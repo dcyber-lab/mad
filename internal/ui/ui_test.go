@@ -33,6 +33,7 @@ func setup(t *testing.T, projects ...string) (*model, *state.State) {
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	t.Setenv("CODEX_HOME", "")
 	st := &state.State{}
 	for _, p := range projects {
@@ -498,7 +499,7 @@ func TestSidebarHeaderCounts(t *testing.T) {
 
 func TestNotifyEvents(t *testing.T) {
 	m, st := setup(t, "/code/api")
-	m.notifyCfg = notify.Default()
+	m.cfg.Notify = notify.Default()
 	bg := &state.Agent{ID: "bg", Kind: "claude"}
 	onStage := &state.Agent{ID: "st", Kind: "claude"}
 	st.Projects[0].Agents = []*state.Agent{bg, onStage}
@@ -562,7 +563,7 @@ func TestNotifyEvents(t *testing.T) {
 	}
 
 	// Turned off in config.json.
-	m.notifyCfg = notify.Config{On: []string{}}
+	m.cfg.Notify = notify.Config{On: []string{}}
 	m.notified = map[string]time.Time{}
 	poll(50, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
 	if as := poll(60, map[string]*status.Hook{"bg": hook(status.Idle), "st": hook(status.Idle)}); len(as) != 0 {
@@ -1240,7 +1241,7 @@ func TestFinishMenu(t *testing.T) {
 	}
 	press(m, "esc")
 	// Configured actions replace the menu.
-	m.finCfg = []deck.FinishAction{{Name: "ship it", Command: "ship {branch}"}}
+	m.cfg.Finish = []deck.FinishAction{{Name: "ship it", Command: "ship {branch}"}}
 	press(m, "j", "f")
 	if len(m.fin) != 1 || m.fin[0].Command != "ship 'feat/x'" || !strings.Contains(m.View(), "ship it") {
 		t.Errorf("configured menu: %+v", m.fin)
@@ -1308,8 +1309,51 @@ func TestQuotaLines(t *testing.T) {
 	if l := m.quotaLines(now)[0]; strings.Contains(l, "▓") || !strings.Contains(l, "5h 62% 2h10m") {
 		t.Errorf("narrow: %q", l)
 	}
-	m.quotaOn = false
+	m.cfg.Quota = false
 	if m.headerH() != headerLines || len(m.quotaLines(now)) != 0 {
 		t.Error("quota off should hide the lines")
+	}
+}
+
+// Config files are reread when they change; a broken one is reported and
+// the last good settings stay.
+func TestReloadConfig(t *testing.T) {
+	m, _ := setup(t)
+	write := func(path, body string, at time.Time) {
+		t.Helper()
+		os.MkdirAll(filepath.Dir(path), 0o755)
+		os.WriteFile(path, []byte(body), 0o644)
+		os.Chtimes(path, at, at) // two writes within a tick still differ
+	}
+	t0 := time.Now().Add(-time.Hour)
+	cfg, agents := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "mad", "config.json"), filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "mad", "agents.json")
+
+	write(cfg, `{"quota": false}`, t0)
+	m.reloadConfig()
+	if m.cfg.Quota || m.flash != "" {
+		t.Fatalf("quota = %v, flash = %q", m.cfg.Quota, m.flash)
+	}
+	write(cfg, "{\n  \"quota\": true,\n}", t0.Add(time.Second))
+	m.reloadConfig()
+	if m.cfg.Quota || !strings.HasPrefix(m.flash, "config.json:3:") {
+		t.Errorf("broken config: quota = %v, flash = %q", m.cfg.Quota, m.flash)
+	}
+
+	write(agents, `[{"name": "gemini", "start": "gemini"}]`, t0)
+	m.reloadConfig()
+	if n := len(m.kinds); n != len(agent.Builtin())+1 {
+		t.Fatalf("kinds after agents.json: %d", n)
+	}
+	write(agents, `[{"start": "x"}, {"name": "y", "waiting": ["("]}]`, t0.Add(time.Second))
+	m.reloadConfig()
+	if strings.Contains(m.flash, "\n") || !strings.Contains(m.flash, "entry 1 has no name; ") {
+		t.Errorf("two problems on one line: %q", m.flash)
+	}
+	write(agents, `[{"name": "gemini", "start": "gemini"}]`, t0.Add(2*time.Second))
+	m.reloadConfig()
+	write(agents, `[{"name": `, t0.Add(3*time.Second))
+	m.reloadConfig()
+	if n := len(m.kinds); n != len(agent.Builtin())+1 || !strings.HasPrefix(m.flash, "agents.json:") {
+		t.Errorf("broken agents.json: %d kinds, flash = %q", n, m.flash)
 	}
 }

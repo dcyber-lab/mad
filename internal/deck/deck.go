@@ -5,7 +5,6 @@
 package deck
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -250,18 +249,6 @@ type DiffConfig struct {
 	Command string `json:"command,omitempty"`
 }
 
-// LoadDiffConfig reads the diff section of config.json.
-func LoadDiffConfig() DiffConfig {
-	var file struct {
-		Diff *DiffConfig `json:"diff"`
-	}
-	data, err := os.ReadFile(paths.ConfigFile())
-	if err != nil || json.Unmarshal(data, &file) != nil || file.Diff == nil {
-		return DiffConfig{}
-	}
-	return *file.Diff
-}
-
 // lookPath is replaceable in tests.
 var lookPath = exec.LookPath
 
@@ -275,18 +262,6 @@ var lookPath = exec.LookPath
 type FinishAction struct {
 	Name    string `json:"name"`
 	Command string `json:"command"`
-}
-
-// LoadFinishConfig reads the finish section of config.json.
-func LoadFinishConfig() []FinishAction {
-	var file struct {
-		Finish []FinishAction `json:"finish"`
-	}
-	data, err := os.ReadFile(paths.ConfigFile())
-	if err != nil || json.Unmarshal(data, &file) != nil {
-		return nil
-	}
-	return file.Finish
 }
 
 // Checkout is what a finish action works on.
@@ -465,7 +440,11 @@ func Switch(arg string) error {
 	if !ok {
 		return nil
 	}
-	if err := OpenAgent(st, agents[i].ID, agent.Load()); err != nil {
+	kinds, _ := agent.Load() // the sidebar reports a broken file
+	if kinds == nil {
+		kinds = agent.Builtin()
+	}
+	if err := OpenAgent(st, agents[i].ID, kinds); err != nil {
 		return err
 	}
 	_ = poke.Send(poke.Poll) // so the sidebar shows it now, not a poll later
@@ -478,7 +457,8 @@ func WriteConfigs() error {
 	if err := paths.WriteFileAtomic(paths.TmuxConf(), []byte(TmuxConfig())); err != nil {
 		return err
 	}
-	return discover.Setup(QuotaEnabled())
+	cfg, _ := LoadConfig() // the sidebar reports a broken file
+	return discover.Setup(cfg.Quota)
 }
 
 // TmuxConfig is the config of mad's tmux server.
@@ -529,19 +509,4 @@ set -g pane-active-border-style "fg=colour75"
 // tmuxQuote double-quotes s for a tmux config line.
 func tmuxQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(s) + `"`
-}
-
-// QuotaEnabled is the "quota" flag of config.json: whether mad follows
-// the plans' usage limits (claude through its status line, codex through
-// its rollout) and shows them under the sidebar's header. On by default;
-// {"quota": false} turns it off.
-func QuotaEnabled() bool {
-	var file struct {
-		Quota *bool `json:"quota"`
-	}
-	data, err := os.ReadFile(paths.ConfigFile())
-	if err != nil || json.Unmarshal(data, &file) != nil || file.Quota == nil {
-		return true
-	}
-	return *file.Quota
 }

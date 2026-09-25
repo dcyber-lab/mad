@@ -157,28 +157,26 @@ type model struct {
 	lastGit     time.Time
 	transcripts map[string]transcript.Info // agent id → what its transcript says
 	quota       map[string]status.Quota    // kind → the account's usage limits, latest report
-	quotaOn     bool                       // config: follow and show usage limits
 	reader      *transcript.Reader         // only the read command touches it
 	reading     bool
 	readDue     bool // read at the next tick: a turn ended
 	lastRead    time.Time
-	taskFor     string // agent the diff view was opened for ("" for a project)
-	diffCfg     deck.DiffConfig
+	taskFor     string              // agent the diff view was opened for ("" for a project)
 	wt          *state.Project      // project a worktree is being named for
 	wtBranch    string              // branch chosen; the kind menu comes next
 	renameID    string              // agent being named
 	fin         []deck.FinishAction // the finish menu being shown
 	finCursor   int
 	finTitle    string
-	finCo       deck.Checkout       // what the menu works on
-	finID       string              // agent the menu is for ("" for a project)
-	finCfg      []deck.FinishAction // from config.json
-	baseOf      map[string]string   // repo → default branch, looked up once
+	finCo       deck.Checkout     // what the menu works on
+	finID       string            // agent the menu is for ("" for a project)
+	baseOf      map[string]string // repo → default branch, looked up once
 
-	notifyCfg notify.Config
-	notifyMod time.Time            // config.json mtime notifyCfg was read at
-	runSince  map[string]time.Time // agent id → when its current run started
-	notified  map[string]time.Time // agent id + event kind → last notification
+	cfg      deck.Config
+	cfgMod   time.Time            // config.json's mtime when cfg was read
+	kindsMod time.Time            // agents.json's mtime when kinds were read
+	runSince map[string]time.Time // agent id → when its current run started
+	notified map[string]time.Time // agent id + event kind → last notification
 }
 
 // Run is `mad sidebar`. A panic is logged to the sidebar log and exits
@@ -188,7 +186,8 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	m := newModel(st, agent.Load())
+	m := newModel(st, agent.Builtin())
+	m.reloadConfig() // config.json, agents.json
 	defer func() {
 		if r := recover(); r != nil {
 			if f, ferr := os.OpenFile(paths.SidebarLog(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
@@ -220,15 +219,11 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		hooks:       map[string]*status.Hook{},
 		screens:     map[string]string{},
 		input:       ti,
-		notifyCfg:   notify.Load(),
-		notifyMod:   notify.ModTime(),
-		diffCfg:     deck.LoadDiffConfig(),
-		finCfg:      deck.LoadFinishConfig(),
+		cfg:         deck.DefaultConfig(),
 		baseOf:      map[string]string{},
 		gitInfo:     map[string]git.Info{},
 		transcripts: map[string]transcript.Info{},
 		quota:       map[string]status.Quota{},
-		quotaOn:     deck.QuotaEnabled(),
 		reader:      transcript.NewReader(),
 		runSince:    map[string]time.Time{},
 		notified:    map[string]time.Time{},
@@ -555,16 +550,41 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// reloadConfig rereads config.json and agents.json when they changed. A
+// broken file is reported and what was usable in it taken; one that is
+// unusable as a whole leaves the last good one in place.
+func (m *model) reloadConfig() {
+	if mod := paths.ModTime(paths.ConfigFile()); !mod.Equal(m.cfgMod) {
+		m.cfgMod = mod
+		cfg, err := deck.LoadConfig()
+		if err != nil {
+			m.configError(err)
+		} else {
+			m.cfg = cfg
+		}
+	}
+	if mod := paths.ModTime(paths.AgentsConfig()); !mod.Equal(m.kindsMod) {
+		m.kindsMod = mod
+		kinds, err := agent.Load()
+		if err != nil {
+			m.configError(err)
+		}
+		if kinds != nil {
+			m.kinds = kinds
+		}
+		if m.kindCursor >= len(m.kinds) {
+			m.kindCursor = 0
+		}
+	}
+}
+
 // applyPoll takes in a full poll: panes, stage, every screen and hook.
 func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 	if msg.err != nil {
 		m.setFlash(msg.err.Error())
 		return nil
 	}
-	if mod := notify.ModTime(); !mod.Equal(m.notifyMod) {
-		m.notifyCfg, m.notifyMod = notify.Load(), mod
-		m.diffCfg, m.finCfg, m.quotaOn = deck.LoadDiffConfig(), deck.LoadFinishConfig(), deck.QuotaEnabled()
-	}
+	m.reloadConfig()
 	// Pick up `mad add` and other writers.
 	if mod := state.ModTime(); mod.After(m.stMod) {
 		if st, err := state.Load(); err == nil {
@@ -675,7 +695,7 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 		return notify.Event{}, false
 	}
 	key := a.ID + "/" + kind
-	if !m.notifyCfg.Wants(kind) || now.Sub(m.notified[key]) < notifyCooldown {
+	if !m.cfg.Notify.Wants(kind) || now.Sub(m.notified[key]) < notifyCooldown {
 		return notify.Event{}, false
 	}
 	m.notified[key] = now
@@ -693,7 +713,7 @@ func (m *model) notifyCmd(alerts []alert) tea.Cmd {
 	if len(alerts) == 0 {
 		return nil
 	}
-	cfg := m.notifyCfg
+	cfg := m.cfg.Notify
 	return func() tea.Msg {
 		for _, a := range alerts {
 			if a.onStage && watched() {
@@ -898,6 +918,13 @@ func (m *model) setFlash(s string) {
 	m.flash, m.flashUntil = s, time.Now().Add(5*time.Second)
 }
 
+// configError shows a broken config file longer than other flashes: the
+// file and line lead, so they survive truncation to the sidebar's width.
+func (m *model) configError(err error) {
+	msg := strings.ReplaceAll(err.Error(), "\n", "; ") // errors.Join puts one per line
+	m.flash, m.flashUntil = msg, time.Now().Add(20*time.Second)
+}
+
 // ---- actions (tmux work runs off the UI goroutine) ----
 
 // action runs tmux work off the UI goroutine; polls started before it
@@ -1003,7 +1030,7 @@ func (m *model) toggleDiff(id, dir string, focusStage bool) tea.Cmd {
 		return m.closeTask(focusStage)
 	}
 	m.taskFor = id
-	cmd := deck.DiffCommand(m.diffCfg, dir)
+	cmd := deck.DiffCommand(m.cfg.Diff, dir)
 	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
 
@@ -1084,7 +1111,7 @@ func (m *model) openFinish(r row) {
 		m.baseOf[c.Repo] = base
 	}
 	c.Base = base
-	m.fin = deck.FinishActions(m.finCfg, c)
+	m.fin = deck.FinishActions(m.cfg.Finish, c)
 	if len(m.fin) == 0 {
 		m.setFlash("nothing to do for " + c.Branch)
 		return
@@ -1568,7 +1595,7 @@ func (m *model) headerH() int {
 // quotaKinds lists the kinds with usage limits to show, in kinds order,
 // with each report's spent windows already dropped.
 func (m *model) quotaKinds(now time.Time) []string {
-	if !m.quotaOn {
+	if !m.cfg.Quota {
 		return nil
 	}
 	var out []string

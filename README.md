@@ -321,7 +321,9 @@ Configure them in `~/.config/mad/config.json`:
 The command gets `MAD_EVENT`, `MAD_PROJECT`, `MAD_AGENT`, `MAD_TITLE` and
 `MAD_MESSAGE` in its environment, e.g. `terminal-notifier -title
 "$MAD_TITLE" -message "$MAD_MESSAGE"`, or a curl to ntfy.sh for your phone.
-Changes to the file apply right away.
+Changes to the file apply right away. A mistake in it (a stray comma) is
+shown at the bottom of the sidebar with its line, and the last good
+settings stay in effect until it's fixed.
 
 ## Custom agents
 
@@ -333,14 +335,16 @@ definitions by `name`, so you can add new agents or override existing ones:
   {"name": "gemini", "start": "gemini", "waiting": ["Allow execution"]},
   {"name": "claude",
    "start":  "claude --settings {claude_settings} --session-id {id} --model opus",
-   "resume": "claude --settings {claude_settings} --resume {sid}",
-   "fork":   "--fork-session",
-   "hooks":  true}
+   "resume": "claude --settings {claude_settings} --resume {sid} --model opus"}
 ]
 ```
 
-An override replaces the whole entry, so keep the fields of the built-in
-you still want.
+An override changes only the fields it sets; the rest stay as built in
+(icon, waiting patterns, `fork`, `hooks` above). Set a field empty to drop
+it: `"fork": ""`, `"waiting": []`. Like `config.json`, the file is reread
+when it changes, and a mistake is shown in the sidebar: an entry that
+can't be used is left out, a file that isn't valid JSON is ignored until
+fixed.
 
 | Field           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |

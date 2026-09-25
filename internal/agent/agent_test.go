@@ -131,22 +131,27 @@ func TestUnknownKindRunsItsName(t *testing.T) {
 	}
 }
 
-func TestLoadMergesAgentsJSON(t *testing.T) {
-	home := withHome(t)
+func writeAgents(t *testing.T, home, body string) {
+	t.Helper()
 	cfg := filepath.Join(home, ".config", "mad", "agents.json")
 	if err := os.MkdirAll(filepath.Dir(cfg), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	json := `[
-		{"name": "claude", "start": "claude --model opus", "waiting": ["Proceed\\?"]},
-		{"name": "gemini", "start": "gemini", "waiting": ["Allow execution", "(bad regex"]},
-		{"start": "nameless is dropped"}
-	]`
-	if err := os.WriteFile(cfg, []byte(json), 0o644); err != nil {
+	if err := os.WriteFile(cfg, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
 
-	kinds := Load()
+func TestLoadMergesAgentsJSON(t *testing.T) {
+	home := withHome(t)
+	writeAgents(t, home, `[
+		{"name": "claude", "start": "claude --model opus", "waiting": ["Proceed\\?"]},
+		{"name": "codex", "fork": "--fork", "resume_latest": ""},
+		{"name": "gemini", "start": "gemini", "waiting": ["Allow execution", "(bad regex"]},
+		{"start": "nameless is dropped"}
+	]`)
+
+	kinds, err := Load()
 	var names []string
 	for _, k := range kinds {
 		names = append(names, k.Name)
@@ -154,26 +159,47 @@ func TestLoadMergesAgentsJSON(t *testing.T) {
 	if strings.Join(names, ",") != "claude,codex,pi,shell,gemini" {
 		t.Fatalf("kinds = %v", names)
 	}
+	// Fields set replace the built-in's, the rest stay.
 	claude := ByName(kinds, "claude")
-	if claude.Start != "claude --model opus" || claude.Hooks {
-		t.Errorf("override should replace the whole kind: %+v", claude)
+	if claude.Start != "claude --model opus" || !claude.Hooks || claude.Fork != "--fork-session" || claude.Icon != "✻" {
+		t.Errorf("claude override should keep what it doesn't set: %+v", claude)
 	}
-	if !claude.ScreenWaiting("Proceed?") {
-		t.Error("override waiting pattern not compiled")
+	if !claude.ScreenWaiting("Proceed?") || claude.ScreenWaiting("Do you want to") {
+		t.Error("override waiting patterns should replace the built-in's")
+	}
+	// An empty value drops the field.
+	codex := ByName(kinds, "codex")
+	if codex.Fork != "--fork" || codex.ResumeLatest != "" || codex.Resume == "" {
+		t.Errorf("codex override: %+v", codex)
 	}
 	gemini := ByName(kinds, "gemini")
 	if !gemini.ScreenWaiting("Allow execution of ls") {
 		t.Error("gemini waiting pattern not compiled")
 	}
+	// What was left out is reported.
+	if err == nil || !strings.Contains(err.Error(), "entry 4 has no name") || !strings.Contains(err.Error(), `gemini: waiting "(bad regex"`) {
+		t.Errorf("err = %v", err)
+	}
+	// Merging never touches the built-ins themselves.
+	if b := ByName(Builtin(), "claude"); b.Start == claude.Start || len(b.Waiting) != 4 || b.Waiting[0] != "Do you want to" {
+		t.Errorf("built-in changed: %+v", b)
+	}
 }
 
-func TestLoadIgnoresBrokenConfig(t *testing.T) {
+func TestLoadBrokenConfig(t *testing.T) {
 	home := withHome(t)
-	cfg := filepath.Join(home, ".config", "mad", "agents.json")
-	_ = os.MkdirAll(filepath.Dir(cfg), 0o755)
-	_ = os.WriteFile(cfg, []byte("not json"), 0o644)
-	if got := len(Load()); got != len(Builtin()) {
-		t.Errorf("broken config: %d kinds, want built-ins only", got)
+	if kinds, err := Load(); err != nil || len(kinds) != len(Builtin()) {
+		t.Errorf("no file: %d kinds, %v", len(kinds), err)
+	}
+	writeAgents(t, home, "[\n  {\"name\": \"x\"},\n]")
+	if kinds, err := Load(); kinds != nil || err == nil || !strings.HasPrefix(err.Error(), "agents.json:3:") {
+		t.Errorf("malformed: %v %v", kinds, err)
+	}
+	writeAgents(t, home, `[{"name": "claude", "waiting": ["x", "y", "z", "w"], "hooks": "yes"}]`)
+	kinds, err := Load()
+	c := ByName(kinds, "claude")
+	if err == nil || !strings.Contains(err.Error(), "agents.json: claude:") || !c.Hooks || c.Waiting[0] != "Do you want to" {
+		t.Errorf("bad field: the entry is left out and reported: %v %+v", err, c)
 	}
 }
 

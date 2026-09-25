@@ -4,13 +4,10 @@ package notify
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"runtime"
 	"time"
-
-	"github.com/dcyber-lab/mad/internal/paths"
 )
 
 // Event kinds.
@@ -55,30 +52,17 @@ type Config struct {
 // Default notifies about both events with the desktop notification.
 func Default() Config { return Config{On: []string{Done, Waiting}} }
 
-// Load reads config.json; a missing or invalid file, or one without a
-// "notify" object, gives Default.
-func Load() Config {
-	var file struct {
-		Notify *Config `json:"notify"`
-	}
-	data, err := os.ReadFile(paths.ConfigFile())
-	if err != nil || json.Unmarshal(data, &file) != nil || file.Notify == nil {
+// FromFile completes the "notify" object as config.json gave it: without
+// one it is Default, without an "on" list it notifies about both events.
+func FromFile(c *Config) Config {
+	if c == nil {
 		return Default()
 	}
-	if file.Notify.On == nil {
-		file.Notify.On = Default().On
+	out := *c
+	if out.On == nil {
+		out.On = Default().On
 	}
-	return *file.Notify
-}
-
-// ModTime is config.json's modification time (zero when missing), so the
-// sidebar can reload it when it changes.
-func ModTime() time.Time {
-	fi, err := os.Stat(paths.ConfigFile())
-	if err != nil {
-		return time.Time{}
-	}
-	return fi.ModTime()
+	return out
 }
 
 func (c Config) Wants(kind string) bool {

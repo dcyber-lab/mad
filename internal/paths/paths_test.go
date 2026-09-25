@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -124,5 +125,28 @@ func TestProjectRoot(t *testing.T) {
 	want, _ := filepath.EvalSymlinks(dir) // macOS: /var → /private/var
 	if !ok || root != want {
 		t.Errorf("inside git: got (%q, %v), want (%q, true)", root, ok, want)
+	}
+}
+
+func TestReadJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	v := map[string]int{"kept": 1}
+	if err := ReadJSON(path, &v); err != nil || v["kept"] != 1 {
+		t.Errorf("missing file: %v %v", err, v)
+	}
+	if !ModTime(path).IsZero() {
+		t.Error("missing file has a ModTime")
+	}
+	os.WriteFile(path, []byte("{\n  \"a\": 1,\n}\n"), 0o644)
+	if err := ReadJSON(path, &v); err == nil || !strings.HasPrefix(err.Error(), "config.json:3: invalid character '}'") {
+		t.Errorf("syntax error = %v", err)
+	}
+	os.WriteFile(path, []byte("{\"a\": 1,\n \"b\": \"x\"}"), 0o644)
+	if err := ReadJSON(path, &v); err == nil || !strings.HasPrefix(err.Error(), "config.json:2: cannot unmarshal string") {
+		t.Errorf("type error = %v", err)
+	}
+	if ModTime(path).IsZero() {
+		t.Error("existing file has no ModTime")
 	}
 }
