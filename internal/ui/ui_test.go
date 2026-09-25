@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -415,4 +416,68 @@ func TestViewFitsWidth(t *testing.T) {
 	check(m.View(), "narrow sidebar")
 	press(m, "a")
 	check(m.View(), "narrow picker")
+}
+
+func TestSidebarGapsAndMouse(t *testing.T) {
+	m, st := setup(t, "/code/a", "/code/b")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}}
+	st.Projects[1].Agents = []*state.Agent{{ID: "b1", Kind: "codex"}}
+	m.rebuildRows()
+	// a, claude, (gap), b, codex
+	if got := m.lineOf; len(got) != 4 || got[2] != 3 || got[3] != 4 {
+		t.Fatalf("lineOf = %v", got)
+	}
+	lines := strings.Split(m.View(), "\n")
+	if strings.TrimSpace(lines[headerLines+2]) != "" || !strings.Contains(lines[headerLines+3], "b") {
+		t.Errorf("no gap before the second project:\n%s", strings.Join(lines[:8], "\n"))
+	}
+
+	click := func(y int) {
+		m.Update(tea.MouseMsg{X: 3, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	}
+	click(headerLines + 2) // the gap
+	if m.cursor != 0 || st.Projects[1].Collapsed {
+		t.Errorf("gap click: cursor=%d collapsed=%v", m.cursor, st.Projects[1].Collapsed)
+	}
+	click(headerLines + 3) // project b
+	if m.cursor != 2 || !st.Projects[1].Collapsed {
+		t.Errorf("project click: cursor=%d collapsed=%v", m.cursor, st.Projects[1].Collapsed)
+	}
+}
+
+func TestSidebarScrollWithGaps(t *testing.T) {
+	var projects []string
+	for i := 0; i < 12; i++ {
+		projects = append(projects, fmt.Sprintf("/code/p%02d", i))
+	}
+	m, st := setup(t, projects...)
+	for i, p := range st.Projects {
+		p.Agents = []*state.Agent{{ID: fmt.Sprint("a", i), Kind: "claude"}}
+	}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 32, Height: 12})
+	press(m, "G")
+	if v := m.View(); !strings.Contains(v, "p11") || strings.Count(v, "\n") != 11 {
+		t.Errorf("last row not visible or wrong height:\n%s", v)
+	}
+	press(m, "g")
+	if v := m.View(); !strings.Contains(v, "p00") || m.offset != 0 {
+		t.Errorf("offset=%d after g:\n%s", m.offset, v)
+	}
+}
+
+func TestSidebarHeaderCounts(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "w", Kind: "claude"}, {ID: "d", Kind: "claude"}, {ID: "i", Kind: "shell"}}
+	m.rebuildRows()
+	if top := strings.Split(m.View(), "\n")[0]; !strings.Contains(top, "3 agents") {
+		t.Errorf("quiet header = %q", top)
+	}
+	m.trackers["w"] = &status.Tracker{Status: status.Waiting}
+	m.trackers["d"] = &status.Tracker{Status: status.Idle, Attention: true}
+	m.trackers["i"] = &status.Tracker{Status: status.Idle}
+	top := strings.Split(m.View(), "\n")[0]
+	if !strings.Contains(top, "?1") || !strings.Contains(top, "●1") || strings.Contains(top, "agents") {
+		t.Errorf("header = %q", top)
+	}
 }
