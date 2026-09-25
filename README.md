@@ -38,7 +38,7 @@ left; the selected agent's real TUI fills the right.
 - macOS or Linux (developed and tested on macOS)
 - [tmux](https://github.com/tmux/tmux) — 3.2+ recommended (see
   [Known limitations](#known-limitations))
-- Go 1.21+ to build
+- Go 1.24+ to build (older Go links macOS binaries that recent macOS refuses to load)
 - At least one agent CLI on your `PATH`:
   [`claude`](https://docs.anthropic.com/en/docs/claude-code),
   [`codex`](https://github.com/openai/codex), `pi`, …
