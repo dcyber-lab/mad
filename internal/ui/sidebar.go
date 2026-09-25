@@ -90,8 +90,9 @@ const (
 	modePickKind
 	modePickSession
 	modeConfirm
-	modeWorktree // naming the branch for a new worktree
-	modeRename   // naming an agent
+	modeWorktree   // naming the branch for a new worktree
+	modeRename     // naming an agent
+	modePickFinish // choosing how to wrap up a branch
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
@@ -156,11 +157,18 @@ type model struct {
 	reading     bool
 	readDue     bool // read at the next tick: a turn ended
 	lastRead    time.Time
-	diffFor     string // agent the diff view was opened for ("" for a project)
+	taskFor     string // agent the diff view was opened for ("" for a project)
 	diffCfg     deck.DiffConfig
-	wt          *state.Project // project a worktree is being named for
-	wtBranch    string         // branch chosen; the kind menu comes next
-	renameID    string         // agent being named
+	wt          *state.Project      // project a worktree is being named for
+	wtBranch    string              // branch chosen; the kind menu comes next
+	renameID    string              // agent being named
+	fin         []deck.FinishAction // the finish menu being shown
+	finCursor   int
+	finTitle    string
+	finCo       deck.Checkout       // what the menu works on
+	finID       string              // agent the menu is for ("" for a project)
+	finCfg      []deck.FinishAction // from config.json
+	baseOf      map[string]string   // repo → default branch, looked up once
 
 	notifyCfg notify.Config
 	notifyMod time.Time            // config.json mtime notifyCfg was read at
@@ -210,6 +218,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		notifyCfg:   notify.Load(),
 		notifyMod:   notify.ModTime(),
 		diffCfg:     deck.LoadDiffConfig(),
+		finCfg:      deck.LoadFinishConfig(),
+		baseOf:      map[string]string{},
 		gitInfo:     map[string]git.Info{},
 		transcripts: map[string]transcript.Info{},
 		reader:      transcript.NewReader(),
@@ -224,11 +234,13 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.readCmd(), tick())
 }
 
-// gitStatus, addWorktree and validBranch are replaceable in tests.
+// gitStatus, addWorktree, validBranch and defaultBranch are replaceable
+// in tests.
 var (
-	gitStatus   = git.Status
-	addWorktree = git.AddWorktree
-	validBranch = git.ValidBranch
+	gitStatus     = git.Status
+	addWorktree   = git.AddWorktree
+	validBranch   = git.ValidBranch
+	defaultBranch = git.DefaultBranch
 )
 
 // gitCmd reads the checkout of every project and agent directory.
@@ -416,7 +428,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.epoch != m.epoch {
 			return m, m.pollCmd() // began before an action finished: stale
 		}
-		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.diffCleanup(msg.panes))
+		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.taskCleanup(msg.panes))
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
@@ -500,6 +512,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyWorktree(msg)
 		case modeRename:
 			return m, m.keyRename(msg)
+		case modePickFinish:
+			return m, m.keyPickFinish(msg)
 		default:
 			// Fast typing arrives as one multi-rune key; handle each rune.
 			if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 {
@@ -527,7 +541,8 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		return nil
 	}
 	if mod := notify.ModTime(); !mod.Equal(m.notifyMod) {
-		m.notifyCfg, m.notifyMod, m.diffCfg = notify.Load(), mod, deck.LoadDiffConfig()
+		m.notifyCfg, m.notifyMod = notify.Load(), mod
+		m.diffCfg, m.finCfg = deck.LoadDiffConfig(), deck.LoadFinishConfig()
 	}
 	// Pick up `mad add` and other writers.
 	if mod := state.ModTime(); mod.After(m.stMod) {
@@ -792,6 +807,8 @@ func (m *model) listHeight() int {
 		footer = len(m.kinds) + 2 // rule, title, one line per kind
 	case modeWorktree, modeRename:
 		footer = 3 // rule, title, input
+	case modePickFinish:
+		footer = len(m.fin) + 2
 	}
 	h := m.height - headerLines - footer
 	if h < 1 {
@@ -947,19 +964,19 @@ func dirInUse(p *state.Project, dir string) bool {
 // toggleDiff shows the changes in dir (of agent id, or a project when id
 // is empty) on stage, or takes them down again when they are up already.
 func (m *model) toggleDiff(id, dir string, focusStage bool) tea.Cmd {
-	if d, ok := m.panes[tmux.IDDiff]; ok && !d.Dead && m.stageID == tmux.IDDiff && m.diffFor == id {
-		return m.closeDiff(focusStage)
+	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.stageID == tmux.IDTask && m.taskFor == id {
+		return m.closeTask(focusStage)
 	}
-	m.diffFor = id
+	m.taskFor = id
 	cmd := deck.DiffCommand(m.diffCfg, dir)
-	return m.action("", func() error { return deck.OpenDiff(dir, cmd) })
+	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
 
-// closeDiff puts the agent the diff was opened for back on stage.
-func (m *model) closeDiff(focusStage bool) tea.Cmd {
-	back := m.diffFor
+// closeTask puts the agent the diff was opened for back on stage.
+func (m *model) closeTask(focusStage bool) tea.Cmd {
+	back := m.taskFor
 	return m.action("", func() error {
-		if err := deck.CloseDiff(back); err != nil {
+		if err := deck.CloseTask(back); err != nil {
 			return err
 		}
 		target := tmux.SidebarPane
@@ -973,8 +990,8 @@ func (m *model) closeDiff(focusStage bool) tea.Cmd {
 // diffFromStage is `mad diff` (Alt-v): the diff of the agent on stage, or
 // back to the agent from its diff; with no agent on stage, the cursor row.
 func (m *model) diffFromStage() tea.Cmd {
-	if m.stageID == tmux.IDDiff {
-		return m.closeDiff(true)
+	if m.stageID == tmux.IDTask {
+		return m.closeTask(true)
 	}
 	if p, a := m.st.FindAgent(m.stageID); a != nil {
 		return m.toggleDiff(a.ID, p.Dir(a), true)
@@ -992,11 +1009,11 @@ func (m *model) diffRow(r row) tea.Cmd {
 	return m.toggleDiff("", r.proj.Path, false)
 }
 
-// diffCleanup takes the diff view down once its command has exited (the
-// pane stays dead on stage, remain-on-exit), or if it got parked in the
-// pool: it is a one-off, not an agent.
-func (m *model) diffCleanup(panes []tmux.Pane) tea.Cmd {
-	d, ok := tmux.FindPane(panes, tmux.IDDiff)
+// taskCleanup takes the task pane (diff view, finish command) down once
+// its command has exited (the pane stays dead on stage, remain-on-exit),
+// or if it got parked in the pool: it is a one-off, not an agent.
+func (m *model) taskCleanup(panes []tmux.Pane) tea.Cmd {
+	d, ok := tmux.FindPane(panes, tmux.IDTask)
 	if !ok {
 		return nil
 	}
@@ -1005,9 +1022,76 @@ func (m *model) diffCleanup(panes []tmux.Pane) tea.Cmd {
 		return nil
 	}
 	if onStage {
-		return m.closeDiff(false) // you quit the viewer: back to the sidebar
+		return m.closeTask(false) // you quit the viewer: back to the sidebar
 	}
-	return m.action("", func() error { return deck.CloseDiff("") })
+	return m.action("", func() error { return deck.CloseTask("") })
+}
+
+// ---- finishing a branch ----
+
+// openFinish shows the finish menu for the checkout of r: push, open a
+// pull request, rebase onto or merge into the default branch.
+func (m *model) openFinish(r row) {
+	c := deck.Checkout{Dir: r.proj.Path, Repo: r.proj.Path}
+	m.finID = ""
+	if r.agent != nil {
+		c.Dir, m.finID = r.proj.Dir(r.agent), r.agent.ID
+	}
+	info, ok := m.gitInfo[c.Dir]
+	if !ok || info.Branch == "" {
+		m.setFlash("not on a branch")
+		return
+	}
+	c.Branch, c.RepoBranch = info.Branch, m.gitInfo[c.Repo].Branch
+	base, known := m.baseOf[c.Repo]
+	if !known {
+		base = defaultBranch(c.Repo)
+		m.baseOf[c.Repo] = base
+	}
+	c.Base = base
+	m.fin = deck.FinishActions(m.finCfg, c)
+	if len(m.fin) == 0 {
+		m.setFlash("nothing to do for " + c.Branch)
+		return
+	}
+	m.finTitle = "finish · " + c.Branch
+	if c.Base != "" && c.Base != c.Branch {
+		m.finTitle += " → " + c.Base
+	}
+	m.finCo, m.finCursor, m.mode = c, 0, modePickFinish
+}
+
+func (m *model) keyPickFinish(k tea.KeyMsg) tea.Cmd {
+	switch k.String() {
+	case "esc", "q", "ctrl+c":
+		m.mode = modeNormal
+	case "up", "k":
+		if m.finCursor > 0 {
+			m.finCursor--
+		}
+	case "down", "j":
+		if m.finCursor < len(m.fin)-1 {
+			m.finCursor++
+		}
+	case "enter", "l":
+		return m.runFinish(m.finCursor)
+	default:
+		if s := k.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+			if i := int(s[0] - '1'); i < len(m.fin) {
+				return m.runFinish(i)
+			}
+		}
+	}
+	return nil
+}
+
+// runFinish runs the chosen command on stage, in the checkout; the pane
+// stays until enter so the outcome (a PR link, a conflict) can be read.
+func (m *model) runFinish(i int) tea.Cmd {
+	m.mode = modeNormal
+	dir, cmd := m.finCo.Dir, deck.HoldCommand(m.fin[i].Command)
+	m.taskFor = m.finID
+	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
 
 // ---- worktrees ----
@@ -1156,6 +1240,10 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return m.openRename(r.agent)
 		}
 		m.setFlash("select an agent to name")
+	case "f":
+		if ok {
+			m.openFinish(r)
+		}
 	case "i":
 		m.st.Compact = !m.st.Compact
 		m.save()
@@ -1463,7 +1551,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		st, attention = tr.Status, tr.Attention
 	}
 	bar, name := seg{stPlain, " "}, seg{stName, m.agentTitle(r.proj, a)}
-	if a.ID == m.stageID || m.stageID == tmux.IDDiff && a.ID == m.diffFor {
+	if a.ID == m.stageID || m.stageID == tmux.IDTask && a.ID == m.taskFor {
 		bar, name = seg{stStage, "▌"}, seg{stStage, name.s}
 	}
 	num := " "
@@ -1628,32 +1716,47 @@ func (m *model) renderFooter() string {
 			layout(m.width, nil, []seg{{stHeader, title}}, []seg{{stFaint, "esc "}}) + "\n" +
 			" " + m.input.View()
 	case modePickKind:
-		// The kind menu replaces the footer; it is short enough.
-		var b strings.Builder
 		title := "new agent"
 		if m.wtBranch != "" {
 			title += " · " + m.wt.Name + " @ " + m.wtBranch
 		} else if r, ok := m.current(); ok {
 			title += " · " + r.proj.Name
 		}
-		b.WriteString(rule(m.width) + "\n")
-		b.WriteString(layout(m.width, nil, []seg{{stHeader, " " + title}}, []seg{{stFaint, "esc "}}) + "\n")
-		for i, k := range m.kinds {
-			var bg lipgloss.TerminalColor
-			if i == m.kindCursor {
-				bg = cSelOn
-			}
-			b.WriteString(layout(m.width, bg, []seg{{stPlain, "  "}, {stKey, fmt.Sprint(i + 1)}, {stPlain, " "}, {stName, k.Name}}, nil) + "\n")
+		var names []string
+		for _, k := range m.kinds {
+			names = append(names, k.Name)
 		}
-		return strings.TrimRight(b.String(), "\n")
+		return m.menu(title, names, m.kindCursor)
+	case modePickFinish:
+		var names []string
+		for _, a := range m.fin {
+			names = append(names, a.Name)
+		}
+		return m.menu(m.finTitle, names, m.finCursor)
 	default:
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		} else {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
-		l2 = hints("w", "worktree", "v", "diff", "r", "resume")
+		l2 = hints("w", "worktree", "v", "diff", "f", "finish")
 		l3 = hints("t", "name", "x", "kill", "q", "detach")
 	}
 	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3
+}
+
+// menu replaces the footer with a titled, numbered list; it is short
+// enough for that.
+func (m *model) menu(title string, items []string, cursor int) string {
+	var b strings.Builder
+	b.WriteString(rule(m.width) + "\n")
+	b.WriteString(layout(m.width, nil, []seg{{stHeader, " " + title}}, []seg{{stFaint, "esc "}}) + "\n")
+	for i, it := range items {
+		var bg lipgloss.TerminalColor
+		if i == cursor {
+			bg = cSelOn
+		}
+		b.WriteString(layout(m.width, bg, []seg{{stPlain, "  "}, {stKey, fmt.Sprint(i + 1)}, {stPlain, " "}, {stName, it}}, nil) + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

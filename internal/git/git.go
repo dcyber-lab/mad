@@ -78,6 +78,22 @@ func parseBranchLine(line string) (branch string, ahead int) {
 	return branch, ahead
 }
 
+// DefaultBranch is the branch work is merged into: what origin's HEAD
+// points at, else main or master when one exists, else "".
+func DefaultBranch(repo string) string {
+	if out, err := exec.Command("git", "-C", repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").Output(); err == nil {
+		if _, name, ok := strings.Cut(strings.TrimSpace(string(out)), "/"); ok {
+			return name
+		}
+	}
+	for _, name := range []string{"main", "master"} {
+		if exec.Command("git", "-C", repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+name).Run() == nil {
+			return name
+		}
+	}
+	return ""
+}
+
 // worktreesSub is where mad keeps a project's worktrees. It is the
 // directory Claude Code uses for its own, so mad's discovery already maps
 // sessions in it back to the main repository.

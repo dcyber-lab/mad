@@ -184,9 +184,9 @@ func ShowPane(madID string, focus bool) error {
 		if err := tmux.Run("swap-pane", "-d", "-s", target.ID, "-t", stage.ID); err != nil {
 			return err
 		}
-		if stage.MadID == tmux.IDDiff {
-			// The diff view is a one-off: it goes when something else
-			// takes the stage.
+		if stage.MadID == tmux.IDTask {
+			// A task pane is a one-off: it goes when something else takes
+			// the stage.
 			_ = tmux.Run("kill-pane", "-t", stage.ID)
 		}
 	}
@@ -196,10 +196,11 @@ func ShowPane(madID string, focus bool) error {
 	return nil
 }
 
-// OpenDiff shows the changes in dir on stage, in a new pane running the
-// diff command; an earlier diff view is replaced.
-func OpenDiff(dir, command string) error {
-	if err := CloseDiff(""); err != nil {
+// OpenTask runs command in dir in a new pane on stage: the diff viewer,
+// a finish command. There is one such pane at a time; an earlier one is
+// replaced.
+func OpenTask(dir, command string) error {
+	if err := CloseTask(""); err != nil {
 		return err
 	}
 	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", "diff", "-c", dir,
@@ -207,21 +208,21 @@ func OpenDiff(dir, command string) error {
 	if err != nil {
 		return err
 	}
-	if err := tmux.Tag(id, tmux.IDDiff); err != nil {
+	if err := tmux.Tag(id, tmux.IDTask); err != nil {
 		return err
 	}
-	return ShowPane(tmux.IDDiff, true)
+	return ShowPane(tmux.IDTask, true)
 }
 
-// CloseDiff removes the diff view. When it is on stage, backID (an agent,
+// CloseTask removes the task pane. When it is on stage, backID (an agent,
 // or the placeholder when empty) takes its place; focus is left where it
-// is unless focus is set.
-func CloseDiff(backID string) error {
+// is.
+func CloseTask(backID string) error {
 	panes, err := tmux.ListPanes()
 	if err != nil {
 		return err
 	}
-	pane, ok := tmux.FindPane(panes, tmux.IDDiff)
+	pane, ok := tmux.FindPane(panes, tmux.IDTask)
 	if !ok {
 		return nil
 	}
@@ -262,6 +263,76 @@ func LoadDiffConfig() DiffConfig {
 
 // lookPath is replaceable in tests.
 var lookPath = exec.LookPath
+
+// FinishAction is one entry of the finish menu (f): a command run on stage
+// to wrap up a branch. In config.json:
+//
+//	{"finish": [{"name": "open PR", "command": "gh pr create --web"}]}
+//
+// replaces the built-in entries. Commands run through sh in the checkout's
+// directory; {dir}, {repo}, {branch} and {base} are replaced, shell-quoted.
+type FinishAction struct {
+	Name    string `json:"name"`
+	Command string `json:"command"`
+}
+
+// LoadFinishConfig reads the finish section of config.json.
+func LoadFinishConfig() []FinishAction {
+	var file struct {
+		Finish []FinishAction `json:"finish"`
+	}
+	data, err := os.ReadFile(paths.ConfigFile())
+	if err != nil || json.Unmarshal(data, &file) != nil {
+		return nil
+	}
+	return file.Finish
+}
+
+// Checkout is what a finish action works on.
+type Checkout struct {
+	Dir    string // the checkout: a worktree, or the project itself
+	Repo   string // the project's main checkout
+	Branch string // checked out in Dir
+	Base   string // the branch work is merged into (git.DefaultBranch)
+	// RepoBranch is what Repo has checked out: merging into Base there
+	// only makes sense when it is Base.
+	RepoBranch string
+}
+
+// FinishActions is the finish menu for c: the configured commands, else
+// the built-in ones that apply. Placeholders are filled in.
+func FinishActions(cfg []FinishAction, c Checkout) []FinishAction {
+	var acts []FinishAction
+	if len(cfg) > 0 {
+		acts = append(acts, cfg...)
+	} else {
+		if _, err := lookPath("gh"); err == nil {
+			acts = append(acts, FinishAction{"push & open PR", "git push -u origin HEAD && gh pr create"})
+		}
+		if c.Base != "" && c.Branch != c.Base {
+			acts = append(acts, FinishAction{"rebase onto " + c.Base, "git rebase {base}"})
+			if c.RepoBranch == c.Base && c.Dir != c.Repo {
+				acts = append(acts, FinishAction{"merge into " + c.Base, "git -C {repo} merge --no-edit {branch}"})
+			}
+		}
+		acts = append(acts, FinishAction{"push", "git push -u origin HEAD"})
+	}
+	r := strings.NewReplacer(
+		"{dir}", paths.ShellQuote(c.Dir), "{repo}", paths.ShellQuote(c.Repo),
+		"{branch}", paths.ShellQuote(c.Branch), "{base}", paths.ShellQuote(c.Base))
+	for i := range acts {
+		acts[i].Command = r.Replace(acts[i].Command)
+	}
+	return acts
+}
+
+// HoldCommand wraps command so its pane shows how it ended and stays until
+// enter is pressed, rather than vanishing with its output.
+func HoldCommand(command string) string {
+	return "sh -c " + paths.ShellQuote(command+`; s=$?; printf '
+[mad] exit %s · press enter
+' "$s"; read _`)
+}
 
 // DiffCommand is the shell command that shows the changes in dir.
 func DiffCommand(cfg DiffConfig, dir string) string {

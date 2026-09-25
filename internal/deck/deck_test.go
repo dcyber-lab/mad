@@ -283,6 +283,59 @@ func TestDiffCommand(t *testing.T) {
 	}
 }
 
+func TestFinishActions(t *testing.T) {
+	old := lookPath
+	t.Cleanup(func() { lookPath = old })
+	lookPath = func(string) (string, error) { return "/usr/bin/gh", nil }
+	names := func(acts []FinishAction) string {
+		var n []string
+		for _, a := range acts {
+			n = append(n, a.Name)
+		}
+		return strings.Join(n, ", ")
+	}
+
+	wt := Checkout{Dir: "/r/.claude/worktrees/f", Repo: "/r", Branch: "feat/x", Base: "main", RepoBranch: "main"}
+	acts := FinishActions(nil, wt)
+	if got := names(acts); got != "push & open PR, rebase onto main, merge into main, push" {
+		t.Error(got)
+	}
+	if acts[2].Command != "git -C '/r' merge --no-edit 'feat/x'" || acts[1].Command != "git rebase 'main'" {
+		t.Errorf("%+v", acts)
+	}
+	// The main checkout is elsewhere: no merge there.
+	wt.RepoBranch = "other"
+	if got := names(FinishActions(nil, wt)); got != "push & open PR, rebase onto main, push" {
+		t.Error(got)
+	}
+	// On the base branch itself there is nothing to rebase or merge.
+	if got := names(FinishActions(nil, Checkout{Dir: "/r", Repo: "/r", Branch: "main", Base: "main", RepoBranch: "main"})); got != "push & open PR, push" {
+		t.Error(got)
+	}
+	// No gh: no PR.
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	if got := names(FinishActions(nil, wt)); got != "rebase onto main, push" {
+		t.Error(got)
+	}
+	// Configured actions replace the list; placeholders are filled in.
+	cfg := []FinishAction{{"pr", "gh pr create --head {branch} --base {base}"}}
+	if got := FinishActions(cfg, wt); len(got) != 1 || got[0].Command != "gh pr create --head 'feat/x' --base 'main'" {
+		t.Errorf("%+v", got)
+	}
+
+	if got := HoldCommand("git push"); !strings.HasPrefix(got, "sh -c 'git push; s=$?;") || !strings.Contains(got, "read _") {
+		t.Error(got)
+	}
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
+	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"finish":[{"name":"x","command":"y"}]}`), 0o644)
+	if got := LoadFinishConfig(); len(got) != 1 || got[0].Name != "x" {
+		t.Errorf("config: %+v", got)
+	}
+}
+
 func TestDiffView(t *testing.T) {
 	useDeck(t)
 	st := &state.State{}
@@ -294,19 +347,19 @@ func TestDiffView(t *testing.T) {
 	}
 
 	// The diff view takes the stage; the agent waits in the pool.
-	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+	if err := OpenTask(os.TempDir(), "sleep 600"); err != nil {
 		t.Fatal(err)
 	}
-	if got := stageID(t); got != tmux.IDDiff {
+	if got := stageID(t); got != tmux.IDTask {
 		t.Fatalf("stage = %q", got)
 	}
 	// Opening it again replaces the pane instead of piling up.
-	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+	if err := OpenTask(os.TempDir(), "sleep 600"); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
 	for _, pn := range panes(t) {
-		if pn.MadID == tmux.IDDiff {
+		if pn.MadID == tmux.IDTask {
 			n++
 		}
 	}
@@ -315,34 +368,34 @@ func TestDiffView(t *testing.T) {
 	}
 
 	// Closing puts the agent back and the pane is gone.
-	if err := CloseDiff(a.ID); err != nil {
+	if err := CloseTask(a.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := stageID(t); got != a.ID {
 		t.Errorf("stage after close = %q", got)
 	}
-	if _, ok := tmux.FindPane(panes(t), tmux.IDDiff); ok {
+	if _, ok := tmux.FindPane(panes(t), tmux.IDTask); ok {
 		t.Error("diff pane survived close")
 	}
-	if err := CloseDiff(a.ID); err != nil {
+	if err := CloseTask(a.ID); err != nil {
 		t.Errorf("closing when there is none: %v", err)
 	}
 
 	// Showing another pane over the diff view kills it too.
-	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+	if err := OpenTask(os.TempDir(), "sleep 600"); err != nil {
 		t.Fatal(err)
 	}
 	if err := OpenAgent(st, a.ID, fakeKind); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := tmux.FindPane(panes(t), tmux.IDDiff); ok {
+	if _, ok := tmux.FindPane(panes(t), tmux.IDTask); ok {
 		t.Error("diff pane survived a switch")
 	}
 	// Closing with an unknown agent falls back to the placeholder.
-	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+	if err := OpenTask(os.TempDir(), "sleep 600"); err != nil {
 		t.Fatal(err)
 	}
-	if err := CloseDiff("gone"); err != nil {
+	if err := CloseTask("gone"); err != nil {
 		t.Fatal(err)
 	}
 	if got := stageID(t); got != tmux.IDPlaceholder {
