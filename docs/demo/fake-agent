@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""fake-agent KIND SID — a scripted stand-in for claude or codex in the demo.
+
+It draws a plausible screen, reports status through `mad hook claude` the way
+claude's hooks do, writes the transcript claude or codex would (title, prompts,
+tool calls, token usage) where mad reads it, and edits files in its checkout so
+the git counts move. What it does comes from $REC/roles/<SID>; triggers are
+files in $REC/trig."""
+import json, os, re, subprocess, sys, termios, time, tty
+
+kind, sid = sys.argv[1], sys.argv[2]
+REC = os.environ["REC"]; HOME = os.environ["HOME"]; cwd = os.getcwd()
+role = open(f"{REC}/roles/{sid}").read().strip() if os.path.exists(f"{REC}/roles/{sid}") else "new"
+O, B, D, G, C, Y, R = "\x1b[38;5;209m", "\x1b[1m", "\x1b[2m", "\x1b[32m", "\x1b[36m", "\x1b[33m", "\x1b[0m"
+SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+out = sys.stdout
+
+if kind == "claude":
+    tdir = f"{HOME}/.claude/projects/{re.sub('[^A-Za-z0-9]', '-', cwd)}"
+    tpath = f"{tdir}/{sid}.jsonl"
+else:
+    tdir = f"{HOME}/.codex/sessions/2026/09/25"
+    tpath = f"{tdir}/rollout-2026-09-25T10-00-00-{sid}.jsonl"
+os.makedirs(tdir, exist_ok=True)
+msg_n, tok = 0, [0, 0, 0, 0]  # input, cache read, cache write, output (codex: cumulative)
+
+def log(obj):
+    with open(tpath, "a") as f: f.write(json.dumps(obj) + "\n")
+def hook(event):
+    if kind == "claude":
+        subprocess.run(["mad", "hook", "claude"], input=json.dumps({"hook_event_name": event, "session_id": sid}),
+                       text=True, stderr=subprocess.DEVNULL)
+def ask(text):
+    if kind == "claude": log({"type": "user", "message": {"role": "user", "content": text}})
+    else: log({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}})
+def title(text): log({"type": "ai-title", "aiTitle": text})
+def usage(inp, read, write, outp):
+    global msg_n
+    msg_n += 1; tok[0] += inp; tok[1] += read; tok[2] += write; tok[3] += outp
+    if kind == "claude":
+        log({"type": "assistant", "message": {"id": f"msg_{sid[:8]}_{msg_n}", "content": [{"type": "text", "text": "…"}],
+             "usage": {"input_tokens": inp, "cache_read_input_tokens": read, "cache_creation_input_tokens": write, "output_tokens": outp}}})
+    else:
+        log({"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {
+            "input_tokens": tok[0] + tok[1], "cached_input_tokens": tok[1], "output_tokens": tok[3]}}}})
+def tool(name, **inp):
+    if kind == "claude":
+        log({"type": "assistant", "message": {"id": f"msg_{sid[:8]}_t{time.time_ns()}", "content": [{"type": "tool_use", "name": name, "input": inp}]}})
+    else:
+        log({"type": "response_item", "payload": {"type": "function_call", "name": name, "arguments": json.dumps(inp)}})
+    usage(1200, 38000, 900, 220)
+
+def w(s=""): out.write(s); out.flush()
+def head():
+    w("\x1b[2J\x1b[H")
+    icon = f"{O}✻{R}" if kind == "claude" else f"{C}>_{R}"
+    w(f"{icon} {B}{kind}{R}  {D}{cwd.replace(HOME, '~')}{R}\n\n")
+def line(s): w(s + "\n")
+def spin(label, secs, until=None):
+    t0 = time.time(); i = 0
+    while (until is None and time.time() - t0 < secs) or (until is not None and not os.path.exists(until)):
+        w(f"\r{O}{SPIN[i % 10]}{R} {label} {D}({int(time.time() - t0)}s){R}\x1b[K"); time.sleep(0.15); i += 1
+    w("\r\x1b[K")
+def prompt_box():
+    line(f"{D}╭{'─' * 50}╮{R}"); line(f"{D}│{R} > \x1b[7m \x1b[0m{' ' * 46}{D}│{R}"); line(f"{D}╰{'─' * 50}╯{R}")
+def edit(path, text):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "a") as f: f.write(text)
+def step(tname, label, secs, **inp):
+    tool(tname, **inp)
+    line(f"{G}⏺{R} {tname}({label})")
+    spin("Working", secs)
+def key():
+    fd = sys.stdin.fileno(); old = termios.tcgetattr(fd)
+    try: tty.setraw(fd); return sys.stdin.read(1)
+    finally: termios.tcsetattr(fd, termios.TCSADRAIN, old)
+def trig(name): return f"{REC}/trig/{'new' if role == 'new' else sid}-{name}"
+def rest(): prompt_box(); hook("Stop"); time.sleep(10**6)
+
+head(); hook("SessionStart")
+if role == "chat":            # finished work, on stage at the start
+    p = "Add a --json flag to `mad scan`"; ask(p); title("Add --json output to scan")
+    usage(3200, 95000, 12000, 1400)
+    for t, l in [("Read", "internal/cli/scan.go"), ("Edit", "internal/cli/scan.go"), ("Bash", "go test ./internal/cli")]:
+        tool(t, file_path=l) if t != "Bash" else tool(t, command=l); line(f"{G}⏺{R} {t}({l})")
+    line(f"\n{G}⏺{R} Done: {B}mad scan --json{R} prints the same report as JSON.\n"); rest()
+elif role == "work":          # busy until told to stop, editing files
+    ask("Move the cache layer from memcached to Redis"); title("Migrate the cache layer to Redis"); hook("UserPromptSubmit")
+    line("> Move the cache layer from memcached to Redis\n")
+    usage(4100, 120000, 30000, 2100)
+    i = 0
+    while not os.path.exists(trig("stop")):
+        f = ["cache/store.go", "cache/redis.go", "cache/store_test.go"][i % 3]
+        step(["Read", "Edit", "Edit", "Bash"][i % 4], f if i % 4 != 3 else "go test ./cache/...", 1.4,
+             **({"command": "go test ./cache/..."} if i % 4 == 3 else {"file_path": f"{cwd}/{f}"}))
+        if i % 4 in (1, 2): edit(f"{cwd}/{f}", f"// step {i}\n")
+        i += 1
+    line(f"\n{G}⏺{R} Done: the cache now lives in Redis; tests pass.\n"); rest()
+elif role == "ask":           # codex waits for approval, then builds
+    ask("Clean the build output and rebuild"); usage(2500, 41000, 0, 900)
+    line("> Clean the build output and rebuild\n"); tool("shell", command=["bash", "-lc", "rm -rf ./dist && make build"])
+    line(f"{C}•{R} Running {B}make build{R} needs a clean dist/ first.\n")
+    line(f"{Y}Would you like to run the following command?{R}\n\n  $ rm -rf ./dist && make build\n")
+    line(f"{B}› 1. Yes{R}\n  2. No, tell codex what to do")
+    key(); head(); line("> Clean the build output and rebuild\n"); line(f"{C}•{R} Ran rm -rf ./dist && make build")
+    spin("Building", 4); usage(1800, 52000, 0, 600); edit(f"{cwd}/dist/.built", "ok\n")
+    line(f"{C}•{R} Build ok: dist/api (8.1 MB)\n\n› "); time.sleep(10**6)
+elif role == "done":          # ran while nobody looked, then finished
+    ask("Bump the CDN cache TTL to one hour"); title("Raise the CDN cache TTL"); hook("UserPromptSubmit")
+    line("> Bump the CDN cache TTL to one hour\n"); usage(2800, 61000, 9000, 1100)
+    step("Edit", "config/cdn.yaml", 5, file_path=f"{cwd}/config/cdn.yaml"); edit(f"{cwd}/config/cdn.yaml", "ttl: 3600\n")
+    line(f"{G}⏺{R} Done: TTL is 3600s in all three regions.\n"); rest()
+elif role == "idle":          # an older conversation, nothing going on
+    ask("Plan the staging Terraform changes"); usage(9000, 210000, 40000, 5200)
+    line("> Plan the staging Terraform changes\n"); line(f"{C}•{R} Plan: 3 to add, 1 to change, 0 to destroy.\n\n› "); time.sleep(10**6)
+else:                          # "new": started in the demo (w), in a worktree
+    line(f"{D}  Welcome! What should we work on?{R}\n"); prompt_box(); time.sleep(1.3)
+    p = "Fix the redirect loop after login"; head(); ask(p); line(f"> {p}\n"); hook("UserPromptSubmit")
+    usage(3000, 70000, 15000, 900); time.sleep(0.6); title("Fix the login redirect loop")
+    step("Grep", "redirect", 1.2, pattern="redirect")
+    step("Read", "auth/login.go", 1.2, file_path=f"{cwd}/auth/login.go")
+    step("Edit", "auth/login.go", 1.6, file_path=f"{cwd}/auth/login.go")
+    edit(f"{cwd}/auth/login.go", "\n// Only redirect when the session is new.\nif s.IsNew() {\n\thttp.Redirect(w, r, next, http.StatusFound)\n}\n")
+    step("Bash", "go test ./auth/...", 1.5, command="go test ./auth/...")
+    line(f"{G}⏺{R} The loop came from redirecting on every request; it now only happens once.\n")
+    hook("Stop"); prompt_box()
+    while not os.path.exists(trig("commit")): time.sleep(0.05)
+    hook("UserPromptSubmit"); ask("Commit it"); tool("Bash", command="git commit -am 'auth: redirect once after login'")
+    subprocess.run(["git", "commit", "-qam", "auth: redirect once after login"], stdout=subprocess.DEVNULL)
+    w("\x1b[3A\x1b[J"); line(f"{G}⏺{R} Bash(git commit -am 'auth: redirect once after login')"); line(f"  {D}⎿  1 file changed, 5 insertions(+){R}\n")
+    rest()

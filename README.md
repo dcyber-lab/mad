@@ -9,8 +9,9 @@ left; the selected agent's real TUI fills the right.
 
 ![mad demo: a sidebar of projects and agents on the left, the selected agent's TUI on the right](docs/demo.gif)
 
-<sub>Recorded from a real deck; the agents are scripted stand-ins that report
-status the way claude and codex do.</sub>
+<sub>Recorded from a real deck with real git repositories; the agents are
+scripted stand-ins that report status and write transcripts the way claude
+and codex do. [docs/demo](docs/demo) re-records it.</sub>
 
 ## Features
 
@@ -36,7 +37,8 @@ status the way claude and codex do.</sub>
 - **Auto-sync** — Claude/Codex sessions running in other terminals or in the
   Claude desktop app are discovered and can be taken over or reopened.
 - **Non-invasive** — uses its own private tmux server and never touches your
-  `~/.claude/settings.json` or your own tmux config.
+  `~/.claude/settings.json` or your own tmux config; what the sidebar shows
+  about a conversation is read from the transcripts the agents already write.
 - **Extensible** — add any other TUI agent with a few lines of JSON.
 
 ## Requirements
@@ -96,7 +98,9 @@ mad                   # opens the deck and adds the current project
 
 Press `n` to start an agent, `enter` to show it, `Alt-s` to jump between the
 sidebar and the agent, and `q` to detach (agents keep running). Run `mad`
-again to reattach.
+again to reattach. For parallel work, `w` starts an agent on a branch of its
+own, `v` shows what it changed, and `f` merges or pushes the branch when it
+is done.
 
 ## Key bindings
 
@@ -105,6 +109,7 @@ again to reattach.
 | Key            | Action                                         |
 | -------------- | ---------------------------------------------- |
 | `j` / `k`      | Move down / up                                 |
+| `g` / `G`      | Top / bottom                                   |
 | `enter`        | Open agent (or fold/unfold a project)          |
 | `n`            | New agent in the current project               |
 | `w`            | New agent in a new worktree (asks for a branch) |
@@ -149,6 +154,7 @@ mad jump                show the next agent that is waiting or done
 mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)
 mad kill-server         stop the deck and every agent in it
+mad version             print the version
 ```
 
 ## Syncing existing projects and sessions
@@ -172,7 +178,33 @@ mad kill-server         stop the deck and every agent in it
 - Sessions started programmatically (desktop workflows, `-p`/SDK calls, codex
   sub-tasks) are filtered out.
 
-## Worktrees and diffs
+## Reading the sidebar
+
+An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
+shell; custom kinds set `icon` and `color` in `agents.json` or get their
+initial) and is named after its conversation: the title you set with `/rename` (claude)
+or in the app (codex), else the one claude generated, else the first thing
+you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
+your own instead, kept until you clear it. The line under a claude or codex
+agent says what it is on: the tool being called and what it was pointed at
+while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
+otherwise the prompt it is working on or was last given. `i` hides that
+line everywhere, for a shorter list.
+
+The number before an agent's status (`1.2M`, `340k`) is every token its
+current session has sent through the model: input, cache reads and writes,
+and output, added up. Names, the line underneath and tokens all come from
+the transcript claude or codex writes (`~/.claude/projects`,
+`~/.codex/sessions`), read from where the last poll stopped, so agents are
+never asked. A project row shows the sum of its
+agents. `/clear` starts a new session, so the count starts over.
+
+Every project row shows the branch of the main checkout, `±N` for files
+changed or untracked, and `↑N` for commits not on the upstream; agents in
+their own worktree show the same for theirs. The scan runs every 5 seconds
+and right after an agent finishes a turn.
+
+## Worktrees, diffs and finishing a branch
 
 Parallel agents want parallel branches. On a project or one of its agents,
 press `w`, type a branch name, and pick the agent kind: mad runs
@@ -185,29 +217,16 @@ untracked. The agent's row names its branch; `x` on the last agent in a
 worktree offers to remove the worktree too (the branch is kept, and a
 worktree with uncommitted changes is refused).
 
-Every project row shows the branch of the main checkout, `±N` for files
-changed or untracked, and `↑N` for commits not on the upstream; agents in
-their own worktree show the same for theirs. The scan runs every 5 seconds
-and right after an agent finishes a turn.
+`v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
+stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)
+when installed, else `git status` and `git diff HEAD` in `less`. Quit the
+viewer, press `v` / `Alt-v` again, or open any agent, and it goes away.
+Pick your own viewer in `~/.config/mad/config.json`; `{dir}` is the
+directory, already shell-quoted:
 
-An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
-shell; custom kinds set `icon` and `color` in `agents.json` or get their
-initial) and
-is named after its conversation: the title you set with `/rename` (claude)
-or in the app (codex), else the one claude generated, else the first thing
-you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
-your own instead, kept until you clear it. The line under a claude or codex
-agent says what it is on: the tool being called and what it was pointed at
-while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
-otherwise the prompt it is working on or was last given. `i` hides that
-line everywhere, for a shorter list.
-
-The number before an agent's status (`1.2M`, `340k`) is every token its
-current session has sent through the model: input, cache reads and writes,
-and output, added up. Both come from the transcript claude or codex writes
-(`~/.claude/projects`, `~/.codex/sessions`), read from where the last poll
-stopped, so agents are never asked. A project row shows the sum of its
-agents. `/clear` starts a new session, so the count starts over.
+```json
+{"diff": {"command": "tig -C {dir} status"}}
+```
 
 When the branch is done, `f` on the agent (or project) lists what can
 happen to it: push and open a pull request (`gh pr create`, when `gh` is
@@ -222,17 +241,6 @@ right after. Your own list in `config.json` replaces the built-in one;
 ```json
 {"finish": [{"name": "open PR", "command": "gh pr create --web --base {base}"},
             {"name": "squash onto {base}", "command": "git rebase -i {base}"}]}
-```
-
-`v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
-stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)
-when installed, else `git status` and `git diff HEAD` in `less`. Quit the
-viewer, press `v` / `Alt-v` again, or open any agent, and it goes away.
-Pick your own viewer in `~/.config/mad/config.json`; `{dir}` is the
-directory, already shell-quoted:
-
-```json
-{"diff": {"command": "tig -C {dir} status"}}
 ```
 
 ## How it works
@@ -332,7 +340,7 @@ sets its own `notify`).
 | `~/.local/state/mad/status/`          | Status reported by hooks                          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
 | `~/.local/state/mad/sidebar.log`      | Sidebar crash log (the sidebar auto-restarts)     |
-| `~/.local/state/mad/sidebar-mad.sock` | Lets `mad switch` / `mad jump` reach the sidebar  |
+| `~/.local/state/mad/sidebar-mad.sock` | How `mad hook`, `switch`, `jump` and `diff` reach the sidebar |
 
 `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected.
 
@@ -349,6 +357,11 @@ sets its own `notify`).
   picks the newest session in that process's directory. This is exact when
   each conversation has its own directory (the app's default worktrees).
 - Desktop-app discovery is macOS only; everything else also works on Linux.
+- Titles, the line under each agent and token counts come from the
+  transcripts claude and codex write, a format neither documents. An agent
+  update can change it; the sidebar then falls back to `claude`, `claude#2`
+  and shows no counts until mad catches up. They refresh every 5 seconds
+  and when a turn ends, so they can trail the status a little.
 
 ## Contributing
 

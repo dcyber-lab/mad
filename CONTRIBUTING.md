@@ -46,6 +46,7 @@ with dependencies pointing downwards in this list:
 | `internal/poke`      | Socket for other mad processes to reach the sidebar              |
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/git`       | Checkout info for the sidebar; worktrees for agents               |
+| `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
 | `internal/state`     | Persistent project/agent tree                                    |
 | `internal/paths`     | Config/state locations, path and shell helpers                   |

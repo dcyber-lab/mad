@@ -16,4 +16,10 @@ test:
 clean:
 	rm -f mad
 
-.PHONY: build install test clean
+# Re-record docs/demo.gif (see docs/demo/README.md).
+DEMO_DIR ?= /tmp/madrec
+demo:
+	python3 docs/demo/record.py $(DEMO_DIR)
+	python3 docs/demo/render.py $(DEMO_DIR)
+
+.PHONY: build install test clean demo
