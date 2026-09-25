@@ -29,6 +29,7 @@ func setup(t *testing.T, projects ...string) (*model, *state.State) {
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	t.Setenv("HOME", dir)
+	t.Setenv("CODEX_HOME", "")
 	st := &state.State{}
 	for _, p := range projects {
 		st.AddProject(p)

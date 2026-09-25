@@ -23,6 +23,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", "")
 	// t.TempDir lives under a temp root, which discovery skips on purpose.
 	old := tempRoots
 	tempRoots = nil
