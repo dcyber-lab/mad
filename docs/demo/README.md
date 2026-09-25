@@ -18,6 +18,12 @@ That runs `record.py`, which plays the timeline and captures the screen every
 100ms, then `render.py`, which draws each capture with a caption bar and
 writes `docs/demo.gif`. Needs tmux, Go, Python 3 and git.
 
+`inspect.py text WORKDIR 3 11 20` prints the screen at those seconds, to
+check each step before rendering; `inspect.py sheet docs/demo.gif out.png
+3 11 20` makes a contact sheet of the result. In Claude Code, the
+`update-demo` skill (`.claude/skills/update-demo`) walks through the whole
+thing, including the pitfalls met so far.
+
 - The story is the timeline at the end of `record.py`: `say` sets the
   caption, `key` / `typ` press keys in the outer terminal, `trig` tells an
   agent to move on. What each agent does is its role in `fake-agent`.
