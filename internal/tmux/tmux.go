@@ -32,6 +32,7 @@ const (
 	IDSidebar     = "_sidebar"
 	IDPlaceholder = "_placeholder"
 	IDKeepalive   = "_keep"
+	IDDiff        = "_diff" // the diff viewer opened with v
 )
 
 func envOr(k, def string) string {

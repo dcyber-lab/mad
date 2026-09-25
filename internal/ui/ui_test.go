@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -768,5 +770,223 @@ func TestSwitchDuringScreenCapture(t *testing.T) {
 		if !m.lastFull.After(before) || !m.polling {
 			t.Errorf("%T during a capture: no full poll after it", done)
 		}
+	}
+}
+
+func TestWorktreeFlow(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	var added []string
+	oldAdd, oldValid := addWorktree, validBranch
+	addWorktree = func(repo, branch, dir string) error { added = append(added, repo+" "+branch+" "+dir); return nil }
+	validBranch = func(name string) error {
+		if strings.ContainsAny(name, " ") || name == "" {
+			return errors.New("invalid branch name")
+		}
+		return nil
+	}
+	t.Cleanup(func() { addWorktree, validBranch = oldAdd, oldValid })
+
+	press(m, "w")
+	if m.mode != modeWorktree || m.wt != st.Projects[0] {
+		t.Fatalf("mode=%v wt=%v", m.mode, m.wt)
+	}
+	if v := m.View(); !strings.Contains(v, "new worktree · one") || !strings.Contains(v, "branch") {
+		t.Errorf("worktree footer missing:\n%s", v)
+	}
+	// A bad name is refused and shown; the prompt stays.
+	press(m, "b", "a", "d", " ", "x", "enter")
+	if m.mode != modeWorktree || !strings.Contains(m.View(), "invalid branch") {
+		t.Errorf("mode=%v view:\n%s", m.mode, m.View())
+	}
+	press(m, "esc")
+	if m.mode != modeNormal {
+		t.Fatal("esc should leave the prompt")
+	}
+
+	press(m, "w")
+	m.input.SetValue("feat/x")
+	press(m, "enter")
+	if m.mode != modePickKind || m.wtBranch != "feat/x" {
+		t.Fatalf("mode=%v branch=%q", m.mode, m.wtBranch)
+	}
+	if v := m.View(); !strings.Contains(v, "one @ feat/x") {
+		t.Errorf("kind menu should name the branch:\n%s", v)
+	}
+	press(m, "1") // claude: no session picker for a fresh worktree
+	if m.mode != modeNormal || m.wtBranch != "" {
+		t.Errorf("mode=%v branch=%q", m.mode, m.wtBranch)
+	}
+	agents := st.Projects[0].Agents
+	if len(agents) != 1 || agents[0].Kind != "claude" || agents[0].Dir != "/p/one/.claude/worktrees/feat-x" {
+		t.Fatalf("agents = %+v", agents)
+	}
+	// Before the first git scan the row already says which worktree.
+	if v := m.View(); !strings.Contains(v, "claude  feat-x") {
+		t.Errorf("worktree name missing from row:\n%s", v)
+	}
+	// The worktree is made when the command runs, not when it is built.
+	if len(added) != 0 {
+		t.Errorf("worktree added early: %v", added)
+	}
+
+	// Setup that fails (e.g. git refused the branch) drops the agent again.
+	m.Update(doneMsg{err: errors.New("git worktree: boom"), failedID: agents[0].ID})
+	if len(st.Projects[0].Agents) != 0 {
+		t.Error("failed agent kept")
+	}
+	if saved, _ := state.Load(); len(saved.Projects[0].Agents) != 0 {
+		t.Error("failed agent still saved")
+	}
+	if !strings.Contains(m.View(), "boom") {
+		t.Error("error not shown")
+	}
+
+	// n after w must not reuse the branch.
+	press(m, "w")
+	m.input.SetValue("feat/y")
+	press(m, "enter", "esc", "n")
+	if m.wtBranch != "" || m.mode != modePickKind {
+		t.Errorf("after esc + n: branch=%q mode=%v", m.wtBranch, m.mode)
+	}
+	press(m, "4") // shell: straight to launch, in the project itself
+	if a := st.Projects[0].Agents; len(a) != 1 || a[0].Dir != "" {
+		t.Errorf("agents = %+v", a)
+	}
+}
+
+func TestKillWorktreeAgentOffersRemoval(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	dir := "/p/one/.claude/worktrees/feat"
+	st.Projects[0].Agents = []*state.Agent{
+		{ID: "a1", Kind: "claude", Dir: dir},
+		{ID: "a2", Kind: "codex", Dir: dir},
+		{ID: "a3", Kind: "claude", Dir: "/elsewhere"},
+	}
+	m.rebuildRows()
+
+	press(m, "j", "x", "y") // a1: a2 still uses the worktree
+	if m.mode != modeNormal {
+		t.Errorf("removal offered while another agent uses the worktree: %q", m.confirmMsg)
+	}
+	press(m, "j", "j", "x", "y") // a3: not a mad worktree
+	if m.mode != modeNormal {
+		t.Errorf("removal offered for a foreign dir: %q", m.confirmMsg)
+	}
+	press(m, "j", "x", "y") // a2: last one in the worktree
+	if m.mode != modeConfirm || !strings.Contains(m.confirmMsg, "remove worktree feat") {
+		t.Fatalf("mode=%v msg=%q", m.mode, m.confirmMsg)
+	}
+	press(m, "n")
+	if m.mode != modeNormal || len(st.Projects[0].Agents) != 0 {
+		t.Errorf("mode=%v agents=%d", m.mode, len(st.Projects[0].Agents))
+	}
+}
+
+func TestGitInfoInRows(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	st.Projects[0].Agents = []*state.Agent{
+		{ID: "a1", Kind: "claude"},
+		{ID: "a2", Kind: "codex", Dir: "/p/one/.claude/worktrees/feat-x"},
+	}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
+
+	// The scan asks about every project and agent directory, once each.
+	old := gitStatus
+	t.Cleanup(func() { gitStatus = old })
+	var asked []string
+	gitStatus = func(dir string) (gitInfo, bool) {
+		asked = append(asked, dir)
+		return gitInfo{}, false
+	}
+	m.gitCmd()()
+	sort.Strings(asked)
+	if strings.Join(asked, " ") != "/p/one /p/one/.claude/worktrees/feat-x" {
+		t.Errorf("scanned %v", asked)
+	}
+
+	m.Update(gitMsg{
+		"/p/one":                          {Branch: "main", Dirty: 2, Ahead: 1},
+		"/p/one/.claude/worktrees/feat-x": {Branch: "feat/x"},
+	})
+	v := m.View()
+	for _, want := range []string{"one  main ±2 ↑1", "codex  feat/x"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("view lacks %q:\n%s", want, v)
+		}
+	}
+	if strings.Contains(v, "claude  main") {
+		t.Errorf("an agent in the project dir should carry no checkout of its own:\n%s", v)
+	}
+
+	// A turn ending asks for a fresh scan at the next tick.
+	m.gitDue, m.gitScanning = false, false
+	m.trackers["a1"] = &status.Tracker{Status: status.Running}
+	m.applyPoll(pollMsg{panes: []tmux.Pane{{ID: "%1", MadID: "a1", Session: tmux.PoolSession, Index: -1, Dead: true}}}, time.Now())
+	if !m.gitDue {
+		t.Error("run ended but no scan requested")
+	}
+}
+
+type gitInfo = git.Info
+
+func TestDiffView(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "a2", Kind: "claude", Dir: "/p/one/.claude/worktrees/w"}}
+	m.rebuildRows()
+	now := time.Now()
+	sidebar := tmux.Pane{ID: "%1", MadID: tmux.IDSidebar, Session: tmux.MainSession, Index: 0, Active: true}
+	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar,
+		{ID: "%2", MadID: "a1", Session: tmux.MainSession, Index: 1},
+	}}, now)
+
+	// v on a row opens its directory; the stage bar stays on the agent
+	// while its diff is up.
+	press(m, "j", "j")
+	if cmd := m.keyNormal(key("v")); cmd == nil || m.diffFor != "a2" {
+		t.Fatalf("cmd=%v diffFor=%q", cmd, m.diffFor)
+	}
+	diff := tmux.Pane{ID: "%9", MadID: tmux.IDDiff, Session: tmux.MainSession, Index: 1}
+	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, diff, {ID: "%2", MadID: "a1", Session: tmux.PoolSession, Index: -1}}}, now)
+	if m.stageID != tmux.IDDiff {
+		t.Fatalf("stage = %q", m.stageID)
+	}
+	if r, _ := m.current(); r.agent.ID != "a2" {
+		t.Errorf("cursor moved to %v", r.agent)
+	}
+	if left, _ := m.rowSegs(m.rows[2]); left[1].s != "▌" {
+		t.Error("the agent whose diff is shown should carry the stage bar")
+	}
+	if m.diffCleanup([]tmux.Pane{sidebar, diff}) != nil {
+		t.Error("a live diff view on stage must be left alone")
+	}
+	// v again on the same row takes it down; on another row it switches.
+	if cmd := m.keyNormal(key("v")); cmd == nil {
+		t.Error("toggle off returned nothing")
+	}
+	press(m, "k")
+	if cmd := m.keyNormal(key("v")); cmd == nil || m.diffFor != "a1" {
+		t.Errorf("switch: cmd=%v diffFor=%q", cmd, m.diffFor)
+	}
+	// Quitting the viewer leaves a dead pane on stage: cleaned up. Parked
+	// in the pool: cleaned up too.
+	dead := diff
+	dead.Dead = true
+	if m.diffCleanup([]tmux.Pane{sidebar, dead}) == nil {
+		t.Error("dead diff view not closed")
+	}
+	parked := diff
+	parked.Session, parked.Index = tmux.PoolSession, -1
+	if m.diffCleanup([]tmux.Pane{sidebar, parked}) == nil {
+		t.Error("parked diff view not closed")
+	}
+	// Alt-v from the stage: for the agent there, or back from the diff.
+	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, {ID: "%2", MadID: "a1", Session: tmux.MainSession, Index: 1}}}, now)
+	if _, cmd := m.Update(pokeMsg(poke.Diff)); cmd == nil || m.diffFor != "a1" {
+		t.Errorf("poke diff: cmd=%v diffFor=%q", cmd, m.diffFor)
+	}
+	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, diff}}, now)
+	if _, cmd := m.Update(pokeMsg(poke.Diff)); cmd == nil {
+		t.Error("poke diff on the diff view should close it")
 	}
 }

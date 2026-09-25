@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -183,11 +184,97 @@ func ShowPane(madID string, focus bool) error {
 		if err := tmux.Run("swap-pane", "-d", "-s", target.ID, "-t", stage.ID); err != nil {
 			return err
 		}
+		if stage.MadID == tmux.IDDiff {
+			// The diff view is a one-off: it goes when something else
+			// takes the stage.
+			_ = tmux.Run("kill-pane", "-t", stage.ID)
+		}
 	}
 	if focus {
 		return tmux.Run("select-pane", "-t", tmux.StagePane)
 	}
 	return nil
+}
+
+// OpenDiff shows the changes in dir on stage, in a new pane running the
+// diff command; an earlier diff view is replaced.
+func OpenDiff(dir, command string) error {
+	if err := CloseDiff(""); err != nil {
+		return err
+	}
+	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", "diff", "-c", dir,
+		"-P", "-F", "#{pane_id}", command)
+	if err != nil {
+		return err
+	}
+	if err := tmux.Tag(id, tmux.IDDiff); err != nil {
+		return err
+	}
+	return ShowPane(tmux.IDDiff, true)
+}
+
+// CloseDiff removes the diff view. When it is on stage, backID (an agent,
+// or the placeholder when empty) takes its place; focus is left where it
+// is unless focus is set.
+func CloseDiff(backID string) error {
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return err
+	}
+	pane, ok := tmux.FindPane(panes, tmux.IDDiff)
+	if !ok {
+		return nil
+	}
+	if stage, ok := tmux.Stage(panes); ok && stage.ID == pane.ID {
+		if backID == "" {
+			backID = tmux.IDPlaceholder
+		}
+		if _, ok := tmux.FindPane(panes, backID); !ok {
+			backID = tmux.IDPlaceholder
+		}
+		return ShowPane(backID, false) // kills the outgoing diff pane
+	}
+	return tmux.Run("kill-pane", "-t", pane.ID)
+}
+
+// DiffConfig is the "diff" object of ~/.config/mad/config.json:
+//
+//	{"diff": {"command": "lazygit -p {dir}"}}
+//
+// The command runs through sh in the agent's directory with {dir}
+// replaced by it. Without one, lazygit is used when installed, else git's
+// own diff in a pager.
+type DiffConfig struct {
+	Command string `json:"command,omitempty"`
+}
+
+// LoadDiffConfig reads the diff section of config.json.
+func LoadDiffConfig() DiffConfig {
+	var file struct {
+		Diff *DiffConfig `json:"diff"`
+	}
+	data, err := os.ReadFile(paths.ConfigFile())
+	if err != nil || json.Unmarshal(data, &file) != nil || file.Diff == nil {
+		return DiffConfig{}
+	}
+	return *file.Diff
+}
+
+// lookPath is replaceable in tests.
+var lookPath = exec.LookPath
+
+// DiffCommand is the shell command that shows the changes in dir.
+func DiffCommand(cfg DiffConfig, dir string) string {
+	q := paths.ShellQuote(dir)
+	if cfg.Command != "" {
+		return strings.ReplaceAll(cfg.Command, "{dir}", q)
+	}
+	if _, err := lookPath("lazygit"); err == nil {
+		return "lazygit -p " + q
+	}
+	// Status first (it lists untracked files, which diff skips), then the
+	// diff against HEAD: everything the agent did since the last commit.
+	return fmt.Sprintf("cd %s && { git -c color.status=always status --short --branch; echo; git -c color.diff=always diff HEAD; } | less -R", q)
 }
 
 // StartAgent launches a in a new pool window, with MAD_AGENT_ID set for
@@ -338,6 +425,8 @@ set -g pane-active-border-style "fg=colour75"
 	fmt.Fprintf(&b, "bind -n M-s %s\nbind s %s\n", toggle, toggle)
 	// The sidebar knows which agents need you; let it pick the next one.
 	fmt.Fprintf(&b, "bind -n M-n run-shell -b %s\n", tmuxQuote(SelfCommand("jump")))
+	// The diff view of the agent on stage, and back.
+	fmt.Fprintf(&b, "bind -n M-v run-shell -b %s\nbind v run-shell -b %s\n", tmuxQuote(SelfCommand("diff")), tmuxQuote(SelfCommand("diff")))
 	run := func(key, arg string) {
 		fmt.Fprintf(&b, "bind %s run-shell -b %s\n", key, tmuxQuote(SelfCommand("switch "+arg)))
 	}

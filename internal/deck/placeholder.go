@@ -14,7 +14,8 @@ const PlaceholderText = `
 
    sidebar keys
      ↑/↓ j/k   move            enter   open agent
-     n         new agent       a       add project
+     n         new agent       w       new agent in a new worktree
+     v         diff view       a       add project
      r         restart/resume  x       kill agent / remove project
      1-9       open agent N    q       detach (agents keep running)
      < / >     narrower / wider sidebar (or drag the border)
@@ -22,6 +23,7 @@ const PlaceholderText = `
    anywhere  (Option must act as Alt in Ghostty)
      Alt-s     sidebar ⇄ agent
      Alt-j/k   next / prev agent
+     Alt-v     diff view of the agent on stage, and back
      Alt-1..9  open agent N
      Ctrl-] then s / n / p / 1-9 / d   same, without Alt
 `
