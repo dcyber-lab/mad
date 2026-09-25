@@ -42,7 +42,13 @@ status the way claude and codex do.</sub>
 
 ## Installation
 
-Prebuilt binaries for macOS and Linux (amd64 and arm64) are on the
+With [Homebrew](https://brew.sh) (macOS or Linux):
+
+```sh
+brew install dcyber-lab/tap/mad
+```
+
+Prebuilt binaries for macOS and Linux (amd64 and arm64) are also on the
 [releases page](https://github.com/dcyber-lab/mad/releases). To install the
 latest one into `~/.local/bin`:
 

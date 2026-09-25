@@ -41,3 +41,21 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+# Pushes Formula/mad.rb to dcyber-lab/homebrew-tap. Needs the
+# HOMEBREW_TAP_TOKEN secret: a token with contents write access to that repo.
+brews:
+  - repository:
+      owner: dcyber-lab
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/dcyber-lab/mad
+    description: Run Claude Code, Codex, pi and shells side by side in one tmux deck
+    license: MIT
+    dependencies:
+      - name: tmux
+    install: |
+      bin.install "mad"
+    test: |
+      assert_match "mad ", shell_output("#{bin}/mad version")
