@@ -12,3 +12,6 @@ coverage.*
 .idea/
 .vscode/
 .DS_Store
+
+# python (docs/demo)
+__pycache__/
