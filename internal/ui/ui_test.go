@@ -990,3 +990,65 @@ func TestDiffView(t *testing.T) {
 		t.Error("poke diff on the diff view should close it")
 	}
 }
+
+func TestTokensInRows(t *testing.T) {
+	m, st := setup(t, "/p/one", "/p/two")
+	st.Projects[0].Agents = []*state.Agent{
+		{ID: "a1", Kind: "claude", SessionID: "s1"},
+		{ID: "a2", Kind: "codex", Dir: "/p/one/.claude/worktrees/w"},
+		{ID: "a3", Kind: "shell"},
+	}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
+
+	// The read covers every agent, with its session id and directory.
+	old := m.usageReader
+	t.Cleanup(func() { m.usageReader = old })
+	m.usageCmd() // just the snapshot; the read itself needs no transcripts
+	if !m.usageScanning || m.usageDue {
+		t.Error("scan not marked in flight")
+	}
+	// Before any transcript, rows carry no count.
+	if v := m.View(); strings.Contains(v, "0  ") {
+		t.Errorf("empty counts shown:\n%s", v)
+	}
+
+	m.Update(usageMsg{
+		"a1": {Input: 10, CacheRead: 1_200_000, Output: 500},
+		"a2": {Input: 33_000, Output: 1_000},
+	})
+	if m.usageScanning {
+		t.Error("scan still marked in flight")
+	}
+	v := m.View()
+	for _, want := range []string{"1.2M  stopped", "34k  stopped", "1.2M  3 "} {
+		if !strings.Contains(v, want) {
+			t.Errorf("view lacks %q:\n%s", want, v)
+		}
+	}
+	lines := strings.Split(v, "\n")
+	for _, l := range lines {
+		if strings.Contains(l, "shell") && strings.Contains(l, "k  ") {
+			t.Errorf("shell has no transcript but shows a count: %q", l)
+		}
+		if strings.Contains(l, "two") && strings.Contains(l, "  0 ") {
+			t.Errorf("an empty project shows a count: %q", l)
+		}
+	}
+
+	// Too narrow for both: the count goes, the status stays.
+	m.Update(tea.WindowSizeMsg{Width: 24, Height: 30})
+	v = m.View()
+	if strings.Contains(v, "1.2M  stopped") || !strings.Contains(v, "claude") || strings.Count(v, "stopped") != 3 {
+		t.Errorf("at width 24:\n%s", v)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
+
+	// A turn ending asks for a fresh read at the next tick.
+	m.usageDue, m.usageScanning = false, false
+	m.trackers["a1"] = &status.Tracker{Status: status.Running}
+	m.applyPoll(pollMsg{panes: []tmux.Pane{{ID: "%1", MadID: "a1", Session: tmux.PoolSession, Index: -1, Dead: true}}}, time.Now())
+	if !m.usageDue {
+		t.Error("run ended but no read requested")
+	}
+}

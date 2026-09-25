@@ -20,6 +20,8 @@ status the way claude and codex do.</sub>
   `idle`, or `done` (finished while you were looking elsewhere).
 - **Git at a glance** — every project and worktree shows its branch, how
   many files changed and how many commits are unpushed.
+- **Tokens at a glance** — every claude and codex agent shows what its
+  session has consumed so far, and every project the sum of its agents.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
   starts an agent in it; `v` opens the changes of any agent in lazygit (or
   `git diff`) without leaving the deck.
@@ -180,6 +182,14 @@ Every project row shows the branch of the main checkout, `±N` for files
 changed or untracked, and `↑N` for commits not on the upstream; agents in
 their own worktree show the same for theirs. The scan runs every 5 seconds
 and right after an agent finishes a turn.
+
+The number before an agent's status (`1.2M`, `340k`) is every token its
+current session has sent through the model: input, cache reads and writes,
+and output, added up. It comes from the transcript claude or codex writes
+(`~/.claude/projects`, `~/.codex/sessions`), read from where the last poll
+stopped, so agents are never asked. A project row shows the sum of its
+agents. `/clear` starts a new session, so the count starts over. When a
+row is too narrow for both, the count goes before the status does.
 
 `v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
 stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)

@@ -47,3 +47,22 @@ func ageAt(t, now time.Time) string {
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 }
+
+// Count is a compact token count: 980, 4.2k, 340k, 1.2M, 12M, 1.1B.
+func Count(n int64) string {
+	f := float64(n)
+	switch {
+	case n < 1000:
+		return fmt.Sprintf("%d", n)
+	case n < 10_000:
+		return fmt.Sprintf("%.1fk", f/1e3)
+	case n < 1_000_000:
+		return fmt.Sprintf("%.0fk", f/1e3)
+	case n < 10_000_000:
+		return fmt.Sprintf("%.1fM", f/1e6)
+	case n < 1_000_000_000:
+		return fmt.Sprintf("%.0fM", f/1e6)
+	default:
+		return fmt.Sprintf("%.1fB", f/1e9)
+	}
+}

@@ -468,3 +468,32 @@ func TestTerminateExternal(t *testing.T) {
 		t.Errorf("second terminate: %v", err)
 	}
 }
+
+func TestTranscripts(t *testing.T) {
+	f := newFixture(t)
+	cwd := f.project("app")
+	if got := ClaudeTranscripts(cwd, "s1"); got != nil {
+		t.Errorf("before any write: %v", got)
+	}
+	main := filepath.Join(ClaudeProjectDir(cwd), "s1.jsonl")
+	f.write(main, []any{map[string]any{"type": "user"}}, time.Now())
+	sub := filepath.Join(ClaudeProjectDir(cwd), "s1", "subagents", "agent-x.jsonl")
+	f.write(sub, []any{map[string]any{"type": "user"}}, time.Now())
+	if got := ClaudeTranscripts(cwd, "s1"); strings.Join(got, " ") != main+" "+sub {
+		t.Errorf("got %v", got)
+	}
+	// A session that ran in another directory is found under its project.
+	if got := ClaudeTranscripts(f.project("other"), "s1"); len(got) != 2 || got[0] != main {
+		t.Errorf("from elsewhere: %v", got)
+	}
+
+	if got := CodexTranscript("019e-abc"); got != "" {
+		t.Errorf("no codex file yet: %q", got)
+	}
+	rollout := filepath.Join(codexSessionsDir(), "2026", "05", "17", "rollout-2026-05-17T22-33-30-019e-abc.jsonl")
+	f.write(rollout, []any{map[string]any{"type": "session_meta"}}, time.Now())
+	f.write(strings.Replace(rollout, "019e-abc", "019e-abcd", 1), []any{map[string]any{"type": "session_meta"}}, time.Now())
+	if got := CodexTranscript("019e-abc"); got != rollout {
+		t.Errorf("got %q want %q", got, rollout)
+	}
+}
