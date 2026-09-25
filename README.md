@@ -200,7 +200,13 @@ hooks), `{codex_notify}` (codex notify wiring).
   claude does not work there (use `\` + Enter instead). On macOS, upgrade
   with `brew upgrade tmux`.
 - codex and pi have no hooks, so their `waiting` state relies on matching
-  on-screen text and may miss new prompt wording.
+  on-screen text and may miss new prompt wording. Their `running` state comes
+  from screen changes: a long command that prints nothing can briefly look
+  idle.
+- The Claude desktop app doesn't expose which session a process serves; mad
+  picks the newest session in that process's directory. This is exact when
+  each conversation has its own directory (the app's default worktrees).
+- Desktop-app discovery is macOS only; everything else also works on Linux.
 
 ## Contributing
 

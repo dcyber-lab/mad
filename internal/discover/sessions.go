@@ -1,4 +1,4 @@
-package main
+package discover
 
 import (
 	"bufio"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
 // Session is a past Claude/Codex conversation, from the CLI or a desktop
@@ -25,17 +27,20 @@ type Session struct {
 	Updated time.Time
 }
 
-const maxSessions = 40
+// MaxSessions caps how many sessions a project lists.
+const MaxSessions = 40
 
 var (
 	titleRe      = regexp.MustCompile(`"(?:customTitle|aiTitle)":"((?:[^"\\]|\\.)*)"`)
 	reminderRe   = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
-	sessionCache sync.Map // path+mtime → Session (or nil for skipped files)
+	sessionCache sync.Map // path@mtime → *Session (nil for skipped files)
 )
 
-// projectSessions lists resumable sessions of kind for a project, newest
-// first, including sessions run in its agent worktrees.
-func projectSessions(root, kind string) []Session {
+// ProjectSessions lists resumable sessions of kind ("claude" or "codex")
+// for a project root, newest first, including sessions that ran in its
+// agent worktrees. Sessions started by programs rather than a person
+// (desktop workflows, -p/SDK runs, codex subagents) are left out.
+func ProjectSessions(root, kind string) []Session {
 	var out []Session
 	switch kind {
 	case "claude":
@@ -44,8 +49,8 @@ func projectSessions(root, kind string) []Session {
 		out = codexSessions(root)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Updated.After(out[j].Updated) })
-	if len(out) > maxSessions {
-		out = out[:maxSessions]
+	if len(out) > MaxSessions {
+		out = out[:MaxSessions]
 	}
 	return out
 }
@@ -56,10 +61,9 @@ type fileEntry struct {
 }
 
 func claudeSessions(root string) []Session {
-	base := filepath.Join(homeDir(), ".claude", "projects")
-	enc := nonAlnum.ReplaceAllString(root, "-")
-	dirs := []string{filepath.Join(base, enc)}
-	wt, _ := filepath.Glob(filepath.Join(base, enc+"--claude-worktrees-*"))
+	base := claudeProjectDir(root)
+	dirs := []string{base}
+	wt, _ := filepath.Glob(base + "--claude-worktrees-*")
 	dirs = append(dirs, wt...)
 
 	var files []fileEntry
@@ -78,7 +82,8 @@ func claudeSessions(root string) []Session {
 
 	var out []Session
 	for i, f := range files {
-		if len(out) >= maxSessions || i >= 4*maxSessions {
+		// Automated sessions can vastly outnumber real ones; bound the work.
+		if len(out) >= MaxSessions || i >= 4*MaxSessions {
 			break
 		}
 		if s := cachedSession(f, parseClaudeSession); s != nil {
@@ -102,10 +107,14 @@ func cachedSession(f fileEntry, parse func(string) *Session) *Session {
 }
 
 // parseClaudeSession keeps interactive sessions (CLI or desktop) that have
-// at least one real user message.
+// at least one message a person typed.
 func parseClaudeSession(path string) *Session {
 	head, tail := readHeadTail(path, 256<<10, 128<<10)
-	s := &Session{Kind: "claude", ID: uuidTail.FindStringSubmatch(path)[1]}
+	m := uuidTail.FindStringSubmatch(path)
+	if m == nil {
+		return nil
+	}
+	s := &Session{Kind: "claude", ID: m[1]}
 	var firstMsg string
 	sc := bufio.NewScanner(bytes.NewReader(head))
 	sc.Buffer(make([]byte, 1<<20), 4<<20)
@@ -156,7 +165,8 @@ func parseClaudeSession(path string) *Session {
 	return s
 }
 
-// userText extracts what the user typed, skipping injected context.
+// userText extracts what the user typed, skipping injected context
+// (system reminders, AGENTS.md, slash-command wrappers).
 func userText(raw json.RawMessage) string {
 	var text string
 	if json.Unmarshal(raw, &text) != nil {
@@ -179,40 +189,25 @@ func userText(raw json.RawMessage) string {
 		return ""
 	}
 	line := strings.TrimSpace(strings.SplitN(text, "\n", 2)[0])
-	return truncate(line, 80)
+	return textutil.Truncate(line, 80)
 }
 
 func codexSessions(root string) []Session {
 	names := codexThreadNames()
-	codexDir := filepath.Join(homeDir(), ".codex", "sessions")
 	var out []Session
-	for day := 0; day <= historyDays && len(out) < maxSessions; day++ {
-		dayDir := filepath.Join(codexDir, time.Now().AddDate(0, 0, -day).Format("2006/01/02"))
-		entries, _ := os.ReadDir(dayDir)
-		var files []fileEntry
-		for _, e := range entries {
-			if info, err := e.Info(); err == nil && strings.HasSuffix(e.Name(), ".jsonl") {
-				files = append(files, fileEntry{filepath.Join(dayDir, e.Name()), info.ModTime()})
-			}
+	codexFiles(func(path string, info os.FileInfo) bool {
+		// Cheap cwd check before a full parse.
+		if c := codexHeadOf(path).cwd; c == "" || ResolveRoot(c) != root {
+			return true
 		}
-		for _, f := range files {
-			// Cheap cwd check before a full parse.
-			cwd, ok := codexCwdCache.Load(f.path)
-			if !ok {
-				cwd = readCwd(f.path, 16<<10)
-				codexCwdCache.Store(f.path, cwd)
+		if s := cachedSession(fileEntry{path, info.ModTime()}, parseCodexSession); s != nil {
+			if n := names[s.ID]; n != "" {
+				s.Title = n
 			}
-			if c := cwd.(string); c == "" || resolveRoot(c) != root {
-				continue
-			}
-			if s := cachedSession(f, parseCodexSession); s != nil {
-				if n := names[s.ID]; n != "" {
-					s.Title = n
-				}
-				out = append(out, *s)
-			}
+			out = append(out, *s)
 		}
-	}
+		return len(out) < MaxSessions
+	})
 	return out
 }
 
@@ -229,8 +224,7 @@ func parseCodexSession(path string) *Session {
 				Cwd        string          `json:"cwd"`
 				Originator string          `json:"originator"`
 				Parent     string          `json:"parent_thread_id"`
-				Source     string          `json:"thread_source"`
-				Type       string          `json:"type"`
+				Source     json.RawMessage `json:"thread_source"`
 				Role       string          `json:"role"`
 				Content    json.RawMessage `json:"content"`
 			} `json:"payload"`
@@ -241,7 +235,9 @@ func parseCodexSession(path string) *Session {
 		switch {
 		case ln.Type == "session_meta":
 			s.ID, s.Cwd = ln.Payload.ID, ln.Payload.Cwd
-			if ln.Payload.Parent != "" || (ln.Payload.Source != "" && ln.Payload.Source != "user") {
+			var source string
+			_ = json.Unmarshal(ln.Payload.Source, &source)
+			if ln.Payload.Parent != "" || (source != "" && source != "user") {
 				return nil // subagent / guardian review threads
 			}
 			switch {
@@ -272,7 +268,7 @@ func parseCodexSession(path string) *Session {
 // last entry wins).
 func codexThreadNames() map[string]string {
 	names := map[string]string{}
-	f, err := os.Open(filepath.Join(homeDir(), ".codex", "session_index.jsonl"))
+	f, err := os.Open(filepath.Join(filepath.Dir(codexSessionsDir()), "session_index.jsonl"))
 	if err != nil {
 		return names
 	}
@@ -291,6 +287,8 @@ func codexThreadNames() map[string]string {
 	return names
 }
 
+// readHeadTail returns up to head bytes from the start of a file and up to
+// tail bytes from its end (not overlapping the head).
 func readHeadTail(path string, head, tail int64) ([]byte, []byte) {
 	f, err := os.Open(path)
 	if err != nil {

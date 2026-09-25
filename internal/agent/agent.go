@@ -1,4 +1,6 @@
-package main
+// Package agent describes the kinds of coding agents mad can run and how
+// to launch or resume each of them.
+package agent
 
 import (
 	"encoding/json"
@@ -6,10 +8,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/state"
 )
 
-// AgentKind describes how to launch one kind of coding agent. Command
-// templates are shell strings with these placeholders:
+// Kind describes how to launch one kind of coding agent. Command templates
+// are shell strings with these placeholders:
 //
 //	{id}              the agent's UUID
 //	{sid}             the agent's current session id (falls back to {id})
@@ -17,8 +22,8 @@ import (
 //	{codex_notify}    `-c notify=[...]` wiring codex's notify to mad
 //
 // Kinds can be overridden or added via ~/.config/mad/agents.json, a JSON
-// array of AgentKind.
-type AgentKind struct {
+// array of Kind.
+type Kind struct {
 	Name string `json:"name"`
 	// Start launches a fresh session.
 	Start string `json:"start"`
@@ -35,7 +40,7 @@ type AgentKind struct {
 	waitingRe []*regexp.Regexp
 }
 
-var builtinKinds = []AgentKind{
+var builtin = []Kind{
 	{
 		Name:    "claude",
 		Start:   "claude --settings {claude_settings} --session-id {id}",
@@ -61,10 +66,18 @@ var builtinKinds = []AgentKind{
 	},
 }
 
-func loadKinds() []AgentKind {
-	kinds := append([]AgentKind(nil), builtinKinds...)
-	if data, err := os.ReadFile(agentsConfigPath()); err == nil {
-		var extra []AgentKind
+// Builtin returns the kinds mad knows without any configuration.
+func Builtin() []Kind {
+	return compile(append([]Kind(nil), builtin...))
+}
+
+// Load returns the built-in kinds merged with agents.json: an entry with a
+// built-in name replaces it, others are appended. A missing or invalid file
+// leaves the built-ins as they are.
+func Load() []Kind {
+	kinds := append([]Kind(nil), builtin...)
+	if data, err := os.ReadFile(paths.AgentsConfig()); err == nil {
+		var extra []Kind
 		if json.Unmarshal(data, &extra) == nil {
 			for _, k := range extra {
 				replaced := false
@@ -73,13 +86,18 @@ func loadKinds() []AgentKind {
 						kinds[i], replaced = k, true
 					}
 				}
-				if !replaced {
+				if !replaced && k.Name != "" {
 					kinds = append(kinds, k)
 				}
 			}
 		}
 	}
+	return compile(kinds)
+}
+
+func compile(kinds []Kind) []Kind {
 	for i := range kinds {
+		kinds[i].waitingRe = nil
 		for _, w := range kinds[i].Waiting {
 			if re, err := regexp.Compile(w); err == nil {
 				kinds[i].waitingRe = append(kinds[i].waitingRe, re)
@@ -89,18 +107,19 @@ func loadKinds() []AgentKind {
 	return kinds
 }
 
-func kindByName(kinds []AgentKind, name string) AgentKind {
+// ByName finds a kind; unknown names run as a command of that name.
+func ByName(kinds []Kind, name string) Kind {
 	for _, k := range kinds {
 		if k.Name == name {
 			return k
 		}
 	}
-	return AgentKind{Name: name, Start: name}
+	return Kind{Name: name, Start: name}
 }
 
-// command builds the shell command for a, resuming its previous session
+// Command builds the shell command for a, resuming its previous session
 // when resume is set and one can be found.
-func (k AgentKind) command(a *Agent, resume bool) string {
+func (k Kind) Command(a *state.Agent, resume bool) string {
 	sid := a.SessionID
 	tpl := k.Start
 	if resume {
@@ -110,7 +129,7 @@ func (k AgentKind) command(a *Agent, resume bool) string {
 			if sid == "" {
 				sid = a.ID
 			}
-			if claudeSessionExists(sid) {
+			if ClaudeSessionExists(sid) {
 				tpl = k.Resume
 			}
 		case sid != "" && k.Resume != "":
@@ -122,24 +141,27 @@ func (k AgentKind) command(a *Agent, resume bool) string {
 	if sid == "" {
 		sid = a.ID
 	}
-	if a.Fork && tpl == k.Resume && k.Name == "claude" {
+	if a.Fork && k.Name == "claude" && tpl == k.Resume {
 		tpl += " --fork-session"
 	}
-	notify := `-c ` + shellQuote(`notify=["`+selfPath()+`","hook","codex"]`)
+	notify := `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`","hook","codex"]`)
 	return strings.NewReplacer(
 		"{id}", a.ID,
 		"{sid}", sid,
-		"{claude_settings}", shellQuote(claudeSettingsPath()),
+		"{claude_settings}", paths.ShellQuote(paths.ClaudeSettings()),
 		"{codex_notify}", notify,
 	).Replace(tpl)
 }
 
-func claudeSessionExists(sid string) bool {
-	matches, _ := filepath.Glob(filepath.Join(homeDir(), ".claude", "projects", "*", sid+".jsonl"))
+// ClaudeSessionExists reports whether claude has a transcript for sid.
+func ClaudeSessionExists(sid string) bool {
+	matches, _ := filepath.Glob(filepath.Join(paths.Home(), ".claude", "projects", "*", sid+".jsonl"))
 	return len(matches) > 0
 }
 
-func (k AgentKind) screenWaiting(screen string) bool {
+// ScreenWaiting reports whether screen text shows the agent asking for
+// input, per the kind's Waiting patterns.
+func (k Kind) ScreenWaiting(screen string) bool {
 	for _, re := range k.waitingRe {
 		if re.MatchString(screen) {
 			return true
