@@ -27,8 +27,14 @@ import (
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
+// Status comes from events where there are any: agents' own hooks and
+// tmux's pane-died reach the sidebar through poke at once. Polling covers
+// the rest: every tick captures the screens of agents without hooks (their
+// status is read off the screen), and a full poll every few seconds
+// re-reads everything as a safety net for missed events.
 const (
 	pollInterval      = 500 * time.Millisecond
+	fullPollEvery     = 3 * time.Second
 	externalScanEvery = 5 * time.Second
 	headerLines       = 2
 	footerLines       = 3
@@ -42,9 +48,13 @@ type (
 		panes   []tmux.Pane
 		screens map[string]string
 		hooks   map[string]*status.Hook
-		watched bool // someone is looking at the deck (tmux.Watched)
-		epoch   int  // model.epoch when the poll started
+		epoch   int // model.epoch when the poll started
 		err     error
+	}
+	// screensMsg is a tick's capture of the agents without hooks.
+	screensMsg struct {
+		screens map[string]string // agent id → screen
+		err     error             // a pane went away: time for a full poll
 	}
 	// externalsMsg carries a scan for sessions outside the deck. It runs
 	// apart from pollMsg: the first scan can take seconds (lsof per
@@ -53,7 +63,8 @@ type (
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
-	// pokeMsg is a command from another mad process (poke.Poll/Jump).
+	// pokeMsg is a command from another mad process: poke.Poll, poke.Jump,
+	// or poke.Hook plus an agent id.
 	pokeMsg string
 	doneMsg struct {
 		err      error
@@ -89,6 +100,10 @@ type model struct {
 	kinds    []agent.Kind
 	trackers map[string]*status.Tracker
 	panes    map[string]tmux.Pane
+	hooks    map[string]*status.Hook // latest report per agent
+	screens  map[string]string       // latest screen per agent
+	lastFull time.Time               // when the last full poll started
+	fullDue  bool                    // a full poll is wanted as soon as the one in flight lands
 	stageID  string
 	focused  bool
 	polling  bool
@@ -162,6 +177,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		kinds:     kinds,
 		trackers:  map[string]*status.Tracker{},
 		panes:     map[string]tmux.Pane{},
+		hooks:     map[string]*status.Hook{},
+		screens:   map[string]string{},
 		input:     ti,
 		notifyCfg: notify.Load(),
 		notifyMod: notify.ModTime(),
@@ -197,7 +214,7 @@ func (m *model) scanCmd() tea.Cmd {
 // pollCmd gathers tmux panes, screens and hook reports off the UI
 // goroutine.
 func (m *model) pollCmd() tea.Cmd {
-	m.polling = true
+	m.polling, m.lastFull, m.fullDue = true, time.Now(), false
 	var ids []string
 	for _, a := range m.st.OrderedAgents() {
 		ids = append(ids, a.ID)
@@ -209,8 +226,7 @@ func (m *model) pollCmd() tea.Cmd {
 			return pollMsg{err: err, epoch: epoch}
 		}
 		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{},
-			watched: tmux.Watched(), epoch: epoch}
+		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, epoch: epoch}
 		// One tmux call for every screen: a call per agent costs a few ms
 		// each and adds up to the whole poll interval with many agents.
 		byPane := map[string]string{}
@@ -236,6 +252,53 @@ func (m *model) pollCmd() tea.Cmd {
 	}
 }
 
+// pollNow asks for a full poll after panes changed. Whatever poll is in
+// flight began before the change: a full one is dropped as stale (epoch)
+// and redone, a screen capture is followed by a full poll (fullDue).
+func (m *model) pollNow() tea.Cmd {
+	m.epoch++
+	if m.polling {
+		m.fullDue = true
+		return nil
+	}
+	return m.pollCmd()
+}
+
+// screenAgents maps the live panes of agents without hooks, whose status
+// can only be read off their screens, to their agent ids.
+func (m *model) screenAgents() map[string]string {
+	out := map[string]string{}
+	for _, a := range m.st.OrderedAgents() {
+		if agent.ByName(m.kinds, a.Kind).Hooks {
+			continue
+		}
+		if p, ok := m.panes[a.ID]; ok && !p.Dead {
+			out[p.ID] = a.ID
+		}
+	}
+	return out
+}
+
+// screensCmd captures just the agents without hooks, in one tmux call.
+func (m *model) screensCmd(byPane map[string]string) tea.Cmd {
+	m.polling = true
+	return func() tea.Msg {
+		var ids []string
+		for pid := range byPane {
+			ids = append(ids, pid)
+		}
+		got, err := tmux.CaptureAll(ids)
+		if err != nil {
+			return screensMsg{err: err}
+		}
+		msg := screensMsg{screens: map[string]string{}}
+		for pid, screen := range got {
+			msg.screens[byPane[pid]] = screen
+		}
+		return msg
+	}
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -254,7 +317,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.frame++
 		cmds := []tea.Cmd{tick()}
 		if !m.polling {
-			cmds = append(cmds, m.pollCmd())
+			if m.fullDue || time.Since(m.lastFull) >= fullPollEvery {
+				cmds = append(cmds, m.pollCmd())
+			} else if byPane := m.screenAgents(); len(byPane) > 0 {
+				cmds = append(cmds, m.screensCmd(byPane))
+			}
 		}
 		if !m.scanning && time.Since(m.lastScan) > externalScanEvery {
 			cmds = append(cmds, m.scanCmd())
@@ -269,29 +336,42 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
+	case screensMsg:
+		m.polling = false
+		if msg.err != nil {
+			return m, m.pollCmd()
+		}
+		only := map[string]bool{}
+		for id, screen := range msg.screens {
+			m.screens[id], only[id] = screen, true
+		}
+		cmd := m.notifyCmd(m.observe(only, time.Now()))
+		if m.fullDue { // asked for while this capture ran
+			cmd = tea.Batch(cmd, m.pollCmd())
+		}
+		return m, cmd
 	case pokeMsg:
-		switch string(msg) {
+		cmd, arg, _ := strings.Cut(string(msg), " ")
+		switch cmd {
+		case poke.Hook: // an agent reported through `mad hook`
+			if _, a := m.st.FindAgent(arg); a != nil {
+				m.hooks[arg] = status.ReadHook(arg)
+				return m, m.notifyCmd(m.observe(map[string]bool{arg: true}, time.Now()))
+			}
 		case poke.Jump:
 			return m, m.jumpNext()
-		case poke.Poll: // the stage was swapped from outside (mad switch)
-			m.epoch++
-			if !m.polling {
-				return m, m.pollCmd()
-			}
+		case poke.Poll: // panes changed from outside (mad switch, pane-died)
+			return m, m.pollNow()
 		}
 		return m, nil
 	case doneMsg:
-		m.epoch++
 		if msg.err != nil {
 			m.setFlash(msg.err.Error())
 		}
 		if msg.selectID != "" {
 			m.selectAgent(msg.selectID)
 		}
-		if m.polling {
-			return m, nil // the poll in flight is stale now and redoes itself
-		}
-		return m, m.pollCmd()
+		return m, m.pollNow()
 	case historyMsg:
 		m.pk.history, m.pk.loading = msg, false
 		if m.mode == modeAddProject {
@@ -339,9 +419,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// applyPoll updates panes and statuses, and returns the notifications the
-// status changes call for.
-func (m *model) applyPoll(msg pollMsg, now time.Time) []notify.Event {
+// applyPoll takes in a full poll: panes, stage, every screen and hook.
+func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 	if msg.err != nil {
 		m.setFlash(msg.err.Error())
 		return nil
@@ -374,22 +453,39 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []notify.Event {
 	if m.stageID != prevStage && tmux.IsAgentID(m.stageID) {
 		m.selectAgent(m.stageID)
 	}
+	m.screens, m.hooks = msg.screens, msg.hooks
+	return m.observe(nil, now)
+}
 
+// alert is a notification to send; one about the agent on stage is
+// dropped if someone is looking at the deck when it goes out.
+type alert struct {
+	notify.Event
+	onStage bool
+}
+
+// observe feeds the latest pane, screen and hook of the agents in only
+// (all when nil) to their trackers, and returns the notifications the
+// status changes call for.
+func (m *model) observe(only map[string]bool, now time.Time) []alert {
 	dirty := false
-	var events []notify.Event
+	var alerts []alert
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
+			if only != nil && !only[a.ID] {
+				continue
+			}
 			tr := m.trackers[a.ID]
 			if tr == nil {
 				tr = &status.Tracker{}
 				m.trackers[a.ID] = tr
 			}
-			hook := msg.hooks[a.ID]
+			hook := m.hooks[a.ID]
 			pane, ok := m.panes[a.ID]
 			prev := tr.Status
-			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, msg.screens[a.ID], a.ID == m.stageID, now)
-			if e, ok := m.event(p, a, prev, tr.Status, hook, a.ID == m.stageID && msg.watched, now); ok {
-				events = append(events, e)
+			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], a.ID == m.stageID, now)
+			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
+				alerts = append(alerts, alert{e, a.ID == m.stageID})
 			}
 			if hook != nil && hook.SessionID != "" && hook.SessionID != a.SessionID {
 				// A forked resume reports its new id here; later resumes use it.
@@ -401,7 +497,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []notify.Event {
 	if dirty {
 		m.save()
 	}
-	return events
+	return alerts
 }
 
 const (
@@ -413,9 +509,8 @@ const (
 )
 
 // event turns a status change into a notification: a run that ended, or
-// an agent that started waiting for you. seen means the agent is on stage
-// and someone is looking, so there is nothing to tell.
-func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *status.Hook, seen bool, now time.Time) (notify.Event, bool) {
+// an agent that started waiting for you.
+func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *status.Hook, now time.Time) (notify.Event, bool) {
 	if cur == status.Running && prev != status.Running {
 		m.runSince[a.ID] = now
 	}
@@ -429,7 +524,7 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 		return notify.Event{}, false
 	}
 	key := a.ID + "/" + kind
-	if seen || !m.notifyCfg.Wants(kind) || now.Sub(m.notified[key]) < notifyCooldown {
+	if !m.notifyCfg.Wants(kind) || now.Sub(m.notified[key]) < notifyCooldown {
 		return notify.Event{}, false
 	}
 	m.notified[key] = now
@@ -440,14 +535,20 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 	return e, true
 }
 
-func (m *model) notifyCmd(events []notify.Event) tea.Cmd {
-	if len(events) == 0 {
+// watched is replaceable in tests.
+var watched = tmux.Watched
+
+func (m *model) notifyCmd(alerts []alert) tea.Cmd {
+	if len(alerts) == 0 {
 		return nil
 	}
 	cfg := m.notifyCfg
 	return func() tea.Msg {
-		for _, e := range events {
-			_ = notify.Send(cfg, e) // best effort: no notifier is not an error
+		for _, a := range alerts {
+			if a.onStage && watched() {
+				continue // it's in front of you
+			}
+			_ = notify.Send(cfg, a.Event) // best effort: no notifier is not an error
 		}
 		return nil
 	}

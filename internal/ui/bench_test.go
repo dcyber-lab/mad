@@ -30,7 +30,7 @@ func benchModel(b *testing.B, n int) (*model, pollMsg) {
 	b.Setenv("XDG_STATE_HOME", b.TempDir())
 	b.Setenv("HOME", b.TempDir())
 	st := &state.State{}
-	msg := pollMsg{screens: map[string]string{}, hooks: map[string]*status.Hook{}, watched: true}
+	msg := pollMsg{screens: map[string]string{}, hooks: map[string]*status.Hook{}}
 	screen := strings.Repeat(strings.Repeat("x", 120)+"\n", 40)
 	for i := 0; i < n; i++ {
 		if i%5 == 0 {

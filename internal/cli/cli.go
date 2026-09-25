@@ -39,6 +39,7 @@ internal:
   mad fit             restore the saved sidebar width
   mad hook claude|codex
                       status hooks called by the agents
+  mad poke CMD        pass an event to the sidebar (tmux hooks use it)
 `
 
 // IO is where a command reads and writes.
@@ -69,6 +70,8 @@ func Run(args []string, stdio IO) int {
 		}
 	case "jump":
 		err = poke.Send(poke.Jump)
+	case "poke":
+		err = poke.Send(strings.Join(args, " "))
 	case "scan":
 		scan(args, stdio.Out)
 	case "fit":
@@ -180,7 +183,7 @@ func hook(args []string, in io.Reader, now time.Time) {
 			h = status.ParseCodex(args[len(args)-1])
 		}
 	}
-	if h != nil {
-		_ = status.WriteHook(id, h, now)
+	if h != nil && status.WriteHook(id, h, now) == nil {
+		_ = poke.Send(poke.Hook + " " + id) // the sidebar shows it now
 	}
 }

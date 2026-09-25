@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -493,7 +494,7 @@ func TestNotifyEvents(t *testing.T) {
 	m.rebuildRows()
 
 	t0 := time.Now()
-	poll := func(sec int, watched bool, hooks map[string]*status.Hook) []notify.Event {
+	poll := func(sec int, hooks map[string]*status.Hook) []alert {
 		now := t0.Add(time.Duration(sec) * time.Second)
 		for _, h := range hooks {
 			h.At = now
@@ -503,56 +504,76 @@ func TestNotifyEvents(t *testing.T) {
 				{ID: "%1", MadID: "bg", Session: tmux.PoolSession, Index: -1},
 				{ID: "%2", MadID: "st", Session: tmux.MainSession, Index: 1},
 			},
+			screens: map[string]string{},
 			hooks:   hooks,
-			watched: watched,
 		}, now)
 	}
 	hook := func(state string) *status.Hook { return &status.Hook{State: state} }
-	kinds := func(evs []notify.Event) string {
+	kinds := func(as []alert) string {
 		var out []string
-		for _, e := range evs {
-			out = append(out, e.Agent+" "+e.Kind)
+		for _, a := range as {
+			s := a.Agent + " " + a.Kind
+			if a.onStage {
+				s += " (stage)"
+			}
+			out = append(out, s)
 		}
 		return strings.Join(out, ",")
 	}
 	steps := []struct {
-		sec     int
-		watched bool
-		bg, st  string
-		want    string
+		sec    int
+		bg, st string
+		want   string
 	}{
-		{0, true, status.Running, status.Running, ""},       // first sight: nothing to compare
-		{2, true, status.Idle, status.Running, ""},          // bg ran 2s: too short
-		{3, true, status.Running, status.Running, ""},       // bg starts again
-		{10, true, status.Idle, status.Idle, "claude done"}, // bg ran 7s; st is watched
-		{11, false, status.Waiting, status.Running, "claude waiting"},
-		{12, false, status.Running, status.Running, ""},
-		{13, false, status.Waiting, status.Running, ""},        // cooldown
-		{30, false, status.Idle, status.Idle, "claude#2 done"}, // nobody looking: st counts
+		{0, status.Running, status.Running, ""},                             // first sight: nothing to compare
+		{2, status.Idle, status.Running, ""},                                // bg ran 2s: too short
+		{3, status.Running, status.Running, ""},                             // bg starts again
+		{10, status.Idle, status.Idle, "claude done,claude#2 done (stage)"}, // bg ran 7s, st 10s
+		{11, status.Waiting, status.Running, "claude waiting"},
+		{12, status.Running, status.Running, ""},
+		{13, status.Waiting, status.Running, ""}, // cooldown
 	}
 	for _, s := range steps {
-		got := kinds(poll(s.sec, s.watched, map[string]*status.Hook{"bg": hook(s.bg), "st": hook(s.st)}))
+		got := kinds(poll(s.sec, map[string]*status.Hook{"bg": hook(s.bg), "st": hook(s.st)}))
 		if got != s.want {
-			t.Errorf("t=%ds: events %q, want %q", s.sec, got, s.want)
+			t.Errorf("t=%ds: alerts %q, want %q", s.sec, got, s.want)
 		}
 	}
 
 	// The hook's own words ride along with waiting.
 	m.notified = map[string]time.Time{}
-	poll(40, false, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
+	poll(40, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
 	w := hook(status.Waiting)
 	w.Message = "Claude needs your permission to use Bash"
-	evs := poll(41, false, map[string]*status.Hook{"bg": w, "st": hook(status.Idle)})
-	if len(evs) != 1 || evs[0].Project != "api" || evs[0].Message != w.Message {
-		t.Errorf("waiting event = %+v", evs)
+	as := poll(41, map[string]*status.Hook{"bg": w, "st": hook(status.Idle)})
+	if len(as) != 1 || as[0].Project != "api" || as[0].Message != w.Message {
+		t.Errorf("waiting alert = %+v", as)
 	}
 
 	// Turned off in config.json.
 	m.notifyCfg = notify.Config{On: []string{}}
 	m.notified = map[string]time.Time{}
-	poll(50, false, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
-	if evs := poll(60, false, map[string]*status.Hook{"bg": hook(status.Idle), "st": hook(status.Idle)}); len(evs) != 0 {
-		t.Errorf("notifications off, got %+v", evs)
+	poll(50, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
+	if as := poll(60, map[string]*status.Hook{"bg": hook(status.Idle), "st": hook(status.Idle)}); len(as) != 0 {
+		t.Errorf("notifications off, got %+v", as)
+	}
+}
+
+// Whether someone looks at the stage is checked when the alert goes out.
+func TestNotifyCmdSkipsWatchedStage(t *testing.T) {
+	m, _ := setup(t, "/code/api")
+	var sent []string
+	oldSend, oldWatched := notify.Send, watched
+	t.Cleanup(func() { notify.Send, watched = oldSend, oldWatched })
+	notify.Send = func(_ notify.Config, e notify.Event) error { sent = append(sent, e.Agent); return nil }
+	alerts := []alert{{notify.Event{Agent: "bg"}, false}, {notify.Event{Agent: "stage"}, true}}
+
+	watched = func() bool { return true }
+	m.notifyCmd(alerts)()
+	watched = func() bool { return false }
+	m.notifyCmd(alerts)()
+	if got := strings.Join(sent, ","); got != "bg,bg,stage" {
+		t.Errorf("sent %q", got)
 	}
 }
 
@@ -656,5 +677,95 @@ func TestPokes(t *testing.T) {
 	}
 	if _, cmd := m.Update(pokeMsg(poke.Poll)); cmd != nil {
 		t.Error("a poll is already in flight; it redoes itself when it lands")
+	}
+}
+
+func TestHookPokeUpdatesAtOnce(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}}
+	m.rebuildRows()
+	m.panes["c1"] = tmux.Pane{ID: "%5", MadID: "c1", Session: tmux.PoolSession, Index: -1}
+	report := func(s string) {
+		if err := status.WriteHook("c1", &status.Hook{State: s}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		m.Update(pokeMsg(poke.Hook + " c1"))
+	}
+	report(status.Running)
+	if got := m.trackers["c1"].Status; got != status.Running {
+		t.Fatalf("after running report: %s", got)
+	}
+	report(status.Waiting)
+	if got := m.trackers["c1"].Status; got != status.Waiting {
+		t.Errorf("after waiting report: %s", got)
+	}
+	// An id the sidebar doesn't know (removed meanwhile) is ignored.
+	if _, cmd := m.Update(pokeMsg(poke.Hook + " gone")); cmd != nil || m.trackers["gone"] != nil {
+		t.Error("unknown agent")
+	}
+}
+
+func TestTickPollsOnlyWhatNeedsIt(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}, {ID: "s1", Kind: "shell"}, {ID: "s2", Kind: "shell"}}
+	m.rebuildRows()
+	m.panes["c1"] = tmux.Pane{ID: "%1", MadID: "c1"}
+	m.panes["s1"] = tmux.Pane{ID: "%2", MadID: "s1"}
+	m.panes["s2"] = tmux.Pane{ID: "%3", MadID: "s2", Dead: true}
+
+	// Only live agents without hooks have their screens captured each tick.
+	if got := m.screenAgents(); len(got) != 1 || got["%2"] != "s1" {
+		t.Errorf("screenAgents = %v", got)
+	}
+
+	m.lastFull = time.Now()
+	m.Update(tickMsg(time.Now()))
+	if !m.polling || time.Since(m.lastFull) > time.Second {
+		t.Errorf("tick within fullPollEvery: polling=%v", m.polling)
+	}
+	m.Update(screensMsg{screens: map[string]string{"s1": "$ "}})
+	if m.polling || m.screens["s1"] != "$ " {
+		t.Errorf("screens not taken in: polling=%v screens=%v", m.polling, m.screens)
+	}
+
+	full := time.Now().Add(-fullPollEvery)
+	m.lastFull = full
+	m.Update(tickMsg(time.Now()))
+	if !m.lastFull.After(full) {
+		t.Error("no full poll after fullPollEvery")
+	}
+
+	// A pane gone mid-capture: a full poll sorts it out.
+	m.polling, m.lastFull = false, time.Now()
+	m.Update(tickMsg(time.Now()))
+	before := m.lastFull
+	time.Sleep(time.Millisecond)
+	m.Update(screensMsg{err: errors.New("can't find pane")})
+	if !m.lastFull.After(before) {
+		t.Error("capture error should start a full poll")
+	}
+}
+
+// A switch that lands while a screen capture runs must still get its full
+// poll right after, not at the next fullPollEvery.
+func TestSwitchDuringScreenCapture(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "s1", Kind: "shell"}}
+	m.rebuildRows()
+	m.panes["s1"] = tmux.Pane{ID: "%2", MadID: "s1"}
+	m.lastFull = time.Now()
+	m.Update(tickMsg(time.Now())) // starts a capture
+	if !m.polling {
+		t.Fatal("no capture started")
+	}
+	for _, done := range []tea.Msg{doneMsg{}, pokeMsg(poke.Poll)} {
+		m.polling, m.fullDue, m.lastFull = true, false, time.Now()
+		before := m.lastFull
+		m.Update(done)
+		time.Sleep(time.Millisecond)
+		m.Update(screensMsg{screens: map[string]string{"s1": "$ "}})
+		if !m.lastFull.After(before) || !m.polling {
+			t.Errorf("%T during a capture: no full poll after it", done)
+		}
 	}
 }

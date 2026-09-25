@@ -102,6 +102,7 @@ func TestTmuxConfigBindings(t *testing.T) {
 		"bind -n M-n run-shell -b ",
 		"bind -r < resize-pane -t main:0.0 -L 2",
 		"set-hook -g client-resized ",
+		"set-hook -g pane-died ",
 	} {
 		if !strings.Contains(conf, want) {
 			t.Errorf("config lacks %q", want)

@@ -329,6 +329,9 @@ set -g pane-border-style "fg=colour238"
 set -g pane-active-border-style "fg=colour75"
 `)
 	fmt.Fprintf(&b, "set-hook -g client-resized %s\n", tmuxQuote("run-shell -b "+tmuxQuote(SelfCommand("fit"))))
+	// An agent's process ended: tell the sidebar now rather than at its
+	// next full poll.
+	fmt.Fprintf(&b, "set-hook -g pane-died %s\n", tmuxQuote("run-shell -b "+tmuxQuote(SelfCommand("poke poll"))))
 	// Sidebar width: drag the border, or prefix + < / >.
 	fmt.Fprintf(&b, "bind -r < resize-pane -t %s -L 2\nbind -r > resize-pane -t %s -R 2\n", tmux.SidebarPane, tmux.SidebarPane)
 	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" "select-pane -t %s" "select-pane -t %s"`, tmux.StagePane, tmux.SidebarPane)

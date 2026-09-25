@@ -1,7 +1,8 @@
 // Package poke is a small control channel into the running sidebar, over a
-// Unix socket in the state directory. Other mad processes use it to have
-// the sidebar re-poll right away (after `mad switch` swapped the stage
-// behind its back) or jump to the next agent that needs you.
+// Unix socket in the state directory. It is how events reach the sidebar
+// without it polling for them: `mad hook` passes on an agent's report,
+// tmux's pane-died hook and `mad switch` say the panes changed, and
+// `mad jump` asks for the next agent that needs you.
 package poke
 
 import (
@@ -19,8 +20,9 @@ import (
 )
 
 const (
-	Poll = "poll" // the stage changed: refresh now
+	Poll = "poll" // panes changed (switch, an agent exited): refresh now
 	Jump = "jump" // open the next agent that is waiting or done
+	Hook = "hook" // "hook <agent id>": that agent wrote a new status report
 )
 
 // Path is the sidebar's socket; one per tmux server, like the sidebar.
