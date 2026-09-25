@@ -14,6 +14,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/notify"
+	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -593,5 +594,67 @@ func TestJumpNext(t *testing.T) {
 	press(m, "d")
 	if at() != "a2" || !strings.Contains(m.flash, "nothing") {
 		t.Errorf("nothing left: at %q, flash %q", at(), m.flash)
+	}
+}
+
+func TestStalePollIsDropped(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	o, x, y := &state.Agent{ID: "o", Kind: "claude"}, &state.Agent{ID: "x", Kind: "claude"}, &state.Agent{ID: "y", Kind: "claude"}
+	st.Projects[0].Agents = []*state.Agent{o, x, y}
+	m.rebuildRows()
+	stageIs := func(id string, epoch int) pollMsg {
+		return pollMsg{epoch: epoch, panes: []tmux.Pane{
+			{ID: "%1", MadID: tmux.IDSidebar, Session: tmux.MainSession, Index: 0},
+			{ID: "%2", MadID: id, Session: tmux.MainSession, Index: 1},
+		}}
+	}
+	cursor := func() string { r, _ := m.current(); return r.agent.ID }
+	m.Update(stageIs("o", m.epoch))
+	m.trackers["x"] = &status.Tracker{Status: status.Waiting}
+	m.trackers["y"] = &status.Tracker{Status: status.Waiting}
+
+	// d twice, fast: o → x → y. The first swap finishes, then a poll starts
+	// (it will see x on stage) while the second swap is still running.
+	press(m, "d")
+	m.Update(doneMsg{})
+	between := m.epoch
+	press(m, "d")
+	if cursor() != "y" {
+		t.Fatalf("cursor on %q after two d", cursor())
+	}
+	_, cmd := m.Update(stageIs("x", between))
+	if cursor() != "y" || cmd == nil || !m.polling {
+		t.Errorf("stale poll applied: cursor snapped to %q (repoll=%v)", cursor(), cmd != nil)
+	}
+	m.Update(doneMsg{})
+	m.Update(stageIs("y", m.epoch))
+	if m.stageID != "y" || cursor() != "y" {
+		t.Errorf("fresh poll: stage %q cursor %q", m.stageID, cursor())
+	}
+}
+
+func TestPokes(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "x", Kind: "claude"}, {ID: "y", Kind: "claude"}}
+	m.rebuildRows()
+	m.trackers["y"] = &status.Tracker{Status: status.Waiting}
+
+	// `mad jump` (Alt-n) works whatever mode the sidebar is in.
+	press(m, "a")
+	if _, cmd := m.Update(pokeMsg(poke.Jump)); cmd == nil {
+		t.Error("jump should open y")
+	}
+	if r, _ := m.current(); r.agent == nil || r.agent.ID != "y" {
+		t.Errorf("cursor not on y")
+	}
+	press(m, "esc")
+
+	// `mad switch` swapped the stage: re-poll now, and drop the poll in flight.
+	epoch := m.epoch
+	if _, cmd := m.Update(pokeMsg(poke.Poll)); cmd == nil || m.epoch == epoch || !m.polling {
+		t.Errorf("poll poke: cmd=%v epoch %d→%d polling=%v", cmd != nil, epoch, m.epoch, m.polling)
+	}
+	if _, cmd := m.Update(pokeMsg(poke.Poll)); cmd != nil {
+		t.Error("a poll is already in flight; it redoes itself when it lands")
 	}
 }

@@ -170,3 +170,40 @@ func TestVersionAtLeast(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureAll(t *testing.T) {
+	useServer(t)
+	var ids []string
+	for i, text := range []string{"first pane", "second\n\n  pane", ""} {
+		id, err := Out("new-session", "-d", "-s", fmt.Sprint("s", i), "-x", "80", "-y", "10", "-P", "-F", "#{pane_id}",
+			fmt.Sprintf("printf '%s'; sleep 30", strings.ReplaceAll(text, "\n", `\n`)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for !strings.Contains(Capture(ids[1]), "pane") && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	got, err := CaptureAll(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if want := Capture(id); got[id] != want {
+			t.Errorf("%s: CaptureAll %q, Capture %q", id, got[id], want)
+		}
+	}
+	if got[ids[1]] != "second\n\n  pane" {
+		t.Errorf("multi-line screen = %q", got[ids[1]])
+	}
+
+	if _, err := CaptureAll(append(ids, "%999")); err == nil {
+		t.Error("a missing pane should make CaptureAll fail")
+	}
+	if got, err := CaptureAll(nil); err != nil || len(got) != 0 {
+		t.Errorf("empty: %v %v", got, err)
+	}
+}

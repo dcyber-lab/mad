@@ -110,6 +110,7 @@ If Alt is inconvenient, use the prefix `Ctrl-]` followed by
 mad                     open the deck (adds the current git project)
 mad add [path]          add a project (default: current directory)
 mad switch N|next|prev  show agent N (1-based, sidebar order)
+mad jump                show the next agent that is waiting or done
 mad scan [path]         show what auto-sync sees (useful for debugging)
 mad kill-server         stop the deck and every agent in it
 ```
@@ -220,6 +221,7 @@ hooks), `{codex_notify}` (codex notify wiring).
 | `~/.local/state/mad/status/`          | Status reported by hooks                          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
 | `~/.local/state/mad/sidebar.log`      | Sidebar crash log (the sidebar auto-restarts)     |
+| `~/.local/state/mad/sidebar-mad.sock` | Lets `mad switch` / `mad jump` reach the sidebar  |
 
 `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected.
 
