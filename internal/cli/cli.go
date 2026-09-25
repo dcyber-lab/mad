@@ -18,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -208,16 +209,11 @@ func hook(args []string, in io.Reader, now time.Time) {
 	if id == "" || len(args) == 0 {
 		return
 	}
-	var h *status.Hook
-	switch args[0] {
-	case "claude":
-		h = status.ParseClaude(in)
-	case "codex":
-		if len(args) > 1 {
-			h = status.ParseCodex(args[len(args)-1])
-		}
+	p := discover.Lookup(args[0])
+	if p == nil {
+		return
 	}
-	if h != nil && status.WriteHook(id, h, now) == nil {
+	if h := p.Hook(args[1:], in); h != nil && status.WriteHook(id, h, now) == nil {
 		_ = poke.Send(poke.Hook + " " + id) // the sidebar shows it now
 	}
 }

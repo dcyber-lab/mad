@@ -184,15 +184,14 @@ func TestMissingFile(t *testing.T) {
 func TestLocateByKind(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CODEX_HOME", "")
-	r := NewReader()
 	for _, k := range []string{"pi", "shell", "claude", "codex"} {
-		if got := r.transcripts(Agent{Kind: k, Dir: "/p", Session: "s"}); len(got) != 0 {
+		if got := transcripts(Agent{Kind: k, Dir: "/p", Session: "s"}); len(got) != 0 {
 			t.Errorf("%s: %v", k, got)
 		}
 	}
 	main := filepath.Join(os.Getenv("HOME"), ".claude", "projects", "-p", "s.jsonl")
 	writeLines(t, main, claudeMsg("m", 0, 0, 1, 1))
-	got := r.transcripts(Agent{Kind: "claude", Dir: "/p", Session: "s"})
+	got := transcripts(Agent{Kind: "claude", Dir: "/p", Session: "s"})
 	if len(got) != 1 || !strings.HasSuffix(got[0], "/-p/s.jsonl") {
 		t.Errorf("claude: %v", got)
 	}

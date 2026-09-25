@@ -25,7 +25,7 @@ func scan(args []string, out io.Writer) {
 	}
 
 	t = time.Now()
-	ext := discover.ScanExternal([]string{"claude", "codex"}, nil)
+	ext := discover.ScanExternal(nil)
 	fmt.Fprintf(out, "\nopen outside the deck: %d (%s)\n", len(ext), time.Since(t).Round(time.Millisecond))
 	for _, e := range ext {
 		fmt.Fprintf(out, "  %-7d %-8s %-6s desktop=%-5v %-40s %s\n", e.PID, e.TTY, e.Kind, e.Desktop, paths.Short(e.Root), e.SessionID)
@@ -35,7 +35,8 @@ func scan(args []string, out io.Writer) {
 		return
 	}
 	root := discover.ResolveRoot(paths.Expand(args[0]))
-	for _, kind := range []string{"claude", "codex"} {
+	for _, p := range discover.Providers() {
+		kind := p.Kind()
 		t = time.Now()
 		ss := discover.ProjectSessions(root, kind)
 		fmt.Fprintf(out, "\n%s sessions of %s: %d (%s)\n", kind, paths.Short(root), len(ss), time.Since(t).Round(time.Millisecond))

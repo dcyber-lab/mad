@@ -40,17 +40,34 @@ with dependencies pointing downwards in this list:
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux/claude configs      |
-| `internal/discover`  | Claude/Codex history, sessions, processes outside the deck       |
+| `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
+| `internal/discover`  | Per-agent providers: history, sessions, transcript lines, processes outside the deck |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |
 | `internal/notify`    | Desktop notifications and the user's notify command              |
 | `internal/poke`      | Socket for other mad processes to reach the sidebar              |
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/git`       | Checkout info for the sidebar; worktrees for agents               |
-| `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
 | `internal/state`     | Persistent project/agent tree                                    |
 | `internal/paths`     | Config/state locations, path and shell helpers                   |
 | `internal/textutil`  | Width-aware truncation/padding for the terminal                  |
+
+### Adding an agent
+
+Launching an agent is configuration: an entry in `agent.builtin` (or a
+user's `agents.json`) with its commands, waiting patterns and icon. That
+alone runs it in the deck.
+
+Everything mad reads from the agent's own files goes through
+`discover.Provider`: where its sessions live and which a person had, what a
+transcript line says (tokens, title, prompt, tool call, usage limits), how
+to recognize it running in another terminal or a desktop app, and how to
+read its `mad hook` reports. Each agent is one file, `internal/discover/claude.go`
+and `codex.go`; a new one implements the interface in its own file and is
+added to `providers`. The sidebar, session picker, sync and `mad scan`
+work from that list; past it, agents are only named where they are
+launched (the `{claude_settings}` and `{codex_notify}` placeholders,
+claude's status line).
 
 ### Tests
 
@@ -65,7 +82,8 @@ go test -race ./...    # what CI runs
   real tmux server on a throwaway socket; they are skipped when `tmux` isn't
   installed.
 - `internal/discover` builds fake Claude/Codex histories in a temp home and
-  stubs `ps`/`lsof` through package variables.
+  stubs `ps`/`lsof` through package variables. A new provider gets a
+  fixture there, and transcript lines for it in `internal/transcript`.
 - `internal/ui` drives the Bubble Tea model with messages only; the commands
   it returns (tmux work) are not executed.
 

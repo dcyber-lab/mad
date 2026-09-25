@@ -9,15 +9,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
-// The session picker runs after choosing claude/codex for a new agent:
-// start fresh, or continue one of the project's past sessions from the CLI
-// or a desktop app.
+// The session picker runs after choosing a kind with a provider (see
+// discover.Provider) for a new agent: start fresh, or continue one of the
+// project's past sessions from the CLI or a desktop app.
 
 const sessHeader = 3 // title, hint, rule
 
@@ -128,7 +129,7 @@ func (m *model) pickSession(i int) tea.Cmd {
 		}
 	}
 	if e, live := m.liveSessions()[s.ID]; live {
-		if s.Kind != "claude" {
+		if agent.ByName(m.kinds, s.Kind).Fork == "" {
 			m.setFlash(fmt.Sprintf("%s is still open (%s); close it there first", s.Kind, e.Where()))
 			return nil
 		}
@@ -181,7 +182,7 @@ func (m *model) sessionsView() string {
 		info = s.Origin
 		if e, ok := live[s.ID]; ok {
 			info = "open in " + e.Where()
-			if s.Kind == "claude" {
+			if agent.ByName(m.kinds, s.Kind).Fork != "" {
 				info += " → fork"
 			}
 		}
