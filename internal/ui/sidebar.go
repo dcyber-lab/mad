@@ -6,6 +6,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
@@ -36,8 +38,9 @@ const (
 	pollInterval      = 500 * time.Millisecond
 	fullPollEvery     = 3 * time.Second
 	externalScanEvery = 5 * time.Second
+	gitScanEvery      = 5 * time.Second
 	headerLines       = 2
-	footerLines       = 3
+	footerLines       = 4
 )
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -60,6 +63,8 @@ type (
 	// apart from pollMsg: the first scan can take seconds (lsof per
 	// process) and must not hold up status updates.
 	externalsMsg []discover.External
+	// gitMsg is a scan of every project and worktree: dir → checkout info.
+	gitMsg map[string]git.Info
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
@@ -69,6 +74,7 @@ type (
 	doneMsg struct {
 		err      error
 		selectID string // agent id to put the cursor on
+		failedID string // agent that never started (its setup failed): drop it
 	}
 )
 
@@ -80,6 +86,7 @@ const (
 	modePickKind
 	modePickSession
 	modeConfirm
+	modeWorktree // naming the branch for a new worktree
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
@@ -135,6 +142,15 @@ type model struct {
 	externals []discover.External
 	lastScan  time.Time
 
+	gitInfo     map[string]git.Info // dir → branch and changes
+	gitScanning bool
+	gitDue      bool // scan at the next tick: an agent finished or panes changed
+	lastGit     time.Time
+	diffFor     string // agent the diff view was opened for ("" for a project)
+	diffCfg     deck.DiffConfig
+	wt          *state.Project // project a worktree is being named for
+	wtBranch    string         // branch chosen; the kind menu comes next
+
 	notifyCfg notify.Config
 	notifyMod time.Time            // config.json mtime notifyCfg was read at
 	runSince  map[string]time.Time // agent id → when its current run started
@@ -182,6 +198,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		input:     ti,
 		notifyCfg: notify.Load(),
 		notifyMod: notify.ModTime(),
+		diffCfg:   deck.LoadDiffConfig(),
+		gitInfo:   map[string]git.Info{},
 		runSince:  map[string]time.Time{},
 		notified:  map[string]time.Time{},
 	}
@@ -190,7 +208,35 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.pollCmd(), m.scanCmd(), tick())
+	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), tick())
+}
+
+// gitStatus, addWorktree and validBranch are replaceable in tests.
+var (
+	gitStatus   = git.Status
+	addWorktree = git.AddWorktree
+	validBranch = git.ValidBranch
+)
+
+// gitCmd reads the checkout of every project and agent directory.
+func (m *model) gitCmd() tea.Cmd {
+	m.gitScanning, m.gitDue, m.lastGit = true, false, time.Now()
+	dirs := map[string]bool{}
+	for _, p := range m.st.Projects {
+		dirs[p.Path] = true
+		for _, a := range p.Agents {
+			dirs[p.Dir(a)] = true
+		}
+	}
+	return func() tea.Msg {
+		out := gitMsg{}
+		for d := range dirs {
+			if info, ok := gitStatus(d); ok {
+				out[d] = info
+			}
+		}
+		return out
+	}
 }
 
 func tick() tea.Cmd {
@@ -326,16 +372,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.scanning && time.Since(m.lastScan) > externalScanEvery {
 			cmds = append(cmds, m.scanCmd())
 		}
+		if !m.gitScanning && (m.gitDue || time.Since(m.lastGit) > gitScanEvery) {
+			cmds = append(cmds, m.gitCmd())
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
 		if msg.epoch != m.epoch {
 			return m, m.pollCmd() // began before an action finished: stale
 		}
-		return m, m.notifyCmd(m.applyPoll(msg, time.Now()))
+		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.diffCleanup(msg.panes))
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
+	case gitMsg:
+		m.gitScanning, m.gitInfo = false, msg
 	case screensMsg:
 		m.polling = false
 		if msg.err != nil {
@@ -362,15 +413,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.jumpNext()
 		case poke.Poll: // panes changed from outside (mad switch, pane-died)
 			return m, m.pollNow()
+		case poke.Diff: // Alt-v: the agent on stage, or back from its diff
+			return m, m.diffFromStage()
 		}
 		return m, nil
 	case doneMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error())
 		}
+		if msg.failedID != "" {
+			m.st.RemoveAgent(msg.failedID)
+			delete(m.trackers, msg.failedID)
+			m.save()
+			m.rebuildRows()
+		}
 		if msg.selectID != "" {
 			m.selectAgent(msg.selectID)
 		}
+		m.gitDue = true
 		return m, m.pollNow()
 	case historyMsg:
 		m.pk.history, m.pk.loading = msg, false
@@ -399,6 +459,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyPickKind(msg)
 		case modeConfirm:
 			return m, m.keyConfirm(msg)
+		case modeWorktree:
+			return m, m.keyWorktree(msg)
 		default:
 			// Fast typing arrives as one multi-rune key; handle each rune.
 			if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 {
@@ -411,7 +473,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyNormal(msg)
 		}
 	}
-	if m.mode == modeAddProject {
+	if m.mode == modeAddProject || m.mode == modeWorktree {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -426,7 +488,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		return nil
 	}
 	if mod := notify.ModTime(); !mod.Equal(m.notifyMod) {
-		m.notifyCfg, m.notifyMod = notify.Load(), mod
+		m.notifyCfg, m.notifyMod, m.diffCfg = notify.Load(), mod, deck.LoadDiffConfig()
 	}
 	// Pick up `mad add` and other writers.
 	if mod := state.ModTime(); mod.After(m.stMod) {
@@ -484,6 +546,9 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			pane, ok := m.panes[a.ID]
 			prev := tr.Status
 			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], a.ID == m.stageID, now)
+			if prev == status.Running && tr.Status != status.Running {
+				m.gitDue = true // a turn ended: its changes are worth showing now
+			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
 				alerts = append(alerts, alert{e, a.ID == m.stageID})
 			}
@@ -674,8 +739,11 @@ func (m *model) selectAgent(id string) {
 
 func (m *model) listHeight() int {
 	footer := footerLines
-	if m.mode == modePickKind {
+	switch m.mode {
+	case modePickKind:
 		footer = len(m.kinds) + 2 // rule, title, one line per kind
+	case modeWorktree:
+		footer = 3 // rule, title, input
 	}
 	h := m.height - headerLines - footer
 	if h < 1 {
@@ -792,17 +860,138 @@ func (m *model) launch(p *state.Project, a *state.Agent, resume bool, before fun
 	m.rebuildRows()
 	m.selectAgent(a.ID)
 	pc, ac, kinds := *p, *a, m.kinds
-	return m.action(a.ID, func() error {
+	m.epoch++
+	return func() tea.Msg {
 		if before != nil {
 			if err := before(); err != nil {
-				return err
+				return doneMsg{err: err, failedID: ac.ID}
 			}
 		}
 		if err := deck.StartAgent(&pc, &ac, resume, kinds); err != nil {
+			return doneMsg{err: err, selectID: ac.ID}
+		}
+		return doneMsg{err: deck.ShowPane(ac.ID, true), selectID: ac.ID}
+	}
+}
+
+// newWorktreeAgent starts kind in its own worktree of p on branch, which
+// is created from HEAD when new. Claude Code's worktree directory is used,
+// so sessions in it are grouped under p everywhere in mad.
+func (m *model) newWorktreeAgent(p *state.Project, kind, branch string) tea.Cmd {
+	dir := git.WorktreeDir(p.Path, branch)
+	a := &state.Agent{ID: state.NewUUID(), Kind: kind, Dir: dir, CreatedAt: time.Now()}
+	repo := p.Path
+	return m.launch(p, a, false, func() error { return addWorktree(repo, branch, dir) })
+}
+
+// dirInUse reports whether an agent of p runs in dir.
+func dirInUse(p *state.Project, dir string) bool {
+	for _, a := range p.Agents {
+		if p.Dir(a) == dir {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- diff view ----
+
+// toggleDiff shows the changes in dir (of agent id, or a project when id
+// is empty) on stage, or takes them down again when they are up already.
+func (m *model) toggleDiff(id, dir string, focusStage bool) tea.Cmd {
+	if d, ok := m.panes[tmux.IDDiff]; ok && !d.Dead && m.stageID == tmux.IDDiff && m.diffFor == id {
+		return m.closeDiff(focusStage)
+	}
+	m.diffFor = id
+	cmd := deck.DiffCommand(m.diffCfg, dir)
+	return m.action("", func() error { return deck.OpenDiff(dir, cmd) })
+}
+
+// closeDiff puts the agent the diff was opened for back on stage.
+func (m *model) closeDiff(focusStage bool) tea.Cmd {
+	back := m.diffFor
+	return m.action("", func() error {
+		if err := deck.CloseDiff(back); err != nil {
 			return err
 		}
-		return deck.ShowPane(ac.ID, true)
+		target := tmux.SidebarPane
+		if focusStage {
+			target = tmux.StagePane
+		}
+		return tmux.Run("select-pane", "-t", target)
 	})
+}
+
+// diffFromStage is `mad diff` (Alt-v): the diff of the agent on stage, or
+// back to the agent from its diff; with no agent on stage, the cursor row.
+func (m *model) diffFromStage() tea.Cmd {
+	if m.stageID == tmux.IDDiff {
+		return m.closeDiff(true)
+	}
+	if p, a := m.st.FindAgent(m.stageID); a != nil {
+		return m.toggleDiff(a.ID, p.Dir(a), true)
+	}
+	if r, ok := m.current(); ok {
+		return m.diffRow(r)
+	}
+	return nil
+}
+
+func (m *model) diffRow(r row) tea.Cmd {
+	if r.agent != nil {
+		return m.toggleDiff(r.agent.ID, r.proj.Dir(r.agent), false)
+	}
+	return m.toggleDiff("", r.proj.Path, false)
+}
+
+// diffCleanup takes the diff view down once its command has exited (the
+// pane stays dead on stage, remain-on-exit), or if it got parked in the
+// pool: it is a one-off, not an agent.
+func (m *model) diffCleanup(panes []tmux.Pane) tea.Cmd {
+	d, ok := tmux.FindPane(panes, tmux.IDDiff)
+	if !ok {
+		return nil
+	}
+	onStage := d.Session == tmux.MainSession && d.Index == 1
+	if onStage && !d.Dead {
+		return nil
+	}
+	if onStage {
+		return m.closeDiff(false) // you quit the viewer: back to the sidebar
+	}
+	return m.action("", func() error { return deck.CloseDiff("") })
+}
+
+// ---- worktrees ----
+
+func (m *model) openWorktreeInput(p *state.Project) tea.Cmd {
+	m.mode, m.wt, m.wtBranch = modeWorktree, p, ""
+	m.input.Prompt = "branch › "
+	m.input.Placeholder = "new or existing"
+	m.input.SetValue("")
+	return m.input.Focus()
+}
+
+func (m *model) keyWorktree(k tea.KeyMsg) tea.Cmd {
+	switch k.String() {
+	case "esc", "ctrl+c":
+		m.mode = modeNormal
+		m.input.Blur()
+		return nil
+	case "enter":
+		name := strings.TrimSpace(m.input.Value())
+		if err := validBranch(name); err != nil {
+			m.setFlash(err.Error())
+			return nil
+		}
+		m.wtBranch = name
+		m.mode, m.kindCursor = modePickKind, 0
+		m.input.Blur()
+		return nil
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(k)
+	return cmd
 }
 
 func (m *model) restart(p *state.Project, a *state.Agent) tea.Cmd {
@@ -870,9 +1059,18 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		}
 	case "n":
 		if ok {
-			m.mode, m.kindCursor = modePickKind, 0
+			m.mode, m.kindCursor, m.wtBranch = modePickKind, 0, ""
 		} else {
 			m.setFlash("add a project first (a)")
+		}
+	case "w":
+		if ok {
+			return m.openWorktreeInput(r.proj)
+		}
+		m.setFlash("add a project first (a)")
+	case "v":
+		if ok {
+			return m.diffRow(r)
 		}
 	case "a":
 		return m.openPicker()
@@ -887,8 +1085,19 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if r.agent != nil {
-			id := r.agent.ID
-			m.confirm(fmt.Sprintf("kill %s? (y/n)", r.proj.DisplayName(r.agent)), func() tea.Cmd { return m.removeAgents(id) })
+			p, a := r.proj, r.agent
+			m.confirm(fmt.Sprintf("kill %s? (y/n)", p.DisplayName(a)), func() tea.Cmd {
+				cmd := m.removeAgents(a.ID)
+				// Its worktree was made for it: offer to clean up too. git
+				// refuses when there are uncommitted changes.
+				if dir := a.Dir; dir != "" && git.IsWorktree(p.Path, dir) && !dirInUse(p, dir) {
+					repo := p.Path
+					m.confirm(fmt.Sprintf("remove worktree %s? (y/n)", filepath.Base(dir)), func() tea.Cmd {
+						return m.action("", func() error { return git.RemoveWorktree(repo, dir) })
+					})
+				}
+				return cmd
+			})
 			return nil
 		}
 		p := r.proj
@@ -962,7 +1171,7 @@ func (m *model) keyConfirm(k tea.KeyMsg) tea.Cmd {
 func (m *model) keyPickKind(k tea.KeyMsg) tea.Cmd {
 	switch k.String() {
 	case "esc", "q", "ctrl+c":
-		m.mode = modeNormal
+		m.mode, m.wtBranch = modeNormal, ""
 	case "up", "k":
 		if m.kindCursor > 0 {
 			m.kindCursor--
@@ -985,6 +1194,11 @@ func (m *model) keyPickKind(k tea.KeyMsg) tea.Cmd {
 
 func (m *model) pickKind(i int) tea.Cmd {
 	m.mode = modeNormal
+	if branch := m.wtBranch; branch != "" {
+		// A fresh worktree has no sessions to continue: start right away.
+		m.wtBranch = ""
+		return m.newWorktreeAgent(m.wt, m.kinds[i].Name, branch)
+	}
 	r, ok := m.current()
 	if !ok {
 		return nil
@@ -1144,7 +1358,8 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		if len(r.proj.Agents) == 0 {
 			right = nil
 		}
-		return []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}, right
+		left = []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}
+		return append(left, m.gitSegs(r.proj.Path, "")...), right
 	}
 	a := r.agent
 	st, attention := status.Stopped, false
@@ -1152,7 +1367,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		st, attention = tr.Status, tr.Attention
 	}
 	bar, name := seg{stPlain, " "}, seg{stName, r.proj.DisplayName(a)}
-	if a.ID == m.stageID {
+	if a.ID == m.stageID || m.stageID == tmux.IDDiff && a.ID == m.diffFor {
 		bar, name = seg{stStage, "▌"}, seg{stStage, name.s}
 	}
 	num := " "
@@ -1160,8 +1375,36 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		num = fmt.Sprint(r.num)
 	}
 	icon, label := m.statusGlyph(st, attention)
-	return []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, name},
-		[]seg{label, {stPlain, " "}}
+	left = []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, name}
+	if a.Dir != "" && a.Dir != r.proj.Path {
+		// Its own checkout: name it, even before the first git scan.
+		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
+	}
+	return left, []seg{label, {stPlain, " "}}
+}
+
+// gitSegs is the checkout of dir as shown after a name: the branch, then
+// how many files changed and how many commits are unpushed, when any.
+func (m *model) gitSegs(dir, fallback string) []seg {
+	info, ok := m.gitInfo[dir]
+	name := info.Branch
+	if name == "" && ok {
+		name = "detached"
+	}
+	if name == "" {
+		name = fallback
+	}
+	if name == "" {
+		return nil
+	}
+	segs := []seg{{stPlain, "  "}, {stFaint, name}}
+	if info.Dirty > 0 {
+		segs = append(segs, seg{stPlain, " "}, seg{stDim, fmt.Sprintf("±%d", info.Dirty)})
+	}
+	if info.Ahead > 0 {
+		segs = append(segs, seg{stPlain, " "}, seg{stFaint, fmt.Sprintf("↑%d", info.Ahead)})
+	}
+	return segs
 }
 
 func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
@@ -1209,15 +1452,25 @@ func (m *model) projectSummary(p *state.Project) seg {
 }
 
 func (m *model) renderFooter() string {
-	var l1, l2 string
+	var l1, l2, l3 string
 	switch m.mode {
 	case modeConfirm:
 		l1 = " " + stWaiting.Render(m.confirmMsg)
+	case modeWorktree:
+		title := " new worktree · " + m.wt.Name
+		if m.flash != "" && time.Now().Before(m.flashUntil) {
+			title = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
+		}
+		return rule(m.width) + "\n" +
+			layout(m.width, nil, []seg{{stHeader, title}}, []seg{{stFaint, "esc "}}) + "\n" +
+			" " + m.input.View()
 	case modePickKind:
 		// The kind menu replaces the footer; it is short enough.
 		var b strings.Builder
 		title := "new agent"
-		if r, ok := m.current(); ok {
+		if m.wtBranch != "" {
+			title += " · " + m.wt.Name + " @ " + m.wtBranch
+		} else if r, ok := m.current(); ok {
 			title += " · " + r.proj.Name
 		}
 		b.WriteString(rule(m.width) + "\n")
@@ -1236,7 +1489,8 @@ func (m *model) renderFooter() string {
 		} else {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
-		l2 = hints("r", "resume", "x", "kill", "q", "detach")
+		l2 = hints("w", "worktree", "v", "diff", "r", "resume")
+		l3 = hints("x", "kill", "q", "detach")
 	}
-	return rule(m.width) + "\n" + l1 + "\n" + l2
+	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3
 }

@@ -100,6 +100,7 @@ func TestTmuxConfigBindings(t *testing.T) {
 		"bind -n M-1 run-shell -b ",
 		"bind -n M-j run-shell -b ",
 		"bind -n M-n run-shell -b ",
+		"bind -n M-v run-shell -b ",
 		"bind -r < resize-pane -t main:0.0 -L 2",
 		"set-hook -g client-resized ",
 		"set-hook -g pane-died ",
@@ -252,6 +253,100 @@ func TestAgentLifecycle(t *testing.T) {
 	}
 	if err := KillAgent("never-started"); err != nil {
 		t.Errorf("killing an unknown agent: %v", err)
+	}
+}
+
+func TestDiffCommand(t *testing.T) {
+	old := lookPath
+	t.Cleanup(func() { lookPath = old })
+	lookPath = func(string) (string, error) { return "/usr/bin/lazygit", nil }
+	if got := DiffCommand(DiffConfig{}, "/p/it's"); got != `lazygit -p '/p/it'\''s'` {
+		t.Error(got)
+	}
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	if got := DiffCommand(DiffConfig{}, "/p"); !strings.HasPrefix(got, "cd '/p' && ") || !strings.Contains(got, "diff HEAD") {
+		t.Error(got)
+	}
+	if got := DiffCommand(DiffConfig{Command: "tig -C {dir} status"}, "/p"); got != "tig -C '/p' status" {
+		t.Error(got)
+	}
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if got := LoadDiffConfig(); got.Command != "" {
+		t.Errorf("no config: %+v", got)
+	}
+	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
+	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"notify":{"on":[]},"diff":{"command":"x {dir}"}}`), 0o644)
+	if got := LoadDiffConfig(); got.Command != "x {dir}" {
+		t.Errorf("config: %+v", got)
+	}
+}
+
+func TestDiffView(t *testing.T) {
+	useDeck(t)
+	st := &state.State{}
+	p, _ := st.AddProject(os.TempDir())
+	a := &state.Agent{ID: "agent-1", Kind: "fake"}
+	p.Agents = []*state.Agent{a}
+	if err := OpenAgent(st, a.ID, fakeKind); err != nil {
+		t.Fatal(err)
+	}
+
+	// The diff view takes the stage; the agent waits in the pool.
+	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+		t.Fatal(err)
+	}
+	if got := stageID(t); got != tmux.IDDiff {
+		t.Fatalf("stage = %q", got)
+	}
+	// Opening it again replaces the pane instead of piling up.
+	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, pn := range panes(t) {
+		if pn.MadID == tmux.IDDiff {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d diff panes", n)
+	}
+
+	// Closing puts the agent back and the pane is gone.
+	if err := CloseDiff(a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := stageID(t); got != a.ID {
+		t.Errorf("stage after close = %q", got)
+	}
+	if _, ok := tmux.FindPane(panes(t), tmux.IDDiff); ok {
+		t.Error("diff pane survived close")
+	}
+	if err := CloseDiff(a.ID); err != nil {
+		t.Errorf("closing when there is none: %v", err)
+	}
+
+	// Showing another pane over the diff view kills it too.
+	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenAgent(st, a.ID, fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tmux.FindPane(panes(t), tmux.IDDiff); ok {
+		t.Error("diff pane survived a switch")
+	}
+	// Closing with an unknown agent falls back to the placeholder.
+	if err := OpenDiff(os.TempDir(), "sleep 600"); err != nil {
+		t.Fatal(err)
+	}
+	if err := CloseDiff("gone"); err != nil {
+		t.Fatal(err)
+	}
+	if got := stageID(t); got != tmux.IDPlaceholder {
+		t.Errorf("stage = %q", got)
 	}
 }
 

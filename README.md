@@ -18,6 +18,11 @@ status the way claude and codex do.</sub>
   work on; worktrees are folded into their main repository.
 - **Live status** — each agent shows `running`, `waiting` (needs your input),
   `idle`, or `done` (finished while you were looking elsewhere).
+- **Git at a glance** — every project and worktree shows its branch, how
+  many files changed and how many commits are unpushed.
+- **One agent per branch** — `w` creates a git worktree on a new branch and
+  starts an agent in it; `v` opens the changes of any agent in lazygit (or
+  `git diff`) without leaving the deck.
 - **Notifications** — a desktop notification when an agent finishes or needs
   you, and `d` / `Alt-n` to jump to the next one.
 - **Never lose a session** — agents are started with a known session id, so
@@ -96,6 +101,8 @@ again to reattach.
 | `j` / `k`      | Move down / up                                 |
 | `enter`        | Open agent (or fold/unfold a project)          |
 | `n`            | New agent in the current project               |
+| `w`            | New agent in a new worktree (asks for a branch) |
+| `v`            | Show / hide the changes of the agent or project |
 | `a`            | Add a project                                  |
 | `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
@@ -115,10 +122,11 @@ width is remembered.
 | `Alt-s`           | Toggle focus between sidebar and agent     |
 | `Alt-j` / `Alt-k` | Next / previous agent                      |
 | `Alt-n`           | Next agent that is waiting or done         |
+| `Alt-v`           | Changes of the agent on stage, and back    |
 | `Alt-1`…`Alt-9`   | Open agent N                               |
 
 If Alt is inconvenient, use the prefix `Ctrl-]` followed by
-`s` / `n` / `p` / `1`–`9` / `d` (detach).
+`s` / `n` / `p` / `v` / `1`–`9` / `d` (detach).
 
 > **Ghostty users:** set `macos-option-as-alt = true` so Option works as Alt.
 
@@ -129,6 +137,7 @@ mad                     open the deck (adds the current git project)
 mad add [path]          add a project (default: current directory)
 mad switch N|next|prev  show agent N (1-based, sidebar order)
 mad jump                show the next agent that is waiting or done
+mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)
 mad kill-server         stop the deck and every agent in it
 ```
@@ -153,6 +162,35 @@ mad kill-server         stop the deck and every agent in it
   `--fork-session`; codex asks you to close the other one first.
 - Sessions started programmatically (desktop workflows, `-p`/SDK calls, codex
   sub-tasks) are filtered out.
+
+## Worktrees and diffs
+
+Parallel agents want parallel branches. On a project or one of its agents,
+press `w`, type a branch name, and pick the agent kind: mad runs
+`git worktree add` (creating the branch from `HEAD` unless it exists) and
+starts the agent in the new checkout. Worktrees live in
+`<project>/.claude/worktrees/<branch>`, the directory Claude Code uses for
+its own, so sessions found there are grouped under the main repository
+either way; mad adds it to `.git/info/exclude` so it never shows up as
+untracked. The agent's row names its branch; `x` on the last agent in a
+worktree offers to remove the worktree too (the branch is kept, and a
+worktree with uncommitted changes is refused).
+
+Every project row shows the branch of the main checkout, `±N` for files
+changed or untracked, and `↑N` for commits not on the upstream; agents in
+their own worktree show the same for theirs. The scan runs every 5 seconds
+and right after an agent finishes a turn.
+
+`v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
+stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)
+when installed, else `git status` and `git diff HEAD` in `less`. Quit the
+viewer, press `v` / `Alt-v` again, or open any agent, and it goes away.
+Pick your own viewer in `~/.config/mad/config.json`; `{dir}` is the
+directory, already shell-quoted:
+
+```json
+{"diff": {"command": "tig -C {dir} status"}}
+```
 
 ## How it works
 
@@ -244,7 +282,7 @@ sets its own `notify`).
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
-| `~/.config/mad/config.json`           | Optional settings (notifications)                 |
+| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer)    |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks                          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
