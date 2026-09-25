@@ -153,6 +153,12 @@ mad kill-server         stop the deck and every agent in it
     from screen changes, waiting from on-screen text.
   - Agents that finish in the background show a green `● done` until you
     look at them.
+  - Updates are pushed where possible: a hook report reaches the sidebar
+    over a socket as it happens, and so does an agent's process ending
+    (tmux's `pane-died`, on mad's own server). Agents without hooks have
+    their screens read twice a second, and everything is re-read every 3
+    seconds in case an event got lost. Nothing beyond the launch flags above
+    is asked of the agents.
 - **Resume**: claude and pi are started with `--session-id <agent uuid>`;
   for codex the thread id is recorded. If tmux dies or the machine restarts,
   press `enter` on the agent to resume the same conversation.

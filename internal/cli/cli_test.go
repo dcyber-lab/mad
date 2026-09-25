@@ -109,6 +109,38 @@ func TestJump(t *testing.T) {
 	}
 }
 
+func TestHookPokesSidebar(t *testing.T) {
+	isolate(t)
+	short, err := os.MkdirTemp("", "mad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(short)
+	t.Setenv("XDG_STATE_HOME", short)
+	got := make(chan string, 1)
+	l, err := poke.Listen(func(cmd string) { got <- cmd })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	t.Setenv("MAD_AGENT_ID", "a1")
+	if code, _, _ := run(t, `{"hook_event_name":"UserPromptSubmit"}`, "hook", "claude"); code != 0 {
+		t.Fatalf("code=%d", code)
+	}
+	select {
+	case cmd := <-got:
+		if cmd != "hook a1" {
+			t.Errorf("sidebar got %q", cmd)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("sidebar got nothing")
+	}
+	if h := status.ReadHook("a1"); h == nil || h.State != status.Running {
+		t.Errorf("hook file = %+v", h)
+	}
+}
+
 func TestHook(t *testing.T) {
 	isolate(t)
 

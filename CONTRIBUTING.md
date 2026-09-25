@@ -69,9 +69,11 @@ go test -race ./...    # what CI runs
 
 ### Performance
 
-The sidebar polls every agent twice a second, so anything per agent per
-poll adds up. Benchmarks cover the poll against a live tmux server, status
-updates, rendering and switching, at up to 200 agents:
+Status arrives as events where it can (hook reports and tmux's pane-died,
+through `internal/poke`); polling covers the rest: every 500ms the screens
+of agents without hooks, every 3s a full poll as a safety net. Anything per
+agent per poll still adds up. Benchmarks cover the full poll against a live
+tmux server, status updates, rendering and switching, at up to 200 agents:
 
 ```sh
 go test -run '^$' -bench . -benchtime 20x ./internal/ui
