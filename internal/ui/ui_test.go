@@ -828,6 +828,7 @@ func TestWorktreeFlow(t *testing.T) {
 		t.Fatalf("agents = %+v", agents)
 	}
 	// Before the first git scan the row already says which worktree.
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 30})
 	if v := m.View(); !strings.Contains(v, "claude  feat-x") {
 		t.Errorf("worktree name missing from row:\n%s", v)
 	}
@@ -1044,10 +1045,10 @@ func TestTokensInRows(t *testing.T) {
 	}
 
 	// Too narrow for both: the count goes, the status stays.
-	m.Update(tea.WindowSizeMsg{Width: 24, Height: 30})
+	m.Update(tea.WindowSizeMsg{Width: 25, Height: 30})
 	v = m.View()
 	if strings.Contains(v, "1.2M  stopped") || !strings.Contains(v, "claude") || strings.Count(v, "stopped") != 3 {
-		t.Errorf("at width 24:\n%s", v)
+		t.Errorf("at width 25:\n%s", v)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
 
@@ -1076,13 +1077,13 @@ func TestDetailLines(t *testing.T) {
 	line := func(n int) string { return strings.Split(m.View(), "\n")[headerLines+n] }
 
 	// Before any transcript: the kind's icon and claude / claude#2.
-	if l := line(1); !strings.Contains(l, "✻ claude ") {
+	if l := line(1); !strings.Contains(l, "✻  claude ") {
 		t.Errorf("no title yet: %q", l)
 	}
-	if l := line(3); !strings.Contains(l, "◆ codex ") {
+	if l := line(3); !strings.Contains(l, ">_ codex ") {
 		t.Errorf("codex icon: %q", l)
 	}
-	if l := line(5); !strings.Contains(l, "$ shell ") {
+	if l := line(5); !strings.Contains(l, "$  shell ") {
 		t.Errorf("shell icon: %q", l)
 	}
 	m.Update(transcriptMsg{
@@ -1090,13 +1091,13 @@ func TestDetailLines(t *testing.T) {
 		"a2": {Title: "Build speed"},
 	})
 	// The title takes the name's place; the last prompt goes under it.
-	if l := line(1); !strings.Contains(l, "✻ Flaky test fix") || strings.Contains(l, "claude") {
+	if l := line(1); !strings.Contains(l, "✻  Flaky test fix") || strings.Contains(l, "claude") {
 		t.Errorf("title should replace the name: %q", l)
 	}
 	if l := line(2); !strings.Contains(l, "now the docs") || strings.Contains(l, "Edit") {
 		t.Errorf("idle claude should show its last prompt: %q", l)
 	}
-	if l := line(3); !strings.Contains(l, "◆ Build speed") {
+	if l := line(3); !strings.Contains(l, ">_ Build speed") {
 		t.Errorf("codex title: %q", l)
 	}
 	// Running: the tool, or the prompt before any tool call.
@@ -1164,7 +1165,7 @@ func TestRename(t *testing.T) {
 	if m.mode != modeNormal || a.Name != "docs" {
 		t.Errorf("enter: mode=%v name=%q", m.mode, a.Name)
 	}
-	if v := m.View(); !strings.Contains(v, "✻ docs") || strings.Contains(v, "Flaky") {
+	if v := m.View(); !strings.Contains(v, "✻  docs") || strings.Contains(v, "Flaky") {
 		t.Errorf("name should replace the title:\n%s", v)
 	}
 	// The name is saved; the line under still says what it does.
@@ -1172,7 +1173,7 @@ func TestRename(t *testing.T) {
 		t.Error("name not saved")
 	}
 	m.trackers["a1"] = &status.Tracker{Status: status.Running}
-	if v := m.View(); !strings.Contains(v, "go test") || !strings.Contains(v, "✻ docs") {
+	if v := m.View(); !strings.Contains(v, "go test") || !strings.Contains(v, "✻  docs") {
 		t.Errorf("running agent should show its tool under the name:\n%s", v)
 	}
 	// Clearing the name goes back to the transcript's title; the old name
