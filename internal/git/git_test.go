@@ -72,6 +72,24 @@ func repo(t *testing.T) string {
 	return dir
 }
 
+func TestDefaultBranch(t *testing.T) {
+	r := repo(t)
+	if got := DefaultBranch(r); got != "main" {
+		t.Errorf("no origin: %q", got)
+	}
+	// With an origin, its HEAD decides.
+	exec.Command("git", "-C", r, "remote", "add", "origin", r).Run()
+	exec.Command("git", "-C", r, "branch", "trunk").Run()
+	exec.Command("git", "-C", r, "fetch", "-q", "origin").Run()
+	exec.Command("git", "-C", r, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk").Run()
+	if got := DefaultBranch(r); got != "trunk" {
+		t.Errorf("origin HEAD: %q", got)
+	}
+	if got := DefaultBranch(t.TempDir()); got != "" {
+		t.Errorf("no repo: %q", got)
+	}
+}
+
 func TestStatusAndWorktrees(t *testing.T) {
 	r := repo(t)
 	if info, ok := Status(r); !ok || info != (Info{Branch: "main"}) {

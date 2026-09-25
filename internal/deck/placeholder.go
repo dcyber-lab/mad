@@ -15,7 +15,8 @@ const PlaceholderText = `
    sidebar keys
      ↑/↓ j/k   move            enter   open agent
      n         new agent       w       new agent in a new worktree
-     v         diff view       a       add project
+     v         diff view       f       finish: push / PR / rebase / merge
+     a         add project     t       name the agent
      r         restart/resume  x       kill agent / remove project
      1-9       open agent N    q       detach (agents keep running)
      < / >     narrower / wider sidebar (or drag the border)

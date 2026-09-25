@@ -27,7 +27,8 @@ status the way claude and codex do.</sub>
   session has consumed so far, and every project the sum of its agents.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
   starts an agent in it; `v` opens the changes of any agent in lazygit (or
-  `git diff`) without leaving the deck.
+  `git diff`) without leaving the deck; `f` pushes the branch, opens a pull
+  request, or rebases / merges it onto the default branch.
 - **Notifications** — a desktop notification when an agent finishes or needs
   you, and `d` / `Alt-n` to jump to the next one.
 - **Never lose a session** — agents are started with a known session id, so
@@ -108,6 +109,7 @@ again to reattach.
 | `n`            | New agent in the current project               |
 | `w`            | New agent in a new worktree (asks for a branch) |
 | `v`            | Show / hide the changes of the agent or project |
+| `f`            | Finish the branch: push, open a PR, rebase, merge |
 | `a`            | Add a project                                  |
 | `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
@@ -206,6 +208,21 @@ and output, added up. Both come from the transcript claude or codex writes
 (`~/.claude/projects`, `~/.codex/sessions`), read from where the last poll
 stopped, so agents are never asked. A project row shows the sum of its
 agents. `/clear` starts a new session, so the count starts over.
+
+When the branch is done, `f` on the agent (or project) lists what can
+happen to it: push and open a pull request (`gh pr create`, when `gh` is
+installed), rebase onto the default branch, merge into it (offered when the
+main checkout has the default branch out), or just push. The default
+branch is what `origin/HEAD` points at, else `main` or `master`. The
+command runs on stage in the checkout and stays until you press enter, so
+a PR link or a conflict can be read; the sidebar's git counts refresh
+right after. Your own list in `config.json` replaces the built-in one;
+`{dir}`, `{repo}`, `{branch}` and `{base}` are filled in, shell-quoted:
+
+```json
+{"finish": [{"name": "open PR", "command": "gh pr create --web --base {base}"},
+            {"name": "squash onto {base}", "command": "git rebase -i {base}"}]}
+```
 
 `v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
 stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)
@@ -310,7 +327,7 @@ sets its own `notify`).
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
-| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer)    |
+| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks                          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |

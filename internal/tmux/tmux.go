@@ -32,7 +32,7 @@ const (
 	IDSidebar     = "_sidebar"
 	IDPlaceholder = "_placeholder"
 	IDKeepalive   = "_keep"
-	IDDiff        = "_diff" // the diff viewer opened with v
+	IDTask        = "_task" // a one-off pane on stage: the diff viewer (v), a finish command (f)
 )
 
 func envOr(k, def string) string {

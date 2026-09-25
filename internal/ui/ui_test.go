@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/notify"
@@ -951,12 +952,12 @@ func TestDiffView(t *testing.T) {
 	// v on a row opens its directory; the stage bar stays on the agent
 	// while its diff is up.
 	press(m, "j", "j")
-	if cmd := m.keyNormal(key("v")); cmd == nil || m.diffFor != "a2" {
-		t.Fatalf("cmd=%v diffFor=%q", cmd, m.diffFor)
+	if cmd := m.keyNormal(key("v")); cmd == nil || m.taskFor != "a2" {
+		t.Fatalf("cmd=%v taskFor=%q", cmd, m.taskFor)
 	}
-	diff := tmux.Pane{ID: "%9", MadID: tmux.IDDiff, Session: tmux.MainSession, Index: 1}
+	diff := tmux.Pane{ID: "%9", MadID: tmux.IDTask, Session: tmux.MainSession, Index: 1}
 	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, diff, {ID: "%2", MadID: "a1", Session: tmux.PoolSession, Index: -1}}}, now)
-	if m.stageID != tmux.IDDiff {
+	if m.stageID != tmux.IDTask {
 		t.Fatalf("stage = %q", m.stageID)
 	}
 	if r, _ := m.current(); r.agent.ID != "a2" {
@@ -965,7 +966,7 @@ func TestDiffView(t *testing.T) {
 	if left, _ := m.rowSegs(m.rows[2]); left[1].s != "▌" {
 		t.Error("the agent whose diff is shown should carry the stage bar")
 	}
-	if m.diffCleanup([]tmux.Pane{sidebar, diff}) != nil {
+	if m.taskCleanup([]tmux.Pane{sidebar, diff}) != nil {
 		t.Error("a live diff view on stage must be left alone")
 	}
 	// v again on the same row takes it down; on another row it switches.
@@ -973,25 +974,25 @@ func TestDiffView(t *testing.T) {
 		t.Error("toggle off returned nothing")
 	}
 	press(m, "k")
-	if cmd := m.keyNormal(key("v")); cmd == nil || m.diffFor != "a1" {
-		t.Errorf("switch: cmd=%v diffFor=%q", cmd, m.diffFor)
+	if cmd := m.keyNormal(key("v")); cmd == nil || m.taskFor != "a1" {
+		t.Errorf("switch: cmd=%v taskFor=%q", cmd, m.taskFor)
 	}
 	// Quitting the viewer leaves a dead pane on stage: cleaned up. Parked
 	// in the pool: cleaned up too.
 	dead := diff
 	dead.Dead = true
-	if m.diffCleanup([]tmux.Pane{sidebar, dead}) == nil {
+	if m.taskCleanup([]tmux.Pane{sidebar, dead}) == nil {
 		t.Error("dead diff view not closed")
 	}
 	parked := diff
 	parked.Session, parked.Index = tmux.PoolSession, -1
-	if m.diffCleanup([]tmux.Pane{sidebar, parked}) == nil {
+	if m.taskCleanup([]tmux.Pane{sidebar, parked}) == nil {
 		t.Error("parked diff view not closed")
 	}
 	// Alt-v from the stage: for the agent there, or back from the diff.
 	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, {ID: "%2", MadID: "a1", Session: tmux.MainSession, Index: 1}}}, now)
-	if _, cmd := m.Update(pokeMsg(poke.Diff)); cmd == nil || m.diffFor != "a1" {
-		t.Errorf("poke diff: cmd=%v diffFor=%q", cmd, m.diffFor)
+	if _, cmd := m.Update(pokeMsg(poke.Diff)); cmd == nil || m.taskFor != "a1" {
+		t.Errorf("poke diff: cmd=%v taskFor=%q", cmd, m.taskFor)
 	}
 	m.applyPoll(pollMsg{panes: []tmux.Pane{sidebar, diff}}, now)
 	if _, cmd := m.Update(pokeMsg(poke.Diff)); cmd == nil {
@@ -1187,4 +1188,62 @@ func TestRename(t *testing.T) {
 	if a.Name != "" || !strings.Contains(m.View(), "Flaky test fix") {
 		t.Errorf("name=%q view:\n%s", a.Name, m.View())
 	}
+}
+
+func TestFinishMenu(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	wt := "/p/one/.claude/worktrees/feat-x"
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude", Dir: wt}, {ID: "a2", Kind: "shell"}}
+	m.rebuildRows()
+	old := defaultBranch
+	t.Cleanup(func() { defaultBranch = old })
+	asked := 0
+	defaultBranch = func(repo string) string { asked++; return "main" }
+
+	// Before the git scan nothing is known about the checkout.
+	press(m, "j", "f")
+	if m.mode != modeNormal || !strings.Contains(m.View(), "not on a branch") {
+		t.Fatalf("mode=%v view:\n%s", m.mode, m.View())
+	}
+	m.Update(gitMsg{"/p/one": {Branch: "main"}, wt: {Branch: "feat/x", Dirty: 1}})
+
+	press(m, "f")
+	if m.mode != modePickFinish || m.finID != "a1" || m.finCo.Branch != "feat/x" || m.finCo.Base != "main" {
+		t.Fatalf("mode=%v id=%q co=%+v", m.mode, m.finID, m.finCo)
+	}
+	v := m.View()
+	for _, want := range []string{"finish · feat/x → main", "rebase onto main", "merge into main", "push"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("menu lacks %q:\n%s", want, v)
+		}
+	}
+	press(m, "j", "j") // cursor on the third entry, whatever gh made of it
+	if m.finCursor != 2 {
+		t.Errorf("cursor = %d", m.finCursor)
+	}
+	if cmd := m.keyPickFinish(key("enter")); cmd == nil || m.mode != modeNormal || m.taskFor != "a1" {
+		t.Errorf("cmd=%v mode=%v taskFor=%q", cmd, m.mode, m.taskFor)
+	}
+
+	// The default branch is looked up once per repo; esc leaves the menu.
+	press(m, "f", "esc")
+	if m.mode != modeNormal || asked != 1 {
+		t.Errorf("mode=%v lookups=%d", m.mode, asked)
+	}
+	// On the project row (main itself) there is nothing to rebase or merge.
+	press(m, "g", "f")
+	if m.mode != modePickFinish || m.finID != "" {
+		t.Fatalf("mode=%v id=%q", m.mode, m.finID)
+	}
+	if v := m.View(); strings.Contains(v, "rebase") || strings.Contains(v, "merge") || strings.Contains(v, "→") {
+		t.Errorf("project on its base branch:\n%s", v)
+	}
+	press(m, "esc")
+	// Configured actions replace the menu.
+	m.finCfg = []deck.FinishAction{{Name: "ship it", Command: "ship {branch}"}}
+	press(m, "j", "f")
+	if len(m.fin) != 1 || m.fin[0].Command != "ship 'feat/x'" || !strings.Contains(m.View(), "ship it") {
+		t.Errorf("configured menu: %+v", m.fin)
+	}
+	press(m, "esc")
 }
