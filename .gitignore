@@ -1,0 +1,14 @@
+# binaries
+/mad
+/multi-agents
+/dist/
+
+# test / coverage
+*.test
+*.out
+coverage.*
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
