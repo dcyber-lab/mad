@@ -3,10 +3,15 @@
 package paths
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Home is the user's home directory ($HOME).
@@ -111,4 +116,46 @@ func WriteFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+// ReadJSON decodes the JSON file at path into v. A missing file is no
+// error and leaves v alone; a malformed one is, naming the file and line
+// ("config.json:12: invalid character '}' …").
+func ReadJSON(path string, v any) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, v)
+	var off int64
+	var syn *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &syn):
+		off = syn.Offset
+	case errors.As(err, &typ):
+		off = typ.Offset
+	default:
+		return fmt.Errorf("%s: %v", filepath.Base(path), err)
+	}
+	if off > int64(len(data)) {
+		off = int64(len(data))
+	}
+	line := bytes.Count(data[:off], []byte("\n")) + 1
+	return fmt.Errorf("%s:%d: %v", filepath.Base(path), line, strings.TrimPrefix(err.Error(), "json: "))
+}
+
+// ModTime is path's modification time, zero when it is missing; readers
+// of config files reload when it changes.
+func ModTime(path string) time.Time {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return fi.ModTime()
 }

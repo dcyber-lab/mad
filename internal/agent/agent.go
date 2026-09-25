@@ -4,7 +4,8 @@ package agent
 
 import (
 	"encoding/json"
-	"os"
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -88,43 +89,79 @@ var builtin = []Kind{
 
 // Builtin returns the kinds mad knows without any configuration.
 func Builtin() []Kind {
-	return compile(append([]Kind(nil), builtin...))
+	kinds, _ := compile(clone(builtin))
+	return kinds
 }
 
-// Load returns the built-in kinds merged with agents.json: an entry with a
-// built-in name replaces it, others are appended. A missing or invalid file
-// leaves the built-ins as they are.
-func Load() []Kind {
-	kinds := append([]Kind(nil), builtin...)
-	if data, err := os.ReadFile(paths.AgentsConfig()); err == nil {
-		var extra []Kind
-		if json.Unmarshal(data, &extra) == nil {
-			for _, k := range extra {
-				replaced := false
-				for i := range kinds {
-					if kinds[i].Name == k.Name {
-						kinds[i], replaced = k, true
-					}
-				}
-				if !replaced && k.Name != "" {
-					kinds = append(kinds, k)
-				}
-			}
+// clone copies kinds deep enough to decode into: a slice left shared
+// would be overwritten in place.
+func clone(kinds []Kind) []Kind {
+	out := append([]Kind(nil), kinds...)
+	for i := range out {
+		out[i].Waiting = append([]string(nil), out[i].Waiting...)
+	}
+	return out
+}
+
+// Load returns the built-in kinds merged with agents.json. An entry with a
+// built-in name changes the fields it sets and keeps the others ("fork":
+// "" drops one); others are appended. What can't be used is left out and
+// reported in the error, the rest still loads. A file that isn't a JSON
+// array at all gives nil and the error, for the caller to keep what it
+// had (or take Builtin).
+func Load() ([]Kind, error) {
+	kinds := clone(builtin)
+	var entries []json.RawMessage
+	if err := paths.ReadJSON(paths.AgentsConfig(), &entries); err != nil {
+		return nil, err
+	}
+	var errs []error
+	for n, raw := range entries {
+		var named struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &named) != nil || named.Name == "" {
+			errs = append(errs, fmt.Errorf("agents.json: entry %d has no name", n+1))
+			continue
+		}
+		i := 0
+		for i < len(kinds) && kinds[i].Name != named.Name {
+			i++
+		}
+		k := Kind{}
+		if i < len(kinds) {
+			k = clone(kinds[i : i+1])[0] // a bad entry must not half-change it
+		}
+		if err := json.Unmarshal(raw, &k); err != nil {
+			errs = append(errs, fmt.Errorf("agents.json: %s: %v", named.Name, strings.TrimPrefix(err.Error(), "json: ")))
+			continue
+		}
+		if i < len(kinds) {
+			kinds[i] = k
+		} else {
+			kinds = append(kinds, k)
 		}
 	}
-	return compile(kinds)
+	kinds, err := compile(kinds)
+	return kinds, errors.Join(append(errs, err)...)
 }
 
-func compile(kinds []Kind) []Kind {
+// compile readies the waiting patterns; one that doesn't compile is
+// skipped and reported.
+func compile(kinds []Kind) ([]Kind, error) {
+	var errs []error
 	for i := range kinds {
 		kinds[i].waitingRe = nil
 		for _, w := range kinds[i].Waiting {
-			if re, err := regexp.Compile(w); err == nil {
-				kinds[i].waitingRe = append(kinds[i].waitingRe, re)
+			re, err := regexp.Compile(w)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("agents.json: %s: waiting %q: %v", kinds[i].Name, w, err))
+				continue
 			}
+			kinds[i].waitingRe = append(kinds[i].waitingRe, re)
 		}
 	}
-	return kinds
+	return kinds, errors.Join(errs...)
 }
 
 // ByName finds a kind; unknown names run as a command of that name.

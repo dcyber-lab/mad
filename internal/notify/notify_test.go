@@ -8,40 +8,22 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/dcyber-lab/mad/internal/paths"
 )
 
-func writeConfig(t *testing.T, body string) {
-	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	if body == "" {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(paths.ConfigFile()), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(paths.ConfigFile(), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLoad(t *testing.T) {
+func TestFromFile(t *testing.T) {
 	cases := []struct {
-		name, file string
-		want       Config
+		name string
+		file *Config
+		want Config
 	}{
-		{"missing", "", Default()},
-		{"invalid", "{", Default()},
-		{"no notify key", `{"other": 1}`, Default()},
-		{"no on list", `{"notify": {"command": "say hi"}}`, Config{On: []string{Done, Waiting}, Command: "say hi"}},
-		{"off", `{"notify": {"on": []}}`, Config{On: []string{}}},
-		{"done only", `{"notify": {"on": ["done"]}}`, Config{On: []string{Done}}},
+		{"no notify key", nil, Default()},
+		{"no on list", &Config{Command: "say hi"}, Config{On: []string{Done, Waiting}, Command: "say hi"}},
+		{"off", &Config{On: []string{}}, Config{On: []string{}}},
+		{"done only", &Config{On: []string{Done}}, Config{On: []string{Done}}},
 	}
 	for _, c := range cases {
-		writeConfig(t, c.file)
-		if got := Load(); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("%s: Load() = %+v, want %+v", c.name, got, c.want)
+		if got := FromFile(c.file); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: FromFile = %+v, want %+v", c.name, got, c.want)
 		}
 	}
 	if (Config{On: []string{}}).Wants(Done) || !Default().Wants(Waiting) {
@@ -108,16 +90,5 @@ func TestSendRunsCustomCommand(t *testing.T) {
 	data, _ := os.ReadFile(out)
 	if string(data) != "mad · api|codex needs you" {
 		t.Errorf("command wrote %q", data)
-	}
-}
-
-func TestModTime(t *testing.T) {
-	writeConfig(t, "")
-	if !ModTime().IsZero() {
-		t.Error("missing file should have a zero ModTime")
-	}
-	writeConfig(t, `{"notify": {"on": []}}`)
-	if ModTime().IsZero() {
-		t.Error("existing file has a zero ModTime")
 	}
 }

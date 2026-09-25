@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -62,16 +64,27 @@ func TestSidebarWidth(t *testing.T) {
 	}
 }
 
-func TestQuotaEnabled(t *testing.T) {
+func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if !QuotaEnabled() {
-		t.Error("quota should default on")
+	if c, err := LoadConfig(); err != nil || !reflect.DeepEqual(c, DefaultConfig()) || !c.Quota {
+		t.Errorf("no file: %+v %v", c, err)
 	}
-	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
-	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"quota": false}`), 0o644)
-	if QuotaEnabled() {
-		t.Error("quota not turned off")
+	write := func(body string) {
+		os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
+		os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(body), 0o644)
+	}
+	write(`{"notify": {"on": []}, "diff": {"command": "x {dir}"},
+		"finish": [{"name": "x", "command": "y"}], "quota": false}`)
+	c, err := LoadConfig()
+	if err != nil || c.Notify.Wants(notify.Done) || c.Diff.Command != "x {dir}" ||
+		len(c.Finish) != 1 || c.Finish[0].Name != "x" || c.Quota {
+		t.Errorf("full file: %+v %v", c, err)
+	}
+	// A typo is reported with its line, not silently read as defaults.
+	write("{\n  \"quota\": false,\n}")
+	if c, err := LoadConfig(); err == nil || !strings.HasPrefix(err.Error(), "config.json:3:") || !c.Quota {
+		t.Errorf("broken file: %+v %v", c, err)
 	}
 }
 
@@ -283,17 +296,6 @@ func TestDiffCommand(t *testing.T) {
 	if got := DiffCommand(DiffConfig{Command: "tig -C {dir} status"}, "/p"); got != "tig -C '/p' status" {
 		t.Error(got)
 	}
-
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	if got := LoadDiffConfig(); got.Command != "" {
-		t.Errorf("no config: %+v", got)
-	}
-	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
-	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"notify":{"on":[]},"diff":{"command":"x {dir}"}}`), 0o644)
-	if got := LoadDiffConfig(); got.Command != "x {dir}" {
-		t.Errorf("config: %+v", got)
-	}
 }
 
 func TestFinishActions(t *testing.T) {
@@ -338,14 +340,6 @@ func TestFinishActions(t *testing.T) {
 
 	if got := HoldCommand("git push"); !strings.HasPrefix(got, "sh -c 'git push; s=$?;") || !strings.Contains(got, "read _") {
 		t.Error(got)
-	}
-
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
-	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"finish":[{"name":"x","command":"y"}]}`), 0o644)
-	if got := LoadFinishConfig(); len(got) != 1 || got[0].Name != "x" {
-		t.Errorf("config: %+v", got)
 	}
 }
 
