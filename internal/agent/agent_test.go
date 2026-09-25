@@ -24,34 +24,39 @@ type written map[string]bool
 
 func (w written) exists(sid string) bool { return w[sid] }
 
+// wiring stands in for the placeholders providers fill.
+var wiring = map[string]string{"{claude_settings}": "'/cfg/mad/claude-settings.json'", "{codex_notify}": "-c 'notify=[mad]'"}
+
+func (w written) launch() Launch { return Launch{Exists: w.exists, Vars: wiring} }
+
 func TestClaudeCommand(t *testing.T) {
-	home := withHome(t)
+	withHome(t)
 	claude := ByName(Builtin(), "claude")
 	a := &state.Agent{ID: "id-1", Kind: "claude"}
 	w := written{}
 
-	start := claude.Command(a, false, w.exists)
+	start := claude.Command(a, false, w.launch())
 	if !strings.HasPrefix(start, "claude --settings ") || !strings.HasSuffix(start, "--session-id id-1") {
 		t.Errorf("start = %q", start)
 	}
-	if !strings.Contains(start, filepath.Join(home, ".config", "mad", "claude-settings.json")) {
+	if !strings.Contains(start, "--settings '/cfg/mad/claude-settings.json' ") {
 		t.Errorf("start doesn't load mad's hook settings: %q", start)
 	}
 
 	// No transcript yet: --resume would fail, so resume starts fresh.
-	if got := claude.Command(a, true, w.exists); got != start {
+	if got := claude.Command(a, true, w.launch()); got != start {
 		t.Errorf("resume without transcript = %q, want start", got)
 	}
 
 	w["id-1"] = true
-	if got := claude.Command(a, true, w.exists); !strings.HasSuffix(got, "--resume id-1") {
+	if got := claude.Command(a, true, w.launch()); !strings.HasSuffix(got, "--resume id-1") {
 		t.Errorf("resume = %q", got)
 	}
 
 	// After /clear the session id differs from the agent id.
 	a.SessionID = "sid-2"
 	w["sid-2"] = true
-	if got := claude.Command(a, true, w.exists); !strings.HasSuffix(got, "--resume sid-2") {
+	if got := claude.Command(a, true, w.launch()); !strings.HasSuffix(got, "--resume sid-2") {
 		t.Errorf("resume by session id = %q", got)
 	}
 }
@@ -62,10 +67,10 @@ func TestClaudeFork(t *testing.T) {
 	a := &state.Agent{ID: "id-1", Kind: "claude", SessionID: "sid-1", Fork: true}
 	w := written{"sid-1": true}
 
-	if got := claude.Command(a, true, w.exists); !strings.HasSuffix(got, "--resume sid-1 --fork-session") {
+	if got := claude.Command(a, true, w.launch()); !strings.HasSuffix(got, "--resume sid-1 --fork-session") {
 		t.Errorf("fork resume = %q", got)
 	}
-	if got := claude.Command(a, false, w.exists); strings.Contains(got, "--fork-session") {
+	if got := claude.Command(a, false, w.launch()); strings.Contains(got, "--fork-session") {
 		t.Errorf("fork must only apply to resume, got %q", got)
 	}
 }
@@ -75,12 +80,15 @@ func TestCodexCommand(t *testing.T) {
 	codex := ByName(Builtin(), "codex")
 	a := &state.Agent{ID: "id-2", Kind: "codex"}
 
-	start := codex.Command(a, false, nil)
-	if !strings.HasPrefix(start, "codex -c 'notify=[") || !strings.Contains(start, `"hook","codex"]`) {
+	none := written{}.launch()
+	if start := codex.Command(a, false, none); start != "codex -c 'notify=[mad]'" {
 		t.Errorf("start should wire notify to mad: %q", start)
 	}
+	// The user's own notify: codex's wiring fills in nothing.
+	if got := codex.Command(a, false, Launch{Vars: map[string]string{"{codex_notify}": ""}}); got != "codex " {
+		t.Errorf("start without mad's notify = %q", got)
+	}
 	// codex names its own threads: whether one was written doesn't matter.
-	none := written{}.exists
 	if got := codex.Command(a, true, none); !strings.HasSuffix(got, "--last") {
 		t.Errorf("resume without id should use --last, got %q", got)
 	}
@@ -90,58 +98,14 @@ func TestCodexCommand(t *testing.T) {
 	}
 }
 
-func TestCodexKeepsUsersNotify(t *testing.T) {
-	home := withHome(t)
-	codex := ByName(Builtin(), "codex")
-	a := &state.Agent{ID: "id-3", Kind: "codex"}
-	write := func(dir, body string) {
-		t.Helper()
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	cases := []struct {
-		config string
-		wired  bool
-	}{
-		{"", true},
-		{"model = \"o3\"\n# notify = [\"old\"]\n", true},
-		{"notify = [\"terminal-notifier\", \"-title\", \"codex\"]\n", false},
-		{"model = \"o3\"\n\n[profiles.work]\n  notify = [\"say\"]\n", false},
-	}
-	for _, c := range cases {
-		write(filepath.Join(home, ".codex"), c.config)
-		if got := strings.Contains(codex.Command(a, false, nil), "notify="); got != c.wired {
-			t.Errorf("config %q: mad's notify wired = %v, want %v", c.config, got, c.wired)
-		}
-	}
-	if got := codex.Command(a, false, nil); got != "codex " {
-		t.Errorf("start without mad's notify = %q", got)
-	}
-
-	// CODEX_HOME moves codex's config.
-	other := t.TempDir()
-	t.Setenv("CODEX_HOME", other)
-	if !strings.Contains(codex.Command(a, false, nil), "notify=") {
-		t.Error("~/.codex should not count once CODEX_HOME is set")
-	}
-	write(other, "notify = [\"x\"]\n")
-	if strings.Contains(codex.Command(a, false, nil), "notify=") {
-		t.Error("notify in $CODEX_HOME/config.toml was overridden")
-	}
-}
-
 func TestPiAndShell(t *testing.T) {
 	withHome(t)
 	a := &state.Agent{ID: "id-3"}
 	pi := ByName(Builtin(), "pi")
-	if got := pi.Command(a, true, nil); got != "pi --session-id id-3" {
+	if got := pi.Command(a, true, Launch{}); got != "pi --session-id id-3" {
 		t.Errorf("pi resume = %q (pi resumes via the same id)", got)
 	}
-	if got := ByName(Builtin(), "shell").Command(a, false, nil); !strings.Contains(got, "${SHELL") {
+	if got := ByName(Builtin(), "shell").Command(a, false, Launch{}); !strings.Contains(got, "${SHELL") {
 		t.Errorf("shell = %q", got)
 	}
 }
@@ -151,18 +115,18 @@ func TestPiAndShell(t *testing.T) {
 func TestNamedKindWithoutProvider(t *testing.T) {
 	k := Kind{Name: "gemini", Start: "gemini --session {id}", Resume: "gemini --resume {sid}", Fork: "--fork"}
 	a := &state.Agent{ID: "id-5"}
-	if got := k.Command(a, true, nil); got != "gemini --session id-5" {
+	if got := k.Command(a, true, Launch{}); got != "gemini --session id-5" {
 		t.Errorf("no session known = %q", got)
 	}
 	a.SessionID, a.Fork = "s-5", true
-	if got := k.Command(a, true, nil); got != "gemini --resume s-5 --fork" {
+	if got := k.Command(a, true, Launch{}); got != "gemini --resume s-5 --fork" {
 		t.Errorf("resume = %q", got)
 	}
 }
 
 func TestUnknownKindRunsItsName(t *testing.T) {
 	k := ByName(Builtin(), "aider")
-	if got := k.Command(&state.Agent{ID: "x"}, true, nil); got != "aider" {
+	if got := k.Command(&state.Agent{ID: "x"}, true, Launch{}); got != "aider" {
 		t.Errorf("got %q", got)
 	}
 }

@@ -39,7 +39,7 @@ with dependencies pointing downwards in this list:
 | -------------------- | ---------------------------------------------------------------- |
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
-| `internal/deck`      | tmux layout, agent lifecycle, generated tmux/claude configs      |
+| `internal/deck`      | tmux layout, agent lifecycle, generated tmux config              |
 | `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/discover`  | Per-agent providers: history, sessions, transcript lines, processes outside the deck |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |
@@ -58,16 +58,21 @@ Launching an agent is configuration: an entry in `agent.builtin` (or a
 user's `agents.json`) with its commands, waiting patterns and icon. That
 alone runs it in the deck.
 
-Everything mad reads from the agent's own files goes through
-`discover.Provider`: where its sessions live and which a person had, what a
-transcript line says (tokens, title, prompt, tool call, usage limits), how
-to recognize it running in another terminal or a desktop app, and how to
-read its `mad hook` reports. Each agent is one file, `internal/discover/claude.go`
-and `codex.go`; a new one implements the interface in its own file and is
-added to `providers`. The sidebar, session picker, sync and `mad scan`
-work from that list; past it, agents are only named where they are
-launched (the `{claude_settings}` and `{codex_notify}` placeholders,
-claude's status line).
+Everything else about an agent goes through `discover.Provider`:
+
+- how mad wires itself in: files written at deck start (claude's settings),
+  the placeholders its commands use (`{claude_settings}`,
+  `{codex_notify}`), and what `mad hook <kind>` makes of its reports
+  (status, usage limits, claude's status line);
+- where its sessions live and which a person had;
+- what a transcript line says (tokens, title, prompt, tool call, limits);
+- how to recognize it running in another terminal or a desktop app, and
+  whether a deck started it.
+
+Each agent is one file, `internal/discover/claude.go` and `codex.go`; a new
+one implements the interface in its own file and is added to `providers`.
+Nothing outside those files and the built-in kinds names an agent, except
+`.claude/worktrees`, the worktree directory mad shares with Claude Code.
 
 ### Tests
 

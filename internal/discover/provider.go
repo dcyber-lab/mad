@@ -7,16 +7,27 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
-// Provider is what mad knows about one kind of agent beyond launching it
-// (see agent.Kind): where it keeps its sessions, what its transcripts say
-// and how to tell it running outside the deck. Kinds without a provider
-// (pi, shell, the ones added in agents.json) still run and show waiting
-// from their screen, but have no history, session picker, transcript or
-// sync. Adding one is a file here and a line in providers.
+// Provider is what mad knows about one kind of agent beyond its launch
+// commands (see agent.Kind): how mad wires itself into the agent, where
+// the agent keeps its sessions, what its transcripts say and how to tell
+// it running outside the deck. Kinds without a provider (pi, shell, the
+// ones added in agents.json) still run and show waiting from their
+// screen, but have no history, session picker, transcript or sync.
+// Adding one is a file here and a line in providers.
 type Provider interface {
 	// Kind is the agent kind (agent.Kind.Name), which is also the name of
 	// its executable.
 	Kind() string
+
+	// Setup writes whatever the agent reads to report to mad, on every
+	// deck start; quota is whether to follow the account's usage limits.
+	Setup(quota bool) error
+	// Placeholders are the command placeholders the agent's wiring fills,
+	// "{name}" → shell text. Any kind's commands may use them.
+	Placeholders() map[string]string
+	// Hook takes what the agent passes to `mad hook <kind> args...`, the
+	// payload on stdin or in args; what it prints goes to stdout.
+	Hook(args []string, stdin io.Reader, stdout io.Writer, now time.Time) Report
 
 	// History calls add for every session used since cutoff: where it
 	// ran, when it was last written and whether a desktop app ran it.
@@ -36,6 +47,9 @@ type Provider interface {
 	// id; nil when the agent keeps none. Read once per poll.
 	Titles() map[string]string
 
+	// Launched reports whether a command line carries mad's wiring: the
+	// process was started by a deck, maybe one on another socket.
+	Launched(cmdline string) bool
 	// Desktop recognizes, by its command line, a process a desktop app
 	// runs for one conversation (it has no terminal) and returns its
 	// arguments.
@@ -49,10 +63,12 @@ type Provider interface {
 	// HumanSession reports whether session id is a conversation with a
 	// person, not one a program drove. Desktop apps run both.
 	HumanSession(id string) bool
+}
 
-	// Hook maps what the agent passes to `mad hook <kind> args...`, with
-	// the payload on stdin or in args, to a status report; nil to ignore.
-	Hook(args []string, stdin io.Reader) *status.Hook
+// Report is what an agent told `mad hook`.
+type Report struct {
+	Hook  *status.Hook  // a change of status; nil when none
+	Quota *status.Quota // the account's usage limits; nil when not given
 }
 
 // providers are the kinds mad follows, in the order they are scanned.
@@ -60,6 +76,27 @@ var providers = []Provider{claude{}, codex{}}
 
 // Providers returns every kind mad follows.
 func Providers() []Provider { return providers }
+
+// Setup runs every provider's Setup.
+func Setup(quota bool) error {
+	for _, p := range providers {
+		if err := p.Setup(quota); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Placeholders merges every provider's placeholders.
+func Placeholders() map[string]string {
+	vars := map[string]string{}
+	for _, p := range providers {
+		for k, v := range p.Placeholders() {
+			vars[k] = v
+		}
+	}
+	return vars
+}
 
 // Lookup returns the provider of kind, or nil.
 func Lookup(kind string) Provider {

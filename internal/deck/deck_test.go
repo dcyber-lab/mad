@@ -1,7 +1,6 @@
 package deck
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -63,46 +62,7 @@ func TestSidebarWidth(t *testing.T) {
 	}
 }
 
-func TestClaudeSettings(t *testing.T) {
-	var s struct {
-		Hooks map[string][]struct {
-			Matcher string `json:"matcher"`
-			Hooks   []struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(ClaudeSettings(true), &s); err != nil {
-		t.Fatal(err)
-	}
-	for _, ev := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop"} {
-		entries := s.Hooks[ev]
-		if len(entries) != 1 || len(entries[0].Hooks) != 1 {
-			t.Fatalf("%s: %+v", ev, entries)
-		}
-		h := entries[0].Hooks[0]
-		if h.Type != "command" || !strings.HasSuffix(h.Command, " hook claude") {
-			t.Errorf("%s hook = %+v", ev, h)
-		}
-	}
-	if s.Hooks["PreToolUse"][0].Matcher != "*" {
-		t.Error("tool hooks must match every tool")
-	}
-}
-
-func TestClaudeSettingsStatusLine(t *testing.T) {
-	var with, without map[string]any
-	json.Unmarshal(ClaudeSettings(true), &with)
-	json.Unmarshal(ClaudeSettings(false), &without)
-	sl, _ := with["statusLine"].(map[string]any)
-	if cmd, _ := sl["command"].(string); !strings.Contains(cmd, "hook statusline") {
-		t.Errorf("statusLine = %v", with["statusLine"])
-	}
-	if _, ok := without["statusLine"]; ok {
-		t.Error("statusLine injected with quota off")
-	}
-
+func TestQuotaEnabled(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	if !QuotaEnabled() {
@@ -290,8 +250,12 @@ func TestResumeAsksProvider(t *testing.T) {
 	a := &state.Agent{ID: "id-1", Kind: "claude"}
 	kinds := agent.Builtin()
 
-	if got := command(p, a, true, kinds); !strings.HasSuffix(got, "--session-id id-1") {
+	got := command(p, a, true, kinds)
+	if !strings.HasSuffix(got, "--session-id id-1") {
 		t.Errorf("never written = %q", got)
+	}
+	if !strings.Contains(got, "--settings '"+filepath.Join(home, ".config", "mad", "claude-settings.json")+"'") {
+		t.Errorf("{claude_settings} not filled: %q", got)
 	}
 	file := filepath.Join(home, ".claude", "projects", "-work-app", "id-1.jsonl")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {

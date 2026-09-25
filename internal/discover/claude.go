@@ -3,9 +3,12 @@ package discover
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,14 +17,188 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
 // claude is Claude Code, in a terminal or run by the Claude desktop app.
 // Its sessions are ~/.claude/projects/<cwd with non-alphanumerics as
 // dashes>/<session id>.jsonl, subagents under <session id>/subagents/.
+// mad passes it a settings file of its own with --settings: hooks that
+// report status, and a status line that reports the usage limits.
 type claude struct{}
 
 func (claude) Kind() string { return "claude" }
+
+const claudeSettingsName = "claude-settings.json"
+
+// claudeSettingsPath is mad's settings file for claude, next to mad's
+// config.
+func claudeSettingsPath() string { return filepath.Join(paths.ConfigDir(), claudeSettingsName) }
+
+// claudeSettings holds hooks that report status to `mad hook claude`, and
+// with quota set a status line command that records the plan's usage
+// limits (it runs the user's own status line afterwards). The user's own
+// settings stay untouched.
+func claudeSettings(quota bool) []byte {
+	self := paths.ShellQuote(paths.Self())
+	hook := []map[string]any{{"hooks": []map[string]any{{
+		"type": "command", "command": self + " hook claude", "timeout": 5,
+	}}}}
+	toolHook := []map[string]any{{"matcher": "*", "hooks": hook[0]["hooks"]}}
+	settings := map[string]any{"hooks": map[string]any{
+		"SessionStart":     hook,
+		"UserPromptSubmit": hook,
+		"PreToolUse":       toolHook,
+		"PostToolUse":      toolHook,
+		"Notification":     hook,
+		"Stop":             hook,
+	}}
+	if quota {
+		settings["statusLine"] = map[string]any{"type": "command", "command": self + " hook claude statusline"}
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	return data
+}
+
+func (claude) Setup(quota bool) error {
+	return paths.WriteFileAtomic(claudeSettingsPath(), claudeSettings(quota))
+}
+
+func (claude) Placeholders() map[string]string {
+	return map[string]string{"{claude_settings}": paths.ShellQuote(claudeSettingsPath())}
+}
+
+// Launched: mad's settings file is on the command line (whichever config
+// dir the deck that started it uses).
+func (claude) Launched(cmdline string) bool {
+	return strings.Contains(cmdline, "/mad/"+claudeSettingsName)
+}
+
+// Hook takes a hook event on stdin, or with "statusline" the JSON claude
+// gives its status line, whose output is the status line shown.
+func (claude) Hook(args []string, stdin io.Reader, stdout io.Writer, now time.Time) Report {
+	if len(args) > 0 && args[0] == "statusline" {
+		return Report{Quota: claudeStatusLine(stdin, stdout, now)}
+	}
+	return Report{Hook: parseClaudeHook(stdin)}
+}
+
+// parseClaudeHook maps a hook event to a status; nil means the event
+// doesn't change it.
+func parseClaudeHook(r io.Reader) *status.Hook {
+	var ev struct {
+		Event            string `json:"hook_event_name"`
+		SessionID        string `json:"session_id"`
+		ToolName         string `json:"tool_name"`
+		Message          string `json:"message"`
+		NotificationType string `json:"notification_type"`
+	}
+	data, _ := io.ReadAll(r)
+	if json.Unmarshal(data, &ev) != nil {
+		return nil
+	}
+	h := &status.Hook{Event: ev.Event, SessionID: ev.SessionID}
+	switch ev.Event {
+	case "SessionStart", "Stop":
+		h.State = status.Idle
+	case "UserPromptSubmit", "PostToolUse":
+		h.State = status.Running
+	case "PreToolUse":
+		h.State = status.Running
+		if ev.ToolName == "AskUserQuestion" || ev.ToolName == "ExitPlanMode" {
+			h.State = status.Waiting
+		}
+	case "Notification":
+		msg := strings.ToLower(ev.Message)
+		switch {
+		case ev.NotificationType == "permission_prompt", strings.Contains(msg, "permission"):
+			h.State, h.Message = status.Waiting, ev.Message
+		case ev.NotificationType == "idle_prompt", strings.Contains(msg, "waiting for your input"):
+			h.State = status.Idle
+		default:
+			return nil
+		}
+	default:
+		return nil
+	}
+	return h
+}
+
+// claudeStatusLine reads the usage limits off the status line JSON, then
+// hands the same JSON to the status line the user configured, if any, so
+// theirs still shows. Without one it prints a short line of its own.
+func claudeStatusLine(in io.Reader, out io.Writer, now time.Time) *status.Quota {
+	data, _ := io.ReadAll(in)
+	q, known := status.ParseStatusLine(bytes.NewReader(data))
+	if cmd := claudeUserStatusLine(); cmd != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		c := exec.CommandContext(ctx, "sh", "-c", cmd)
+		c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(data), out, io.Discard
+		_ = c.Run()
+	} else {
+		var ev struct {
+			Model struct {
+				Name string `json:"display_name"`
+			} `json:"model"`
+			Context struct {
+				Used *float64 `json:"used_percentage"`
+			} `json:"context_window"`
+		}
+		_ = json.Unmarshal(data, &ev)
+		var parts []string
+		if ev.Model.Name != "" {
+			parts = append(parts, ev.Model.Name)
+		}
+		if ev.Context.Used != nil {
+			parts = append(parts, fmt.Sprintf("ctx %.0f%%", *ev.Context.Used))
+		}
+		if known {
+			if w := q.FiveHour; w.Known() {
+				s := fmt.Sprintf("5h %.0f%%", w.Used)
+				if !w.ResetAt.IsZero() {
+					s += " (" + textutil.Until(w.ResetAt, now) + ")"
+				}
+				parts = append(parts, s)
+			}
+			if w := q.SevenDay; w.Known() {
+				parts = append(parts, fmt.Sprintf("wk %.0f%%", w.Used))
+			}
+		}
+		fmt.Fprintln(out, strings.Join(parts, " · "))
+	}
+	if !known {
+		return nil
+	}
+	return &q
+}
+
+// claudeUserStatusLine is the status line command from the user's own
+// claude settings, the most specific first: the project's local and
+// shared settings, then ~/.claude/settings.json.
+func claudeUserStatusLine() string {
+	cwd, _ := os.Getwd()
+	files := []string{
+		filepath.Join(cwd, ".claude", "settings.local.json"),
+		filepath.Join(cwd, ".claude", "settings.json"),
+		filepath.Join(paths.Home(), ".claude", "settings.json"),
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		var st struct {
+			StatusLine *struct {
+				Command string `json:"command"`
+			} `json:"statusLine"`
+		}
+		if json.Unmarshal(data, &st) == nil && st.StatusLine != nil && st.StatusLine.Command != "" {
+			return st.StatusLine.Command
+		}
+	}
+	return ""
+}
 
 var claudeTitleRe = regexp.MustCompile(`"(?:customTitle|aiTitle)":"((?:[^"\\]|\\.)*)"`)
 
@@ -287,6 +464,3 @@ func (claude) HumanSession(id string) bool {
 	}
 	return cachedSession(fileEntry{matches[0], info.ModTime()}, parseClaudeSession) != nil
 }
-
-// Hook takes the hook event claude writes to stdin (see deck.ClaudeSettings).
-func (claude) Hook(_ []string, stdin io.Reader) *status.Hook { return status.ParseClaude(stdin) }

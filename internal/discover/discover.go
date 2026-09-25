@@ -223,11 +223,7 @@ func parsePS(out string, want map[string]Provider, deckTTYs map[string]bool) []p
 				}
 			}
 		}
-		if want[p.kind] == nil {
-			continue
-		}
-		// Started by a mad deck (maybe one on another socket).
-		if strings.Contains(cmdline, "/mad/claude-settings.json") {
+		if pv := want[p.kind]; pv == nil || pv.Launched(cmdline) {
 			continue
 		}
 		procs = append(procs, p)

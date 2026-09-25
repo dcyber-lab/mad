@@ -15,14 +15,6 @@ func Home() string {
 	return h
 }
 
-// CodexHome is codex's own directory: $CODEX_HOME, defaulting to ~/.codex.
-func CodexHome() string {
-	if d := os.Getenv("CODEX_HOME"); d != "" {
-		return d
-	}
-	return filepath.Join(Home(), ".codex")
-}
-
 // ConfigDir is $XDG_CONFIG_HOME/mad, defaulting to ~/.config/mad.
 func ConfigDir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
@@ -44,7 +36,6 @@ func StatusDir() string        { return filepath.Join(StateDir(), "status") }
 func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width") }
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
 func TmuxConf() string         { return filepath.Join(ConfigDir(), "tmux.conf") }
-func ClaudeSettings() string   { return filepath.Join(ConfigDir(), "claude-settings.json") }
 func AgentsConfig() string     { return filepath.Join(ConfigDir(), "agents.json") }
 func ConfigFile() string       { return filepath.Join(ConfigDir(), "config.json") }
 

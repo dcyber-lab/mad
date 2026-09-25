@@ -252,6 +252,15 @@ func (m *model) mousePicker(ev tea.MouseMsg) tea.Cmd {
 	return nil
 }
 
+// historyKinds names the agents whose history the picker scans ("claude/codex").
+func historyKinds() string {
+	var kinds []string
+	for _, p := range discover.Providers() {
+		kinds = append(kinds, p.Kind())
+	}
+	return strings.Join(kinds, "/")
+}
+
 func (m *model) pickerView() string {
 	var b strings.Builder
 	b.WriteString(layout(m.width, nil, []seg{{stHeader, " add project"}}, []seg{{stFaint, "esc "}}) + "\n")
@@ -262,7 +271,7 @@ func (m *model) pickerView() string {
 	lines := 0
 	switch {
 	case len(m.pk.items) == 0 && m.pk.loading:
-		b.WriteString(stDim.Render(" scanning claude/codex history…") + "\n")
+		b.WriteString(stDim.Render(" scanning "+historyKinds()+" history…") + "\n")
 		lines++
 	case len(m.pk.items) == 0:
 		b.WriteString(stDim.Render(" no match — type a path: / or ~") + "\n")

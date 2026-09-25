@@ -349,15 +349,16 @@ func DiffCommand(cfg DiffConfig, dir string) string {
 	return fmt.Sprintf("cd %s && { git -c color.status=always status --short --branch; echo; git -c color.diff=always diff HEAD; } | less -R", q)
 }
 
-// command is a's shell command; the kind's provider, if any, says which
-// sessions exist to resume.
+// command is a's shell command, with the placeholders of every agent's
+// wiring filled; the kind's provider, if any, says which sessions exist
+// to resume.
 func command(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) string {
-	var exists func(string) bool
+	l := agent.Launch{Vars: discover.Placeholders()}
 	if pv := discover.Lookup(a.Kind); pv != nil {
 		dir := p.Dir(a)
-		exists = func(sid string) bool { return len(pv.Transcripts(dir, sid)) > 0 }
+		l.Exists = func(sid string) bool { return len(pv.Transcripts(dir, sid)) > 0 }
 	}
-	return agent.ByName(kinds, a.Kind).Command(a, resume, exists)
+	return agent.ByName(kinds, a.Kind).Command(a, resume, l)
 }
 
 // StartAgent launches a in a new pool window, with MAD_AGENT_ID set for
@@ -471,12 +472,13 @@ func Switch(arg string) error {
 	return nil
 }
 
-// WriteConfigs writes the tmux config and the claude hook settings.
+// WriteConfigs writes the tmux config and what each agent reads to report
+// to mad (claude's hook settings).
 func WriteConfigs() error {
 	if err := paths.WriteFileAtomic(paths.TmuxConf(), []byte(TmuxConfig())); err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(paths.ClaudeSettings(), ClaudeSettings(QuotaEnabled()))
+	return discover.Setup(QuotaEnabled())
 }
 
 // TmuxConfig is the config of mad's tmux server.
@@ -527,30 +529,6 @@ set -g pane-active-border-style "fg=colour75"
 // tmuxQuote double-quotes s for a tmux config line.
 func tmuxQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(s) + `"`
-}
-
-// ClaudeSettings is passed to claude with --settings: hooks that report
-// status to `mad hook claude`, and with quota set a status line command
-// that records the plan's usage limits (it runs the user's own status
-// line afterwards). The user's own settings stay untouched.
-func ClaudeSettings(quota bool) []byte {
-	hook := []map[string]any{{"hooks": []map[string]any{{
-		"type": "command", "command": SelfCommand("hook claude"), "timeout": 5,
-	}}}}
-	toolHook := []map[string]any{{"matcher": "*", "hooks": hook[0]["hooks"]}}
-	settings := map[string]any{"hooks": map[string]any{
-		"SessionStart":     hook,
-		"UserPromptSubmit": hook,
-		"PreToolUse":       toolHook,
-		"PostToolUse":      toolHook,
-		"Notification":     hook,
-		"Stop":             hook,
-	}}
-	if quota {
-		settings["statusLine"] = map[string]any{"type": "command", "command": SelfCommand("hook statusline")}
-	}
-	data, _ := json.MarshalIndent(settings, "", "  ")
-	return data
 }
 
 // QuotaEnabled is the "quota" flag of config.json: whether mad follows

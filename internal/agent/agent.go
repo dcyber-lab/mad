@@ -5,7 +5,6 @@ package agent
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -18,8 +17,10 @@ import (
 //
 //	{id}              the agent's UUID
 //	{sid}             the agent's current session id (falls back to {id})
-//	{claude_settings} path to mad's claude settings (status hooks)
-//	{codex_notify}    `-c notify=[...]` wiring codex's notify to mad
+//
+// and those agents' wiring fills (see Launch.Vars): {claude_settings},
+// the path to mad's claude settings (status hooks), and {codex_notify},
+// `-c notify=[...]` pointing codex's notify at mad.
 //
 // Kinds can be overridden or added via ~/.config/mad/agents.json, a JSON
 // array of Kind.
@@ -147,22 +148,31 @@ func (k Kind) Glyph() string {
 	return "?"
 }
 
+// Launch is what building a command needs to know from outside the kind.
+type Launch struct {
+	// Exists tells whether a session was ever written, for kinds whose
+	// sessions mad can look up; nil otherwise. It matters to kinds mad
+	// names the session of ({id} in Start): the session is the agent's
+	// id until it reports another, and one that never got a message
+	// can't be resumed (claude's --resume fails).
+	Exists func(sid string) bool
+	// Vars are the placeholders agents' wiring fills ({claude_settings},
+	// {codex_notify}) and their shell text. Any kind may use any of them.
+	Vars map[string]string
+}
+
 // Command builds the shell command for a, resuming its previous session
-// when resume is set and one can be found. exists tells whether a session
-// was ever written, for kinds whose sessions mad can look up (nil
-// otherwise). It matters to kinds mad names the session of ({id} in
-// Start): the session is the agent's id until it reports another, and one
-// that never got a message can't be resumed (claude's --resume fails).
-func (k Kind) Command(a *state.Agent, resume bool, exists func(sid string) bool) string {
+// when resume is set and one can be found.
+func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	sid := a.SessionID
 	tpl := k.Start
 	if resume {
 		switch {
-		case exists != nil && strings.Contains(k.Start, "{id}"):
+		case l.Exists != nil && strings.Contains(k.Start, "{id}"):
 			if sid == "" {
 				sid = a.ID
 			}
-			if k.Resume != "" && exists(sid) {
+			if k.Resume != "" && l.Exists(sid) {
 				tpl = k.Resume
 			}
 		case sid != "" && k.Resume != "":
@@ -177,37 +187,11 @@ func (k Kind) Command(a *state.Agent, resume bool, exists func(sid string) bool)
 	if a.Fork && k.Fork != "" && k.Resume != "" && tpl == k.Resume {
 		tpl += " " + k.Fork
 	}
-	notify := ""
-	if !CodexHasOwnNotify() {
-		notify = `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`","hook","codex"]`)
+	pairs := []string{"{id}", a.ID, "{sid}", sid}
+	for name, text := range l.Vars {
+		pairs = append(pairs, name, text)
 	}
-	return strings.NewReplacer(
-		"{id}", a.ID,
-		"{sid}", sid,
-		"{claude_settings}", paths.ShellQuote(paths.ClaudeSettings()),
-		"{codex_notify}", notify,
-	).Replace(tpl)
-}
-
-// notifyKey matches a `notify = ...` line in codex's config.toml, at the top
-// level or in a profile.
-var notifyKey = regexp.MustCompile(`^\s*notify\s*=`)
-
-// CodexHasOwnNotify reports whether the user set codex's notify command
-// themselves. codex takes a single notify command, so mad's -c notify=...
-// would replace theirs; mad leaves it alone then, and codex resumes fall
-// back to the most recent session because mad never learns the thread id.
-func CodexHasOwnNotify() bool {
-	data, err := os.ReadFile(filepath.Join(paths.CodexHome(), "config.toml"))
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if notifyKey.MatchString(line) {
-			return true
-		}
-	}
-	return false
+	return strings.NewReplacer(pairs...).Replace(tpl)
 }
 
 // ScreenWaiting reports whether screen text shows the agent asking for
