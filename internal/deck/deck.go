@@ -464,7 +464,7 @@ func WriteConfigs() error {
 	if err := paths.WriteFileAtomic(paths.TmuxConf(), []byte(TmuxConfig())); err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(paths.ClaudeSettings(), ClaudeSettings())
+	return paths.WriteFileAtomic(paths.ClaudeSettings(), ClaudeSettings(QuotaEnabled()))
 }
 
 // TmuxConfig is the config of mad's tmux server.
@@ -518,8 +518,10 @@ func tmuxQuote(s string) string {
 }
 
 // ClaudeSettings is passed to claude with --settings: hooks that report
-// status to `mad hook claude`. The user's own settings stay untouched.
-func ClaudeSettings() []byte {
+// status to `mad hook claude`, and with quota set a status line command
+// that records the plan's usage limits (it runs the user's own status
+// line afterwards). The user's own settings stay untouched.
+func ClaudeSettings(quota bool) []byte {
 	hook := []map[string]any{{"hooks": []map[string]any{{
 		"type": "command", "command": SelfCommand("hook claude"), "timeout": 5,
 	}}}}
@@ -532,6 +534,24 @@ func ClaudeSettings() []byte {
 		"Notification":     hook,
 		"Stop":             hook,
 	}}
+	if quota {
+		settings["statusLine"] = map[string]any{"type": "command", "command": SelfCommand("hook statusline")}
+	}
 	data, _ := json.MarshalIndent(settings, "", "  ")
 	return data
+}
+
+// QuotaEnabled is the "quota" flag of config.json: whether mad follows
+// the plans' usage limits (claude through its status line, codex through
+// its rollout) and shows them under the sidebar's header. On by default;
+// {"quota": false} turns it off.
+func QuotaEnabled() bool {
+	var file struct {
+		Quota *bool `json:"quota"`
+	}
+	data, err := os.ReadFile(paths.ConfigFile())
+	if err != nil || json.Unmarshal(data, &file) != nil || file.Quota == nil {
+		return true
+	}
+	return *file.Quota
 }

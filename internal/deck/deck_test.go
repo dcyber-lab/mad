@@ -73,7 +73,7 @@ func TestClaudeSettings(t *testing.T) {
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
-	if err := json.Unmarshal(ClaudeSettings(), &s); err != nil {
+	if err := json.Unmarshal(ClaudeSettings(true), &s); err != nil {
 		t.Fatal(err)
 	}
 	for _, ev := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop"} {
@@ -88,6 +88,30 @@ func TestClaudeSettings(t *testing.T) {
 	}
 	if s.Hooks["PreToolUse"][0].Matcher != "*" {
 		t.Error("tool hooks must match every tool")
+	}
+}
+
+func TestClaudeSettingsStatusLine(t *testing.T) {
+	var with, without map[string]any
+	json.Unmarshal(ClaudeSettings(true), &with)
+	json.Unmarshal(ClaudeSettings(false), &without)
+	sl, _ := with["statusLine"].(map[string]any)
+	if cmd, _ := sl["command"].(string); !strings.Contains(cmd, "hook statusline") {
+		t.Errorf("statusLine = %v", with["statusLine"])
+	}
+	if _, ok := without["statusLine"]; ok {
+		t.Error("statusLine injected with quota off")
+	}
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if !QuotaEnabled() {
+		t.Error("quota should default on")
+	}
+	os.MkdirAll(filepath.Join(dir, "mad"), 0o755)
+	os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(`{"quota": false}`), 0o644)
+	if QuotaEnabled() {
+		t.Error("quota not turned off")
 	}
 }
 

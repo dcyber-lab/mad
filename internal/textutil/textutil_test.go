@@ -78,3 +78,16 @@ func TestCount(t *testing.T) {
 		}
 	}
 }
+
+func TestUntil(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	cases := map[time.Duration]string{
+		-time.Minute: "0m", 45 * time.Minute: "45m", 2*time.Hour + 10*time.Minute: "2h10m",
+		3 * time.Hour: "3h", 76 * time.Hour: "3d4h", 48 * time.Hour: "2d", 90 * time.Second: "2m",
+	}
+	for d, want := range cases {
+		if got := Until(now.Add(d), now); got != want {
+			t.Errorf("Until(+%v) = %q, want %q", d, got, want)
+		}
+	}
+}

@@ -13,8 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
@@ -48,6 +50,9 @@ type Info struct {
 	// Tool is the tool call the agent made last, with a hint of its input
 	// ("Bash · go test ./..."). Cleared when the user asks something new.
 	Tool string
+	// Quota is the account's usage limits as last reported in the
+	// transcript (codex writes them after every response).
+	Quota status.Quota
 }
 
 // Agent names a session whose transcript to follow.
@@ -122,7 +127,7 @@ func (r *Reader) Read(agents []Agent) map[string]Info {
 			f.update(p)
 			info.Tokens = info.Tokens.add(f.totals)
 			if i == 0 {
-				info.Title, info.Prompt, info.Tool = f.title(), f.prompt, f.tool
+				info.Title, info.Prompt, info.Tool, info.Quota = f.title(), f.prompt, f.tool, f.quota
 			}
 		}
 		if a.Kind == "codex" {
@@ -154,6 +159,7 @@ type file struct {
 
 	custom, ai, first string // titles by source; first is the first prompt
 	prompt, tool      string
+	quota             status.Quota
 }
 
 func (f *file) title() string {
@@ -307,14 +313,19 @@ func (f *file) claudeLine(line []byte) {
 // every response, what the user typed, and the function calls it makes.
 func (f *file) codexLine(line []byte) {
 	var ln struct {
-		Type    string `json:"type"`
-		Payload struct {
-			Type      string          `json:"type"`
-			Role      string          `json:"role"`
-			Content   json.RawMessage `json:"content"`
-			Name      string          `json:"name"`
-			Arguments string          `json:"arguments"`
-			Info      *struct {
+		Type      string `json:"type"`
+		Timestamp string `json:"timestamp"`
+		Payload   struct {
+			Type       string          `json:"type"`
+			Role       string          `json:"role"`
+			Content    json.RawMessage `json:"content"`
+			Name       string          `json:"name"`
+			Arguments  string          `json:"arguments"`
+			RateLimits *struct {
+				Primary   *codexWindow `json:"primary"`
+				Secondary *codexWindow `json:"secondary"`
+			} `json:"rate_limits"`
+			Info *struct {
 				Total struct {
 					Input      int64 `json:"input_tokens"`
 					CacheRead  int64 `json:"cached_input_tokens"`
@@ -328,6 +339,16 @@ func (f *file) codexLine(line []byte) {
 		return
 	}
 	p := ln.Payload
+	if ln.Type == "event_msg" && p.Type == "token_count" && p.RateLimits != nil {
+		at, _ := time.Parse(time.RFC3339Nano, ln.Timestamp)
+		f.quota = status.Quota{At: at}
+		if w := p.RateLimits.Primary; w != nil {
+			f.quota.FiveHour = w.window(at)
+		}
+		if w := p.RateLimits.Secondary; w != nil {
+			f.quota.SevenDay = w.window(at)
+		}
+	}
 	switch {
 	case ln.Type == "event_msg" && p.Type == "token_count" && p.Info != nil && bytes.Contains(line, tokenCountKey):
 		// codex counts cached tokens inside input_tokens.
@@ -344,4 +365,24 @@ func (f *file) codexLine(line []byte) {
 		json.Unmarshal([]byte(p.Arguments), &args)
 		f.tool = toolLabel(p.Name, args)
 	}
+}
+
+// codexWindow is one of codex's rate limit windows: the primary one is
+// the five-hour window, the secondary the weekly one. Newer codex gives
+// the reset as a time, older as seconds from the event.
+type codexWindow struct {
+	Used     float64 `json:"used_percent"`
+	ResetsAt int64   `json:"resets_at"`
+	ResetsIn int64   `json:"resets_in_seconds"`
+}
+
+func (w *codexWindow) window(at time.Time) status.Window {
+	out := status.Window{Used: w.Used}
+	switch {
+	case w.ResetsAt > 0:
+		out.ResetAt = time.Unix(w.ResetsAt, 0)
+	case w.ResetsIn > 0 && !at.IsZero():
+		out.ResetAt = at.Add(time.Duration(w.ResetsIn) * time.Second)
+	}
+	return out
 }
