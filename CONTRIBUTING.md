@@ -42,6 +42,7 @@ with dependencies pointing downwards in this list:
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux/claude configs      |
 | `internal/discover`  | Claude/Codex history, sessions, processes outside the deck       |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |
+| `internal/notify`    | Desktop notifications and the user's notify command              |
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
 | `internal/state`     | Persistent project/agent tree                                    |

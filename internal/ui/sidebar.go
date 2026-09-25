@@ -18,6 +18,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -40,6 +41,7 @@ type (
 		panes   []tmux.Pane
 		screens map[string]string
 		hooks   map[string]*status.Hook
+		watched bool // someone is looking at the deck (tmux.Watched)
 		err     error
 	}
 	// externalsMsg carries a scan for sessions outside the deck. It runs
@@ -109,6 +111,11 @@ type model struct {
 	sp        sessPicker
 	externals []discover.External
 	lastScan  time.Time
+
+	notifyCfg notify.Config
+	notifyMod time.Time            // config.json mtime notifyCfg was read at
+	runSince  map[string]time.Time // agent id → when its current run started
+	notified  map[string]time.Time // agent id + event kind → last notification
 }
 
 // Run is `mad sidebar`. A panic is logged to the sidebar log and exits
@@ -137,12 +144,16 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 	ti.Prompt = "› "
 	ti.CharLimit = 512
 	m := &model{
-		st:       st,
-		stMod:    state.ModTime(),
-		kinds:    kinds,
-		trackers: map[string]*status.Tracker{},
-		panes:    map[string]tmux.Pane{},
-		input:    ti,
+		st:        st,
+		stMod:     state.ModTime(),
+		kinds:     kinds,
+		trackers:  map[string]*status.Tracker{},
+		panes:     map[string]tmux.Pane{},
+		input:     ti,
+		notifyCfg: notify.Load(),
+		notifyMod: notify.ModTime(),
+		runSince:  map[string]time.Time{},
+		notified:  map[string]time.Time{},
 	}
 	m.rebuildRows()
 	return m
@@ -184,7 +195,7 @@ func (m *model) pollCmd() tea.Cmd {
 			return pollMsg{err: err}
 		}
 		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}}
+		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, watched: tmux.Watched()}
 		for _, p := range panes {
 			if tmux.IsAgentID(p.MadID) && !p.Dead {
 				msg.screens[p.MadID] = tmux.Capture(p.ID)
@@ -223,7 +234,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
-		m.applyPoll(msg, time.Now())
+		return m, m.notifyCmd(m.applyPoll(msg, time.Now()))
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
@@ -285,10 +296,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) applyPoll(msg pollMsg, now time.Time) {
+// applyPoll updates panes and statuses, and returns the notifications the
+// status changes call for.
+func (m *model) applyPoll(msg pollMsg, now time.Time) []notify.Event {
 	if msg.err != nil {
 		m.setFlash(msg.err.Error())
-		return
+		return nil
+	}
+	if mod := notify.ModTime(); !mod.Equal(m.notifyMod) {
+		m.notifyCfg, m.notifyMod = notify.Load(), mod
 	}
 	// Pick up `mad add` and other writers.
 	if mod := state.ModTime(); mod.After(m.stMod) {
@@ -317,6 +333,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) {
 	}
 
 	dirty := false
+	var events []notify.Event
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
 			tr := m.trackers[a.ID]
@@ -326,7 +343,11 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) {
 			}
 			hook := msg.hooks[a.ID]
 			pane, ok := m.panes[a.ID]
+			prev := tr.Status
 			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, msg.screens[a.ID], a.ID == m.stageID, now)
+			if e, ok := m.event(p, a, prev, tr.Status, hook, a.ID == m.stageID && msg.watched, now); ok {
+				events = append(events, e)
+			}
 			if hook != nil && hook.SessionID != "" && hook.SessionID != a.SessionID {
 				// A forked resume reports its new id here; later resumes use it.
 				a.SessionID, a.Fork = hook.SessionID, false
@@ -336,6 +357,56 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) {
 	}
 	if dirty {
 		m.save()
+	}
+	return events
+}
+
+const (
+	// notifyMinRun: a shorter run (a redraw, a quick reply) isn't worth a
+	// notification.
+	notifyMinRun = 5 * time.Second
+	// notifyCooldown keeps a flapping status from repeating itself.
+	notifyCooldown = 15 * time.Second
+)
+
+// event turns a status change into a notification: a run that ended, or
+// an agent that started waiting for you. seen means the agent is on stage
+// and someone is looking, so there is nothing to tell.
+func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *status.Hook, seen bool, now time.Time) (notify.Event, bool) {
+	if cur == status.Running && prev != status.Running {
+		m.runSince[a.ID] = now
+	}
+	var kind string
+	switch {
+	case prev == status.Running && cur == status.Idle && now.Sub(m.runSince[a.ID]) >= notifyMinRun:
+		kind = notify.Done
+	case prev != "" && prev != status.Waiting && cur == status.Waiting:
+		kind = notify.Waiting // prev "": already waiting when the sidebar started
+	default:
+		return notify.Event{}, false
+	}
+	key := a.ID + "/" + kind
+	if seen || !m.notifyCfg.Wants(kind) || now.Sub(m.notified[key]) < notifyCooldown {
+		return notify.Event{}, false
+	}
+	m.notified[key] = now
+	e := notify.Event{Kind: kind, Project: p.Name, Agent: p.DisplayName(a)}
+	if kind == notify.Waiting && hook != nil && hook.State == status.Waiting {
+		e.Message = hook.Message
+	}
+	return e, true
+}
+
+func (m *model) notifyCmd(events []notify.Event) tea.Cmd {
+	if len(events) == 0 {
+		return nil
+	}
+	cfg := m.notifyCfg
+	return func() tea.Msg {
+		for _, e := range events {
+			_ = notify.Send(cfg, e) // best effort: no notifier is not an error
+		}
+		return nil
 	}
 }
 
@@ -658,6 +729,8 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		}
 	case "a":
 		return m.openPicker()
+	case "d":
+		return m.jumpNext()
 	case "r":
 		if ok && r.agent != nil {
 			return m.restart(r.proj, r.agent)
@@ -690,6 +763,40 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 	case "q", "ctrl+c":
 		return action("", func() error { return tmux.Run("detach-client") })
 	}
+	return nil
+}
+
+// needsYou: waiting for input, or finished while you were elsewhere.
+func (m *model) needsYou(a *state.Agent) bool {
+	tr := m.trackers[a.ID]
+	return tr != nil && (tr.Status == status.Waiting || tr.Status == status.Idle && tr.Attention)
+}
+
+// jumpNext opens the next agent after the cursor that needs you, wrapping
+// around; opening it clears its mark, so pressing again moves on.
+func (m *model) jumpNext() tea.Cmd {
+	agents := m.st.OrderedAgents()
+	start := 0 // index into agents to search from
+	if r, ok := m.current(); ok {
+		switch {
+		case r.agent != nil:
+			start = r.num // r.num is 1-based: the agent after it
+		default:
+			for _, p := range m.st.Projects {
+				if p == r.proj {
+					break
+				}
+				start += len(p.Agents)
+			}
+		}
+	}
+	for k := range agents {
+		if a := agents[(start+k)%len(agents)]; m.needsYou(a) {
+			m.selectAgent(a.ID)
+			return m.openCmd(a)
+		}
+	}
+	m.setFlash("nothing waiting or done")
 	return nil
 }
 
@@ -980,7 +1087,7 @@ func (m *model) renderFooter() string {
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		} else {
-			l1 = hints("⏎", "open", "n", "new", "a", "project")
+			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
 		l2 = hints("r", "resume", "x", "kill", "q", "detach")
 	}

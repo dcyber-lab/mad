@@ -23,6 +23,8 @@ left; the selected agent's real TUI fills the right.
   work on; worktrees are folded into their main repository.
 - **Live status** — each agent shows `running`, `waiting` (needs your input),
   `idle`, or `done` (finished while you were looking elsewhere).
+- **Notifications** — a desktop notification when an agent finishes or needs
+  you, and `d` / `Alt-n` to jump to the next one.
 - **Never lose a session** — agents are started with a known session id, so
   after a crash or reboot you press `enter` and the conversation resumes.
 - **Auto-sync** — Claude/Codex sessions running in other terminals or in the
@@ -77,6 +79,7 @@ again to reattach.
 | `enter`        | Open agent (or fold/unfold a project)          |
 | `n`            | New agent in the current project               |
 | `a`            | Add a project                                  |
+| `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
 | `x`            | Remove                                         |
 | `1`–`9`        | Open agent N                                   |
@@ -93,6 +96,7 @@ width is remembered.
 | ----------------- | ------------------------------------------ |
 | `Alt-s`           | Toggle focus between sidebar and agent     |
 | `Alt-j` / `Alt-k` | Next / previous agent                      |
+| `Alt-n`           | Next agent that is waiting or done         |
 | `Alt-1`…`Alt-9`   | Open agent N                               |
 
 If Alt is inconvenient, use the prefix `Ctrl-]` followed by
@@ -152,6 +156,30 @@ mad kill-server         stop the deck and every agent in it
   for codex the thread id is recorded. If tmux dies or the machine restarts,
   press `enter` on the agent to resume the same conversation.
 
+## Notifications
+
+When an agent finishes a run (running → idle) or starts waiting for you,
+mad shows a desktop notification: `osascript` on macOS, `notify-send` on
+Linux. Nothing is sent for the agent on stage while its terminal has focus,
+for runs shorter than 5 seconds, or twice for the same agent and event
+within 15 seconds. They keep coming while the deck is detached.
+
+Configure them in `~/.config/mad/config.json`:
+
+```json
+{"notify": {"on": ["done", "waiting"], "command": ""}}
+```
+
+| Field     | Meaning                                                                 |
+| --------- | ----------------------------------------------------------------------- |
+| `on`      | Events to notify about: `done`, `waiting`. `[]` turns notifications off |
+| `command` | Run through `sh` instead of the desktop notification                    |
+
+The command gets `MAD_EVENT`, `MAD_PROJECT`, `MAD_AGENT`, `MAD_TITLE` and
+`MAD_MESSAGE` in its environment, e.g. `terminal-notifier -title
+"$MAD_TITLE" -message "$MAD_MESSAGE"`, or a curl to ntfy.sh for your phone.
+Changes to the file apply right away.
+
 ## Custom agents
 
 Create `~/.config/mad/agents.json`. Entries are merged with the built-in
@@ -187,6 +215,7 @@ hooks), `{codex_notify}` (codex notify wiring).
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
+| `~/.config/mad/config.json`           | Optional settings (notifications)                 |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks                          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
