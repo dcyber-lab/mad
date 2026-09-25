@@ -127,6 +127,7 @@ func useDeck(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	t.Setenv("HOME", dir)
+	t.Setenv("LC_ALL", "C") // non-UTF-8: tmux must still keep the tabs in -F output
 
 	oldSocket, oldSelf := tmux.Socket, SelfCommand
 	tmux.Socket = fmt.Sprintf("mad-deck-test-%d", time.Now().UnixNano())
