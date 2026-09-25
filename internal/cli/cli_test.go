@@ -221,6 +221,16 @@ func TestStatusLineHook(t *testing.T) {
 		t.Errorf("quota = %+v %v", q, ok)
 	}
 
+	// Settings mad writes now call it as claude's; the old form above
+	// is what running sessions still hold.
+	os.Remove(status.QuotaPath("claude"))
+	if code, out, _ := run(t, in, "hook", "claude", "statusline"); code != 0 || !strings.HasPrefix(out, "Opus · ctx 34%") {
+		t.Errorf("hook claude statusline: code=%d out=%q", code, out)
+	}
+	if _, ok := status.ReadQuota("claude"); !ok {
+		t.Error("hook claude statusline recorded no quota")
+	}
+
 	// With one, the same JSON is handed to it and its output shown.
 	os.MkdirAll(filepath.Join(dir, ".claude"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(`{"statusLine":{"type":"command","command":"jq -r .model.display_name | tr a-z A-Z"}}`), 0o644)

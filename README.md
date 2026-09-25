@@ -261,7 +261,7 @@ time until it resets; `wk` is the weekly one. Orange from 80%, red from
 Nothing is shown on an API key or a gateway without limits.
 
 claude reports its limits to a status line command mad passes in with
-`--settings` (Claude Code v2.1.211 or later): `mad hook statusline`
+`--settings` (Claude Code v2.1.211 or later): `mad hook claude statusline`
 records them, then runs the status line from your own settings with the
 same input, so yours still shows. Without one it prints `Opus · ctx 34% ·
 5h 62% (2h10m) · wk 31%`. codex writes its limits into its rollout after

@@ -22,7 +22,6 @@ func TestDirsFollowXDG(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "/st")
 	for got, want := range map[string]string{
 		TmuxConf():         "/cfg/mad/tmux.conf",
-		ClaudeSettings():   "/cfg/mad/claude-settings.json",
 		AgentsConfig():     "/cfg/mad/agents.json",
 		StateFile():        "/st/mad/state.json",
 		StatusDir():        "/st/mad/status",

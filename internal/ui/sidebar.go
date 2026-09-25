@@ -53,7 +53,7 @@ type (
 		panes   []tmux.Pane
 		screens map[string]string
 		hooks   map[string]*status.Hook
-		quota   map[string]status.Quota // kind → limits reported through `mad hook statusline`
+		quota   map[string]status.Quota // kind → limits reported through `mad hook`
 		epoch   int                     // model.epoch when the poll started
 		err     error
 	}

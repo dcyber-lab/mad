@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,11 +19,79 @@ import (
 // codex is OpenAI's Codex CLI, or its desktop app. Each thread is a rollout
 // file, $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<time>-<thread id>.jsonl;
 // the names threads were given are in session_index.jsonl next to it.
+// mad learns of finished turns through codex's notify command.
 type codex struct{}
 
 func (codex) Kind() string { return "codex" }
 
-func codexSessionsDir() string { return filepath.Join(paths.CodexHome(), "sessions") }
+// codexHome is codex's own directory: $CODEX_HOME, defaulting to ~/.codex.
+func codexHome() string {
+	if d := os.Getenv("CODEX_HOME"); d != "" {
+		return d
+	}
+	return filepath.Join(paths.Home(), ".codex")
+}
+
+func codexSessionsDir() string { return filepath.Join(codexHome(), "sessions") }
+
+// Setup: codex takes its wiring on the command line.
+func (codex) Setup(bool) error { return nil }
+
+// codexNotify marks mad's notify command on a codex command line.
+const codexNotify = `"hook","codex"]`
+
+// Placeholders: {codex_notify} points codex's notify at `mad hook codex`,
+// unless the user set a notify command of their own.
+func (codex) Placeholders() map[string]string {
+	notify := ""
+	if !codexHasOwnNotify() {
+		notify = `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`",`+codexNotify)
+	}
+	return map[string]string{"{codex_notify}": notify}
+}
+
+// notifyKey matches a `notify = ...` line in codex's config.toml, at the top
+// level or in a profile.
+var notifyKey = regexp.MustCompile(`^\s*notify\s*=`)
+
+// codexHasOwnNotify reports whether the user set codex's notify command
+// themselves. codex takes a single notify command, so mad's -c notify=...
+// would replace theirs; mad leaves it alone then, and codex resumes fall
+// back to the most recent session because mad never learns the thread id.
+func codexHasOwnNotify() bool {
+	data, err := os.ReadFile(filepath.Join(codexHome(), "config.toml"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if notifyKey.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func (codex) Launched(cmdline string) bool { return strings.Contains(cmdline, codexNotify) }
+
+// Hook takes the notify payload, codex's last argument.
+func (codex) Hook(args []string, _ io.Reader, _ io.Writer, _ time.Time) Report {
+	if len(args) == 0 {
+		return Report{}
+	}
+	return Report{Hook: parseCodexHook(args[len(args)-1])}
+}
+
+// parseCodexHook maps a notify payload to a status.
+func parseCodexHook(payload string) *status.Hook {
+	var ev struct {
+		Type     string `json:"type"`
+		ThreadID string `json:"thread-id"`
+	}
+	if json.Unmarshal([]byte(payload), &ev) != nil || ev.Type != "agent-turn-complete" {
+		return nil
+	}
+	return &status.Hook{State: status.Idle, Event: ev.Type, SessionID: ev.ThreadID}
+}
 
 type codexHead struct {
 	cwd     string
@@ -305,12 +374,3 @@ func (codex) ProcessSession(pid int, args []string) string {
 func (codex) RecentSessions(string) []string { return nil }
 
 func (codex) HumanSession(string) bool { return true }
-
-// Hook takes codex's notify payload, its last argument (see
-// agent.Kind's {codex_notify}).
-func (codex) Hook(args []string, _ io.Reader) *status.Hook {
-	if len(args) == 0 {
-		return nil
-	}
-	return status.ParseCodex(args[len(args)-1])
-}

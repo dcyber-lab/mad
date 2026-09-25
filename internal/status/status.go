@@ -6,7 +6,6 @@ package status
 import (
 	"encoding/json"
 	"hash/fnv"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,59 +76,6 @@ func WriteHook(id string, h *Hook, now time.Time) error {
 }
 
 func RemoveHook(id string) { os.Remove(HookPath(id)) }
-
-// ParseClaude maps a Claude Code hook event (JSON on stdin) to a status;
-// nil means the event doesn't change it.
-func ParseClaude(r io.Reader) *Hook {
-	var ev struct {
-		Event            string `json:"hook_event_name"`
-		SessionID        string `json:"session_id"`
-		ToolName         string `json:"tool_name"`
-		Message          string `json:"message"`
-		NotificationType string `json:"notification_type"`
-	}
-	data, _ := io.ReadAll(r)
-	if json.Unmarshal(data, &ev) != nil {
-		return nil
-	}
-	h := &Hook{Event: ev.Event, SessionID: ev.SessionID}
-	switch ev.Event {
-	case "SessionStart", "Stop":
-		h.State = Idle
-	case "UserPromptSubmit", "PostToolUse":
-		h.State = Running
-	case "PreToolUse":
-		h.State = Running
-		if ev.ToolName == "AskUserQuestion" || ev.ToolName == "ExitPlanMode" {
-			h.State = Waiting
-		}
-	case "Notification":
-		msg := strings.ToLower(ev.Message)
-		switch {
-		case ev.NotificationType == "permission_prompt", strings.Contains(msg, "permission"):
-			h.State, h.Message = Waiting, ev.Message
-		case ev.NotificationType == "idle_prompt", strings.Contains(msg, "waiting for your input"):
-			h.State = Idle
-		default:
-			return nil
-		}
-	default:
-		return nil
-	}
-	return h
-}
-
-// ParseCodex maps codex's `notify` payload (its last argv) to a status.
-func ParseCodex(payload string) *Hook {
-	var ev struct {
-		Type     string `json:"type"`
-		ThreadID string `json:"thread-id"`
-	}
-	if json.Unmarshal([]byte(payload), &ev) != nil || ev.Type != "agent-turn-complete" {
-		return nil
-	}
-	return &Hook{State: Idle, Event: ev.Type, SessionID: ev.ThreadID}
-}
 
 // Tracker follows one agent across polls.
 type Tracker struct {
