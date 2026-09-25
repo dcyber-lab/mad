@@ -1,6 +1,7 @@
-// Package discover finds the projects and sessions the user already has
-// outside the deck: Claude/Codex session history (CLI and desktop apps) and
-// agents running in other terminals or in the Claude desktop app.
+// Package discover reads what agents keep about themselves: their session
+// history (CLI and desktop apps), their transcripts, and their processes
+// running outside the deck. What differs between kinds of agent is behind
+// Provider, one file per kind; the rest of the package is shared.
 package discover
 
 import (
@@ -27,8 +28,8 @@ type Candidate struct {
 	Sources  []string // "claude", "claude desktop", "codex", "codex desktop"
 }
 
-// External is a claude/codex session running outside the deck: a TUI in
-// another terminal, or a Claude desktop app conversation.
+// External is an agent session running outside the deck: a TUI in another
+// terminal, or a desktop app conversation.
 type External struct {
 	PID       int
 	TTY       string
@@ -64,14 +65,6 @@ var (
 	processCwd    = lsofCwd
 	openFiles     = lsofFiles
 )
-
-func claudeProjectsDir() string { return filepath.Join(paths.Home(), ".claude", "projects") }
-func codexSessionsDir() string  { return filepath.Join(paths.CodexHome(), "sessions") }
-
-// claudeProjectDir is where claude keeps transcripts for a cwd.
-func claudeProjectDir(cwd string) string {
-	return filepath.Join(claudeProjectsDir(), nonAlnum.ReplaceAllString(cwd, "-"))
-}
 
 // rootCache memoizes dir → project root (git calls are the slow part).
 var rootCache sync.Map
@@ -110,16 +103,15 @@ func UsableDir(dir string) bool {
 }
 
 // readCwd pulls the first "cwd" field out of the head of a session file,
-// and whether a desktop app wrote it.
-func readCwd(path string, limit int64) (cwd string, desktop bool) {
+// and whether a desktop app wrote it: whether desktopMark is in the head.
+func readCwd(path string, limit int64, desktopMark string) (cwd string, desktop bool) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", false
 	}
 	defer f.Close()
 	data, _ := io.ReadAll(io.LimitReader(f, limit))
-	desktop = strings.Contains(string(data), `"entrypoint":"claude-desktop"`) ||
-		strings.Contains(string(data), `"originator":"Codex Desktop"`)
+	desktop = strings.Contains(string(data), desktopMark)
 	m := cwdRe.FindSubmatch(data)
 	if m == nil {
 		return "", desktop
@@ -127,46 +119,7 @@ func readCwd(path string, limit int64) (cwd string, desktop bool) {
 	return strings.ReplaceAll(string(m[1]), `\/`, `/`), desktop
 }
 
-type codexHead struct {
-	cwd     string
-	desktop bool
-}
-
-// codexHeads caches rollout path → head; rollout files never change cwd.
-var codexHeads sync.Map
-
-func codexHeadOf(path string) codexHead {
-	if v, ok := codexHeads.Load(path); ok {
-		return v.(codexHead)
-	}
-	cwd, desktop := readCwd(path, 16<<10)
-	h := codexHead{cwd, desktop}
-	codexHeads.Store(path, h)
-	return h
-}
-
-// codexFiles lists rollout files of the last HistoryDays days, newest day
-// first.
-func codexFiles(visit func(path string, info os.FileInfo) bool) {
-	for day := 0; day <= HistoryDays; day++ {
-		dayDir := filepath.Join(codexSessionsDir(), time.Now().AddDate(0, 0, -day).Format("2006/01/02"))
-		entries, _ := os.ReadDir(dayDir)
-		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".jsonl") {
-				continue
-			}
-			info, err := e.Info()
-			if err != nil {
-				continue
-			}
-			if !visit(filepath.Join(dayDir, e.Name()), info) {
-				return
-			}
-		}
-	}
-}
-
-// ScanHistory lists projects from Claude and Codex session history, most
+// ScanHistory lists projects from every provider's session history, most
 // recently used first.
 func ScanHistory() []Candidate {
 	byRoot := map[string]*Candidate{}
@@ -197,32 +150,15 @@ func ScanHistory() []Candidate {
 	}
 
 	cutoff := time.Now().AddDate(0, 0, -HistoryDays)
-	dirs, _ := os.ReadDir(claudeProjectsDir())
-	for _, d := range dirs {
-		if !d.IsDir() {
-			continue
-		}
-		newest, t := newestJSONL(filepath.Join(claudeProjectsDir(), d.Name()))
-		if newest == "" || t.Before(cutoff) {
-			continue
-		}
-		cwd, desktop := readCwd(newest, 64<<10)
-		src := "claude"
-		if desktop {
-			src = "claude desktop"
-		}
-		add(cwd, t, src)
+	for _, p := range providers {
+		p.History(cutoff, func(cwd string, t time.Time, desktop bool) {
+			src := p.Kind()
+			if desktop {
+				src += " desktop"
+			}
+			add(cwd, t, src)
+		})
 	}
-
-	codexFiles(func(path string, info os.FileInfo) bool {
-		h := codexHeadOf(path)
-		src := "codex"
-		if h.desktop {
-			src = "codex desktop"
-		}
-		add(h.cwd, info.ModTime(), src)
-		return true
-	})
 
 	out := make([]Candidate, 0, len(byRoot))
 	for _, c := range byRoot {
@@ -251,29 +187,6 @@ func newestJSONL(dir string) (string, time.Time) {
 	return best, bestT
 }
 
-// claudeSessionsByMtime lists a cwd's claude session ids, newest first.
-func claudeSessionsByMtime(cwd string) []string {
-	entries, _ := os.ReadDir(claudeProjectDir(cwd))
-	type f struct {
-		id string
-		t  time.Time
-	}
-	var fs []f
-	for _, e := range entries {
-		if m := uuidTail.FindStringSubmatch(e.Name()); m != nil {
-			if info, err := e.Info(); err == nil {
-				fs = append(fs, f{m[1], info.ModTime()})
-			}
-		}
-	}
-	sort.Slice(fs, func(i, j int) bool { return fs[i].t.After(fs[j].t) })
-	ids := make([]string, len(fs))
-	for i, x := range fs {
-		ids[i] = x.id
-	}
-	return ids
-}
-
 // proc is an agent process picked out of ps output.
 type proc struct {
 	pid     int
@@ -283,10 +196,10 @@ type proc struct {
 	desktop bool
 }
 
-// parsePS picks claude/codex processes (kinds in want) out of
+// parsePS picks the processes of providers in want (by kind) out of
 // `ps -axo pid=,tty=,args=` output: TUIs on a terminal that isn't one of
-// the deck's (deckTTYs), and Claude desktop conversations.
-func parsePS(out string, want, deckTTYs map[string]bool) []proc {
+// the deck's (deckTTYs), and desktop app conversations.
+func parsePS(out string, want map[string]Provider, deckTTYs map[string]bool) []proc {
 	var procs []proc
 	sc := bufio.NewScanner(strings.NewReader(out))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
@@ -302,14 +215,15 @@ func parsePS(out string, want, deckTTYs map[string]bool) []proc {
 		case isTerminal(tty) && !deckTTYs["/dev/"+tty]:
 			f := strings.Fields(cmdline)
 			p.kind, p.args = filepath.Base(f[0]), f[1:]
-		case (tty == "??" || tty == "?") && isClaudeDesktop(cmdline):
-			p.kind, p.desktop = "claude", true
-			i := strings.Index(cmdline, "MacOS/claude ") + len("MacOS/claude ")
-			p.args = strings.Fields(cmdline[i:])
-		default:
-			continue
+		case tty == "??" || tty == "?":
+			for kind, pv := range want {
+				if args, ok := pv.Desktop(cmdline); ok {
+					p.kind, p.args, p.desktop = kind, args, true
+					break
+				}
+			}
 		}
-		if !want[p.kind] {
+		if want[p.kind] == nil {
 			continue
 		}
 		// Started by a mad deck (maybe one on another socket).
@@ -325,38 +239,29 @@ func isTerminal(tty string) bool {
 	return strings.HasPrefix(tty, "ttys") || strings.HasPrefix(tty, "pts/") || strings.HasPrefix(tty, "tty")
 }
 
-// isClaudeDesktop matches the Claude app's per-conversation claude process;
-// its launcher wrapper and non-persisting helper runs don't count.
-func isClaudeDesktop(cmdline string) bool {
-	return strings.Contains(cmdline, "/claude-code/") &&
-		strings.Contains(cmdline, "MacOS/claude ") &&
-		!strings.Contains(cmdline, "--no-session-persistence") &&
-		!strings.Contains(cmdline, "Helpers/disclaimer")
-}
-
 // externalCache: a pid's cwd and session don't change while it lives.
 var (
 	externalMu    sync.Mutex
 	externalCache = map[int]External{}
 )
 
-// ScanExternal finds claude/codex sessions (kinds) running outside the
+// ScanExternal finds the sessions of every provider running outside the
 // deck, whose own terminals are deckTTYs (e.g. /dev/ttys004).
-func ScanExternal(kinds []string, deckTTYs map[string]bool) []External {
+func ScanExternal(deckTTYs map[string]bool) []External {
 	out, err := listProcesses()
 	if err != nil {
 		return nil
 	}
-	want := map[string]bool{}
-	for _, k := range kinds {
-		want[k] = true
+	want := map[string]Provider{}
+	for _, p := range providers {
+		want[p.Kind()] = p
 	}
 
 	externalMu.Lock()
 	defer externalMu.Unlock()
 	alive := map[int]bool{}
 	var res []External
-	var guess []int // claude entries without a known session id
+	var guess []int // entries without a known session id
 	for _, p := range parsePS(string(out), want, deckTTYs) {
 		alive[p.pid] = true
 		e, ok := externalCache[p.pid]
@@ -366,14 +271,11 @@ func ScanExternal(kinds []string, deckTTYs map[string]bool) []External {
 				continue
 			}
 			e.Root = ResolveRoot(e.Cwd)
-			e.SessionID = SessionFromArgs(p.kind, p.args)
-			if p.kind == "codex" && e.SessionID == "" {
-				e.SessionID = codexOpenRollout(p.pid)
-			}
+			e.SessionID = want[p.kind].ProcessSession(p.pid, p.args)
 			externalCache[p.pid] = e
 		}
 		res = append(res, e)
-		if e.Kind == "claude" && e.SessionID == "" {
+		if e.SessionID == "" {
 			guess = append(guess, len(res)-1)
 		}
 	}
@@ -383,8 +285,8 @@ func ScanExternal(kinds []string, deckTTYs map[string]bool) []External {
 		}
 	}
 
-	// Claude without an explicit id: hand out that cwd's newest sessions,
-	// newest process first. A guess, but right for the one-per-dir case.
+	// No explicit id: hand out that cwd's newest sessions, newest process
+	// first. A guess, but right for the one-per-dir case.
 	sort.Slice(guess, func(i, j int) bool { return res[guess[i]].PID > res[guess[j]].PID })
 	used := map[string]bool{}
 	for _, e := range res {
@@ -392,7 +294,7 @@ func ScanExternal(kinds []string, deckTTYs map[string]bool) []External {
 	}
 	for _, i := range guess {
 		e := &res[i]
-		for _, id := range claudeSessionsByMtime(e.Cwd) {
+		for _, id := range want[e.Kind].RecentSessions(e.Cwd) {
 			if !used[id] {
 				e.SessionID, used[id] = id, true
 				break
@@ -404,27 +306,12 @@ func ScanExternal(kinds []string, deckTTYs map[string]bool) []External {
 	// only conversations a person is having.
 	kept := res[:0]
 	for _, e := range res {
-		if !e.Desktop || humanClaudeSession(e.SessionID) {
+		if !e.Desktop || want[e.Kind].HumanSession(e.SessionID) {
 			kept = append(kept, e)
 		}
 	}
 	sort.Slice(kept, func(i, j int) bool { return kept[i].PID < kept[j].PID })
 	return kept
-}
-
-func humanClaudeSession(id string) bool {
-	if id == "" {
-		return false
-	}
-	matches, _ := filepath.Glob(filepath.Join(claudeProjectsDir(), "*", id+".jsonl"))
-	if len(matches) == 0 {
-		return false
-	}
-	info, err := os.Stat(matches[0])
-	if err != nil {
-		return false
-	}
-	return cachedSession(fileEntry{matches[0], info.ModTime()}, parseClaudeSession) != nil
 }
 
 func lsofCwd(pid int) string {
@@ -452,43 +339,6 @@ func lsofFiles(pid int) []string {
 		}
 	}
 	return files
-}
-
-// SessionFromArgs reads an explicit session id off an agent's arguments.
-func SessionFromArgs(kind string, args []string) string {
-	for i, a := range args {
-		switch kind {
-		case "claude":
-			for _, flag := range []string{"--resume=", "--session-id="} {
-				if strings.HasPrefix(a, flag) {
-					return a[len(flag):]
-				}
-			}
-			if (a == "--resume" || a == "-r" || a == "--session-id") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				return args[i+1]
-			}
-		case "codex":
-			if a == "resume" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				return args[i+1]
-			}
-		}
-	}
-	return ""
-}
-
-// codexOpenRollout reads the session id off the rollout file codex keeps
-// open (the newest one when there are several).
-func codexOpenRollout(pid int) string {
-	best := ""
-	for _, f := range openFiles(pid) {
-		if strings.Contains(f, "/rollout-") && filepath.Base(f) > filepath.Base(best) {
-			best = f
-		}
-	}
-	if m := uuidTail.FindStringSubmatch(best); m != nil {
-		return m[1]
-	}
-	return ""
 }
 
 // TerminateExternal asks an external agent to exit (SIGTERM) and waits up

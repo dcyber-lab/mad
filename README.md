@@ -334,9 +334,13 @@ definitions by `name`, so you can add new agents or override existing ones:
   {"name": "claude",
    "start":  "claude --settings {claude_settings} --session-id {id} --model opus",
    "resume": "claude --settings {claude_settings} --resume {sid}",
+   "fork":   "--fork-session",
    "hooks":  true}
 ]
 ```
+
+An override replaces the whole entry, so keep the fields of the built-in
+you still want.
 
 | Field           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
@@ -346,6 +350,7 @@ definitions by `name`, so you can add new agents or override existing ones:
 | `start`         | Shell command for a fresh session                                 |
 | `resume`        | Command to reopen session `{sid}`                                 |
 | `resume_latest` | Command to reopen the most recent session when no id is known     |
+| `fork`          | Appended to `resume` to continue a session still open elsewhere in a copy (without it, close it there first) |
 | `waiting`       | Regexes matched against the bottom of the screen → `waiting`      |
 | `hooks`         | The agent reports status itself through `mad hook`                |
 
@@ -353,6 +358,11 @@ Placeholders: `{id}` (agent UUID), `{sid}` (current session id, falls back
 to `{id}`), `{claude_settings}` (mad's generated Claude settings with status
 hooks), `{codex_notify}` (codex notify wiring; empty when your codex config
 sets its own `notify`).
+
+Kinds added here start, resume and show `waiting` like the built-ins. What
+mad reads from claude's and codex's own files (titles, tokens, the session
+picker, sessions open elsewhere) is Go code, one file per agent in
+`internal/discover`; see [CONTRIBUTING](CONTRIBUTING.md#adding-an-agent).
 
 ## Files
 

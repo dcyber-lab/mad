@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -348,10 +349,21 @@ func DiffCommand(cfg DiffConfig, dir string) string {
 	return fmt.Sprintf("cd %s && { git -c color.status=always status --short --branch; echo; git -c color.diff=always diff HEAD; } | less -R", q)
 }
 
+// command is a's shell command; the kind's provider, if any, says which
+// sessions exist to resume.
+func command(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) string {
+	var exists func(string) bool
+	if pv := discover.Lookup(a.Kind); pv != nil {
+		dir := p.Dir(a)
+		exists = func(sid string) bool { return len(pv.Transcripts(dir, sid)) > 0 }
+	}
+	return agent.ByName(kinds, a.Kind).Command(a, resume, exists)
+}
+
 // StartAgent launches a in a new pool window, with MAD_AGENT_ID set for
 // its status hooks.
 func StartAgent(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) error {
-	cmd := agent.ByName(kinds, a.Kind).Command(a, resume)
+	cmd := command(p, a, resume, kinds)
 	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", a.Kind, "-c", p.Dir(a),
 		"-e", "MAD_AGENT_ID="+a.ID, "-P", "-F", "#{pane_id}", cmd)
 	if err != nil {
@@ -362,7 +374,7 @@ func StartAgent(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kin
 
 // RestartAgent reruns a in its existing pane, resuming its session.
 func RestartAgent(p *state.Project, a *state.Agent, paneID string, kinds []agent.Kind) error {
-	cmd := agent.ByName(kinds, a.Kind).Command(a, true)
+	cmd := command(p, a, true, kinds)
 	return tmux.Run("respawn-pane", "-k", "-t", paneID, "-c", p.Dir(a), "-e", "MAD_AGENT_ID="+a.ID, cmd)
 }
 

@@ -37,6 +37,10 @@ type Kind struct {
 	Resume string `json:"resume,omitempty"`
 	// ResumeLatest reopens the most recent session when no id is known.
 	ResumeLatest string `json:"resume_latest,omitempty"`
+	// Fork is appended to Resume to continue a session in a copy of its
+	// own, for one still open outside the deck. Kinds without it only
+	// take over sessions nothing else has open.
+	Fork string `json:"fork,omitempty"`
 	// Waiting are regexes matched against the bottom of the screen to
 	// detect "needs your input" when no hook says so.
 	Waiting []string `json:"waiting,omitempty"`
@@ -53,6 +57,7 @@ var builtin = []Kind{
 		Color:   "173", // claude's orange
 		Start:   "claude --settings {claude_settings} --session-id {id}",
 		Resume:  "claude --settings {claude_settings} --resume {sid}",
+		Fork:    "--fork-session",
 		Waiting: []string{`Do you want to`, `❯ 1\. Yes`, `trust this folder`, `Enter to confirm`},
 		Hooks:   true,
 	},
@@ -143,18 +148,21 @@ func (k Kind) Glyph() string {
 }
 
 // Command builds the shell command for a, resuming its previous session
-// when resume is set and one can be found.
-func (k Kind) Command(a *state.Agent, resume bool) string {
+// when resume is set and one can be found. exists tells whether a session
+// was ever written, for kinds whose sessions mad can look up (nil
+// otherwise). It matters to kinds mad names the session of ({id} in
+// Start): the session is the agent's id until it reports another, and one
+// that never got a message can't be resumed (claude's --resume fails).
+func (k Kind) Command(a *state.Agent, resume bool, exists func(sid string) bool) string {
 	sid := a.SessionID
 	tpl := k.Start
 	if resume {
 		switch {
-		case k.Name == "claude":
-			// --resume fails hard on a session that never got a message.
+		case exists != nil && strings.Contains(k.Start, "{id}"):
 			if sid == "" {
 				sid = a.ID
 			}
-			if ClaudeSessionExists(sid) {
+			if k.Resume != "" && exists(sid) {
 				tpl = k.Resume
 			}
 		case sid != "" && k.Resume != "":
@@ -166,8 +174,8 @@ func (k Kind) Command(a *state.Agent, resume bool) string {
 	if sid == "" {
 		sid = a.ID
 	}
-	if a.Fork && k.Name == "claude" && tpl == k.Resume {
-		tpl += " --fork-session"
+	if a.Fork && k.Fork != "" && k.Resume != "" && tpl == k.Resume {
+		tpl += " " + k.Fork
 	}
 	notify := ""
 	if !CodexHasOwnNotify() {
@@ -200,12 +208,6 @@ func CodexHasOwnNotify() bool {
 		}
 	}
 	return false
-}
-
-// ClaudeSessionExists reports whether claude has a transcript for sid.
-func ClaudeSessionExists(sid string) bool {
-	matches, _ := filepath.Glob(filepath.Join(paths.Home(), ".claude", "projects", "*", sid+".jsonl"))
-	return len(matches) > 0
 }
 
 // ScreenWaiting reports whether screen text shows the agent asking for

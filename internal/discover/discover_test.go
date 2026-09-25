@@ -226,7 +226,7 @@ func TestParsePS(t *testing.T) {
 		"  110 ??       /usr/sbin/daemon",
 		"junk",
 	}, "\n")
-	want := map[string]bool{"claude": true, "codex": true}
+	want := map[string]Provider{"claude": claude{}, "codex": codex{}}
 	procs := parsePS(out, want, map[string]bool{"/dev/ttys004": true})
 
 	var got []string
@@ -243,7 +243,7 @@ func TestParsePS(t *testing.T) {
 		t.Errorf("parsePS:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(wantProcs, "\n"))
 	}
 
-	if procs := parsePS(out, map[string]bool{"codex": true}, nil); len(procs) != 2 {
+	if procs := parsePS(out, map[string]Provider{"codex": codex{}}, nil); len(procs) != 2 {
 		t.Errorf("filter by kind: %+v", procs)
 	}
 }
@@ -289,7 +289,7 @@ func TestScanExternal(t *testing.T) {
 	externalCache = map[int]External{}
 	externalMu.Unlock()
 
-	ext := ScanExternal([]string{"claude", "codex"}, nil)
+	ext := ScanExternal(nil)
 	var got []string
 	for _, e := range ext {
 		got = append(got, fmt.Sprintf("%d %s %s desktop=%v %s", e.PID, e.Kind, filepath.Base(e.Root), e.Desktop, e.SessionID))
@@ -309,7 +309,7 @@ func TestScanExternal(t *testing.T) {
 
 	// Exited processes drop out of the cache.
 	ps = "201 ttys001 claude --resume " + uuid(99)
-	if ext := ScanExternal([]string{"claude", "codex"}, nil); len(ext) != 1 {
+	if ext := ScanExternal(nil); len(ext) != 1 {
 		t.Errorf("after exits: %+v", ext)
 	}
 	externalMu.Lock()
@@ -320,7 +320,10 @@ func TestScanExternal(t *testing.T) {
 	}
 }
 
-func TestSessionFromArgs(t *testing.T) {
+func TestProcessSession(t *testing.T) {
+	old := openFiles
+	t.Cleanup(func() { openFiles = old })
+	openFiles = func(int) []string { return nil }
 	cases := []struct {
 		kind string
 		args []string
@@ -336,7 +339,7 @@ func TestSessionFromArgs(t *testing.T) {
 		{"codex", []string{"-c", "x=1"}, ""},
 	}
 	for _, c := range cases {
-		if got := SessionFromArgs(c.kind, c.args); got != c.want {
+		if got := Lookup(c.kind).ProcessSession(1, c.args); got != c.want {
 			t.Errorf("%s %v = %q, want %q", c.kind, c.args, got, c.want)
 		}
 	}
@@ -472,28 +475,28 @@ func TestTerminateExternal(t *testing.T) {
 func TestTranscripts(t *testing.T) {
 	f := newFixture(t)
 	cwd := f.project("app")
-	if got := ClaudeTranscripts(cwd, "s1"); got != nil {
+	if got := (claude{}).Transcripts(cwd, "s1"); got != nil {
 		t.Errorf("before any write: %v", got)
 	}
-	main := filepath.Join(ClaudeProjectDir(cwd), "s1.jsonl")
+	main := filepath.Join(claudeProjectDir(cwd), "s1.jsonl")
 	f.write(main, []any{map[string]any{"type": "user"}}, time.Now())
-	sub := filepath.Join(ClaudeProjectDir(cwd), "s1", "subagents", "agent-x.jsonl")
+	sub := filepath.Join(claudeProjectDir(cwd), "s1", "subagents", "agent-x.jsonl")
 	f.write(sub, []any{map[string]any{"type": "user"}}, time.Now())
-	if got := ClaudeTranscripts(cwd, "s1"); strings.Join(got, " ") != main+" "+sub {
+	if got := (claude{}).Transcripts(cwd, "s1"); strings.Join(got, " ") != main+" "+sub {
 		t.Errorf("got %v", got)
 	}
 	// A session that ran in another directory is found under its project.
-	if got := ClaudeTranscripts(f.project("other"), "s1"); len(got) != 2 || got[0] != main {
+	if got := (claude{}).Transcripts(f.project("other"), "s1"); len(got) != 2 || got[0] != main {
 		t.Errorf("from elsewhere: %v", got)
 	}
 
-	if got := CodexTranscript("019e-abc"); got != "" {
+	if got := (codex{}).Transcripts("", "019e-abc"); got != nil {
 		t.Errorf("no codex file yet: %q", got)
 	}
 	rollout := filepath.Join(codexSessionsDir(), "2026", "05", "17", "rollout-2026-05-17T22-33-30-019e-abc.jsonl")
 	f.write(rollout, []any{map[string]any{"type": "session_meta"}}, time.Now())
 	f.write(strings.Replace(rollout, "019e-abc", "019e-abcd", 1), []any{map[string]any{"type": "session_meta"}}, time.Now())
-	if got := CodexTranscript("019e-abc"); got != rollout {
+	if got := (codex{}).Transcripts("", "019e-abc"); len(got) != 1 || got[0] != rollout {
 		t.Errorf("got %q want %q", got, rollout)
 	}
 }

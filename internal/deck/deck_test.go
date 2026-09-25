@@ -280,6 +280,31 @@ func TestAgentLifecycle(t *testing.T) {
 	}
 }
 
+// Claude resumes only a session its provider finds a transcript of; a
+// fresh agent that never got a message starts over under its own id.
+func TestResumeAsksProvider(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	p := &state.Project{Path: "/work/app"}
+	a := &state.Agent{ID: "id-1", Kind: "claude"}
+	kinds := agent.Builtin()
+
+	if got := command(p, a, true, kinds); !strings.HasSuffix(got, "--session-id id-1") {
+		t.Errorf("never written = %q", got)
+	}
+	file := filepath.Join(home, ".claude", "projects", "-work-app", "id-1.jsonl")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := command(p, a, true, kinds); !strings.HasSuffix(got, "--resume id-1") {
+		t.Errorf("written = %q", got)
+	}
+}
+
 func TestDiffCommand(t *testing.T) {
 	old := lookPath
 	t.Cleanup(func() { lookPath = old })

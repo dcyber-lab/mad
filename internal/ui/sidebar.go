@@ -97,13 +97,15 @@ const (
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
-// another terminal (ext), or the "N in desktop" summary (desktop > 0).
+// another terminal (ext), or the "N in desktop" summary (desktop > 0) of
+// conversations in a desktop app (deskKind's; so far only claude has one).
 type row struct {
-	proj    *state.Project
-	agent   *state.Agent
-	ext     *discover.External
-	desktop int
-	num     int // 1-based global agent number
+	proj     *state.Project
+	agent    *state.Agent
+	ext      *discover.External
+	desktop  int
+	deskKind string
+	num      int // 1-based global agent number
 }
 
 func (r row) isProject() bool { return r.agent == nil && r.ext == nil && r.desktop == 0 }
@@ -292,7 +294,7 @@ func tick() tea.Cmd {
 	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// scanCmd looks for claude/codex sessions outside the deck.
+// scanCmd looks for agent sessions outside the deck.
 func (m *model) scanCmd() tea.Cmd {
 	m.scanning, m.lastScan = true, time.Now()
 	return func() tea.Msg {
@@ -302,7 +304,7 @@ func (m *model) scanCmd() tea.Cmd {
 				deckTTYs[p.TTY] = true
 			}
 		}
-		return externalsMsg(discover.ScanExternal([]string{"claude", "codex"}, deckTTYs))
+		return externalsMsg(discover.ScanExternal(deckTTYs))
 	}
 }
 
@@ -741,20 +743,23 @@ func (m *model) rebuildRows() {
 		if p.Collapsed {
 			continue
 		}
-		desktop := 0
+		desk := row{proj: p}
 		for i := range m.externals {
 			e := &m.externals[i]
 			if e.Root != p.Path {
 				continue
 			}
 			if e.Desktop {
-				desktop++
+				desk.desktop++
+				if desk.deskKind == "" {
+					desk.deskKind = e.Kind
+				}
 			} else {
 				m.rows = append(m.rows, row{proj: p, ext: e})
 			}
 		}
-		if desktop > 0 {
-			m.rows = append(m.rows, row{proj: p, desktop: desktop})
+		if desk.desktop > 0 {
+			m.rows = append(m.rows, desk)
 		}
 	}
 	// Keep the cursor on the same item when possible.
@@ -918,7 +923,7 @@ func (m *model) activate(r row) tea.Cmd {
 		})
 		return nil
 	case r.desktop > 0:
-		return m.openSessionPicker(r.proj, "claude")
+		return m.openSessionPicker(r.proj, r.deskKind)
 	}
 	r.proj.Collapsed = !r.proj.Collapsed
 	m.save()
@@ -1409,7 +1414,7 @@ func (m *model) pickKind(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if k := m.kinds[i].Name; k == "claude" || k == "codex" {
+	if k := m.kinds[i].Name; discover.Lookup(k) != nil {
 		return m.openSessionPicker(r.proj, k)
 	}
 	return m.newAgent(r.proj, m.kinds[i].Name)

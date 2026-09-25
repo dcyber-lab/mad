@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/discover"
 )
 
 func write(t *testing.T, path, lines string) {
@@ -91,7 +93,7 @@ func TestCodex(t *testing.T) {
 	r := NewReader()
 	r.locate = func(a Agent) []string { return []string{path} }
 	names := map[string]string{}
-	r.threadNames = func() map[string]string { return names }
+	r.titles = func(discover.Provider) map[string]string { return names }
 	agents := []Agent{{ID: "c", Kind: "codex", Session: "t1"}}
 
 	write(t, path, `{"type":"session_meta","payload":{"id":"t1"}}
