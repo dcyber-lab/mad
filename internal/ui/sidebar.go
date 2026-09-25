@@ -27,6 +27,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
+	"github.com/dcyber-lab/mad/internal/usage"
 )
 
 // Status comes from events where there are any: agents' own hooks and
@@ -39,6 +40,7 @@ const (
 	fullPollEvery     = 3 * time.Second
 	externalScanEvery = 5 * time.Second
 	gitScanEvery      = 5 * time.Second
+	usageScanEvery    = 5 * time.Second
 	headerLines       = 2
 	footerLines       = 4
 )
@@ -65,6 +67,8 @@ type (
 	externalsMsg []discover.External
 	// gitMsg is a scan of every project and worktree: dir → checkout info.
 	gitMsg map[string]git.Info
+	// usageMsg is a read of every agent's transcript: agent id → tokens.
+	usageMsg map[string]usage.Totals
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
@@ -142,14 +146,19 @@ type model struct {
 	externals []discover.External
 	lastScan  time.Time
 
-	gitInfo     map[string]git.Info // dir → branch and changes
-	gitScanning bool
-	gitDue      bool // scan at the next tick: an agent finished or panes changed
-	lastGit     time.Time
-	diffFor     string // agent the diff view was opened for ("" for a project)
-	diffCfg     deck.DiffConfig
-	wt          *state.Project // project a worktree is being named for
-	wtBranch    string         // branch chosen; the kind menu comes next
+	gitInfo       map[string]git.Info // dir → branch and changes
+	gitScanning   bool
+	gitDue        bool // scan at the next tick: an agent finished or panes changed
+	lastGit       time.Time
+	usage         map[string]usage.Totals // agent id → tokens its session consumed
+	usageReader   *usage.Reader           // only the usage command touches it
+	usageScanning bool
+	usageDue      bool // read at the next tick: a turn ended
+	lastUsage     time.Time
+	diffFor       string // agent the diff view was opened for ("" for a project)
+	diffCfg       deck.DiffConfig
+	wt            *state.Project // project a worktree is being named for
+	wtBranch      string         // branch chosen; the kind menu comes next
 
 	notifyCfg notify.Config
 	notifyMod time.Time            // config.json mtime notifyCfg was read at
@@ -188,27 +197,29 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 	ti.Prompt = "› "
 	ti.CharLimit = 512
 	m := &model{
-		st:        st,
-		stMod:     state.ModTime(),
-		kinds:     kinds,
-		trackers:  map[string]*status.Tracker{},
-		panes:     map[string]tmux.Pane{},
-		hooks:     map[string]*status.Hook{},
-		screens:   map[string]string{},
-		input:     ti,
-		notifyCfg: notify.Load(),
-		notifyMod: notify.ModTime(),
-		diffCfg:   deck.LoadDiffConfig(),
-		gitInfo:   map[string]git.Info{},
-		runSince:  map[string]time.Time{},
-		notified:  map[string]time.Time{},
+		st:          st,
+		stMod:       state.ModTime(),
+		kinds:       kinds,
+		trackers:    map[string]*status.Tracker{},
+		panes:       map[string]tmux.Pane{},
+		hooks:       map[string]*status.Hook{},
+		screens:     map[string]string{},
+		input:       ti,
+		notifyCfg:   notify.Load(),
+		notifyMod:   notify.ModTime(),
+		diffCfg:     deck.LoadDiffConfig(),
+		gitInfo:     map[string]git.Info{},
+		usage:       map[string]usage.Totals{},
+		usageReader: usage.NewReader(),
+		runSince:    map[string]time.Time{},
+		notified:    map[string]time.Time{},
 	}
 	m.rebuildRows()
 	return m
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), tick())
+	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.usageCmd(), tick())
 }
 
 // gitStatus, addWorktree and validBranch are replaceable in tests.
@@ -237,6 +248,25 @@ func (m *model) gitCmd() tea.Cmd {
 		}
 		return out
 	}
+}
+
+// usageCmd brings every agent's token count up to date from its
+// transcript. The reader keeps where each file was left off, so only what
+// an agent wrote since the last read is parsed.
+func (m *model) usageCmd() tea.Cmd {
+	m.usageScanning, m.usageDue, m.lastUsage = true, false, time.Now()
+	var agents []usage.Agent
+	for _, p := range m.st.Projects {
+		for _, a := range p.Agents {
+			sid := a.SessionID
+			if sid == "" {
+				sid = a.ID
+			}
+			agents = append(agents, usage.Agent{ID: a.ID, Kind: a.Kind, Dir: p.Dir(a), Session: sid})
+		}
+	}
+	r := m.usageReader
+	return func() tea.Msg { return usageMsg(r.Read(agents)) }
 }
 
 func tick() tea.Cmd {
@@ -375,6 +405,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.gitScanning && (m.gitDue || time.Since(m.lastGit) > gitScanEvery) {
 			cmds = append(cmds, m.gitCmd())
 		}
+		if !m.usageScanning && (m.usageDue || time.Since(m.lastUsage) > usageScanEvery) {
+			cmds = append(cmds, m.usageCmd())
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
@@ -387,6 +420,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case gitMsg:
 		m.gitScanning, m.gitInfo = false, msg
+	case usageMsg:
+		m.usageScanning, m.usage = false, msg
 	case screensMsg:
 		m.polling = false
 		if msg.err != nil {
@@ -430,7 +465,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.selectID != "" {
 			m.selectAgent(msg.selectID)
 		}
-		m.gitDue = true
+		m.gitDue, m.usageDue = true, true
 		return m, m.pollNow()
 	case historyMsg:
 		m.pk.history, m.pk.loading = msg, false
@@ -547,7 +582,7 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			prev := tr.Status
 			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], a.ID == m.stageID, now)
 			if prev == status.Running && tr.Status != status.Running {
-				m.gitDue = true // a turn ended: its changes are worth showing now
+				m.gitDue, m.usageDue = true, true // a turn ended: its changes and cost are worth showing now
 			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
 				alerts = append(alerts, alert{e, a.ID == m.stageID})
@@ -1359,7 +1394,8 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 			right = nil
 		}
 		left = []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}
-		return append(left, m.gitSegs(r.proj.Path, "")...), right
+		left = append(left, m.gitSegs(r.proj.Path, "")...)
+		return left, m.withTokens(left, right, m.projectTokens(r.proj))
 	}
 	a := r.agent
 	st, attention := status.Stopped, false
@@ -1380,7 +1416,29 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
-	return left, []seg{label, {stPlain, " "}}
+	return left, m.withTokens(left, []seg{label, {stPlain, " "}}, m.usage[a.ID].Total())
+}
+
+// withTokens puts a token count before the right side of a row, unless
+// the row is too narrow for both: the count goes before the status does.
+func (m *model) withTokens(left, right []seg, tokens int64) []seg {
+	if tokens <= 0 {
+		return right
+	}
+	with := append([]seg{{stFaint, textutil.Count(tokens)}, {stPlain, "  "}}, right...)
+	if room := m.width - segWidth(with) - 1; room < minLeft && room < segWidth(left) {
+		return right
+	}
+	return with
+}
+
+// projectTokens is what all of p's agents consumed together.
+func (m *model) projectTokens(p *state.Project) int64 {
+	var n int64
+	for _, a := range p.Agents {
+		n += m.usage[a.ID].Total()
+	}
+	return n
 }
 
 // gitSegs is the checkout of dir as shown after a name: the branch, then

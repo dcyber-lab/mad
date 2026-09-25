@@ -66,3 +66,15 @@ func TestAge(t *testing.T) {
 		}
 	}
 }
+
+func TestCount(t *testing.T) {
+	cases := map[int64]string{
+		0: "0", 980: "980", 1200: "1.2k", 9960: "10.0k", 12345: "12k", 340_000: "340k",
+		1_234_567: "1.2M", 12_345_678: "12M", 999_999_999: "1000M", 1_100_000_000: "1.1B",
+	}
+	for n, want := range cases {
+		if got := Count(n); got != want {
+			t.Errorf("Count(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
