@@ -66,7 +66,7 @@ var (
 )
 
 func claudeProjectsDir() string { return filepath.Join(paths.Home(), ".claude", "projects") }
-func codexSessionsDir() string  { return filepath.Join(paths.Home(), ".codex", "sessions") }
+func codexSessionsDir() string  { return filepath.Join(paths.CodexHome(), "sessions") }
 
 // claudeProjectDir is where claude keeps transcripts for a cwd.
 func claudeProjectDir(cwd string) string {

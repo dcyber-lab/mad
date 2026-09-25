@@ -149,8 +149,11 @@ mad kill-server         stop the deck and every agent in it
   - *claude*: hooks are injected with `--settings` (your own settings file is
     untouched) and report running / waiting (permission prompts, questions) /
     idle.
-  - *codex*: `-c notify=...` reports the thread id; running/idle is inferred
-    from screen changes, waiting from on-screen text.
+  - *codex*: running/idle is inferred from screen changes, waiting from
+    on-screen text. `-c notify=...` reports the thread id so resume reopens
+    the right conversation; if your `~/.codex/config.toml` (or
+    `$CODEX_HOME`) sets `notify` itself, mad leaves yours alone and resume
+    falls back to `codex resume --last`.
   - Agents that finish in the background show a green `● done` until you
     look at them.
   - Updates are pushed where possible: a hook report reaches the sidebar
@@ -213,7 +216,8 @@ definitions by `name`, so you can add new agents or override existing ones:
 
 Placeholders: `{id}` (agent UUID), `{sid}` (current session id, falls back
 to `{id}`), `{claude_settings}` (mad's generated Claude settings with status
-hooks), `{codex_notify}` (codex notify wiring).
+hooks), `{codex_notify}` (codex notify wiring; empty when your codex config
+sets its own `notify`).
 
 ## Files
 

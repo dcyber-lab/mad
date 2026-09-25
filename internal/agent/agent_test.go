@@ -15,6 +15,7 @@ func withHome(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("CODEX_HOME", "")
 	return home
 }
 
@@ -89,6 +90,50 @@ func TestCodexCommand(t *testing.T) {
 	a.SessionID = "thread-9"
 	if got := codex.Command(a, true); !strings.HasPrefix(got, "codex resume ") || !strings.HasSuffix(got, " thread-9") {
 		t.Errorf("resume by id = %q", got)
+	}
+}
+
+func TestCodexKeepsUsersNotify(t *testing.T) {
+	home := withHome(t)
+	codex := ByName(Builtin(), "codex")
+	a := &state.Agent{ID: "id-3", Kind: "codex"}
+	write := func(dir, body string) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		config string
+		wired  bool
+	}{
+		{"", true},
+		{"model = \"o3\"\n# notify = [\"old\"]\n", true},
+		{"notify = [\"terminal-notifier\", \"-title\", \"codex\"]\n", false},
+		{"model = \"o3\"\n\n[profiles.work]\n  notify = [\"say\"]\n", false},
+	}
+	for _, c := range cases {
+		write(filepath.Join(home, ".codex"), c.config)
+		if got := strings.Contains(codex.Command(a, false), "notify="); got != c.wired {
+			t.Errorf("config %q: mad's notify wired = %v, want %v", c.config, got, c.wired)
+		}
+	}
+	if got := codex.Command(a, false); got != "codex " {
+		t.Errorf("start without mad's notify = %q", got)
+	}
+
+	// CODEX_HOME moves codex's config.
+	other := t.TempDir()
+	t.Setenv("CODEX_HOME", other)
+	if !strings.Contains(codex.Command(a, false), "notify=") {
+		t.Error("~/.codex should not count once CODEX_HOME is set")
+	}
+	write(other, "notify = [\"x\"]\n")
+	if strings.Contains(codex.Command(a, false), "notify=") {
+		t.Error("notify in $CODEX_HOME/config.toml was overridden")
 	}
 }
 

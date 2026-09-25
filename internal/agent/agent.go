@@ -144,13 +144,37 @@ func (k Kind) Command(a *state.Agent, resume bool) string {
 	if a.Fork && k.Name == "claude" && tpl == k.Resume {
 		tpl += " --fork-session"
 	}
-	notify := `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`","hook","codex"]`)
+	notify := ""
+	if !CodexHasOwnNotify() {
+		notify = `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`","hook","codex"]`)
+	}
 	return strings.NewReplacer(
 		"{id}", a.ID,
 		"{sid}", sid,
 		"{claude_settings}", paths.ShellQuote(paths.ClaudeSettings()),
 		"{codex_notify}", notify,
 	).Replace(tpl)
+}
+
+// notifyKey matches a `notify = ...` line in codex's config.toml, at the top
+// level or in a profile.
+var notifyKey = regexp.MustCompile(`^\s*notify\s*=`)
+
+// CodexHasOwnNotify reports whether the user set codex's notify command
+// themselves. codex takes a single notify command, so mad's -c notify=...
+// would replace theirs; mad leaves it alone then, and codex resumes fall
+// back to the most recent session because mad never learns the thread id.
+func CodexHasOwnNotify() bool {
+	data, err := os.ReadFile(filepath.Join(paths.CodexHome(), "config.toml"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if notifyKey.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // ClaudeSessionExists reports whether claude has a transcript for sid.
