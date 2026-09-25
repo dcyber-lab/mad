@@ -7,15 +7,10 @@ Run many coding-agent TUIs (Claude Code, Codex, pi, or a plain shell) side by
 side in one terminal, organized by project. A project sidebar stays on the
 left; the selected agent's real TUI fills the right.
 
-```
-┌ sidebar ─────────────┬ stage ───────────────────────────┐
-│ ▾ multi-agents       │                                  │
-│  ▶1 ⠋ claude running │   the selected agent's real TUI  │
-│   2 ? codex  waiting │                                  │
-│ ▾ other-proj         │                                  │
-│   3 ● claude done    │                                  │
-└──────────────────────┴──────────────────────────────────┘
-```
+![mad demo: a sidebar of projects and agents on the left, the selected agent's TUI on the right](docs/demo.gif)
+
+<sub>Recorded from a real deck; the agents are scripted stand-ins that report
+status the way claude and codex do.</sub>
 
 ## Features
 
