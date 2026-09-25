@@ -21,6 +21,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
+	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 // The model is driven by messages only; commands it returns (tmux work) are
@@ -54,6 +55,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyTab}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -429,23 +432,27 @@ func TestSidebarGapsAndMouse(t *testing.T) {
 	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}}
 	st.Projects[1].Agents = []*state.Agent{{ID: "b1", Kind: "codex"}}
 	m.rebuildRows()
-	// a, claude, (gap), b, codex
-	if got := m.lineOf; len(got) != 4 || got[2] != 3 || got[3] != 4 {
+	// a, claude (2 lines), (gap), b, codex (2 lines)
+	if got := m.lineOf; len(got) != 4 || got[2] != 4 || got[3] != 5 {
 		t.Fatalf("lineOf = %v", got)
 	}
 	lines := strings.Split(m.View(), "\n")
-	if strings.TrimSpace(lines[headerLines+2]) != "" || !strings.Contains(lines[headerLines+3], "b") {
+	if strings.TrimSpace(lines[headerLines+3]) != "" || !strings.Contains(lines[headerLines+4], "b") {
 		t.Errorf("no gap before the second project:\n%s", strings.Join(lines[:8], "\n"))
 	}
 
 	click := func(y int) {
 		m.Update(tea.MouseMsg{X: 3, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	}
-	click(headerLines + 2) // the gap
+	click(headerLines + 3) // the gap
 	if m.cursor != 0 || st.Projects[1].Collapsed {
 		t.Errorf("gap click: cursor=%d collapsed=%v", m.cursor, st.Projects[1].Collapsed)
 	}
-	click(headerLines + 3) // project b
+	click(headerLines + 2) // the line under claude belongs to it
+	if m.cursor != 1 {
+		t.Errorf("detail click: cursor=%d", m.cursor)
+	}
+	click(headerLines + 4) // project b
 	if m.cursor != 2 || !st.Projects[1].Collapsed {
 		t.Errorf("project click: cursor=%d collapsed=%v", m.cursor, st.Projects[1].Collapsed)
 	}
@@ -1002,10 +1009,10 @@ func TestTokensInRows(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
 
 	// The read covers every agent, with its session id and directory.
-	old := m.usageReader
-	t.Cleanup(func() { m.usageReader = old })
-	m.usageCmd() // just the snapshot; the read itself needs no transcripts
-	if !m.usageScanning || m.usageDue {
+	old := m.reader
+	t.Cleanup(func() { m.reader = old })
+	m.readCmd() // just the snapshot; the read itself needs no transcripts
+	if !m.reading || m.readDue {
 		t.Error("scan not marked in flight")
 	}
 	// Before any transcript, rows carry no count.
@@ -1013,11 +1020,11 @@ func TestTokensInRows(t *testing.T) {
 		t.Errorf("empty counts shown:\n%s", v)
 	}
 
-	m.Update(usageMsg{
-		"a1": {Input: 10, CacheRead: 1_200_000, Output: 500},
-		"a2": {Input: 33_000, Output: 1_000},
+	m.Update(transcriptMsg{
+		"a1": {Tokens: transcript.Totals{Input: 10, CacheRead: 1_200_000, Output: 500}},
+		"a2": {Tokens: transcript.Totals{Input: 33_000, Output: 1_000}},
 	})
-	if m.usageScanning {
+	if m.reading {
 		t.Error("scan still marked in flight")
 	}
 	v := m.View()
@@ -1045,10 +1052,138 @@ func TestTokensInRows(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
 
 	// A turn ending asks for a fresh read at the next tick.
-	m.usageDue, m.usageScanning = false, false
+	m.readDue, m.reading = false, false
 	m.trackers["a1"] = &status.Tracker{Status: status.Running}
 	m.applyPoll(pollMsg{panes: []tmux.Pane{{ID: "%1", MadID: "a1", Session: tmux.PoolSession, Index: -1, Dead: true}}}, time.Now())
-	if !m.usageDue {
+	if !m.readDue {
 		t.Error("run ended but no read requested")
+	}
+}
+
+func TestDetailLines(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	st.Projects[0].Agents = []*state.Agent{
+		{ID: "a1", Kind: "claude"},
+		{ID: "a2", Kind: "codex"},
+		{ID: "a3", Kind: "shell"},
+	}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 30})
+	// claude and codex take two lines, shell one.
+	if got := m.lineOf; len(got) != 4 || got[1] != 1 || got[2] != 3 || got[3] != 5 {
+		t.Fatalf("lineOf = %v", got)
+	}
+	line := func(n int) string { return strings.Split(m.View(), "\n")[headerLines+n] }
+
+	// Before any transcript: the kind's icon and claude / claude#2.
+	if l := line(1); !strings.Contains(l, "✻ claude ") {
+		t.Errorf("no title yet: %q", l)
+	}
+	if l := line(3); !strings.Contains(l, "◆ codex ") {
+		t.Errorf("codex icon: %q", l)
+	}
+	if l := line(5); !strings.Contains(l, "$ shell ") {
+		t.Errorf("shell icon: %q", l)
+	}
+	m.Update(transcriptMsg{
+		"a1": {Title: "Flaky test fix", Prompt: "now the docs", Tool: "Edit · README.md"},
+		"a2": {Title: "Build speed"},
+	})
+	// The title takes the name's place; the last prompt goes under it.
+	if l := line(1); !strings.Contains(l, "✻ Flaky test fix") || strings.Contains(l, "claude") {
+		t.Errorf("title should replace the name: %q", l)
+	}
+	if l := line(2); !strings.Contains(l, "now the docs") || strings.Contains(l, "Edit") {
+		t.Errorf("idle claude should show its last prompt: %q", l)
+	}
+	if l := line(3); !strings.Contains(l, "◆ Build speed") {
+		t.Errorf("codex title: %q", l)
+	}
+	// Running: the tool, or the prompt before any tool call.
+	m.trackers["a1"] = &status.Tracker{Status: status.Running}
+	if l := line(2); !strings.Contains(l, "Edit · README.md") {
+		t.Errorf("running claude should show its tool: %q", l)
+	}
+	m.transcripts["a1"] = transcript.Info{Title: "Flaky test fix", Prompt: "now the docs"}
+	if l := line(2); !strings.Contains(l, "now the docs") {
+		t.Errorf("running claude without a tool should show the prompt: %q", l)
+	}
+	m.trackers["a1"] = &status.Tracker{Status: status.Waiting}
+	m.transcripts["a1"] = transcript.Info{Title: "Flaky test fix", Tool: "Bash · rm -rf build"}
+	if l := line(2); !strings.Contains(l, "rm -rf build") {
+		t.Errorf("waiting claude should show the tool it asks about: %q", l)
+	}
+
+	// A long line is cut to the width, never wrapped.
+	m.transcripts["a1"] = transcript.Info{Tool: "Bash · " + strings.Repeat("x", 100)}
+	if l := line(2); lipgloss.Width(l) > 40 || !strings.Contains(l, "…") {
+		t.Errorf("detail not truncated (%d wide): %q", lipgloss.Width(l), l)
+	}
+
+	// The cursor moves by row, not by line.
+	press(m, "j", "j")
+	if r, _ := m.current(); r.agent == nil || r.agent.ID != "a2" {
+		t.Errorf("j moved to %+v, want a2", r)
+	}
+
+	// i hides the lines and remembers that.
+	press(m, "i")
+	if got := m.lineOf; got[3] != 3 || !st.Compact {
+		t.Errorf("compact: lineOf=%v compact=%v", got, st.Compact)
+	}
+	if v := m.View(); !strings.Contains(v, "Build speed") || strings.Contains(v, "now the docs") {
+		t.Errorf("compact should keep titles and drop the line under:\n%s", v)
+	}
+	press(m, "i")
+	if st.Compact || m.lineOf[3] != 5 {
+		t.Errorf("not back: compact=%v lineOf=%v", st.Compact, m.lineOf)
+	}
+}
+
+func TestRename(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	a := &state.Agent{ID: "a1", Kind: "claude"}
+	st.Projects[0].Agents = []*state.Agent{a}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 30})
+	m.Update(transcriptMsg{"a1": {Title: "Flaky test fix", Prompt: "fix it", Tool: "Bash · go test"}})
+
+	press(m, "t") // on the project row: nothing to name
+	if m.mode != modeNormal || !strings.Contains(m.View(), "select an agent") {
+		t.Errorf("mode=%v view:\n%s", m.mode, m.View())
+	}
+	press(m, "j", "t")
+	if m.mode != modeRename || !strings.Contains(m.View(), "name · claude") {
+		t.Errorf("mode=%v view:\n%s", m.mode, m.View())
+	}
+	press(m, "esc")
+	if m.mode != modeNormal || a.Name != "" {
+		t.Errorf("esc: mode=%v name=%q", m.mode, a.Name)
+	}
+	press(m, "t", "d", "o", "c", "s", "enter")
+	if m.mode != modeNormal || a.Name != "docs" {
+		t.Errorf("enter: mode=%v name=%q", m.mode, a.Name)
+	}
+	if v := m.View(); !strings.Contains(v, "✻ docs") || strings.Contains(v, "Flaky") {
+		t.Errorf("name should replace the title:\n%s", v)
+	}
+	// The name is saved; the line under still says what it does.
+	if saved, _ := state.Load(); saved.Projects[0].Agents[0].Name != "docs" {
+		t.Error("name not saved")
+	}
+	m.trackers["a1"] = &status.Tracker{Status: status.Running}
+	if v := m.View(); !strings.Contains(v, "go test") || !strings.Contains(v, "✻ docs") {
+		t.Errorf("running agent should show its tool under the name:\n%s", v)
+	}
+	// Clearing the name goes back to the transcript's title; the old name
+	// is offered for editing first.
+	m.trackers["a1"] = nil
+	press(m, "t")
+	if m.input.Value() != "docs" {
+		t.Errorf("input = %q, want the current name", m.input.Value())
+	}
+	press(m, "backspace", "backspace", "backspace", "backspace", "enter")
+	if a.Name != "" || !strings.Contains(m.View(), "Flaky test fix") {
+		t.Errorf("name=%q view:\n%s", a.Name, m.View())
 	}
 }

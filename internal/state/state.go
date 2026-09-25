@@ -18,6 +18,8 @@ import (
 
 type State struct {
 	Projects []*Project `json:"projects"`
+	// Compact hides the line under each agent that says what it is on.
+	Compact bool `json:"compact,omitempty"`
 	// Ignored projects are not re-added by auto-sync after being removed.
 	Ignored []string `json:"ignored,omitempty"`
 }
@@ -40,7 +42,10 @@ type Agent struct {
 	Dir string `json:"dir,omitempty"`
 	// Fork resumes SessionID as a copy (the original is open elsewhere,
 	// e.g. in the desktop app). Cleared once the copy reports its own id.
-	Fork      bool      `json:"fork,omitempty"`
+	Fork bool `json:"fork,omitempty"`
+	// Name is what the user called the agent; shown under it instead of
+	// the conversation's own title.
+	Name      string    `json:"name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

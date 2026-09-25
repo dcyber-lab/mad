@@ -20,6 +20,9 @@ status the way claude and codex do.</sub>
   `idle`, or `done` (finished while you were looking elsewhere).
 - **Git at a glance** — every project and worktree shows its branch, how
   many files changed and how many commits are unpushed.
+- **What each agent is on** — a claude or codex agent is listed by its
+  conversation's title, with the tool it is calling or the prompt it was
+  given under it. `t` gives it a name of your own.
 - **Tokens at a glance** — every claude and codex agent shows what its
   session has consumed so far, and every project the sum of its agents.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
@@ -108,6 +111,8 @@ again to reattach.
 | `a`            | Add a project                                  |
 | `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
+| `t`            | Name the agent (empty to go back to its title) |
+| `i`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
 | `1`–`9`        | Open agent N                                   |
 | `tab`          | Focus the agent pane                           |
@@ -183,13 +188,24 @@ changed or untracked, and `↑N` for commits not on the upstream; agents in
 their own worktree show the same for theirs. The scan runs every 5 seconds
 and right after an agent finishes a turn.
 
+An agent's row starts with its kind (`✻` claude, `◆` codex, `π` pi, `$`
+shell; custom kinds set `icon` and `color` in `agents.json` or get their
+initial) and
+is named after its conversation: the title you set with `/rename` (claude)
+or in the app (codex), else the one claude generated, else the first thing
+you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
+your own instead, kept until you clear it. The line under a claude or codex
+agent says what it is on: the tool being called and what it was pointed at
+while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
+otherwise the prompt it is working on or was last given. `i` hides that
+line everywhere, for a shorter list.
+
 The number before an agent's status (`1.2M`, `340k`) is every token its
 current session has sent through the model: input, cache reads and writes,
-and output, added up. It comes from the transcript claude or codex writes
+and output, added up. Both come from the transcript claude or codex writes
 (`~/.claude/projects`, `~/.codex/sessions`), read from where the last poll
 stopped, so agents are never asked. A project row shows the sum of its
-agents. `/clear` starts a new session, so the count starts over. When a
-row is too narrow for both, the count goes before the status does.
+agents. `/clear` starts a new session, so the count starts over.
 
 `v` on an agent or project (or `Alt-v` from the agent's pane) swaps the
 stage to a viewer for its changes: [lazygit](https://github.com/jesseduffield/lazygit)
@@ -274,6 +290,8 @@ definitions by `name`, so you can add new agents or override existing ones:
 | Field           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
 | `name`          | Agent kind name shown in the sidebar                              |
+| `icon`          | One glyph standing for the kind in the sidebar (default: initial) |
+| `color`         | The icon's color: an xterm-256 number or `#rrggbb`                |
 | `start`         | Shell command for a fresh session                                 |
 | `resume`        | Command to reopen session `{sid}`                                 |
 | `resume_latest` | Command to reopen the most recent session when no id is known     |

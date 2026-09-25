@@ -358,8 +358,8 @@ func TestUserText(t *testing.T) {
 		{json.RawMessage(`42`), ""},
 	}
 	for _, c := range cases {
-		if got := userText(c.in); got != c.want {
-			t.Errorf("userText(%.40s) = %q, want %q", c.in, got, c.want)
+		if got := UserText(c.in); got != c.want {
+			t.Errorf("UserText(%.40s) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
