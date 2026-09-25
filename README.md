@@ -188,7 +188,7 @@ changed or untracked, and `↑N` for commits not on the upstream; agents in
 their own worktree show the same for theirs. The scan runs every 5 seconds
 and right after an agent finishes a turn.
 
-An agent's row starts with its kind (`✻` claude, `◆` codex, `π` pi, `$`
+An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
 shell; custom kinds set `icon` and `color` in `agents.json` or get their
 initial) and
 is named after its conversation: the title you set with `/rename` (claude)
@@ -290,7 +290,7 @@ definitions by `name`, so you can add new agents or override existing ones:
 | Field           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
 | `name`          | Agent kind name shown in the sidebar                              |
-| `icon`          | One glyph standing for the kind in the sidebar (default: initial) |
+| `icon`          | A glyph or two standing for the kind in the sidebar (default: initial) |
 | `color`         | The icon's color: an xterm-256 number or `#rrggbb`                |
 | `start`         | Shell command for a fresh session                                 |
 | `resume`        | Command to reopen session `{sid}`                                 |

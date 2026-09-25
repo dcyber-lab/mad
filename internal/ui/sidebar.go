@@ -1472,7 +1472,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 	}
 	icon, label := m.statusGlyph(st, attention)
 	k := agent.ByName(m.kinds, a.Kind)
-	kind := seg{stName.Bold(true), k.Glyph()}
+	kind := seg{stName.Bold(true), textutil.PadRight(k.Glyph(), m.iconWidth())}
 	if k.Color != "" {
 		kind.st = kind.st.Foreground(lipgloss.Color(k.Color))
 	}
@@ -1496,6 +1496,17 @@ func (m *model) withTokens(left, right []seg, tokens int64) []seg {
 		return right
 	}
 	return with
+}
+
+// iconWidth is the column the kind icons share: as wide as the widest.
+func (m *model) iconWidth() int {
+	w := 1
+	for _, k := range m.kinds {
+		if kw := lipgloss.Width(k.Glyph()); kw > w {
+			w = kw
+		}
+	}
+	return w
 }
 
 // agentTitle is what an agent's row is called: the name the user gave it,

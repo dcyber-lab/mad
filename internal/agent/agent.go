@@ -25,9 +25,10 @@ import (
 // array of Kind.
 type Kind struct {
 	Name string `json:"name"`
-	// Icon stands for the kind in the sidebar; one glyph. Kinds without
-	// one show the first letter of their name. Color is the icon's, an
-	// xterm-256 number or #rrggbb; without one it is drawn like other text.
+	// Icon stands for the kind in the sidebar: a glyph or two, as the
+	// agent draws itself (✻, >_). Kinds without one show the first letter
+	// of their name. Color is the icon's, an xterm-256 number or #rrggbb;
+	// without one it is drawn like other text.
 	Icon  string `json:"icon,omitempty"`
 	Color string `json:"color,omitempty"`
 	// Start launches a fresh session.
@@ -57,7 +58,7 @@ var builtin = []Kind{
 	},
 	{
 		Name:         "codex",
-		Icon:         "◆",
+		Icon:         ">_",
 		Color:        "252",
 		Start:        "codex {codex_notify}",
 		Resume:       "codex resume {codex_notify} {sid}",
