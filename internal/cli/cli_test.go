@@ -44,6 +44,20 @@ func TestHelpAndUnknown(t *testing.T) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	for _, arg := range []string{"version", "-v", "--version"} {
+		code, out, _ := run(t, "", arg)
+		if code != 0 || !strings.HasPrefix(out, "mad ") || strings.TrimSpace(out) == "mad" {
+			t.Errorf("%s: code=%d out=%q", arg, code, out)
+		}
+	}
+	Version = "v9.9.9"
+	defer func() { Version = "" }()
+	if _, out, _ := run(t, "", "version"); out != "mad v9.9.9\n" {
+		t.Errorf("ldflags version: out=%q", out)
+	}
+}
+
 func TestAdd(t *testing.T) {
 	dir := isolate(t)
 	proj := filepath.Join(dir, "code", "app")

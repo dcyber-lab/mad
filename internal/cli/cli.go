@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -32,6 +33,7 @@ usage:
   mad scan [path]     show what sync sees: history, open sessions, and
                       the sessions of one project
   mad kill-server     stop the deck and every agent in it
+  mad version         print the version
 
 internal:
   mad sidebar         the sidebar TUI (runs inside tmux)
@@ -41,6 +43,22 @@ internal:
                       status hooks called by the agents
   mad poke CMD        pass an event to the sidebar (tmux hooks use it)
 `
+
+// Version is set by the release build (-ldflags "-X .../cli.Version=v1.2.3").
+// Binaries built with `go install module@version` report the module version
+// instead; anything else reports "devel".
+var Version string
+
+// version returns the version to print.
+func version() string {
+	if Version != "" {
+		return Version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "devel"
+}
 
 // IO is where a command reads and writes.
 type IO struct {
@@ -86,6 +104,8 @@ func Run(args []string, stdio IO) int {
 		hook(args, stdio.In, time.Now())
 	case "-h", "--help", "help":
 		fmt.Fprint(stdio.Out, Usage)
+	case "-v", "--version", "version":
+		fmt.Fprintln(stdio.Out, "mad", version())
 	default:
 		fmt.Fprintf(stdio.Err, "mad: unknown command %q\n\n%s", cmd, Usage)
 		return 2

@@ -33,13 +33,28 @@ status the way claude and codex do.</sub>
 - macOS or Linux (developed and tested on macOS)
 - [tmux](https://github.com/tmux/tmux) — 3.2+ recommended (see
   [Known limitations](#known-limitations))
-- Go 1.24+ to build (older Go links macOS binaries that recent macOS refuses to load)
+- Go 1.24+ only if you build from source (older Go links macOS binaries
+  that recent macOS refuses to load); the release binaries need no Go
 - At least one agent CLI on your `PATH`:
   [`claude`](https://docs.anthropic.com/en/docs/claude-code),
   [`codex`](https://github.com/openai/codex), `pi`, …
 - `ps` and `lsof` (used by auto-sync)
 
 ## Installation
+
+Prebuilt binaries for macOS and Linux (amd64 and arm64) are on the
+[releases page](https://github.com/dcyber-lab/mad/releases). To install the
+latest one into `~/.local/bin`:
+
+```sh
+curl -fsSL https://github.com/dcyber-lab/mad/releases/latest/download/mad_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz \
+  | tar -xz -C ~/.local/bin mad
+```
+
+(`mkdir -p ~/.local/bin` first if it doesn't exist, and make sure it's on
+your `PATH`.)
+
+With Go 1.24 or newer installed:
 
 ```sh
 go install github.com/dcyber-lab/mad@latest
@@ -52,6 +67,8 @@ git clone https://github.com/dcyber-lab/mad.git
 cd mad
 make install          # → ~/.local/bin/mad (override with BIN=...)
 ```
+
+`mad version` prints which build you have.
 
 ## Quick start
 
