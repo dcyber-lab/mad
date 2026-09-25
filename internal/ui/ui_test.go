@@ -1247,3 +1247,69 @@ func TestFinishMenu(t *testing.T) {
 	}
 	press(m, "esc")
 }
+
+func TestQuotaLines(t *testing.T) {
+	m, st := setup(t, "/p/one")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "c1", Kind: "codex"}}
+	m.rebuildRows()
+	m.Update(tea.WindowSizeMsg{Width: 44, Height: 30})
+	now := time.Now()
+	if m.headerH() != headerLines || len(m.quotaLines(now)) != 0 {
+		t.Fatalf("no quota yet: headerH=%d", m.headerH())
+	}
+
+	// claude's limits come with the poll (written by the status line
+	// hook); codex's ride in its transcript.
+	claude := status.Quota{
+		FiveHour: status.Window{Used: 62, ResetAt: now.Add(2*time.Hour + 10*time.Minute)},
+		SevenDay: status.Window{Used: 96, ResetAt: now.Add(76 * time.Hour)}, At: now,
+	}
+	m.applyPoll(pollMsg{quota: map[string]status.Quota{"claude": claude}}, now)
+	m.Update(transcriptMsg{"c1": {Quota: status.Quota{FiveHour: status.Window{Used: 12}, At: now.Add(-time.Minute)}}})
+	lines := m.quotaLines(now)
+	if len(lines) != 2 || m.headerH() != headerLines+2 {
+		t.Fatalf("lines=%d headerH=%d", len(lines), m.headerH())
+	}
+	if l := lines[0]; !strings.Contains(l, "✻") || !strings.Contains(l, "5h ▓▓▓▓▓░░░ 62% 2h10m") || !strings.Contains(l, "wk 96% 3d4h") {
+		t.Errorf("claude line: %q", l)
+	}
+	if l := lines[1]; !strings.Contains(l, ">_") || !strings.Contains(l, "▓░░░░░░░ 12%") || strings.Contains(l, "wk") {
+		t.Errorf("codex line: %q", l)
+	}
+	// The list starts under the quota lines: a click on the first row
+	// still lands on it.
+	v := strings.Split(m.View(), "\n")
+	if !strings.Contains(v[1], "62%") || strings.TrimSpace(v[3]) != "" || !strings.Contains(v[4], "one") {
+		t.Errorf("view:\n%s", strings.Join(v[:6], "\n"))
+	}
+	m.Update(tea.MouseMsg{X: 3, Y: m.headerH(), Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if !st.Projects[0].Collapsed {
+		t.Error("click under the quota lines should hit the project row")
+	}
+
+	// An older report never replaces a newer one; a newer one does.
+	m.applyPoll(pollMsg{quota: map[string]status.Quota{"claude": {FiveHour: status.Window{Used: 1}, At: now.Add(-time.Hour)}}}, now)
+	if m.quota["claude"].FiveHour.Used != 62 {
+		t.Error("older report replaced the newer")
+	}
+	m.applyPoll(pollMsg{quota: map[string]status.Quota{"claude": {FiveHour: status.Window{Used: 70}, At: now.Add(time.Second)}}}, now)
+	if m.quota["claude"].FiveHour.Used != 70 {
+		t.Error("newer report ignored")
+	}
+
+	// Past the five-hour reset the window shows as unused; narrow
+	// sidebars drop the bar.
+	m.quota["claude"] = claude
+	later := now.Add(3 * time.Hour)
+	if l := m.quotaLines(later)[0]; !strings.Contains(l, "5h ░░░░░░░░ 0%") || strings.Contains(l, "2h10m") || !strings.Contains(l, "wk 96%") {
+		t.Errorf("after reset: %q", l)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 30, Height: 30})
+	if l := m.quotaLines(now)[0]; strings.Contains(l, "▓") || !strings.Contains(l, "5h 62% 2h10m") {
+		t.Errorf("narrow: %q", l)
+	}
+	m.quotaOn = false
+	if m.headerH() != headerLines || len(m.quotaLines(now)) != 0 {
+		t.Error("quota off should hide the lines")
+	}
+}

@@ -182,3 +182,43 @@ func TestAttention(t *testing.T) {
 		t.Error("viewing clears attention")
 	}
 }
+
+func TestQuota(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if _, ok := ParseStatusLine(strings.NewReader(`{"model":{"display_name":"Opus"}}`)); ok {
+		t.Error("no rate_limits should not parse")
+	}
+	if _, ok := ParseStatusLine(strings.NewReader(`not json`)); ok {
+		t.Error("garbage parsed")
+	}
+	q, ok := ParseStatusLine(strings.NewReader(`{"rate_limits":{"five_hour":{"used_percentage":62,"resets_at":1738425600},"seven_day":{"used_percentage":31,"resets_at":1738857600}}}`))
+	if !ok || q.FiveHour.Used != 62 || q.FiveHour.ResetAt.Unix() != 1738425600 || q.SevenDay.Used != 31 {
+		t.Fatalf("parsed %+v %v", q, ok)
+	}
+	// A window Claude dropped (its reset passed) reads as unknown.
+	q2, ok := ParseStatusLine(strings.NewReader(`{"rate_limits":{"seven_day":{"used_percentage":5,"resets_at":1738857600}}}`))
+	if !ok || q2.FiveHour.Known() || q2.SevenDay.Used != 5 {
+		t.Errorf("partial: %+v", q2)
+	}
+
+	now := time.Unix(1738400000, 0)
+	if _, ok := ReadQuota("claude"); ok {
+		t.Error("read before write")
+	}
+	if err := WriteQuota("claude", q, now); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := ReadQuota("claude")
+	if !ok || !got.At.Equal(now) || got.FiveHour.Used != 62 || !got.SevenDay.ResetAt.Equal(q.SevenDay.ResetAt) {
+		t.Errorf("read back %+v %v", got, ok)
+	}
+	// Past its reset the five-hour window is spent from zero; the weekly
+	// one is untouched.
+	e := got.Expire(time.Unix(1738425600, 0))
+	if e.FiveHour.Known() || e.SevenDay.Used != 31 {
+		t.Errorf("expired: %+v", e)
+	}
+	if e := got.Expire(now); e.FiveHour.Used != 62 {
+		t.Errorf("not yet expired: %+v", e)
+	}
+}

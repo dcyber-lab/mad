@@ -26,6 +26,8 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
   given under it. `t` gives it a name of your own.
 - **Tokens at a glance** — every claude and codex agent shows what its
   session has consumed so far, and every project the sum of its agents.
+- **Usage limits** — under the header, how much of the claude and codex
+  subscription windows (5-hour, weekly) is used and when they reset.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
   starts an agent in it; `v` opens the changes of any agent in lazygit (or
   `git diff`) without leaving the deck; `f` pushes the branch, opens a pull
@@ -243,6 +245,30 @@ right after. Your own list in `config.json` replaces the built-in one;
             {"name": "squash onto {base}", "command": "git rebase -i {base}"}]}
 ```
 
+## Usage limits
+
+On a claude.ai or ChatGPT subscription, a line per kind under the header
+shows how much of the plan is used:
+
+```
+ ✻  5h ▓▓▓▓▓░░░ 62% 2h10m          wk 31% 3d4h
+ >_ 5h ▓░░░░░░░ 12% 4h02m          wk 40% 5d
+```
+
+The bar and the first percentage are the rolling five-hour window with the
+time until it resets; `wk` is the weekly one. Orange from 80%, red from
+95%. A window whose reset has passed reads as 0% until the next report.
+Nothing is shown on an API key or a gateway without limits.
+
+claude reports its limits to a status line command mad passes in with
+`--settings` (Claude Code v2.1.211 or later): `mad hook statusline`
+records them, then runs the status line from your own settings with the
+same input, so yours still shows. Without one it prints `Opus · ctx 34% ·
+5h 62% (2h10m) · wk 31%`. codex writes its limits into its rollout after
+every response, which mad reads anyway. Agents started before mad learned
+this keep running without it; resume them (`r`) to pick it up. Turn the
+whole thing off with `{"quota": false}` in `config.json`.
+
 ## How it works
 
 - mad runs a **private tmux server** (`tmux -L mad`), isolated from any tmux
@@ -335,9 +361,9 @@ sets its own `notify`).
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
-| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu) |
+| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
-| `~/.local/state/mad/status/`          | Status reported by hooks                          |
+| `~/.local/state/mad/status/`          | Status reported by hooks; `quota-<kind>.json` usage limits |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
 | `~/.local/state/mad/sidebar.log`      | Sidebar crash log (the sidebar auto-restarts)     |
 | `~/.local/state/mad/sidebar-mad.sock` | How `mad hook`, `switch`, `jump` and `diff` reach the sidebar |

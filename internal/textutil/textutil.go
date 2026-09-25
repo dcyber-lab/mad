@@ -48,6 +48,30 @@ func ageAt(t, now time.Time) string {
 	}
 }
 
+// Until says how long until t: 45m, 2h10m, 3d4h. Zero once t has passed.
+func Until(t, now time.Time) string {
+	d := t.Sub(now)
+	if d <= 0 {
+		return "0m"
+	}
+	d = d.Round(time.Minute)
+	h, m := int(d.Hours()), int(d.Minutes())%60
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", m)
+	case d < 24*time.Hour:
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh%02dm", h, m)
+	default:
+		if h%24 == 0 {
+			return fmt.Sprintf("%dd", h/24)
+		}
+		return fmt.Sprintf("%dd%dh", h/24, h%24)
+	}
+}
+
 // Count is a compact token count: 980, 4.2k, 340k, 1.2M, 12M, 1.1B.
 func Count(n int64) string {
 	f := float64(n)

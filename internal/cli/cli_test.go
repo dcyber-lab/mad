@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -200,5 +202,40 @@ func TestScanOnEmptyHome(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("scan output lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestStatusLineHook(t *testing.T) {
+	dir := isolate(t)
+	t.Chdir(dir)
+	in := `{"model":{"display_name":"Opus"},"context_window":{"used_percentage":34},"rate_limits":{"five_hour":{"used_percentage":62,"resets_at":` + fmt.Sprint(time.Now().Add(2*time.Hour+10*time.Minute).Unix()) + `},"seven_day":{"used_percentage":31}}}`
+
+	// Without a status line of the user's own, mad prints a summary and
+	// records the limits.
+	code, out, _ := run(t, in, "hook", "statusline")
+	if code != 0 || !strings.HasPrefix(out, "Opus · ctx 34% · 5h 62% (2h") || !strings.HasSuffix(strings.TrimSpace(out), "wk 31%") {
+		t.Errorf("code=%d out=%q", code, out)
+	}
+	q, ok := status.ReadQuota("claude")
+	if !ok || q.FiveHour.Used != 62 || q.SevenDay.Used != 31 {
+		t.Errorf("quota = %+v %v", q, ok)
+	}
+
+	// With one, the same JSON is handed to it and its output shown.
+	os.MkdirAll(filepath.Join(dir, ".claude"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(`{"statusLine":{"type":"command","command":"jq -r .model.display_name | tr a-z A-Z"}}`), 0o644)
+	if _, err := exec.LookPath("jq"); err == nil {
+		if _, out, _ := run(t, in, "hook", "statusline"); strings.TrimSpace(out) != "OPUS" {
+			t.Errorf("user status line out=%q", out)
+		}
+	}
+	// No rate limits (an API key): nothing recorded, still a line.
+	os.Remove(filepath.Join(dir, ".claude", "settings.json"))
+	os.Remove(status.QuotaPath("claude"))
+	if _, out, _ := run(t, `{"model":{"display_name":"Sonnet"}}`, "hook", "statusline"); strings.TrimSpace(out) != "Sonnet" {
+		t.Errorf("api key out=%q", out)
+	}
+	if _, ok := status.ReadQuota("claude"); ok {
+		t.Error("quota written without rate limits")
 	}
 }

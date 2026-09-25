@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func write(t *testing.T, path, lines string) {
@@ -108,5 +109,22 @@ func TestCodex(t *testing.T) {
 	names["t1"] = "Build speed"
 	if got := r.Read(agents)["c"].Title; got != "Build speed" {
 		t.Errorf("thread name not used: %q", got)
+	}
+
+	// Rate limits ride along with the token count: primary is the
+	// five-hour window, secondary the weekly one; resets are a time or
+	// seconds from the event.
+	write(t, path, `{"timestamp":"2026-02-01T10:00:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":800,"output_tokens":50}},"rate_limits":{"primary":{"used_percent":12.5,"window_minutes":300,"resets_in_seconds":3600},"secondary":{"used_percent":40,"window_minutes":10080,"resets_at":1738857600}}}}
+`)
+	q := r.Read(agents)["c"].Quota
+	if q.FiveHour.Used != 12.5 || q.FiveHour.ResetAt.UTC().Format(time.RFC3339) != "2026-02-01T11:00:00Z" ||
+		q.SevenDay.Used != 40 || q.SevenDay.ResetAt.Unix() != 1738857600 || q.At.IsZero() {
+		t.Errorf("quota = %+v", q)
+	}
+	// null rate limits (an API key) leave the last report alone.
+	write(t, path, `{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1}},"rate_limits":null}}
+`)
+	if got := r.Read(agents)["c"].Quota; got != q {
+		t.Errorf("quota after null = %+v", got)
 	}
 }

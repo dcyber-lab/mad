@@ -2,10 +2,14 @@
 package cli
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -18,6 +22,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
 	"github.com/dcyber-lab/mad/internal/ui"
 )
@@ -42,6 +47,8 @@ internal:
   mad fit             restore the saved sidebar width
   mad hook claude|codex
                       status hooks called by the agents
+  mad hook statusline claude's status line: records the plan's usage
+                      limits, then runs your own status line command
   mad poke CMD        pass an event to the sidebar (tmux hooks use it)
 `
 
@@ -104,7 +111,11 @@ func Run(args []string, stdio IO) int {
 	case "placeholder":
 		deck.RunPlaceholder(stdio.Out)
 	case "hook":
-		hook(args, stdio.In, time.Now())
+		if len(args) > 0 && args[0] == "statusline" {
+			statusLine(stdio.In, stdio.Out, time.Now())
+		} else {
+			hook(args, stdio.In, time.Now())
+		}
 	case "-h", "--help", "help":
 		fmt.Fprint(stdio.Out, Usage)
 	case "-v", "--version", "version":
@@ -209,4 +220,80 @@ func hook(args []string, in io.Reader, now time.Time) {
 	if h != nil && status.WriteHook(id, h, now) == nil {
 		_ = poke.Send(poke.Hook + " " + id) // the sidebar shows it now
 	}
+}
+
+// statusLine is claude's status line command while it runs under mad: it
+// records the account's usage limits from the JSON on stdin, then hands
+// the same JSON to the status line the user configured, if any, so theirs
+// still shows. Without one it prints a short line of its own.
+func statusLine(in io.Reader, out io.Writer, now time.Time) {
+	data, _ := io.ReadAll(in)
+	q, known := status.ParseStatusLine(bytes.NewReader(data))
+	if known && status.WriteQuota("claude", q, now) == nil {
+		_ = poke.Send(poke.Poll)
+	}
+	if cmd := userStatusLine(); cmd != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		c := exec.CommandContext(ctx, "sh", "-c", cmd)
+		c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(data), out, io.Discard
+		_ = c.Run()
+		return
+	}
+	var ev struct {
+		Model struct {
+			Name string `json:"display_name"`
+		} `json:"model"`
+		Context struct {
+			Used *float64 `json:"used_percentage"`
+		} `json:"context_window"`
+	}
+	_ = json.Unmarshal(data, &ev)
+	var parts []string
+	if ev.Model.Name != "" {
+		parts = append(parts, ev.Model.Name)
+	}
+	if ev.Context.Used != nil {
+		parts = append(parts, fmt.Sprintf("ctx %.0f%%", *ev.Context.Used))
+	}
+	if known {
+		if w := q.FiveHour; w.Known() {
+			s := fmt.Sprintf("5h %.0f%%", w.Used)
+			if !w.ResetAt.IsZero() {
+				s += " (" + textutil.Until(w.ResetAt, now) + ")"
+			}
+			parts = append(parts, s)
+		}
+		if w := q.SevenDay; w.Known() {
+			parts = append(parts, fmt.Sprintf("wk %.0f%%", w.Used))
+		}
+	}
+	fmt.Fprintln(out, strings.Join(parts, " · "))
+}
+
+// userStatusLine is the status line command from the user's own claude
+// settings, the most specific first: the project's local and shared
+// settings, then ~/.claude/settings.json.
+func userStatusLine() string {
+	cwd, _ := os.Getwd()
+	files := []string{
+		filepath.Join(cwd, ".claude", "settings.local.json"),
+		filepath.Join(cwd, ".claude", "settings.json"),
+		filepath.Join(paths.Home(), ".claude", "settings.json"),
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		var st struct {
+			StatusLine *struct {
+				Command string `json:"command"`
+			} `json:"statusLine"`
+		}
+		if json.Unmarshal(data, &st) == nil && st.StatusLine != nil && st.StatusLine.Command != "" {
+			return st.StatusLine.Command
+		}
+	}
+	return ""
 }

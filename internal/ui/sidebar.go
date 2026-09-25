@@ -53,7 +53,8 @@ type (
 		panes   []tmux.Pane
 		screens map[string]string
 		hooks   map[string]*status.Hook
-		epoch   int // model.epoch when the poll started
+		quota   map[string]status.Quota // kind → limits reported through `mad hook statusline`
+		epoch   int                     // model.epoch when the poll started
 		err     error
 	}
 	// screensMsg is a tick's capture of the agents without hooks.
@@ -153,6 +154,8 @@ type model struct {
 	gitDue      bool // scan at the next tick: an agent finished or panes changed
 	lastGit     time.Time
 	transcripts map[string]transcript.Info // agent id → what its transcript says
+	quota       map[string]status.Quota    // kind → the account's usage limits, latest report
+	quotaOn     bool                       // config: follow and show usage limits
 	reader      *transcript.Reader         // only the read command touches it
 	reading     bool
 	readDue     bool // read at the next tick: a turn ended
@@ -222,6 +225,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		baseOf:      map[string]string{},
 		gitInfo:     map[string]git.Info{},
 		transcripts: map[string]transcript.Info{},
+		quota:       map[string]status.Quota{},
+		quotaOn:     deck.QuotaEnabled(),
 		reader:      transcript.NewReader(),
 		runSince:    map[string]time.Time{},
 		notified:    map[string]time.Time{},
@@ -310,13 +315,22 @@ func (m *model) pollCmd() tea.Cmd {
 		ids = append(ids, a.ID)
 	}
 	epoch := m.epoch
+	var kinds []string
+	for _, k := range m.kinds {
+		kinds = append(kinds, k.Name)
+	}
 	return func() tea.Msg {
 		panes, err := tmux.ListPanes()
 		if err != nil {
 			return pollMsg{err: err, epoch: epoch}
 		}
 		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, epoch: epoch}
+		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, quota: map[string]status.Quota{}, epoch: epoch}
+		for _, k := range kinds {
+			if q, ok := status.ReadQuota(k); ok {
+				msg.quota[k] = q
+			}
+		}
 		// One tmux call for every screen: a call per agent costs a few ms
 		// each and adds up to the whole poll interval with many agents.
 		byPane := map[string]string{}
@@ -436,6 +450,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gitScanning, m.gitInfo = false, msg
 	case transcriptMsg:
 		m.reading, m.transcripts = false, msg
+		for _, p := range m.st.Projects {
+			for _, a := range p.Agents {
+				m.noteQuota(a.Kind, msg[a.ID].Quota)
+			}
+		}
 	case screensMsg:
 		m.polling = false
 		if msg.err != nil {
@@ -542,7 +561,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 	}
 	if mod := notify.ModTime(); !mod.Equal(m.notifyMod) {
 		m.notifyCfg, m.notifyMod = notify.Load(), mod
-		m.diffCfg, m.finCfg = deck.LoadDiffConfig(), deck.LoadFinishConfig()
+		m.diffCfg, m.finCfg, m.quotaOn = deck.LoadDiffConfig(), deck.LoadFinishConfig(), deck.QuotaEnabled()
 	}
 	// Pick up `mad add` and other writers.
 	if mod := state.ModTime(); mod.After(m.stMod) {
@@ -570,7 +589,18 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		m.selectAgent(m.stageID)
 	}
 	m.screens, m.hooks = msg.screens, msg.hooks
+	for k, q := range msg.quota {
+		m.noteQuota(k, q)
+	}
 	return m.observe(nil, now)
+}
+
+// noteQuota keeps the latest report of a kind's usage limits.
+func (m *model) noteQuota(kind string, q status.Quota) {
+	if q.At.IsZero() || !q.At.After(m.quota[kind].At) {
+		return
+	}
+	m.quota[kind] = q
 }
 
 // alert is a notification to send; one about the agent on stage is
@@ -810,7 +840,7 @@ func (m *model) listHeight() int {
 	case modePickFinish:
 		footer = len(m.fin) + 2
 	}
-	h := m.height - headerLines - footer
+	h := m.height - m.headerH() - footer
 	if h < 1 {
 		h = 1
 	}
@@ -1395,7 +1425,7 @@ func (m *model) handleMouse(ev tea.MouseMsg) tea.Cmd {
 	case ev.Button == tea.MouseButtonWheelDown:
 		m.move(1)
 	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress:
-		if i, ok := m.rowAt(ev.Y - headerLines); ok && ev.Y >= headerLines {
+		if i, ok := m.rowAt(ev.Y - m.headerH()); ok && ev.Y >= m.headerH() {
 			m.cursor = i
 			return m.activate(m.rows[i])
 		}
@@ -1429,7 +1459,11 @@ func (m *model) View() string {
 
 func (m *model) sidebarView() string {
 	var b strings.Builder
-	b.WriteString(m.renderHeader() + "\n\n")
+	b.WriteString(m.renderHeader() + "\n")
+	for _, l := range m.quotaLines(time.Now()) {
+		b.WriteString(l + "\n")
+	}
+	b.WriteString("\n")
 
 	h := m.listHeight()
 	lines := 0
@@ -1519,6 +1553,83 @@ func (m *model) renderHeader() string {
 }
 
 func (m *model) spin() string { return spinner[m.frame%len(spinner)] }
+
+// headerH is how many lines the list starts after: the brand line, a
+// line per kind with known usage limits, and a blank one.
+func (m *model) headerH() int {
+	return headerLines + len(m.quotaKinds(time.Now()))
+}
+
+// quotaKinds lists the kinds with usage limits to show, in kinds order,
+// with each report's spent windows already dropped.
+func (m *model) quotaKinds(now time.Time) []string {
+	if !m.quotaOn {
+		return nil
+	}
+	var out []string
+	for _, k := range m.kinds {
+		q, ok := m.quota[k.Name]
+		if !ok {
+			continue
+		}
+		if q = q.Expire(now); q.FiveHour.Known() || q.SevenDay.Known() || !q.At.IsZero() {
+			out = append(out, k.Name)
+		}
+	}
+	return out
+}
+
+const quotaBar = 8 // cells in the five-hour bar
+
+// quotaLines draws the usage limits under the header, one kind a line:
+// its icon, the five-hour window as a bar with the percentage and the
+// time to its reset, and the weekly window on the right.
+func (m *model) quotaLines(now time.Time) []string {
+	var out []string
+	for _, name := range m.quotaKinds(now) {
+		k := agent.ByName(m.kinds, name)
+		q := m.quota[name].Expire(now)
+		icon := seg{stName.Bold(true), textutil.PadRight(k.Glyph(), m.iconWidth())}
+		if k.Color != "" {
+			icon.st = icon.st.Foreground(lipgloss.Color(k.Color))
+		}
+		left := []seg{{stPlain, " "}, icon, {stPlain, " "}, {stFaint, "5h "}}
+		w := q.FiveHour
+		if m.width >= 36 {
+			filled := int(w.Used/100*quotaBar + 0.5)
+			if filled > quotaBar {
+				filled = quotaBar
+			}
+			left = append(left, seg{quotaStyle(w.Used), strings.Repeat("▓", filled)}, seg{stFaint, strings.Repeat("░", quotaBar-filled)}, seg{stPlain, " "})
+		}
+		left = append(left, seg{quotaStyle(w.Used), fmt.Sprintf("%.0f%%", w.Used)})
+		if !w.ResetAt.IsZero() {
+			left = append(left, seg{stFaint, " " + textutil.Until(w.ResetAt, now)})
+		}
+		var right []seg
+		if wk := q.SevenDay; wk.Known() {
+			right = []seg{{stFaint, "wk "}, {quotaStyle(wk.Used), fmt.Sprintf("%.0f%%", wk.Used)}}
+			if !wk.ResetAt.IsZero() {
+				right = append(right, seg{stFaint, " " + textutil.Until(wk.ResetAt, now)})
+			}
+			right = append(right, seg{stPlain, " "})
+		}
+		out = append(out, layout(m.width, nil, left, right))
+	}
+	return out
+}
+
+// quotaStyle colors a used percentage: plain, then orange from 80%, red
+// from 95%.
+func quotaStyle(used float64) lipgloss.Style {
+	switch {
+	case used >= 95:
+		return stWaiting
+	case used >= 80:
+		return stRunning
+	}
+	return stName
+}
 
 // rowSegs lays out one row: the left part is cut to fit, the right part
 // (status, count, tty) is right-aligned and dropped when too narrow.
