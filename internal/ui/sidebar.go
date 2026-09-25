@@ -5,6 +5,7 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -108,6 +109,7 @@ func (r row) isProject() bool { return r.agent == nil && r.ext == nil && r.deskt
 type model struct {
 	st       *state.State
 	stMod    time.Time
+	stErr    error // the state file as last seen doesn't parse: not saved over
 	kinds    []agent.Kind
 	trackers map[string]*status.Tracker
 	panes    map[string]tmux.Pane
@@ -179,7 +181,8 @@ type model struct {
 func Run() error {
 	st, err := state.Load()
 	if err != nil {
-		return err
+		waitForState(os.Stdout, err, time.Second)
+		return nil // the pane's loop starts the sidebar again
 	}
 	m := newModel(st, agent.Builtin())
 	m.reloadConfig() // config.json, agents.json
@@ -199,6 +202,18 @@ func Run() error {
 	}
 	_, err = p.Run()
 	return err
+}
+
+// waitForState says in the sidebar's pane why the state can't be read,
+// and returns once the file changes. Starting on an empty state instead
+// would overwrite the file at the first save.
+func waitForState(out io.Writer, err error, poll time.Duration) {
+	fmt.Fprintf(out, "\x1b[2J\x1b[H mad can't read its state:\n\n %v\n\n %s\n\n Fix the file and the sidebar comes back.\n",
+		err, paths.Short(paths.StateFile()))
+	mod := state.ModTime()
+	for state.ModTime().Equal(mod) {
+		time.Sleep(poll)
+	}
 }
 
 func newModel(st *state.State, kinds []agent.Kind) *model {

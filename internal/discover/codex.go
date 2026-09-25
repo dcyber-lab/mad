@@ -150,10 +150,11 @@ func (codex) Sessions(root string) []Session {
 			return true
 		}
 		if s := cachedSession(fileEntry{path, info.ModTime()}, parseCodexSession); s != nil {
-			if n := names[s.ID]; n != "" {
-				s.Title = n
+			ss := *s // the cached one stays as parsed
+			if n := names[ss.ID]; n != "" {
+				ss.Title = n
 			}
-			out = append(out, *s)
+			out = append(out, ss)
 		}
 		return len(out) < MaxSessions
 	})
@@ -324,11 +325,37 @@ func (w *codexWindow) window(at time.Time) status.Window {
 
 func (codex) Titles() map[string]string { return codexThreadNames() }
 
+// codexNames is session_index.jsonl as last read. The file lists every
+// thread ever named, and the sidebar asks for it every few seconds, so it
+// is read again only when it changes.
+var codexNames struct {
+	sync.Mutex
+	path  string
+	mod   time.Time
+	size  int64
+	names map[string]string
+}
+
 // codexThreadNames reads session_index.jsonl (id → thread name, last
-// entry wins).
+// entry wins). The map is shared: callers only read it.
 func codexThreadNames() map[string]string {
+	path := filepath.Join(filepath.Dir(codexSessionsDir()), "session_index.jsonl")
+	fi, err := os.Stat(path)
+	if err != nil {
+		return map[string]string{}
+	}
+	c := &codexNames
+	c.Lock()
+	defer c.Unlock()
+	if c.names == nil || c.path != path || !c.mod.Equal(fi.ModTime()) || c.size != fi.Size() {
+		c.path, c.mod, c.size, c.names = path, fi.ModTime(), fi.Size(), readCodexNames(path)
+	}
+	return c.names
+}
+
+func readCodexNames(path string) map[string]string {
 	names := map[string]string{}
-	f, err := os.Open(filepath.Join(filepath.Dir(codexSessionsDir()), "session_index.jsonl"))
+	f, err := os.Open(path)
 	if err != nil {
 		return names
 	}

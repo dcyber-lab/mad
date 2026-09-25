@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -168,6 +169,10 @@ func (m *model) current() (row, bool) {
 }
 
 func (m *model) save() {
+	if m.stErr != nil {
+		m.configError(fmt.Errorf("%w; changes aren't saved until it's fixed", m.stErr))
+		return
+	}
 	if err := m.st.Save(); err != nil {
 		m.setFlash(err.Error())
 	}

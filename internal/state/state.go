@@ -6,9 +6,7 @@ package state
 import (
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -49,18 +47,12 @@ type Agent struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Load reads the state file; a missing file is an empty state.
+// Load reads the state file; a missing file is an empty state, a
+// malformed one an error naming the line.
 func Load() (*State, error) {
-	data, err := os.ReadFile(paths.StateFile())
-	if errors.Is(err, fs.ErrNotExist) {
-		return &State{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
 	var s State
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", paths.StateFile(), err)
+	if err := paths.ReadJSON(paths.StateFile(), &s); err != nil {
+		return nil, err
 	}
 	return &s, nil
 }

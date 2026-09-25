@@ -501,3 +501,76 @@ func TestTranscripts(t *testing.T) {
 		t.Errorf("got %q want %q", got, rollout)
 	}
 }
+
+// A file being written keeps one cache entry, parsed again only when its
+// mtime moves.
+func TestSessionCacheIsPerFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	parses := 0
+	parse := func(string) *Session { parses++; return &Session{ID: "x"} }
+	count := func() int {
+		n := 0
+		sessionCache.Range(func(k, _ any) bool {
+			if k == path {
+				n++
+			}
+			return true
+		})
+		return n
+	}
+	t0 := time.Now()
+	for i := 0; i < 3; i++ {
+		at := t0.Add(time.Duration(i) * time.Second)
+		cachedSession(fileEntry{path, at}, parse)
+		if s := cachedSession(fileEntry{path, at}, parse); s == nil || !s.Updated.Equal(at) {
+			t.Fatalf("write %d: %+v", i, s)
+		}
+	}
+	if parses != 3 || count() != 1 {
+		t.Errorf("parses = %d, entries = %d; want 3 and 1", parses, count())
+	}
+}
+
+// Once a desktop conversation is known to be a person's, later scans don't
+// parse it again however often it is written.
+func TestHumanSessionRemembered(t *testing.T) {
+	f := newFixture(t)
+	app := f.project("app")
+	id := uuid(40)
+	if (claude{}).HumanSession(id) {
+		t.Fatal("no file yet")
+	}
+	f.claudeSession(app, id, "hello", time.Minute, claudeOpts{entrypoint: "claude-desktop"})
+	if !(claude{}).HumanSession(id) {
+		t.Fatal("a person's session")
+	}
+	os.Remove(filepath.Join(claudeProjectDir(app), id+".jsonl"))
+	if !(claude{}).HumanSession(id) {
+		t.Error("not remembered")
+	}
+	f.claudeSession(app, uuid(41), "Review bundle", time.Minute, claudeOpts{entrypoint: "claude-desktop", turnOrigin: "sdk"})
+	if (claude{}).HumanSession(uuid(41)) {
+		t.Error("a workflow's session")
+	}
+}
+
+func TestCodexThreadNamesReadOnChange(t *testing.T) {
+	f := newFixture(t)
+	index := filepath.Join(f.home, ".codex", "session_index.jsonl")
+	if n := codexThreadNames(); len(n) != 0 {
+		t.Fatalf("no index: %v", n)
+	}
+	t0 := time.Now().Add(-time.Hour)
+	f.write(index, []any{map[string]any{"id": "t-1", "thread_name": "one"}}, t0)
+	first := codexThreadNames()
+	if first["t-1"] != "one" {
+		t.Fatalf("names = %v", first)
+	}
+	if again := codexThreadNames(); fmt.Sprintf("%p", again) != fmt.Sprintf("%p", first) {
+		t.Error("read again though unchanged")
+	}
+	f.write(index, []any{map[string]any{"id": "t-1", "thread_name": "renamed"}}, t0.Add(time.Second))
+	if n := codexThreadNames(); n["t-1"] != "renamed" {
+		t.Errorf("change not picked up: %v", n)
+	}
+}

@@ -30,7 +30,7 @@ const MaxSessions = 40
 
 var (
 	reminderRe   = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
-	sessionCache sync.Map // path@mtime → *Session (nil for skipped files)
+	sessionCache sync.Map // path → cachedFile
 )
 
 // ProjectSessions lists resumable sessions of kind for a project root,
@@ -56,16 +56,25 @@ type fileEntry struct {
 	t    time.Time
 }
 
+// cachedFile is a session file as parsed at one mtime; s is nil for files
+// that aren't a person's session.
+type cachedFile struct {
+	t time.Time
+	s *Session
+}
+
+// cachedSession parses f unless it was parsed at the same mtime. One entry
+// per file: a file being written replaces its own entry. The Session is
+// shared; callers copy it before changing it.
 func cachedSession(f fileEntry, parse func(string) *Session) *Session {
-	key := f.path + "@" + f.t.String()
-	if v, ok := sessionCache.Load(key); ok {
-		return v.(*Session)
+	if v, ok := sessionCache.Load(f.path); ok && v.(cachedFile).t.Equal(f.t) {
+		return v.(cachedFile).s
 	}
 	s := parse(f.path)
 	if s != nil {
 		s.Updated = f.t
 	}
-	sessionCache.Store(key, s)
+	sessionCache.Store(f.path, cachedFile{f.t, s})
 	return s
 }
 

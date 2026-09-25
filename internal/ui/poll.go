@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -188,10 +189,16 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		return nil
 	}
 	m.reloadConfig()
-	// Pick up `mad add` and other writers.
+	// Pick up `mad add` and other writers. A file edited into something
+	// that doesn't parse is left alone until fixed; the fixed file wins
+	// over what changed here meanwhile.
 	if mod := state.ModTime(); mod.After(m.stMod) {
-		if st, err := state.Load(); err == nil {
-			m.st, m.stMod = st, mod
+		m.stMod = mod
+		if st, err := state.Load(); err != nil {
+			m.stErr = err
+			m.configError(fmt.Errorf("%w; changes aren't saved until it's fixed", err))
+		} else {
+			m.st, m.stErr = st, nil
 			m.rebuildRows()
 		}
 	}
