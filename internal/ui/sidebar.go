@@ -20,6 +20,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
@@ -42,6 +43,7 @@ type (
 		screens map[string]string
 		hooks   map[string]*status.Hook
 		watched bool // someone is looking at the deck (tmux.Watched)
+		epoch   int  // model.epoch when the poll started
 		err     error
 	}
 	// externalsMsg carries a scan for sessions outside the deck. It runs
@@ -51,7 +53,9 @@ type (
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
-	doneMsg         struct {
+	// pokeMsg is a command from another mad process (poke.Poll/Jump).
+	pokeMsg string
+	doneMsg struct {
 		err      error
 		selectID string // agent id to put the cursor on
 	}
@@ -88,6 +92,10 @@ type model struct {
 	stageID  string
 	focused  bool
 	polling  bool
+	// epoch counts actions started and finished. A poll that began in
+	// another epoch may predate a swap: it is dropped and redone, or the
+	// cursor would jump back to the old stage for a moment.
+	epoch    int
 	scanning bool
 
 	rows   []row
@@ -135,7 +143,12 @@ func Run() error {
 			os.Exit(1)
 		}
 	}()
-	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithoutCatchPanics()).Run()
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithoutCatchPanics())
+	// Without the socket everything still works, just a poll behind.
+	if l, err := poke.Listen(func(cmd string) { p.Send(pokeMsg(cmd)) }); err == nil {
+		defer l.Close()
+	}
+	_, err = p.Run()
 	return err
 }
 
@@ -189,16 +202,31 @@ func (m *model) pollCmd() tea.Cmd {
 	for _, a := range m.st.OrderedAgents() {
 		ids = append(ids, a.ID)
 	}
+	epoch := m.epoch
 	return func() tea.Msg {
 		panes, err := tmux.ListPanes()
 		if err != nil {
-			return pollMsg{err: err}
+			return pollMsg{err: err, epoch: epoch}
 		}
 		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, watched: tmux.Watched()}
+		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{},
+			watched: tmux.Watched(), epoch: epoch}
+		// One tmux call for every screen: a call per agent costs a few ms
+		// each and adds up to the whole poll interval with many agents.
+		byPane := map[string]string{}
+		var paneIDs []string
 		for _, p := range panes {
 			if tmux.IsAgentID(p.MadID) && !p.Dead {
-				msg.screens[p.MadID] = tmux.Capture(p.ID)
+				byPane[p.ID] = p.MadID
+				paneIDs = append(paneIDs, p.ID)
+			}
+		}
+		screens, err := tmux.CaptureAll(paneIDs)
+		for _, pid := range paneIDs {
+			if err != nil { // a pane went away mid-poll
+				msg.screens[byPane[pid]] = tmux.Capture(pid)
+			} else {
+				msg.screens[byPane[pid]] = screens[pid]
 			}
 		}
 		for _, id := range ids {
@@ -234,11 +262,26 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
+		if msg.epoch != m.epoch {
+			return m, m.pollCmd() // began before an action finished: stale
+		}
 		return m, m.notifyCmd(m.applyPoll(msg, time.Now()))
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
+	case pokeMsg:
+		switch string(msg) {
+		case poke.Jump:
+			return m, m.jumpNext()
+		case poke.Poll: // the stage was swapped from outside (mad switch)
+			m.epoch++
+			if !m.polling {
+				return m, m.pollCmd()
+			}
+		}
+		return m, nil
 	case doneMsg:
+		m.epoch++
 		if msg.err != nil {
 			m.setFlash(msg.err.Error())
 		}
@@ -246,7 +289,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectAgent(msg.selectID)
 		}
 		if m.polling {
-			return m, nil
+			return m, nil // the poll in flight is stale now and redoes itself
 		}
 		return m, m.pollCmd()
 	case historyMsg:
@@ -588,13 +631,16 @@ func (m *model) setFlash(s string) {
 
 // ---- actions (tmux work runs off the UI goroutine) ----
 
-func action(selectID string, f func() error) tea.Cmd {
+// action runs tmux work off the UI goroutine; polls started before it
+// finishes are discarded (see epoch).
+func (m *model) action(selectID string, f func() error) tea.Cmd {
+	m.epoch++
 	return func() tea.Msg { return doneMsg{err: f(), selectID: selectID} }
 }
 
 func (m *model) openCmd(a *state.Agent) tea.Cmd {
 	st, kinds, id := m.st.Clone(), m.kinds, a.ID
-	return action("", func() error { return deck.OpenAgent(st, id, kinds) })
+	return m.action("", func() error { return deck.OpenAgent(st, id, kinds) })
 }
 
 func (m *model) activate(r row) tea.Cmd {
@@ -645,7 +691,7 @@ func (m *model) launch(p *state.Project, a *state.Agent, resume bool, before fun
 	m.rebuildRows()
 	m.selectAgent(a.ID)
 	pc, ac, kinds := *p, *a, m.kinds
-	return action(a.ID, func() error {
+	return m.action(a.ID, func() error {
 		if before != nil {
 			if err := before(); err != nil {
 				return err
@@ -661,7 +707,7 @@ func (m *model) launch(p *state.Project, a *state.Agent, resume bool, before fun
 func (m *model) restart(p *state.Project, a *state.Agent) tea.Cmd {
 	pane, ok := m.panes[a.ID]
 	pc, ac, kinds := *p, *a, m.kinds
-	return action(a.ID, func() error {
+	return m.action(a.ID, func() error {
 		var err error
 		if ok {
 			err = deck.RestartAgent(&pc, &ac, pane.ID, kinds)
@@ -683,7 +729,7 @@ func (m *model) removeAgents(ids ...string) tea.Cmd {
 	}
 	m.save()
 	m.rebuildRows()
-	return action("", func() error {
+	return m.action("", func() error {
 		for _, id := range ids {
 			if err := deck.KillAgent(id); err != nil {
 				return err
@@ -711,11 +757,11 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return m.activate(r)
 		}
 	case "<", "-":
-		return action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-L", "2") })
+		return m.action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-L", "2") })
 	case ">", "=", "+":
-		return action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-R", "2") })
+		return m.action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-R", "2") })
 	case "tab":
-		return action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
+		return m.action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		n := int(k.String()[0] - '0')
 		if agents := m.st.OrderedAgents(); n <= len(agents) {
@@ -761,7 +807,7 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return cmd
 		})
 	case "q", "ctrl+c":
-		return action("", func() error { return tmux.Run("detach-client") })
+		return m.action("", func() error { return tmux.Run("detach-client") })
 	}
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
@@ -293,7 +294,11 @@ func Switch(arg string) error {
 	if !ok {
 		return nil
 	}
-	return OpenAgent(st, agents[i].ID, agent.Load())
+	if err := OpenAgent(st, agents[i].ID, agent.Load()); err != nil {
+		return err
+	}
+	_ = poke.Send(poke.Poll) // so the sidebar shows it now, not a poll later
+	return nil
 }
 
 // WriteConfigs writes the tmux config and the claude hook settings.
@@ -329,7 +334,7 @@ set -g pane-active-border-style "fg=colour75"
 	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" "select-pane -t %s" "select-pane -t %s"`, tmux.StagePane, tmux.SidebarPane)
 	fmt.Fprintf(&b, "bind -n M-s %s\nbind s %s\n", toggle, toggle)
 	// The sidebar knows which agents need you; let it pick the next one.
-	fmt.Fprintf(&b, "bind -n M-n send-keys -t %s d\n", tmux.SidebarPane)
+	fmt.Fprintf(&b, "bind -n M-n run-shell -b %s\n", tmuxQuote(SelfCommand("jump")))
 	run := func(key, arg string) {
 		fmt.Fprintf(&b, "bind %s run-shell -b %s\n", key, tmuxQuote(SelfCommand("switch "+arg)))
 	}

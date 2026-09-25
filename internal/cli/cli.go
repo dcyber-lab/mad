@@ -14,6 +14,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -27,6 +28,7 @@ usage:
   mad add [path]      add a project (default: current directory)
   mad switch N|next|prev
                       show agent N (1-based, sidebar order) in the stage
+  mad jump            show the next agent that is waiting or done
   mad scan [path]     show what sync sees: history, open sessions, and
                       the sessions of one project
   mad kill-server     stop the deck and every agent in it
@@ -65,6 +67,8 @@ func Run(args []string, stdio IO) int {
 		} else {
 			err = deck.Switch(args[0])
 		}
+	case "jump":
+		err = poke.Send(poke.Jump)
 	case "scan":
 		scan(args, stdio.Out)
 	case "fit":

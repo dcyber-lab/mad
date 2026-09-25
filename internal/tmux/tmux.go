@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
 )
@@ -208,4 +209,49 @@ func versionAtLeast(v string, major, minor int) bool {
 		return false
 	}
 	return ma > major || ma == major && mi >= minor
+}
+
+// CaptureAll returns the visible text of several panes, keyed by pane id,
+// with one tmux call instead of one per pane: a marker line printed before
+// each capture splits the output. If any pane is gone tmux stops at it, so
+// callers fall back to Capture on error.
+func CaptureAll(paneIDs []string) (map[string]string, error) {
+	screens := map[string]string{}
+	if len(paneIDs) == 0 {
+		return screens, nil
+	}
+	marker := fmt.Sprintf("mad-capture-%d-%d ", os.Getpid(), time.Now().UnixNano())
+	var args []string
+	for _, id := range paneIDs {
+		if len(args) > 0 {
+			args = append(args, ";")
+		}
+		args = append(args, "display-message", "-p", "-t", id, marker+"#{pane_id}", ";", "capture-pane", "-p", "-t", id)
+	}
+	out, err := Out(args...)
+	if err != nil {
+		return nil, err
+	}
+	var cur string
+	var b strings.Builder
+	flush := func() {
+		if cur != "" {
+			screens[cur] = strings.TrimRight(b.String(), "\n")
+		}
+		b.Reset()
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if id, ok := strings.CutPrefix(line, marker); ok {
+			flush()
+			cur = id
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	flush()
+	if len(screens) != len(paneIDs) {
+		return nil, fmt.Errorf("tmux: captured %d of %d panes", len(screens), len(paneIDs))
+	}
+	return screens, nil
 }

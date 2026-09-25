@@ -43,6 +43,7 @@ with dependencies pointing downwards in this list:
 | `internal/discover`  | Claude/Codex history, sessions, processes outside the deck       |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |
 | `internal/notify`    | Desktop notifications and the user's notify command              |
+| `internal/poke`      | Socket for other mad processes to reach the sidebar              |
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
 | `internal/state`     | Persistent project/agent tree                                    |
@@ -65,6 +66,19 @@ go test -race ./...    # what CI runs
   stubs `ps`/`lsof` through package variables.
 - `internal/ui` drives the Bubble Tea model with messages only; the commands
   it returns (tmux work) are not executed.
+
+### Performance
+
+The sidebar polls every agent twice a second, so anything per agent per
+poll adds up. Benchmarks cover the poll against a live tmux server, status
+updates, rendering and switching, at up to 200 agents:
+
+```sh
+go test -run '^$' -bench . -benchtime 20x ./internal/ui
+```
+
+A poll with 50 busy agents takes about 17ms (one tmux call captures every
+screen); keep it far below the 500ms interval.
 
 ## Pull requests
 

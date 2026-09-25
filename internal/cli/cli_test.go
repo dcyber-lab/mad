@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
@@ -73,6 +74,38 @@ func TestSwitchUsage(t *testing.T) {
 	code, _, errOut := run(t, "", "switch")
 	if code != 1 || !strings.Contains(errOut, "usage: mad switch") {
 		t.Errorf("code=%d err=%q", code, errOut)
+	}
+}
+
+func TestJump(t *testing.T) {
+	isolate(t)
+	code, _, errOut := run(t, "", "jump")
+	if code != 1 || !strings.Contains(errOut, "sidebar is not running") {
+		t.Errorf("no deck: code=%d err=%q", code, errOut)
+	}
+
+	short, err := os.MkdirTemp("", "mad") // socket paths are length-limited
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(short)
+	t.Setenv("XDG_STATE_HOME", short)
+	got := make(chan string, 1)
+	l, err := poke.Listen(func(cmd string) { got <- cmd })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if code, _, errOut := run(t, "", "jump"); code != 0 {
+		t.Fatalf("code=%d err=%q", code, errOut)
+	}
+	select {
+	case cmd := <-got:
+		if cmd != poke.Jump {
+			t.Errorf("sidebar got %q", cmd)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("sidebar got nothing")
 	}
 }
 
