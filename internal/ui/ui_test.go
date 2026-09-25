@@ -18,6 +18,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/notify"
+	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -1355,5 +1356,67 @@ func TestReloadConfig(t *testing.T) {
 	m.reloadConfig()
 	if n := len(m.kinds); n != len(agent.Builtin())+1 || !strings.HasPrefix(m.flash, "agents.json:") {
 		t.Errorf("broken agents.json: %d kinds, flash = %q", n, m.flash)
+	}
+}
+
+// A state file edited into bad JSON while the sidebar runs is reported and
+// not saved over; once fixed, the file wins.
+func TestBrokenStateNotSavedOver(t *testing.T) {
+	proj := t.TempDir()
+	m, st := setup(t, proj)
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.stMod = state.ModTime()
+	path := paths.StateFile()
+	later := func(d time.Duration) {
+		at := time.Now().Add(d)
+		os.Chtimes(path, at, at)
+	}
+
+	os.WriteFile(path, []byte("{\n  \"projects\": [,\n}"), 0o644)
+	later(time.Second)
+	m.applyPoll(pollMsg{}, time.Now())
+	if m.stErr == nil || !strings.HasPrefix(m.flash, "state.json:2:") || len(m.st.Projects) != 1 {
+		t.Fatalf("stErr = %v, flash = %q, projects = %d", m.stErr, m.flash, len(m.st.Projects))
+	}
+	m.save()
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "[,") {
+		t.Errorf("broken file saved over: %s", data)
+	}
+
+	os.WriteFile(path, []byte(`{"projects": []}`), 0o644)
+	later(2 * time.Second)
+	m.applyPoll(pollMsg{}, time.Now())
+	if m.stErr != nil || len(m.st.Projects) != 0 {
+		t.Errorf("fixed file: stErr = %v, projects = %d", m.stErr, len(m.st.Projects))
+	}
+}
+
+// With no state to start from, the sidebar says why in its pane and waits
+// for the file to change.
+func TestWaitForState(t *testing.T) {
+	setup(t)
+	path := paths.StateFile()
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte("{nope"), 0o644)
+	_, err := state.Load()
+	var out strings.Builder
+	done := make(chan struct{})
+	go func() { waitForState(&out, err, 5*time.Millisecond); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("returned before the file changed")
+	case <-time.After(50 * time.Millisecond):
+	}
+	at := time.Now().Add(time.Second)
+	os.Chtimes(path, at, at)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("still waiting after the file changed")
+	}
+	if !strings.Contains(out.String(), "state.json:1:") || !strings.Contains(out.String(), "comes back") {
+		t.Errorf("pane shows %q", out.String())
 	}
 }

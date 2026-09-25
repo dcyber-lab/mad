@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -450,9 +451,17 @@ func (claude) RecentSessions(cwd string) []string {
 	return ids
 }
 
+// claudeHumans remembers sessions found to be a person's: what makes one
+// so is at its head and doesn't change as the conversation goes on, while
+// its mtime does at every message.
+var claudeHumans sync.Map // session id → true
+
 func (claude) HumanSession(id string) bool {
 	if id == "" {
 		return false
+	}
+	if _, ok := claudeHumans.Load(id); ok {
+		return true
 	}
 	matches, _ := filepath.Glob(filepath.Join(claudeProjectsDir(), "*", id+".jsonl"))
 	if len(matches) == 0 {
@@ -462,5 +471,9 @@ func (claude) HumanSession(id string) bool {
 	if err != nil {
 		return false
 	}
-	return cachedSession(fileEntry{matches[0], info.ModTime()}, parseClaudeSession) != nil
+	if cachedSession(fileEntry{matches[0], info.ModTime()}, parseClaudeSession) == nil {
+		return false // maybe not yet: a new conversation has no message
+	}
+	claudeHumans.Store(id, true)
+	return true
 }

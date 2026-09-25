@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -57,8 +58,8 @@ func TestLoadCorrupt(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(); err == nil {
-		t.Error("want a parse error")
+	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), "state.json:1:") {
+		t.Errorf("want a parse error naming the line, got %v", err)
 	}
 }
 
