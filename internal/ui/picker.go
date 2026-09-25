@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,7 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -255,9 +254,9 @@ func (m *model) mousePicker(ev tea.MouseMsg) tea.Cmd {
 
 func (m *model) pickerView() string {
 	var b strings.Builder
-	b.WriteString(stHeader.Render(" add project") + stDim.Render("  esc cancel") + "\n")
+	b.WriteString(layout(m.width, nil, []seg{{stHeader, " add project"}}, []seg{{stFaint, "esc "}}) + "\n")
 	b.WriteString(" " + m.input.View() + "\n")
-	b.WriteString(stDim.Render(strings.Repeat("─", m.width)) + "\n")
+	b.WriteString(rule(m.width) + "\n")
 
 	h := m.pickerListHeight()
 	lines := 0
@@ -275,17 +274,20 @@ func (m *model) pickerView() string {
 		if it.isDir {
 			name += "/"
 		}
-		mark := " "
+		mark := seg{stPlain, " "}
 		if it.running {
-			mark = stDone.Render("●")
+			mark = seg{stDone, "●"}
 		}
-		meta := it.meta
-		left := fmt.Sprintf(" %s %s", mark, textutil.Truncate(name, m.width-5-len(meta)))
-		line := textutil.PadRight(left, m.width-len(meta)-1) + stDim.Render(meta)
+		var bg lipgloss.TerminalColor
 		if i == m.pk.cursor {
-			line = stCursor.Render(textutil.PadRight(ansi.Strip(line), m.width))
+			bg = cSelOn
 		}
-		b.WriteString(line + "\n")
+		left := []seg{{stPlain, " "}, mark, {stPlain, " "}, {stName, name}}
+		var right []seg
+		if it.meta != "" {
+			right = []seg{{stFaint, it.meta + " "}}
+		}
+		b.WriteString(layout(m.width, bg, left, right) + "\n")
 		lines++
 	}
 	for ; lines < h; lines++ {
@@ -301,6 +303,6 @@ func (m *model) pickerView() string {
 		}
 	}
 	b.WriteString(stDim.Render(" "+textutil.Truncate(sel, m.width-2)) + "\n")
-	b.WriteString(stDim.Render(" ⏎ add  tab browse  ● running"))
+	b.WriteString(hints("⏎", "add", "tab", "browse") + "  " + stDone.Render("●") + stDim.Render(" running"))
 	return b.String()
 }

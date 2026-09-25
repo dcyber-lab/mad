@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -139,33 +139,33 @@ func (m *model) pickSession(i int) tea.Cmd {
 
 func (m *model) sessionsView() string {
 	var b strings.Builder
-	b.WriteString(stHeader.Render(" "+m.sp.kind) + stDim.Render(" · "+m.sp.proj.Name+"  esc") + "\n")
+	b.WriteString(layout(m.width, nil, []seg{{stHeader, " " + m.sp.kind}, {stDim, " · " + m.sp.proj.Name}}, []seg{{stFaint, "esc "}}) + "\n")
 	b.WriteString(stDim.Render(" new, or continue a session") + "\n")
-	b.WriteString(stDim.Render(strings.Repeat("─", m.width)) + "\n")
+	b.WriteString(rule(m.width) + "\n")
 
 	live := m.liveSessions()
 	h := m.sessListHeight()
 	lines := 0
 	for i := m.sp.offset; i <= len(m.sp.items) && lines < h; i++ {
-		var line string
+		var left, right []seg
 		if i == 0 {
-			line = " ＋ new session"
+			left = []seg{{stPlain, " "}, {stKey, "＋"}, {stPlain, " "}, {stName, "new session"}}
 		} else {
 			s := m.sp.items[i-1]
-			mark := " "
+			mark := seg{stPlain, " "}
 			if _, ok := live[s.ID]; ok {
-				mark = stDone.Render("●")
+				mark = seg{stDone, "●"}
 			} else if s.Origin == "desktop" {
-				mark = stDim.Render("◇")
+				mark = seg{stDim, "◇"}
 			}
-			meta := textutil.Age(s.Updated)
-			left := fmt.Sprintf(" %s %s", mark, textutil.Truncate(s.Title, m.width-5-len(meta)))
-			line = textutil.PadRight(left, m.width-len(meta)-1) + stDim.Render(meta)
+			left = []seg{{stPlain, " "}, mark, {stPlain, " "}, {stName, s.Title}}
+			right = []seg{{stFaint, textutil.Age(s.Updated) + " "}}
 		}
+		var bg lipgloss.TerminalColor
 		if i == m.sp.cursor {
-			line = stCursor.Render(textutil.PadRight(ansi.Strip(line), m.width))
+			bg = cSelOn
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(layout(m.width, bg, left, right) + "\n")
 		lines++
 	}
 	if m.sp.loading && lines < h {
@@ -188,6 +188,6 @@ func (m *model) sessionsView() string {
 		info += " · " + paths.Short(s.Cwd)
 	}
 	b.WriteString(stDim.Render(" "+textutil.Truncate(info, m.width-2)) + "\n")
-	b.WriteString(stDim.Render(" ● open now  ◇ desktop"))
+	b.WriteString(" " + stDone.Render("●") + stDim.Render(" open now  ") + stDim.Render("◇ desktop"))
 	return b.String()
 }

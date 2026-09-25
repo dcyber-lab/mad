@@ -34,19 +34,6 @@ const (
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-var (
-	stHeader   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
-	stProject  = lipgloss.NewStyle().Bold(true)
-	stDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
-	stCursor   = lipgloss.NewStyle().Background(lipgloss.Color("24")).Foreground(lipgloss.Color("255")).Bold(true)
-	stCursorBg = lipgloss.NewStyle().Background(lipgloss.Color("235"))
-	stRunning  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	stWaiting  = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
-	stDone     = lipgloss.NewStyle().Foreground(lipgloss.Color("78"))
-	stStage    = lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Bold(true)
-	stFlash    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-)
-
 type (
 	tickMsg time.Time
 	pollMsg struct {
@@ -102,8 +89,9 @@ type model struct {
 	scanning bool
 
 	rows   []row
+	lineOf []int // screen line of each row: projects after the first get a blank line above
 	cursor int
-	offset int
+	offset int // first visible screen line
 	width  int
 	height int
 	frame  int
@@ -425,6 +413,15 @@ func (m *model) rebuildRows() {
 			}
 		}
 	}
+	m.lineOf = m.lineOf[:0]
+	line := 0
+	for i, r := range m.rows {
+		if i > 0 && r.isProject() {
+			line++
+		}
+		m.lineOf = append(m.lineOf, line)
+		line++
+	}
 	if m.cursor >= len(m.rows) {
 		m.cursor = len(m.rows) - 1
 	}
@@ -432,6 +429,17 @@ func (m *model) rebuildRows() {
 		m.cursor = 0
 	}
 	m.clampScroll()
+}
+
+// rowAt is the row drawn on list line y (0 = first list line), if any.
+func (m *model) rowAt(y int) (int, bool) {
+	line := y + m.offset
+	for i, l := range m.lineOf {
+		if l == line {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func (m *model) selectAgent(id string) {
@@ -452,7 +460,7 @@ func (m *model) selectAgent(id string) {
 func (m *model) listHeight() int {
 	footer := footerLines
 	if m.mode == modePickKind {
-		footer = len(m.kinds) + 1
+		footer = len(m.kinds) + 2 // rule, title, one line per kind
 	}
 	h := m.height - headerLines - footer
 	if h < 1 {
@@ -462,12 +470,16 @@ func (m *model) listHeight() int {
 }
 
 func (m *model) clampScroll() {
-	h := m.listHeight()
-	if m.cursor < m.offset {
-		m.offset = m.cursor
+	if m.cursor >= len(m.lineOf) {
+		m.offset = 0
+		return
 	}
-	if m.cursor >= m.offset+h {
-		m.offset = m.cursor - h + 1
+	h, line := m.listHeight(), m.lineOf[m.cursor]
+	if line < m.offset {
+		m.offset = line
+	}
+	if line >= m.offset+h {
+		m.offset = line - h + 1
 	}
 	if m.offset < 0 {
 		m.offset = 0
@@ -739,8 +751,7 @@ func (m *model) handleMouse(ev tea.MouseMsg) tea.Cmd {
 	case ev.Button == tea.MouseButtonWheelDown:
 		m.move(1)
 	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress:
-		i := ev.Y - headerLines + m.offset
-		if ev.Y >= headerLines && i < len(m.rows) {
+		if i, ok := m.rowAt(ev.Y - headerLines); ok && ev.Y >= headerLines {
 			m.cursor = i
 			return m.activate(m.rows[i])
 		}
@@ -774,27 +785,41 @@ func (m *model) View() string {
 
 func (m *model) sidebarView() string {
 	var b strings.Builder
-	b.WriteString(stHeader.Render(" ⧉ mad") + stDim.Render(fmt.Sprintf("  %d agents", len(m.st.OrderedAgents()))) + "\n\n")
+	b.WriteString(m.renderHeader() + "\n\n")
 
 	h := m.listHeight()
 	lines := 0
 	if len(m.rows) == 0 {
-		b.WriteString(stDim.Render(" no projects — press a") + "\n")
+		b.WriteString(stDim.Render(" no projects yet") + "\n")
 		lines++
+		if lines < h {
+			b.WriteString(hints("a", "add one") + "\n")
+			lines++
+		}
 	}
-	for i := m.offset; i < len(m.rows) && lines < h; i++ {
-		line := m.renderRow(m.rows[i])
+	next := m.offset // next screen line to draw
+	for i := 0; i < len(m.rows) && lines < h; i++ {
+		l := m.lineOf[i]
+		if l < m.offset {
+			continue
+		}
+		for ; next < l && lines < h; next++ {
+			b.WriteString("\n") // gap between projects
+			lines++
+		}
+		if lines >= h {
+			break
+		}
+		var bg lipgloss.TerminalColor
 		if i == m.cursor {
-			// Inner styles reset the background, so the cursor row is
-			// rendered plain on a solid bar.
-			line = textutil.PadRight(ansi.Strip(line), m.width)
+			bg = cSelOff
 			if m.focused {
-				line = stCursor.Render(line)
-			} else {
-				line = stCursorBg.Render(line)
+				bg = cSelOn
 			}
 		}
-		b.WriteString(line + "\n")
+		left, right := m.rowSegs(m.rows[i])
+		b.WriteString(layout(m.width, bg, left, right) + "\n")
+		next++
 		lines++
 	}
 	for ; lines < h; lines++ {
@@ -804,61 +829,107 @@ func (m *model) sidebarView() string {
 	return b.String()
 }
 
-func (m *model) renderRow(r row) string {
+// renderHeader is the brand plus what needs you: waiting, running and
+// finished-while-away counts, or the agent count when all is quiet.
+func (m *model) renderHeader() string {
+	var waiting, running, done int
+	agents := m.st.OrderedAgents()
+	for _, a := range agents {
+		if tr := m.trackers[a.ID]; tr != nil {
+			switch {
+			case tr.Status == status.Waiting:
+				waiting++
+			case tr.Status == status.Running:
+				running++
+			case tr.Status == status.Idle && tr.Attention:
+				done++
+			}
+		}
+	}
+	var right []seg
+	add := func(n int, st lipgloss.Style, icon string) {
+		if n > 0 {
+			right = append(right, seg{st, fmt.Sprintf("%s%d", icon, n)}, seg{stPlain, "  "})
+		}
+	}
+	add(waiting, stWaiting, "?")
+	add(running, stRunning, m.spin())
+	add(done, stDone, "●")
+	if len(right) > 0 {
+		right[len(right)-1].s = " "
+	} else {
+		n := fmt.Sprintf("%d agents ", len(agents))
+		if len(agents) == 1 {
+			n = "1 agent "
+		}
+		right = []seg{{stFaint, n}}
+	}
+	return layout(m.width, nil, []seg{{stHeader, " ⧉ mad"}}, right)
+}
+
+func (m *model) spin() string { return spinner[m.frame%len(spinner)] }
+
+// rowSegs lays out one row: the left part is cut to fit, the right part
+// (status, count, tty) is right-aligned and dropped when too narrow.
+func (m *model) rowSegs(r row) (left, right []seg) {
 	switch {
 	case r.ext != nil:
-		return fmt.Sprintf("    %s %s %s", stDim.Render("↗"), textutil.PadRight(r.ext.Kind, 11), stDim.Render(r.ext.TTY))
+		return []seg{{stPlain, "     "}, {stDim, "↗ "}, {stDim, r.ext.Kind}},
+			[]seg{{stFaint, r.ext.TTY + " "}}
 	case r.desktop > 0:
-		return stDim.Render(fmt.Sprintf("    ◇ %d in desktop", r.desktop))
+		return []seg{{stPlain, "     "}, {stDim, "◇ "}, {stDim, fmt.Sprintf("%d in desktop", r.desktop)}}, nil
 	case r.agent == nil:
-		arrow, extra := "▾", ""
+		arrow := "▾ "
+		right = []seg{{stFaint, fmt.Sprintf("%d ", len(r.proj.Agents))}}
 		if r.proj.Collapsed {
-			arrow, extra = "▸", m.projectSummary(r.proj)
+			arrow = "▸ "
+			if icon := m.projectSummary(r.proj); icon.s != "" {
+				right = append([]seg{icon, {stPlain, " "}}, right...)
+			}
 		}
-		return " " + arrow + " " + stProject.Render(textutil.Truncate(r.proj.Name, m.width-6)) + extra
+		if len(r.proj.Agents) == 0 {
+			right = nil
+		}
+		return []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}, right
 	}
 	a := r.agent
 	st, attention := status.Stopped, false
 	if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
 		st, attention = tr.Status, tr.Attention
 	}
-	mark := " "
+	bar, name := seg{stPlain, " "}, seg{stName, r.proj.DisplayName(a)}
 	if a.ID == m.stageID {
-		mark = stStage.Render("▶")
+		bar, name = seg{stStage, "▌"}, seg{stStage, name.s}
 	}
 	num := " "
 	if r.num <= 9 {
-		num = stDim.Render(fmt.Sprint(r.num))
+		num = fmt.Sprint(r.num)
 	}
 	icon, label := m.statusGlyph(st, attention)
-	name := textutil.PadRight(textutil.Truncate(r.proj.DisplayName(a), 11), 11)
-	return fmt.Sprintf("  %s%s %s %s %s", mark, num, icon, name, label)
+	return []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, name},
+		[]seg{label, {stPlain, " "}}
 }
 
-func (m *model) statusGlyph(s string, attention bool) (string, string) {
+func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
 	switch s {
 	case status.Running:
-		return stRunning.Render(spinner[m.frame%len(spinner)]), stRunning.Render("running")
+		return seg{stRunning, m.spin()}, seg{stRunning, "running"}
 	case status.Waiting:
-		return stWaiting.Render("?"), stWaiting.Render("waiting")
+		return seg{stWaiting, "?"}, seg{stWaiting, "waiting"}
 	case status.Idle:
 		if attention {
-			return stDone.Render("●"), stDone.Render("done")
+			return seg{stDone, "●"}, seg{stDone, "done"}
 		}
-		return stDim.Render("○"), stDim.Render("idle")
+		return seg{stDim, "○"}, seg{stFaint, "idle"}
 	case status.Exited:
-		return stDim.Render("✗"), stDim.Render("exited")
+		return seg{stDim, "✗"}, seg{stFaint, "exited"}
 	default:
-		return stDim.Render("·"), stDim.Render("stopped")
+		return seg{stFaint, "·"}, seg{stFaint, "stopped"}
 	}
 }
 
-// projectSummary is shown next to a collapsed project: agent count plus
-// the most urgent status inside it.
-func (m *model) projectSummary(p *state.Project) string {
-	if len(p.Agents) == 0 {
-		return ""
-	}
+// projectSummary is the most urgent status inside a collapsed project.
+func (m *model) projectSummary(p *state.Project) seg {
 	waiting, running, done := 0, 0, 0
 	for _, a := range p.Agents {
 		if tr := m.trackers[a.ID]; tr != nil {
@@ -872,16 +943,15 @@ func (m *model) projectSummary(p *state.Project) string {
 			}
 		}
 	}
-	s := stDim.Render(fmt.Sprintf(" (%d)", len(p.Agents)))
 	switch {
 	case waiting > 0:
-		s += " " + stWaiting.Render("?")
+		return seg{stWaiting, "?"}
 	case running > 0:
-		s += " " + stRunning.Render(spinner[m.frame%len(spinner)])
+		return seg{stRunning, m.spin()}
 	case done > 0:
-		s += " " + stDone.Render("●")
+		return seg{stDone, "●"}
 	}
-	return s
+	return seg{}
 }
 
 func (m *model) renderFooter() string {
@@ -892,22 +962,27 @@ func (m *model) renderFooter() string {
 	case modePickKind:
 		// The kind menu replaces the footer; it is short enough.
 		var b strings.Builder
-		b.WriteString(stDim.Render(" new agent (enter/esc)") + "\n")
+		title := "new agent"
+		if r, ok := m.current(); ok {
+			title += " · " + r.proj.Name
+		}
+		b.WriteString(rule(m.width) + "\n")
+		b.WriteString(layout(m.width, nil, []seg{{stHeader, " " + title}}, []seg{{stFaint, "esc "}}) + "\n")
 		for i, k := range m.kinds {
-			line := fmt.Sprintf("  %d %s", i+1, k.Name)
+			var bg lipgloss.TerminalColor
 			if i == m.kindCursor {
-				line = stCursor.Render(textutil.PadRight(line, m.width))
+				bg = cSelOn
 			}
-			b.WriteString(line + "\n")
+			b.WriteString(layout(m.width, bg, []seg{{stPlain, "  "}, {stKey, fmt.Sprint(i + 1)}, {stPlain, " "}, {stName, k.Name}}, nil) + "\n")
 		}
 		return strings.TrimRight(b.String(), "\n")
 	default:
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		} else {
-			l1 = stDim.Render(" ⏎ open  n new  a project")
+			l1 = hints("⏎", "open", "n", "new", "a", "project")
 		}
-		l2 = stDim.Render(" r resume  x kill  q detach")
+		l2 = hints("r", "resume", "x", "kill", "q", "detach")
 	}
-	return stDim.Render(strings.Repeat("─", m.width)) + "\n" + l1 + "\n" + l2
+	return rule(m.width) + "\n" + l1 + "\n" + l2
 }
