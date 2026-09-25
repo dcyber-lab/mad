@@ -328,6 +328,8 @@ set -g pane-active-border-style "fg=colour75"
 	fmt.Fprintf(&b, "bind -r < resize-pane -t %s -L 2\nbind -r > resize-pane -t %s -R 2\n", tmux.SidebarPane, tmux.SidebarPane)
 	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" "select-pane -t %s" "select-pane -t %s"`, tmux.StagePane, tmux.SidebarPane)
 	fmt.Fprintf(&b, "bind -n M-s %s\nbind s %s\n", toggle, toggle)
+	// The sidebar knows which agents need you; let it pick the next one.
+	fmt.Fprintf(&b, "bind -n M-n send-keys -t %s d\n", tmux.SidebarPane)
 	run := func(key, arg string) {
 		fmt.Fprintf(&b, "bind %s run-shell -b %s\n", key, tmuxQuote(SelfCommand("switch "+arg)))
 	}

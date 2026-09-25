@@ -38,6 +38,7 @@ func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log")
 func TmuxConf() string         { return filepath.Join(ConfigDir(), "tmux.conf") }
 func ClaudeSettings() string   { return filepath.Join(ConfigDir(), "claude-settings.json") }
 func AgentsConfig() string     { return filepath.Join(ConfigDir(), "agents.json") }
+func ConfigFile() string       { return filepath.Join(ConfigDir(), "config.json") }
 
 // Self is the absolute path of the running mad binary; tmux bindings and
 // agent hooks call back into it.

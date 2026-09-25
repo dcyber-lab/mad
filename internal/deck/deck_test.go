@@ -99,6 +99,7 @@ func TestTmuxConfigBindings(t *testing.T) {
 		"bind -n M-s ",
 		"bind -n M-1 run-shell -b ",
 		"bind -n M-j run-shell -b ",
+		"bind -n M-n send-keys -t main:0.0 d",
 		"bind -r < resize-pane -t main:0.0 -L 2",
 		"set-hook -g client-resized ",
 	} {

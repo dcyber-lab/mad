@@ -137,3 +137,36 @@ func TestErrorsIncludeStderr(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestWatched(t *testing.T) {
+	cases := []struct {
+		clients    string
+		focusKnown bool
+		want       bool
+	}{
+		{"", true, false}, // detached
+		{"", false, false},
+		{"xattached,focused,UTF-8", true, true},
+		{"xattached,UTF-8", true, false},                   // terminal lost focus
+		{"xattached,UTF-8\nxattached,focused", true, true}, // one of two looks
+		{"xattached,UTF-8", false, true},                   // old tmux: attached is enough
+		{"x", false, true},                                 // old tmux without client_flags
+	}
+	for _, c := range cases {
+		if got := watched(c.clients, c.focusKnown); got != c.want {
+			t.Errorf("watched(%q, %v) = %v", c.clients, c.focusKnown, got)
+		}
+	}
+}
+
+func TestVersionAtLeast(t *testing.T) {
+	cases := map[string]bool{
+		"tmux 3.4\n": true, "tmux 3.3a": true, "tmux 3.1c": false, "tmux 2.9": false,
+		"tmux next-3.5": true, "tmux openbsd-7.4": true, "tmux master": false, "": false,
+	}
+	for v, want := range cases {
+		if got := versionAtLeast(v, 3, 3); got != want {
+			t.Errorf("versionAtLeast(%q) = %v", v, got)
+		}
+	}
+}

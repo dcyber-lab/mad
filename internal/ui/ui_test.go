@@ -13,6 +13,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -479,5 +480,118 @@ func TestSidebarHeaderCounts(t *testing.T) {
 	top := strings.Split(m.View(), "\n")[0]
 	if !strings.Contains(top, "?1") || !strings.Contains(top, "●1") || strings.Contains(top, "agents") {
 		t.Errorf("header = %q", top)
+	}
+}
+
+func TestNotifyEvents(t *testing.T) {
+	m, st := setup(t, "/code/api")
+	m.notifyCfg = notify.Default()
+	bg := &state.Agent{ID: "bg", Kind: "claude"}
+	onStage := &state.Agent{ID: "st", Kind: "claude"}
+	st.Projects[0].Agents = []*state.Agent{bg, onStage}
+	m.rebuildRows()
+
+	t0 := time.Now()
+	poll := func(sec int, watched bool, hooks map[string]*status.Hook) []notify.Event {
+		now := t0.Add(time.Duration(sec) * time.Second)
+		for _, h := range hooks {
+			h.At = now
+		}
+		return m.applyPoll(pollMsg{
+			panes: []tmux.Pane{
+				{ID: "%1", MadID: "bg", Session: tmux.PoolSession, Index: -1},
+				{ID: "%2", MadID: "st", Session: tmux.MainSession, Index: 1},
+			},
+			hooks:   hooks,
+			watched: watched,
+		}, now)
+	}
+	hook := func(state string) *status.Hook { return &status.Hook{State: state} }
+	kinds := func(evs []notify.Event) string {
+		var out []string
+		for _, e := range evs {
+			out = append(out, e.Agent+" "+e.Kind)
+		}
+		return strings.Join(out, ",")
+	}
+	steps := []struct {
+		sec     int
+		watched bool
+		bg, st  string
+		want    string
+	}{
+		{0, true, status.Running, status.Running, ""},       // first sight: nothing to compare
+		{2, true, status.Idle, status.Running, ""},          // bg ran 2s: too short
+		{3, true, status.Running, status.Running, ""},       // bg starts again
+		{10, true, status.Idle, status.Idle, "claude done"}, // bg ran 7s; st is watched
+		{11, false, status.Waiting, status.Running, "claude waiting"},
+		{12, false, status.Running, status.Running, ""},
+		{13, false, status.Waiting, status.Running, ""},        // cooldown
+		{30, false, status.Idle, status.Idle, "claude#2 done"}, // nobody looking: st counts
+	}
+	for _, s := range steps {
+		got := kinds(poll(s.sec, s.watched, map[string]*status.Hook{"bg": hook(s.bg), "st": hook(s.st)}))
+		if got != s.want {
+			t.Errorf("t=%ds: events %q, want %q", s.sec, got, s.want)
+		}
+	}
+
+	// The hook's own words ride along with waiting.
+	m.notified = map[string]time.Time{}
+	poll(40, false, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
+	w := hook(status.Waiting)
+	w.Message = "Claude needs your permission to use Bash"
+	evs := poll(41, false, map[string]*status.Hook{"bg": w, "st": hook(status.Idle)})
+	if len(evs) != 1 || evs[0].Project != "api" || evs[0].Message != w.Message {
+		t.Errorf("waiting event = %+v", evs)
+	}
+
+	// Turned off in config.json.
+	m.notifyCfg = notify.Config{On: []string{}}
+	m.notified = map[string]time.Time{}
+	poll(50, false, map[string]*status.Hook{"bg": hook(status.Running), "st": hook(status.Idle)})
+	if evs := poll(60, false, map[string]*status.Hook{"bg": hook(status.Idle), "st": hook(status.Idle)}); len(evs) != 0 {
+		t.Errorf("notifications off, got %+v", evs)
+	}
+}
+
+func TestJumpNext(t *testing.T) {
+	m, st := setup(t, "/code/a", "/code/b")
+	a1, a2 := &state.Agent{ID: "a1", Kind: "claude"}, &state.Agent{ID: "a2", Kind: "codex"}
+	b1 := &state.Agent{ID: "b1", Kind: "claude"}
+	st.Projects[0].Agents = []*state.Agent{a1, a2}
+	st.Projects[1].Agents = []*state.Agent{b1}
+	st.Projects[1].Collapsed = true
+	m.rebuildRows()
+	set := func(id, s string, attention bool) { m.trackers[id] = &status.Tracker{Status: s, Attention: attention} }
+	set("a1", status.Waiting, false)
+	set("a2", status.Idle, false)
+	set("b1", status.Idle, true)
+	at := func() string {
+		if r, ok := m.current(); ok && r.agent != nil {
+			return r.agent.ID
+		}
+		return ""
+	}
+
+	press(m, "d") // from the first project row
+	if at() != "a1" {
+		t.Fatalf("first jump → %q", at())
+	}
+	set("a1", status.Idle, false) // answered on stage
+	press(m, "d")
+	if at() != "b1" || st.Projects[1].Collapsed {
+		t.Fatalf("second jump → %q (collapsed=%v)", at(), st.Projects[1].Collapsed)
+	}
+	set("b1", status.Idle, false)
+	set("a2", status.Idle, true)
+	press(m, "d") // wraps around to the top
+	if at() != "a2" {
+		t.Fatalf("wrap → %q", at())
+	}
+	set("a2", status.Idle, false)
+	press(m, "d")
+	if at() != "a2" || !strings.Contains(m.flash, "nothing") {
+		t.Errorf("nothing left: at %q, flash %q", at(), m.flash)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/dcyber-lab/mad/internal/paths"
 )
@@ -151,4 +152,60 @@ func Tag(paneID, madID string) error {
 func Capture(paneID string) string {
 	out, _ := Out("capture-pane", "-p", "-t", paneID)
 	return out
+}
+
+// Watched reports whether someone is looking at the deck: a client is
+// attached to the main session and its terminal has focus. tmux tracks focus
+// from 3.3 on; with an older tmux any attached client counts as looking.
+func Watched() bool {
+	out, err := Out("list-clients", "-t", MainSession, "-F", "x#{client_flags}")
+	if err != nil {
+		return false
+	}
+	return watched(out, tracksFocus())
+}
+
+func watched(clients string, focusKnown bool) bool {
+	for _, line := range strings.Split(clients, "\n") {
+		flags, ok := strings.CutPrefix(line, "x") // one line per client
+		if !ok {
+			continue
+		}
+		if !focusKnown {
+			return true
+		}
+		for _, f := range strings.Split(flags, ",") {
+			if f == "focused" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+var focusVersion struct {
+	sync.Once
+	ok bool
+}
+
+func tracksFocus() bool {
+	focusVersion.Do(func() {
+		out, err := exec.Command("tmux", "-V").Output()
+		focusVersion.ok = err == nil && versionAtLeast(string(out), 3, 3)
+	})
+	return focusVersion.ok
+}
+
+// versionAtLeast parses "tmux 3.3a" or "tmux next-3.5"; anything without a
+// version number counts as too old.
+func versionAtLeast(v string, major, minor int) bool {
+	i := strings.IndexAny(v, "0123456789")
+	if i < 0 {
+		return false
+	}
+	var ma, mi int
+	if n, _ := fmt.Sscanf(v[i:], "%d.%d", &ma, &mi); n < 2 {
+		return false
+	}
+	return ma > major || ma == major && mi >= minor
 }
