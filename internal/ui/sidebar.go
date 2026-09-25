@@ -27,7 +27,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
-	"github.com/dcyber-lab/mad/internal/usage"
+	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 // Status comes from events where there are any: agents' own hooks and
@@ -36,13 +36,13 @@ import (
 // status is read off the screen), and a full poll every few seconds
 // re-reads everything as a safety net for missed events.
 const (
-	pollInterval      = 500 * time.Millisecond
-	fullPollEvery     = 3 * time.Second
-	externalScanEvery = 5 * time.Second
-	gitScanEvery      = 5 * time.Second
-	usageScanEvery    = 5 * time.Second
-	headerLines       = 2
-	footerLines       = 4
+	pollInterval        = 500 * time.Millisecond
+	fullPollEvery       = 3 * time.Second
+	externalScanEvery   = 5 * time.Second
+	gitScanEvery        = 5 * time.Second
+	transcriptScanEvery = 5 * time.Second
+	headerLines         = 2
+	footerLines         = 4
 )
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -67,8 +67,8 @@ type (
 	externalsMsg []discover.External
 	// gitMsg is a scan of every project and worktree: dir → checkout info.
 	gitMsg map[string]git.Info
-	// usageMsg is a read of every agent's transcript: agent id → tokens.
-	usageMsg map[string]usage.Totals
+	// transcriptMsg is a read of every agent's transcript: agent id → what it says.
+	transcriptMsg map[string]transcript.Info
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
@@ -91,6 +91,7 @@ const (
 	modePickSession
 	modeConfirm
 	modeWorktree // naming the branch for a new worktree
+	modeRename   // naming an agent
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
@@ -146,19 +147,20 @@ type model struct {
 	externals []discover.External
 	lastScan  time.Time
 
-	gitInfo       map[string]git.Info // dir → branch and changes
-	gitScanning   bool
-	gitDue        bool // scan at the next tick: an agent finished or panes changed
-	lastGit       time.Time
-	usage         map[string]usage.Totals // agent id → tokens its session consumed
-	usageReader   *usage.Reader           // only the usage command touches it
-	usageScanning bool
-	usageDue      bool // read at the next tick: a turn ended
-	lastUsage     time.Time
-	diffFor       string // agent the diff view was opened for ("" for a project)
-	diffCfg       deck.DiffConfig
-	wt            *state.Project // project a worktree is being named for
-	wtBranch      string         // branch chosen; the kind menu comes next
+	gitInfo     map[string]git.Info // dir → branch and changes
+	gitScanning bool
+	gitDue      bool // scan at the next tick: an agent finished or panes changed
+	lastGit     time.Time
+	transcripts map[string]transcript.Info // agent id → what its transcript says
+	reader      *transcript.Reader         // only the read command touches it
+	reading     bool
+	readDue     bool // read at the next tick: a turn ended
+	lastRead    time.Time
+	diffFor     string // agent the diff view was opened for ("" for a project)
+	diffCfg     deck.DiffConfig
+	wt          *state.Project // project a worktree is being named for
+	wtBranch    string         // branch chosen; the kind menu comes next
+	renameID    string         // agent being named
 
 	notifyCfg notify.Config
 	notifyMod time.Time            // config.json mtime notifyCfg was read at
@@ -209,8 +211,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		notifyMod:   notify.ModTime(),
 		diffCfg:     deck.LoadDiffConfig(),
 		gitInfo:     map[string]git.Info{},
-		usage:       map[string]usage.Totals{},
-		usageReader: usage.NewReader(),
+		transcripts: map[string]transcript.Info{},
+		reader:      transcript.NewReader(),
 		runSince:    map[string]time.Time{},
 		notified:    map[string]time.Time{},
 	}
@@ -219,7 +221,7 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.usageCmd(), tick())
+	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.readCmd(), tick())
 }
 
 // gitStatus, addWorktree and validBranch are replaceable in tests.
@@ -250,23 +252,23 @@ func (m *model) gitCmd() tea.Cmd {
 	}
 }
 
-// usageCmd brings every agent's token count up to date from its
-// transcript. The reader keeps where each file was left off, so only what
+// readCmd brings what is known of every agent's session up to date from
+// its transcript. The reader keeps where each file was left off, so only what
 // an agent wrote since the last read is parsed.
-func (m *model) usageCmd() tea.Cmd {
-	m.usageScanning, m.usageDue, m.lastUsage = true, false, time.Now()
-	var agents []usage.Agent
+func (m *model) readCmd() tea.Cmd {
+	m.reading, m.readDue, m.lastRead = true, false, time.Now()
+	var agents []transcript.Agent
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
 			sid := a.SessionID
 			if sid == "" {
 				sid = a.ID
 			}
-			agents = append(agents, usage.Agent{ID: a.ID, Kind: a.Kind, Dir: p.Dir(a), Session: sid})
+			agents = append(agents, transcript.Agent{ID: a.ID, Kind: a.Kind, Dir: p.Dir(a), Session: sid})
 		}
 	}
-	r := m.usageReader
-	return func() tea.Msg { return usageMsg(r.Read(agents)) }
+	r := m.reader
+	return func() tea.Msg { return transcriptMsg(r.Read(agents)) }
 }
 
 func tick() tea.Cmd {
@@ -405,8 +407,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.gitScanning && (m.gitDue || time.Since(m.lastGit) > gitScanEvery) {
 			cmds = append(cmds, m.gitCmd())
 		}
-		if !m.usageScanning && (m.usageDue || time.Since(m.lastUsage) > usageScanEvery) {
-			cmds = append(cmds, m.usageCmd())
+		if !m.reading && (m.readDue || time.Since(m.lastRead) > transcriptScanEvery) {
+			cmds = append(cmds, m.readCmd())
 		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
@@ -420,8 +422,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case gitMsg:
 		m.gitScanning, m.gitInfo = false, msg
-	case usageMsg:
-		m.usageScanning, m.usage = false, msg
+	case transcriptMsg:
+		m.reading, m.transcripts = false, msg
 	case screensMsg:
 		m.polling = false
 		if msg.err != nil {
@@ -465,7 +467,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.selectID != "" {
 			m.selectAgent(msg.selectID)
 		}
-		m.gitDue, m.usageDue = true, true
+		m.gitDue, m.readDue = true, true
 		return m, m.pollNow()
 	case historyMsg:
 		m.pk.history, m.pk.loading = msg, false
@@ -496,6 +498,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyConfirm(msg)
 		case modeWorktree:
 			return m, m.keyWorktree(msg)
+		case modeRename:
+			return m, m.keyRename(msg)
 		default:
 			// Fast typing arrives as one multi-rune key; handle each rune.
 			if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 {
@@ -508,7 +512,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyNormal(msg)
 		}
 	}
-	if m.mode == modeAddProject || m.mode == modeWorktree {
+	if m.mode == modeAddProject || m.mode == modeWorktree || m.mode == modeRename {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -582,7 +586,7 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			prev := tr.Status
 			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], a.ID == m.stageID, now)
 			if prev == status.Running && tr.Status != status.Running {
-				m.gitDue, m.usageDue = true, true // a turn ended: its changes and cost are worth showing now
+				m.gitDue, m.readDue = true, true // a turn ended: its changes and cost are worth showing now
 			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
 				alerts = append(alerts, alert{e, a.ID == m.stageID})
@@ -735,7 +739,7 @@ func (m *model) rebuildRows() {
 			line++
 		}
 		m.lineOf = append(m.lineOf, line)
-		line++
+		line += m.rowHeight(r)
 	}
 	if m.cursor >= len(m.rows) {
 		m.cursor = len(m.rows) - 1
@@ -746,11 +750,20 @@ func (m *model) rebuildRows() {
 	m.clampScroll()
 }
 
+// rowHeight is how many screen lines a row takes: an agent whose
+// transcript is followed gets a second line for what it is on.
+func (m *model) rowHeight(r row) int {
+	if r.agent != nil && !m.st.Compact && transcript.Followed(r.agent.Kind) {
+		return 2
+	}
+	return 1
+}
+
 // rowAt is the row drawn on list line y (0 = first list line), if any.
 func (m *model) rowAt(y int) (int, bool) {
 	line := y + m.offset
 	for i, l := range m.lineOf {
-		if l == line {
+		if line >= l && line < l+m.rowHeight(m.rows[i]) {
 			return i, true
 		}
 	}
@@ -777,7 +790,7 @@ func (m *model) listHeight() int {
 	switch m.mode {
 	case modePickKind:
 		footer = len(m.kinds) + 2 // rule, title, one line per kind
-	case modeWorktree:
+	case modeWorktree, modeRename:
 		footer = 3 // rule, title, input
 	}
 	h := m.height - headerLines - footer
@@ -793,11 +806,11 @@ func (m *model) clampScroll() {
 		return
 	}
 	h, line := m.listHeight(), m.lineOf[m.cursor]
+	if last := line + m.rowHeight(m.rows[m.cursor]) - 1; last >= m.offset+h {
+		m.offset = last - h + 1
+	}
 	if line < m.offset {
 		m.offset = line
-	}
-	if line >= m.offset+h {
-		m.offset = line - h + 1
 	}
 	if m.offset < 0 {
 		m.offset = 0
@@ -1029,6 +1042,37 @@ func (m *model) keyWorktree(k tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
+// ---- naming ----
+
+func (m *model) openRename(a *state.Agent) tea.Cmd {
+	m.mode, m.renameID, m.flash = modeRename, a.ID, ""
+	m.input.Prompt = "name › "
+	m.input.Placeholder = "empty: the conversation's title"
+	m.input.SetValue(a.Name)
+	m.input.CursorEnd()
+	return m.input.Focus()
+}
+
+func (m *model) keyRename(k tea.KeyMsg) tea.Cmd {
+	switch k.String() {
+	case "esc", "ctrl+c":
+		m.mode = modeNormal
+		m.input.Blur()
+		return nil
+	case "enter":
+		if _, a := m.st.FindAgent(m.renameID); a != nil {
+			a.Name = strings.TrimSpace(m.input.Value())
+			m.save()
+		}
+		m.mode = modeNormal
+		m.input.Blur()
+		return nil
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(k)
+	return cmd
+}
+
 func (m *model) restart(p *state.Project, a *state.Agent) tea.Cmd {
 	pane, ok := m.panes[a.ID]
 	pc, ac, kinds := *p, *a, m.kinds
@@ -1107,6 +1151,15 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		if ok {
 			return m.diffRow(r)
 		}
+	case "t":
+		if ok && r.agent != nil {
+			return m.openRename(r.agent)
+		}
+		m.setFlash("select an agent to name")
+	case "i":
+		m.st.Compact = !m.st.Compact
+		m.save()
+		m.rebuildRows()
 	case "a":
 		return m.openPicker()
 	case "d":
@@ -1302,8 +1355,8 @@ func (m *model) sidebarView() string {
 	}
 	next := m.offset // next screen line to draw
 	for i := 0; i < len(m.rows) && lines < h; i++ {
-		l := m.lineOf[i]
-		if l < m.offset {
+		l, rh := m.lineOf[i], m.rowHeight(m.rows[i])
+		if l+rh <= m.offset {
 			continue
 		}
 		for ; next < l && lines < h; next++ {
@@ -1320,10 +1373,17 @@ func (m *model) sidebarView() string {
 				bg = cSelOn
 			}
 		}
-		left, right := m.rowSegs(m.rows[i])
-		b.WriteString(layout(m.width, bg, left, right) + "\n")
-		next++
-		lines++
+		if l >= m.offset { // else only its second line is in view
+			left, right := m.rowSegs(m.rows[i])
+			b.WriteString(layout(m.width, bg, left, right) + "\n")
+			next++
+			lines++
+		}
+		if rh > 1 && lines < h {
+			b.WriteString(layout(m.width, bg, m.detailSegs(m.rows[i].agent), nil) + "\n")
+			next++
+			lines++
+		}
 	}
 	for ; lines < h; lines++ {
 		b.WriteString("\n")
@@ -1402,7 +1462,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 	if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
 		st, attention = tr.Status, tr.Attention
 	}
-	bar, name := seg{stPlain, " "}, seg{stName, r.proj.DisplayName(a)}
+	bar, name := seg{stPlain, " "}, seg{stName, m.agentTitle(r.proj, a)}
 	if a.ID == m.stageID || m.stageID == tmux.IDDiff && a.ID == m.diffFor {
 		bar, name = seg{stStage, "▌"}, seg{stStage, name.s}
 	}
@@ -1411,32 +1471,61 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		num = fmt.Sprint(r.num)
 	}
 	icon, label := m.statusGlyph(st, attention)
-	left = []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, name}
+	k := agent.ByName(m.kinds, a.Kind)
+	kind := seg{stName.Bold(true), k.Glyph()}
+	if k.Color != "" {
+		kind.st = kind.st.Foreground(lipgloss.Color(k.Color))
+	}
+	left = []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, kind, {stPlain, " "}, name}
 	if a.Dir != "" && a.Dir != r.proj.Path {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
-	return left, m.withTokens(left, []seg{label, {stPlain, " "}}, m.usage[a.ID].Total())
+	return left, m.withTokens(left, []seg{label, {stPlain, " "}}, m.transcripts[a.ID].Tokens.Total())
 }
 
 // withTokens puts a token count before the right side of a row, unless
-// the row is too narrow for both: the count goes before the status does.
+// that would cut into the title: the count goes before the title does,
+// and before the status.
 func (m *model) withTokens(left, right []seg, tokens int64) []seg {
 	if tokens <= 0 {
 		return right
 	}
 	with := append([]seg{{stFaint, textutil.Count(tokens)}, {stPlain, "  "}}, right...)
-	if room := m.width - segWidth(with) - 1; room < minLeft && room < segWidth(left) {
+	if m.width-segWidth(with)-1 < segWidth(left) {
 		return right
 	}
 	return with
+}
+
+// agentTitle is what an agent's row is called: the name the user gave it,
+// else its conversation's title, else claude / claude#2.
+func (m *model) agentTitle(p *state.Project, a *state.Agent) string {
+	if a.Name != "" {
+		return a.Name
+	}
+	if t := m.transcripts[a.ID].Title; t != "" {
+		return t
+	}
+	return p.DisplayName(a)
+}
+
+// detailSegs is the line under an agent: the tool it is calling while it
+// runs or waits, else the prompt it is on or was last given.
+func (m *model) detailSegs(a *state.Agent) []seg {
+	info := m.transcripts[a.ID]
+	indent := seg{stPlain, "         "}
+	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) && info.Tool != "" {
+		return []seg{indent, {stDim, info.Tool}}
+	}
+	return []seg{indent, {stFaint, info.Prompt}}
 }
 
 // projectTokens is what all of p's agents consumed together.
 func (m *model) projectTokens(p *state.Project) int64 {
 	var n int64
 	for _, a := range p.Agents {
-		n += m.usage[a.ID].Total()
+		n += m.transcripts[a.ID].Tokens.Total()
 	}
 	return n
 }
@@ -1514,8 +1603,13 @@ func (m *model) renderFooter() string {
 	switch m.mode {
 	case modeConfirm:
 		l1 = " " + stWaiting.Render(m.confirmMsg)
-	case modeWorktree:
-		title := " new worktree · " + m.wt.Name
+	case modeWorktree, modeRename:
+		title := " name"
+		if m.mode == modeWorktree {
+			title = " new worktree · " + m.wt.Name
+		} else if p, a := m.st.FindAgent(m.renameID); a != nil {
+			title += " · " + p.DisplayName(a)
+		}
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			title = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		}
@@ -1548,7 +1642,7 @@ func (m *model) renderFooter() string {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
 		l2 = hints("w", "worktree", "v", "diff", "r", "resume")
-		l3 = hints("x", "kill", "q", "detach")
+		l3 = hints("t", "name", "x", "kill", "q", "detach")
 	}
 	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3
 }

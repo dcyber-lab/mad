@@ -1,4 +1,4 @@
-package usage
+package transcript
 
 import (
 	"encoding/json"
@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 )
+
+// The token tests came over from the usage package this one replaced.
 
 func writeLines(t *testing.T, path string, lines ...any) {
 	t.Helper()
@@ -66,12 +68,13 @@ func codexCount(in, cached, out int64) map[string]any {
 }
 
 func reader(t *testing.T, files map[string][]string) *Reader {
+	t.Helper()
 	r := NewReader()
 	r.locate = func(a Agent) []string { return files[a.ID] }
 	return r
 }
 
-func TestClaudeTotals(t *testing.T) {
+func TestClaudeTokens(t *testing.T) {
 	dir := t.TempDir()
 	main := filepath.Join(dir, "s.jsonl")
 	writeLines(t, main,
@@ -82,13 +85,13 @@ func TestClaudeTotals(t *testing.T) {
 		claudeMsg("m2", 1, 0, 1100, 10),
 	)
 	r := reader(t, map[string][]string{"a": {main}})
-	got := r.Read([]Agent{{ID: "a", Kind: "claude"}})
+	got := r.Read([]Agent{{ID: "a", Kind: "claude"}})["a"].Tokens
 	want := Totals{Input: 3, CacheWrite: 100, CacheRead: 2100, Output: 40}
-	if got["a"] != want {
-		t.Fatalf("got %+v want %+v", got["a"], want)
+	if got != want {
+		t.Fatalf("got %+v want %+v", got, want)
 	}
-	if got["a"].Total() != 2243 {
-		t.Errorf("total %d", got["a"].Total())
+	if got.Total() != 2243 {
+		t.Errorf("total %d", got.Total())
 	}
 }
 
@@ -98,29 +101,29 @@ func TestIncrementalRead(t *testing.T) {
 	writeLines(t, main, claudeMsg("m1", 0, 0, 100, 10))
 	r := reader(t, map[string][]string{"a": {main}})
 	agents := []Agent{{ID: "a", Kind: "claude"}}
-	if got := r.Read(agents)["a"].Total(); got != 110 {
+	if got := r.Read(agents)["a"].Tokens.Total(); got != 110 {
 		t.Fatalf("first read %d", got)
 	}
 	// A line still being written doesn't count and isn't skipped.
 	partial, _ := json.Marshal(claudeMsg("m2", 0, 0, 200, 20))
 	half := string(partial[:len(partial)/2])
 	appendLines(t, main, 0, half)
-	if got := r.Read(agents)["a"].Total(); got != 110 {
+	if got := r.Read(agents)["a"].Tokens.Total(); got != 110 {
 		t.Fatalf("partial line counted: %d", got)
 	}
 	appendLines(t, main, 0, string(partial[len(partial)/2:])+"\n")
-	if got := r.Read(agents)["a"].Total(); got != 330 {
+	if got := r.Read(agents)["a"].Tokens.Total(); got != 330 {
 		t.Fatalf("after completion %d", got)
 	}
 	// The same message logged again later, with final numbers, replaces
 	// the earlier ones.
 	appendLines(t, main, 0, claudeMsg("m2", 0, 0, 200, 25))
-	if got := r.Read(agents)["a"].Total(); got != 335 {
+	if got := r.Read(agents)["a"].Tokens.Total(); got != 335 {
 		t.Fatalf("after update %d", got)
 	}
 	// A rewritten (shorter) file is read from the start again.
 	writeLines(t, main, claudeMsg("m9", 0, 0, 5, 5))
-	if got := r.Read(agents)["a"].Total(); got != 10 {
+	if got := r.Read(agents)["a"].Tokens.Total(); got != 10 {
 		t.Fatalf("after rewrite %d", got)
 	}
 }
@@ -134,8 +137,8 @@ func TestSubagentsAndForgetting(t *testing.T) {
 	files := map[string][]string{"a": {main, sub}, "b": nil}
 	r := reader(t, files)
 	got := r.Read([]Agent{{ID: "a", Kind: "claude"}, {ID: "b", Kind: "shell"}})
-	if got["a"].Total() != 150 {
-		t.Errorf("with subagent: %d", got["a"].Total())
+	if got["a"].Tokens.Total() != 150 {
+		t.Errorf("with subagent: %d", got["a"].Tokens.Total())
 	}
 	if _, ok := got["b"]; ok {
 		t.Error("an agent without a transcript got totals")
@@ -150,7 +153,7 @@ func TestSubagentsAndForgetting(t *testing.T) {
 	}
 }
 
-func TestCodexTotals(t *testing.T) {
+func TestCodexTokens(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "rollout.jsonl")
 	writeLines(t, path,
@@ -160,7 +163,7 @@ func TestCodexTotals(t *testing.T) {
 		codexCount(3000, 2500, 120), // cumulative: the last one is the answer
 	)
 	r := reader(t, map[string][]string{"c": {path}})
-	got := r.Read([]Agent{{ID: "c", Kind: "codex"}})["c"]
+	got := r.Read([]Agent{{ID: "c", Kind: "codex"}})["c"].Tokens
 	want := Totals{Input: 500, CacheRead: 2500, Output: 120}
 	if got != want {
 		t.Errorf("got %+v want %+v", got, want)
@@ -173,7 +176,7 @@ func TestCodexTotals(t *testing.T) {
 func TestMissingFile(t *testing.T) {
 	r := reader(t, map[string][]string{"a": {filepath.Join(t.TempDir(), "nope.jsonl")}})
 	got := r.Read([]Agent{{ID: "a", Kind: "claude"}})
-	if got["a"] != (Totals{}) {
+	if got["a"] != (Info{}) {
 		t.Errorf("got %+v", got["a"])
 	}
 }

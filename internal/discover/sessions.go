@@ -149,7 +149,7 @@ func parseClaudeSession(path string) *Session {
 			if ln.TurnOrigin == "sdk" {
 				return nil // started by a program (desktop workflows), not a person
 			}
-			firstMsg = userText(ln.Message.Content)
+			firstMsg = UserText(ln.Message.Content)
 		}
 		if s.Origin != "" && s.Cwd != "" && firstMsg != "" {
 			break
@@ -165,9 +165,9 @@ func parseClaudeSession(path string) *Session {
 	return s
 }
 
-// userText extracts what the user typed, skipping injected context
+// UserText extracts what the user typed, skipping injected context
 // (system reminders, AGENTS.md, slash-command wrappers).
-func userText(raw json.RawMessage) string {
+func UserText(raw json.RawMessage) string {
 	var text string
 	if json.Unmarshal(raw, &text) != nil {
 		var parts []struct {
@@ -193,7 +193,7 @@ func userText(raw json.RawMessage) string {
 }
 
 func codexSessions(root string) []Session {
-	names := codexThreadNames()
+	names := CodexThreadNames()
 	var out []Session
 	codexFiles(func(path string, info os.FileInfo) bool {
 		// Cheap cwd check before a full parse.
@@ -249,7 +249,7 @@ func parseCodexSession(path string) *Session {
 				s.Origin = "cli"
 			}
 		case ln.Type == "response_item" && ln.Payload.Role == "user" && s.Title == "":
-			s.Title = userText(ln.Payload.Content)
+			s.Title = UserText(ln.Payload.Content)
 		}
 		if s.ID != "" && s.Title != "" {
 			break
@@ -264,9 +264,9 @@ func parseCodexSession(path string) *Session {
 	return s
 }
 
-// codexThreadNames reads ~/.codex/session_index.jsonl (id → thread name,
+// CodexThreadNames reads ~/.codex/session_index.jsonl (id → thread name,
 // last entry wins).
-func codexThreadNames() map[string]string {
+func CodexThreadNames() map[string]string {
 	names := map[string]string{}
 	f, err := os.Open(filepath.Join(filepath.Dir(codexSessionsDir()), "session_index.jsonl"))
 	if err != nil {

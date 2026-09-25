@@ -25,6 +25,11 @@ import (
 // array of Kind.
 type Kind struct {
 	Name string `json:"name"`
+	// Icon stands for the kind in the sidebar; one glyph. Kinds without
+	// one show the first letter of their name. Color is the icon's, an
+	// xterm-256 number or #rrggbb; without one it is drawn like other text.
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
 	// Start launches a fresh session.
 	Start string `json:"start"`
 	// Resume reopens session {sid}; used when a session id is known.
@@ -43,6 +48,8 @@ type Kind struct {
 var builtin = []Kind{
 	{
 		Name:    "claude",
+		Icon:    "✻",
+		Color:   "173", // claude's orange
 		Start:   "claude --settings {claude_settings} --session-id {id}",
 		Resume:  "claude --settings {claude_settings} --resume {sid}",
 		Waiting: []string{`Do you want to`, `❯ 1\. Yes`, `trust this folder`, `Enter to confirm`},
@@ -50,6 +57,8 @@ var builtin = []Kind{
 	},
 	{
 		Name:         "codex",
+		Icon:         "◆",
+		Color:        "252",
 		Start:        "codex {codex_notify}",
 		Resume:       "codex resume {codex_notify} {sid}",
 		ResumeLatest: "codex resume {codex_notify} --last",
@@ -58,10 +67,14 @@ var builtin = []Kind{
 	{
 		// pi creates the session on first use, so start == resume.
 		Name:  "pi",
+		Icon:  "π",
+		Color: "111",
 		Start: "pi --session-id {id}",
 	},
 	{
 		Name:  "shell",
+		Icon:  "$",
+		Color: "114",
 		Start: `exec "${SHELL:-/bin/zsh}" -l`,
 	},
 }
@@ -115,6 +128,17 @@ func ByName(kinds []Kind, name string) Kind {
 		}
 	}
 	return Kind{Name: name, Start: name}
+}
+
+// Glyph is the kind's icon, or the first letter of its name.
+func (k Kind) Glyph() string {
+	if k.Icon != "" {
+		return k.Icon
+	}
+	for _, r := range k.Name {
+		return strings.ToUpper(string(r))
+	}
+	return "?"
 }
 
 // Command builds the shell command for a, resuming its previous session
