@@ -39,9 +39,11 @@ func envOr(k, def string) string {
 	return def
 }
 
-// Args prefixes a tmux command line with mad's socket and config.
+// Args prefixes a tmux command line with mad's socket and config. -u: without
+// a UTF-8 locale tmux turns the tabs in -F output into "_" (breaking
+// ListPanes) and draws the sidebar's glyphs as "_" too.
 func Args(args ...string) []string {
-	return append([]string{"-L", Socket, "-f", paths.TmuxConf()}, args...)
+	return append([]string{"-u", "-L", Socket, "-f", paths.TmuxConf()}, args...)
 }
 
 // Out runs a tmux command and returns its trimmed stdout.

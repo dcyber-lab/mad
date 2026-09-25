@@ -88,6 +88,7 @@ func useServer(t *testing.T) {
 	old := Socket
 	Socket = fmt.Sprintf("mad-test-%d", time.Now().UnixNano())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // -f points at a missing file: defaults
+	t.Setenv("LC_ALL", "C")                  // non-UTF-8: tmux must still keep the tabs in -F output
 	t.Cleanup(func() {
 		_ = Run("kill-server")
 		Socket = old
