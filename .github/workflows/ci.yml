@@ -16,6 +16,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Install tmux
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then brew install tmux; else sudo apt-get update && sudo apt-get install -y tmux; fi
+          tmux -V
+      - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
-      - run: go test ./...
+      - run: go test -race ./...
       - run: go build -o mad .

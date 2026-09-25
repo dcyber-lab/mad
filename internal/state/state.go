@@ -1,4 +1,7 @@
-package main
+// Package state is the persistent project → agent tree, stored as JSON in
+// the state directory. Runtime facts (is a pane alive, which agent is on
+// stage) come from tmux, not from here.
+package state
 
 import (
 	"crypto/rand"
@@ -9,10 +12,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/paths"
 )
 
-// State is the persistent project → agent tree. Runtime facts (is the pane
-// alive, is it on stage) come from tmux, not from here.
 type State struct {
 	Projects []*Project `json:"projects"`
 	// Ignored projects are not re-added by auto-sync after being removed.
@@ -41,8 +44,9 @@ type Agent struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func loadState() (*State, error) {
-	data, err := os.ReadFile(stateFile())
+// Load reads the state file; a missing file is an empty state.
+func Load() (*State, error) {
+	data, err := os.ReadFile(paths.StateFile())
 	if errors.Is(err, fs.ErrNotExist) {
 		return &State{}, nil
 	}
@@ -51,28 +55,29 @@ func loadState() (*State, error) {
 	}
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", stateFile(), err)
+		return nil, fmt.Errorf("parse %s: %w", paths.StateFile(), err)
 	}
 	return &s, nil
 }
 
-func (s *State) save() error {
+func (s *State) Save() error {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(stateFile(), data)
+	return paths.WriteFileAtomic(paths.StateFile(), data)
 }
 
-func stateModTime() time.Time {
-	fi, err := os.Stat(stateFile())
+// ModTime of the state file, to notice writes by other processes.
+func ModTime() time.Time {
+	fi, err := os.Stat(paths.StateFile())
 	if err != nil {
 		return time.Time{}
 	}
 	return fi.ModTime()
 }
 
-func (s *State) findProject(path string) *Project {
+func (s *State) FindProject(path string) *Project {
 	for _, p := range s.Projects {
 		if p.Path == path {
 			return p
@@ -81,10 +86,10 @@ func (s *State) findProject(path string) *Project {
 	return nil
 }
 
-// addProject registers path (already resolved to its root); it reports
-// whether the project is new.
-func (s *State) addProject(path string) (*Project, bool) {
-	if p := s.findProject(path); p != nil {
+// AddProject registers path (already resolved to its root) and reports
+// whether it is new. Adding by hand also lifts an earlier removal.
+func (s *State) AddProject(path string) (*Project, bool) {
+	if p := s.FindProject(path); p != nil {
 		return p, false
 	}
 	s.unignore(path)
@@ -93,19 +98,20 @@ func (s *State) addProject(path string) (*Project, bool) {
 	return p, true
 }
 
-func (s *State) removeProject(p *Project) {
+// RemoveProject drops p and remembers it so auto-sync won't bring it back.
+func (s *State) RemoveProject(p *Project) {
 	for i, q := range s.Projects {
 		if q == p {
 			s.Projects = append(s.Projects[:i], s.Projects[i+1:]...)
 			break
 		}
 	}
-	if !s.isIgnored(p.Path) {
+	if !s.IsIgnored(p.Path) {
 		s.Ignored = append(s.Ignored, p.Path)
 	}
 }
 
-func (s *State) isIgnored(path string) bool {
+func (s *State) IsIgnored(path string) bool {
 	for _, x := range s.Ignored {
 		if x == path {
 			return true
@@ -123,14 +129,7 @@ func (s *State) unignore(path string) {
 	}
 }
 
-func (p *Project) dirFor(a *Agent) string {
-	if a.Dir != "" {
-		return a.Dir
-	}
-	return p.Path
-}
-
-func (s *State) findAgent(id string) (*Project, *Agent) {
+func (s *State) FindAgent(id string) (*Project, *Agent) {
 	for _, p := range s.Projects {
 		for _, a := range p.Agents {
 			if a.ID == id {
@@ -141,7 +140,7 @@ func (s *State) findAgent(id string) (*Project, *Agent) {
 	return nil, nil
 }
 
-func (s *State) removeAgent(id string) {
+func (s *State) RemoveAgent(id string) {
 	for _, p := range s.Projects {
 		for i, a := range p.Agents {
 			if a.ID == id {
@@ -152,9 +151,9 @@ func (s *State) removeAgent(id string) {
 	}
 }
 
-// orderedAgents is the global numbering used by `mad switch N` and the
+// OrderedAgents is the global numbering used by `mad switch N` and the
 // sidebar's 1-9 labels.
-func (s *State) orderedAgents() []*Agent {
+func (s *State) OrderedAgents() []*Agent {
 	var out []*Agent
 	for _, p := range s.Projects {
 		out = append(out, p.Agents...)
@@ -162,9 +161,32 @@ func (s *State) orderedAgents() []*Agent {
 	return out
 }
 
-// displayName disambiguates agents of the same kind within a project:
+// Clone deep-copies the tree, so background work never races the UI.
+func (s *State) Clone() *State {
+	cp := &State{Ignored: append([]string(nil), s.Ignored...)}
+	for _, p := range s.Projects {
+		pc := *p
+		pc.Agents = make([]*Agent, 0, len(p.Agents))
+		for _, a := range p.Agents {
+			ac := *a
+			pc.Agents = append(pc.Agents, &ac)
+		}
+		cp.Projects = append(cp.Projects, &pc)
+	}
+	return cp
+}
+
+// Dir is where a's process runs.
+func (p *Project) Dir(a *Agent) string {
+	if a.Dir != "" {
+		return a.Dir
+	}
+	return p.Path
+}
+
+// DisplayName disambiguates agents of the same kind within a project:
 // claude, claude#2, ...
-func (p *Project) displayName(a *Agent) string {
+func (p *Project) DisplayName(a *Agent) string {
 	n, idx := 0, 0
 	for _, b := range p.Agents {
 		if b.Kind == a.Kind {
@@ -180,7 +202,8 @@ func (p *Project) displayName(a *Agent) string {
 	return fmt.Sprintf("%s#%d", a.Kind, idx)
 }
 
-func newUUID() string {
+// NewUUID returns a random (version 4) UUID.
+func NewUUID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	b[6] = b[6]&0x0f | 0x40

@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -8,16 +8,23 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
 // The session picker runs after choosing claude/codex for a new agent:
 // start fresh, or continue one of the project's past sessions from the CLI
 // or a desktop app.
 
+const sessHeader = 3 // title, hint, rule
+
 type sessPicker struct {
-	proj    *Project
+	proj    *state.Project
 	kind    string
-	items   []Session // row 0 of the list is "new session"
+	items   []discover.Session // list row 0 is "new session", then items
 	loading bool
 	cursor  int
 	offset  int
@@ -25,10 +32,13 @@ type sessPicker struct {
 
 type sessionsMsg struct {
 	root, kind string
-	list       []Session
+	list       []discover.Session
 }
 
-func (m *model) openSessionPicker(p *Project, kind string) tea.Cmd {
+// projectSessions is replaceable in tests.
+var projectSessions = discover.ProjectSessions
+
+func (m *model) openSessionPicker(p *state.Project, kind string) tea.Cmd {
 	m.mode = modePickSession
 	m.sp = sessPicker{proj: p, kind: kind, loading: true}
 	root := p.Path
@@ -36,8 +46,8 @@ func (m *model) openSessionPicker(p *Project, kind string) tea.Cmd {
 }
 
 // liveSessions are session ids currently open outside the deck.
-func (m *model) liveSessions() map[string]External {
-	live := map[string]External{}
+func (m *model) liveSessions() map[string]discover.External {
+	live := map[string]discover.External{}
 	for _, e := range m.externals {
 		if e.SessionID != "" {
 			live[e.SessionID] = e
@@ -47,7 +57,7 @@ func (m *model) liveSessions() map[string]External {
 }
 
 func (m *model) sessListHeight() int {
-	h := m.height - 3 - 2
+	h := m.height - sessHeader - 2
 	if h < 1 {
 		h = 1
 	}
@@ -97,7 +107,7 @@ func (m *model) mouseSessions(ev tea.MouseMsg) tea.Cmd {
 	case ev.Button == tea.MouseButtonWheelDown:
 		m.moveSessions(1)
 	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress:
-		if i := ev.Y - 3 + m.sp.offset; ev.Y >= 3 && i <= len(m.sp.items) {
+		if i := ev.Y - sessHeader + m.sp.offset; ev.Y >= sessHeader && i <= len(m.sp.items) {
 			return m.pickSession(i)
 		}
 	}
@@ -111,7 +121,7 @@ func (m *model) pickSession(i int) tea.Cmd {
 		return m.newAgent(p, m.sp.kind)
 	}
 	s := m.sp.items[i-1]
-	a := &Agent{ID: newUUID(), Kind: s.Kind, SessionID: s.ID, CreatedAt: time.Now()}
+	a := &state.Agent{ID: state.NewUUID(), Kind: s.Kind, SessionID: s.ID, CreatedAt: time.Now()}
 	if s.Cwd != "" && s.Cwd != p.Path {
 		if fi, err := os.Stat(s.Cwd); err == nil && fi.IsDir() {
 			a.Dir = s.Cwd // e.g. the worktree the session ran in
@@ -119,19 +129,12 @@ func (m *model) pickSession(i int) tea.Cmd {
 	}
 	if e, live := m.liveSessions()[s.ID]; live {
 		if s.Kind != "claude" {
-			m.setFlash(fmt.Sprintf("%s is still open (%s); close it there first", s.Kind, where(e)))
+			m.setFlash(fmt.Sprintf("%s is still open (%s); close it there first", s.Kind, e.Where()))
 			return nil
 		}
 		a.Fork = true // don't fight the running copy; continue in a fork
 	}
 	return m.launch(p, a, true, nil)
-}
-
-func where(e External) string {
-	if e.Desktop {
-		return "desktop"
-	}
-	return e.TTY
 }
 
 func (m *model) sessionsView() string {
@@ -150,18 +153,17 @@ func (m *model) sessionsView() string {
 		} else {
 			s := m.sp.items[i-1]
 			mark := " "
-			switch {
-			case live[s.ID].PID != 0:
+			if _, ok := live[s.ID]; ok {
 				mark = stDone.Render("●")
-			case s.Origin == "desktop":
+			} else if s.Origin == "desktop" {
 				mark = stDim.Render("◇")
 			}
-			meta := age(s.Updated)
-			left := fmt.Sprintf(" %s %s", mark, truncate(s.Title, m.width-5-len(meta)))
-			line = padRight(left, m.width-len(meta)-1) + stDim.Render(meta)
+			meta := textutil.Age(s.Updated)
+			left := fmt.Sprintf(" %s %s", mark, textutil.Truncate(s.Title, m.width-5-len(meta)))
+			line = textutil.PadRight(left, m.width-len(meta)-1) + stDim.Render(meta)
 		}
 		if i == m.sp.cursor {
-			line = stCursor.Render(padRight(ansi.Strip(line), m.width))
+			line = stCursor.Render(textutil.PadRight(ansi.Strip(line), m.width))
 		}
 		b.WriteString(line + "\n")
 		lines++
@@ -178,14 +180,14 @@ func (m *model) sessionsView() string {
 		s := m.sp.items[c-1]
 		info = s.Origin
 		if e, ok := live[s.ID]; ok {
-			info = "open in " + where(e)
+			info = "open in " + e.Where()
 			if s.Kind == "claude" {
 				info += " → fork"
 			}
 		}
-		info += " · " + shortPath(s.Cwd)
+		info += " · " + paths.Short(s.Cwd)
 	}
-	b.WriteString(stDim.Render(" "+truncate(info, m.width-2)) + "\n")
+	b.WriteString(stDim.Render(" "+textutil.Truncate(info, m.width-2)) + "\n")
 	b.WriteString(stDim.Render(" ● open now  ◇ desktop"))
 	return b.String()
 }

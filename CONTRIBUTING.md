@@ -32,21 +32,38 @@ MAD_SOCKET=mad-dev ./mad kill-server
 
 ### Code layout
 
-| File            | Responsibility                                            |
-| --------------- | --------------------------------------------------------- |
-| `main.go`       | CLI entry point and subcommands                           |
-| `deck.go`       | tmux layout, agent lifecycle, generated configs           |
-| `tmux.go`       | Thin wrapper around the private tmux server               |
-| `sidebar.go`    | Bubble Tea sidebar TUI                                    |
-| `picker.go`     | Project picker (fuzzy search + path completion)           |
-| `sesspicker.go` | Session picker for new claude/codex agents                |
-| `agents.go`     | Agent kinds (built-in + `agents.json`)                    |
-| `hook.go`       | `mad hook` — status reports from agents                   |
-| `sessions.go`   | Claude/Codex session history readers                      |
-| `discover.go`   | Auto-sync: history scan and external process detection    |
-| `scan.go`       | `mad scan` debugging output                               |
-| `state.go`      | Persistent project/agent state                            |
-| `paths.go`      | Config/state paths and helpers                            |
+`main.go` only calls `internal/cli`. Everything else lives in `internal/`,
+with dependencies pointing downwards in this list:
+
+| Package              | Responsibility                                                   |
+| -------------------- | ---------------------------------------------------------------- |
+| `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
+| `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
+| `internal/deck`      | tmux layout, agent lifecycle, generated tmux/claude configs      |
+| `internal/discover`  | Claude/Codex history, sessions, processes outside the deck       |
+| `internal/status`    | Hook reports and running/waiting/idle inference                  |
+| `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
+| `internal/tmux`      | Thin wrapper around the private tmux server                      |
+| `internal/state`     | Persistent project/agent tree                                    |
+| `internal/paths`     | Config/state locations, path and shell helpers                   |
+| `internal/textutil`  | Width-aware truncation/padding for the terminal                  |
+
+### Tests
+
+```sh
+go test ./...          # everything
+go test -race ./...    # what CI runs
+```
+
+- Every package has its own `*_test.go`. Tests never touch your real home,
+  state or tmux: they point `HOME`/`XDG_*` at temp dirs.
+- `internal/tmux` and `internal/deck` include integration tests against a
+  real tmux server on a throwaway socket; they are skipped when `tmux` isn't
+  installed.
+- `internal/discover` builds fake Claude/Codex histories in a temp home and
+  stubs `ps`/`lsof` through package variables.
+- `internal/ui` drives the Bubble Tea model with messages only; the commands
+  it returns (tmux work) are not executed.
 
 ## Pull requests
 

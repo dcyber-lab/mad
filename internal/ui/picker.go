@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -10,13 +10,17 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
 // The add-project picker takes over the sidebar: a search box over
 // projects from Claude/Codex history (running ones first), or directory
 // completion when the query looks like a path.
 
-const pickerHeader = 4 // title, input, rule, blank-free list starts here
+const pickerHeader = 3 // title, input, rule
 
 type pickItem struct {
 	path    string
@@ -26,15 +30,18 @@ type pickItem struct {
 	isDir   bool // from path completion
 }
 
-type historyMsg []Candidate
+type historyMsg []discover.Candidate
 
 type picker struct {
-	history []Candidate
+	history []discover.Candidate
 	loading bool
 	items   []pickItem
 	cursor  int
 	offset  int
 }
+
+// scanHistory is replaceable in tests.
+var scanHistory = discover.ScanHistory
 
 func (m *model) openPicker() tea.Cmd {
 	m.mode = modeAddProject
@@ -56,7 +63,7 @@ func (m *model) refreshPicker() {
 	var items []pickItem
 
 	if isPathQuery(q) {
-		for _, d := range completeDir(q) {
+		for _, d := range discover.CompleteDir(q) {
 			items = append(items, pickItem{path: d, isDir: true})
 			if len(items) >= 300 {
 				break
@@ -75,15 +82,15 @@ func (m *model) refreshPicker() {
 		var list []scored
 		seen := map[string]bool{}
 		consider := func(path string, last time.Time, sources []string) {
-			if seen[path] || m.st.findProject(path) != nil {
+			if seen[path] || m.st.FindProject(path) != nil {
 				return
 			}
 			seen[path] = true
 			// Fuzzy on the name; the full path only as a plain substring
 			// (subsequences of long paths match nearly anything).
-			ok, score := fuzzyMatch(q, filepath.Base(path))
+			ok, score := discover.FuzzyMatch(q, filepath.Base(path))
 			if !ok {
-				i := strings.Index(strings.ToLower(shortPath(path)), strings.ToLower(q))
+				i := strings.Index(strings.ToLower(paths.Short(path)), strings.ToLower(q))
 				if i < 0 {
 					return
 				}
@@ -91,7 +98,7 @@ func (m *model) refreshPicker() {
 			}
 			meta := ""
 			if !last.IsZero() {
-				meta = age(last)
+				meta = textutil.Age(last)
 			}
 			list = append(list, scored{pickItem{path: path, running: running[path] > 0, meta: meta, sources: sources}, score, last})
 		}
@@ -186,7 +193,7 @@ func (m *model) keyPicker(k tea.KeyMsg) tea.Cmd {
 	case "tab":
 		// Descend into the selected directory (or start browsing from it).
 		if m.pk.cursor < len(m.pk.items) {
-			m.input.SetValue(shortPath(m.pk.items[m.pk.cursor].path) + "/")
+			m.input.SetValue(paths.Short(m.pk.items[m.pk.cursor].path) + "/")
 			m.input.CursorEnd()
 			m.pk.cursor = 0
 			m.refreshPicker()
@@ -197,7 +204,7 @@ func (m *model) keyPicker(k tea.KeyMsg) tea.Cmd {
 			return m.addPicked(m.pk.items[m.pk.cursor].path)
 		}
 		if q := strings.TrimSpace(m.input.Value()); isPathQuery(q) {
-			return m.addPicked(expandPath(q))
+			return m.addPicked(paths.Expand(q))
 		}
 		return nil
 	}
@@ -210,19 +217,19 @@ func (m *model) keyPicker(k tea.KeyMsg) tea.Cmd {
 
 func (m *model) addPicked(dir string) tea.Cmd {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		m.setFlash("not a directory: " + shortPath(dir))
+		m.setFlash("not a directory: " + paths.Short(dir))
 		return nil
 	}
 	m.closePicker()
-	root, _ := projectRoot(dir)
-	p, added := m.st.addProject(root)
+	root, _ := paths.ProjectRoot(dir)
+	p, added := m.st.AddProject(root)
 	if !added {
 		m.setFlash("already added: " + p.Name)
 	}
 	m.save()
 	m.rebuildRows()
 	for i, r := range m.rows {
-		if r.agent == nil && r.ext == nil && r.proj == p {
+		if r.isProject() && r.proj == p {
 			m.cursor = i
 		}
 	}
@@ -273,11 +280,10 @@ func (m *model) pickerView() string {
 			mark = stDone.Render("●")
 		}
 		meta := it.meta
-		nameW := m.width - 5 - len(meta)
-		left := fmt.Sprintf(" %s %s", mark, truncate(name, nameW))
-		line := padRight(left, m.width-len(meta)-1) + stDim.Render(meta)
+		left := fmt.Sprintf(" %s %s", mark, textutil.Truncate(name, m.width-5-len(meta)))
+		line := textutil.PadRight(left, m.width-len(meta)-1) + stDim.Render(meta)
 		if i == m.pk.cursor {
-			line = stCursor.Render(padRight(ansi.Strip(line), m.width))
+			line = stCursor.Render(textutil.PadRight(ansi.Strip(line), m.width))
 		}
 		b.WriteString(line + "\n")
 		lines++
@@ -289,24 +295,12 @@ func (m *model) pickerView() string {
 	sel := ""
 	if m.pk.cursor < len(m.pk.items) {
 		it := m.pk.items[m.pk.cursor]
-		sel = shortPath(it.path)
+		sel = paths.Short(it.path)
 		if len(it.sources) > 0 {
 			sel += " · " + strings.Join(it.sources, ", ")
 		}
 	}
-	b.WriteString(stDim.Render(" "+truncate(sel, m.width-2)) + "\n")
+	b.WriteString(stDim.Render(" "+textutil.Truncate(sel, m.width-2)) + "\n")
 	b.WriteString(stDim.Render(" ⏎ add  tab browse  ● running"))
 	return b.String()
-}
-
-func age(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
 }

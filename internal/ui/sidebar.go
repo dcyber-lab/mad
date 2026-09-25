@@ -1,8 +1,10 @@
-package main
+// Package ui is the sidebar: a Bubble Tea program that runs in the left
+// tmux pane, shows projects and agents with live status, and drives the
+// deck (open, create, resume, kill agents).
+package ui
 
 import (
 	"fmt"
-	"hash/fnv"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -12,15 +14,22 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
+	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
 const (
-	pollInterval   = 500 * time.Millisecond
-	activeWindow   = 2 * time.Second  // screen changed this recently → running
-	staleRunning   = 10 * time.Second // hook says running but screen frozen → interrupted
-	headerLines    = 2
-	footerLines    = 3
-	waitingTailLen = 15 // screen lines scanned for waiting patterns
+	pollInterval      = 500 * time.Millisecond
+	externalScanEvery = 5 * time.Second
+	headerLines       = 2
+	footerLines       = 3
 )
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -38,31 +47,24 @@ var (
 	stFlash    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 )
 
-type agentView struct {
-	hash       uint64
-	seen       bool
-	lastChange time.Time
-	status     string
-	attention  bool // finished or blocked while not on stage
-}
-
 type (
 	tickMsg time.Time
 	pollMsg struct {
-		panes   []Pane
+		panes   []tmux.Pane
 		screens map[string]string
-		hooks   map[string]*HookStatus
+		hooks   map[string]*status.Hook
 		err     error
-		// externals is set when this poll also scanned for outside sessions.
-		externals []External
-		scanned   bool
 	}
+	// externalsMsg carries a scan for sessions outside the deck. It runs
+	// apart from pollMsg: the first scan can take seconds (lsof per
+	// process) and must not hold up status updates.
+	externalsMsg []discover.External
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
 	doneMsg         struct {
-		err     error
-		select_ string // agent id to put the cursor on
+		err      error
+		selectID string // agent id to put the cursor on
 	}
 )
 
@@ -76,14 +78,12 @@ const (
 	modeConfirm
 )
 
-const externalScanEvery = 5 * time.Second
-
 // row is one sidebar line: a project, a deck agent, an agent running in
 // another terminal (ext), or the "N in desktop" summary (desktop > 0).
 type row struct {
-	proj    *Project
-	agent   *Agent
-	ext     *External
+	proj    *state.Project
+	agent   *state.Agent
+	ext     *discover.External
 	desktop int
 	num     int // 1-based global agent number
 }
@@ -91,14 +91,15 @@ type row struct {
 func (r row) isProject() bool { return r.agent == nil && r.ext == nil && r.desktop == 0 }
 
 type model struct {
-	st      *State
-	stMod   time.Time
-	kinds   []AgentKind
-	views   map[string]*agentView
-	panes   map[string]Pane
-	stageID string
-	focused bool
-	polling bool
+	st       *state.State
+	stMod    time.Time
+	kinds    []agent.Kind
+	trackers map[string]*status.Tracker
+	panes    map[string]tmux.Pane
+	stageID  string
+	focused  bool
+	polling  bool
+	scanning bool
 
 	rows   []row
 	cursor int
@@ -118,31 +119,21 @@ type model struct {
 
 	pk        picker
 	sp        sessPicker
-	externals []External
+	externals []discover.External
 	lastScan  time.Time
 }
 
-func runSidebar() error {
-	st, err := loadState()
+// Run is `mad sidebar`. A panic is logged to the sidebar log and exits
+// non-zero; the pane's restart loop then relaunches the sidebar.
+func Run() error {
+	st, err := state.Load()
 	if err != nil {
 		return err
 	}
-	ti := textinput.New()
-	ti.Prompt = "› "
-	ti.CharLimit = 512
-	m := &model{
-		st:    st,
-		stMod: stateModTime(),
-		kinds: loadKinds(),
-		views: map[string]*agentView{},
-		panes: map[string]Pane{},
-		input: ti,
-	}
-	m.rebuildRows()
+	m := newModel(st, agent.Load())
 	defer func() {
 		if r := recover(); r != nil {
-			// Logged, then the restart loop in sidebarCommand relaunches us.
-			if f, ferr := os.OpenFile(sidebarLogPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
+			if f, ferr := os.OpenFile(paths.SidebarLog(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
 				fmt.Fprintf(f, "%s panic: %v\n%s\n", time.Now().Format(time.RFC3339), r, debug.Stack())
 				f.Close()
 			}
@@ -153,51 +144,70 @@ func runSidebar() error {
 	return err
 }
 
+func newModel(st *state.State, kinds []agent.Kind) *model {
+	ti := textinput.New()
+	ti.Prompt = "› "
+	ti.CharLimit = 512
+	m := &model{
+		st:       st,
+		stMod:    state.ModTime(),
+		kinds:    kinds,
+		trackers: map[string]*status.Tracker{},
+		panes:    map[string]tmux.Pane{},
+		input:    ti,
+	}
+	m.rebuildRows()
+	return m
+}
+
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.pollCmd(), tick())
+	return tea.Batch(m.pollCmd(), m.scanCmd(), tick())
 }
 
 func tick() tea.Cmd {
 	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func (m *model) pollCmd() tea.Cmd {
-	m.polling = true
-	var ids []string
-	for _, a := range m.st.orderedAgents() {
-		ids = append(ids, a.ID)
-	}
-	scan := time.Since(m.lastScan) > externalScanEvery
-	if scan {
-		m.lastScan = time.Now()
-	}
+// scanCmd looks for claude/codex sessions outside the deck.
+func (m *model) scanCmd() tea.Cmd {
+	m.scanning, m.lastScan = true, time.Now()
 	return func() tea.Msg {
-		panes, err := listPanes()
-		if err != nil {
-			return pollMsg{err: err}
-		}
-		_ = ensureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*HookStatus{}}
-		if scan {
-			deckTTYs := map[string]bool{}
+		deckTTYs := map[string]bool{}
+		if panes, err := tmux.ListPanes(); err == nil {
 			for _, p := range panes {
 				deckTTYs[p.TTY] = true
 			}
-			msg.externals, msg.scanned = scanExternal([]string{"claude", "codex"}, deckTTYs), true
 		}
+		return externalsMsg(discover.ScanExternal([]string{"claude", "codex"}, deckTTYs))
+	}
+}
+
+// pollCmd gathers tmux panes, screens and hook reports off the UI
+// goroutine.
+func (m *model) pollCmd() tea.Cmd {
+	m.polling = true
+	var ids []string
+	for _, a := range m.st.OrderedAgents() {
+		ids = append(ids, a.ID)
+	}
+	return func() tea.Msg {
+		panes, err := tmux.ListPanes()
+		if err != nil {
+			return pollMsg{err: err}
+		}
+		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
+		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}}
 		for _, p := range panes {
-			if isAgentID(p.MadID) && !p.Dead {
-				msg.screens[p.MadID] = capturePane(p.ID)
+			if tmux.IsAgentID(p.MadID) && !p.Dead {
+				msg.screens[p.MadID] = tmux.Capture(p.ID)
 			}
 		}
 		for _, id := range ids {
-			msg.hooks[id] = readHookStatus(id)
+			msg.hooks[id] = status.ReadHook(id)
 		}
 		return msg
 	}
 }
-
-func isAgentID(id string) bool { return id != "" && !strings.HasPrefix(id, "_") }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -208,26 +218,33 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w := msg.Width
 		return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return widthSettledMsg{w} })
 	case widthSettledMsg:
-		if msg.width == m.width && msg.width != sidebarWidth() {
-			if err := saveSidebarWidth(msg.width); err != nil {
+		if msg.width == m.width && msg.width != deck.SidebarWidth() {
+			if err := deck.SaveSidebarWidth(msg.width); err != nil {
 				m.setFlash(err.Error())
 			}
 		}
 	case tickMsg:
 		m.frame++
-		if m.polling {
-			return m, tick()
+		cmds := []tea.Cmd{tick()}
+		if !m.polling {
+			cmds = append(cmds, m.pollCmd())
 		}
-		return m, tea.Batch(m.pollCmd(), tick())
+		if !m.scanning && time.Since(m.lastScan) > externalScanEvery {
+			cmds = append(cmds, m.scanCmd())
+		}
+		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
-		m.applyPoll(msg)
+		m.applyPoll(msg, time.Now())
+	case externalsMsg:
+		m.scanning = false
+		m.applyExternals(msg)
 	case doneMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error())
 		}
-		if msg.select_ != "" {
-			m.selectAgent(msg.select_)
+		if msg.selectID != "" {
+			m.selectAgent(msg.selectID)
 		}
 		if m.polling {
 			return m, nil
@@ -280,62 +297,51 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) applyPoll(msg pollMsg) {
+func (m *model) applyPoll(msg pollMsg, now time.Time) {
 	if msg.err != nil {
 		m.setFlash(msg.err.Error())
 		return
 	}
 	// Pick up `mad add` and other writers.
-	if mod := stateModTime(); mod.After(m.stMod) {
-		if st, err := loadState(); err == nil {
+	if mod := state.ModTime(); mod.After(m.stMod) {
+		if st, err := state.Load(); err == nil {
 			m.st, m.stMod = st, mod
 			m.rebuildRows()
 		}
 	}
 
-	m.panes = map[string]Pane{}
+	m.panes = map[string]tmux.Pane{}
 	prevStage := m.stageID
 	m.stageID = ""
 	for _, p := range msg.panes {
 		if p.MadID != "" {
 			m.panes[p.MadID] = p
 		}
-		if p.Session == mainSession && p.Index == 1 {
+		if p.Session == tmux.MainSession && p.Index == 1 {
 			m.stageID = p.MadID
 		}
-		if p.Session == mainSession && p.Index == 0 {
+		if p.Session == tmux.MainSession && p.Index == 0 {
 			m.focused = p.Active
 		}
 	}
-	if m.stageID != prevStage && isAgentID(m.stageID) {
+	if m.stageID != prevStage && tmux.IsAgentID(m.stageID) {
 		m.selectAgent(m.stageID)
 	}
-	if msg.scanned {
-		m.applyExternals(msg.externals)
-	}
 
-	now := time.Now()
 	dirty := false
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
-			v := m.views[a.ID]
-			if v == nil {
-				v = &agentView{}
-				m.views[a.ID] = v
+			tr := m.trackers[a.ID]
+			if tr == nil {
+				tr = &status.Tracker{}
+				m.trackers[a.ID] = tr
 			}
-			hs := msg.hooks[a.ID]
+			hook := msg.hooks[a.ID]
 			pane, ok := m.panes[a.ID]
-			s := computeStatus(kindByName(m.kinds, a.Kind), pane, ok, v, hs, msg.screens[a.ID], now)
-			onStage := a.ID == m.stageID
-			if onStage {
-				v.attention = false
-			} else if v.status == statusRunning && (s == statusIdle || s == statusWaiting) {
-				v.attention = true
-			}
-			v.status = s
-			if hs != nil && hs.SessionID != "" && hs.SessionID != a.SessionID {
+			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, msg.screens[a.ID], a.ID == m.stageID, now)
+			if hook != nil && hook.SessionID != "" && hook.SessionID != a.SessionID {
 				// A forked resume reports its new id here; later resumes use it.
-				a.SessionID, a.Fork = hs.SessionID, false
+				a.SessionID, a.Fork = hook.SessionID, false
 				dirty = true
 			}
 		}
@@ -345,54 +351,25 @@ func (m *model) applyPoll(msg pollMsg) {
 	}
 }
 
-func computeStatus(k AgentKind, pane Pane, ok bool, v *agentView, hs *HookStatus, screen string, now time.Time) string {
-	if !ok {
-		return statusStopped
-	}
-	if pane.Dead {
-		return statusExited
-	}
-	h := fnv.New64a()
-	h.Write([]byte(screen))
-	sum := h.Sum64()
-	if !v.seen {
-		v.seen, v.hash = true, sum
-	} else if sum != v.hash {
-		v.hash, v.lastChange = sum, now
-	}
+// usableDir is replaceable in tests (temp dirs don't count as projects).
+var usableDir = discover.UsableDir
 
-	if k.Hooks && hs != nil {
-		switch hs.State {
-		case statusWaiting:
-			return statusWaiting
-		case statusRunning:
-			last := hs.At
-			if v.lastChange.After(last) {
-				last = v.lastChange
-			}
-			if now.Sub(last) > staleRunning {
-				return statusIdle // interrupted: no Stop hook fires on Esc
-			}
-			return statusRunning
-		default:
-			return statusIdle
+// applyExternals records outside sessions and auto-adds their projects.
+func (m *model) applyExternals(ext []discover.External) {
+	m.externals = ext
+	var added []string
+	for _, e := range ext {
+		if m.st.FindProject(e.Root) != nil || m.st.IsIgnored(e.Root) || !usableDir(e.Root) {
+			continue
 		}
+		p, _ := m.st.AddProject(e.Root)
+		added = append(added, p.Name)
 	}
-	if now.Sub(v.lastChange) < activeWindow {
-		return statusRunning
+	if len(added) > 0 {
+		m.save()
+		m.setFlash("synced: " + strings.Join(added, ", "))
 	}
-	if k.screenWaiting(tailLines(screen, waitingTailLen)) {
-		return statusWaiting
-	}
-	return statusIdle
-}
-
-func tailLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n "), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
+	m.rebuildRows()
 }
 
 // ---- rows & selection ----
@@ -458,7 +435,7 @@ func (m *model) rebuildRows() {
 }
 
 func (m *model) selectAgent(id string) {
-	p, _ := m.st.findAgent(id)
+	p, _ := m.st.FindAgent(id)
 	if p != nil && p.Collapsed {
 		p.Collapsed = false
 		m.save()
@@ -516,10 +493,10 @@ func (m *model) current() (row, bool) {
 }
 
 func (m *model) save() {
-	if err := m.st.save(); err != nil {
+	if err := m.st.Save(); err != nil {
 		m.setFlash(err.Error())
 	}
-	m.stMod = stateModTime()
+	m.stMod = state.ModTime()
 }
 
 func (m *model) setFlash(s string) {
@@ -529,28 +506,12 @@ func (m *model) setFlash(s string) {
 // ---- actions (tmux work runs off the UI goroutine) ----
 
 func action(selectID string, f func() error) tea.Cmd {
-	return func() tea.Msg { return doneMsg{err: f(), select_: selectID} }
+	return func() tea.Msg { return doneMsg{err: f(), selectID: selectID} }
 }
 
-func (m *model) openCmd(a *Agent) tea.Cmd {
-	st := m.snapshot()
-	kinds := m.kinds
-	return action("", func() error { return openAgent(st, a.ID, kinds) })
-}
-
-// snapshot copies the state so actions never race with Update.
-func (m *model) snapshot() *State {
-	cp := &State{}
-	for _, p := range m.st.Projects {
-		pc := *p
-		pc.Agents = nil
-		for _, a := range p.Agents {
-			ac := *a
-			pc.Agents = append(pc.Agents, &ac)
-		}
-		cp.Projects = append(cp.Projects, &pc)
-	}
-	return cp
+func (m *model) openCmd(a *state.Agent) tea.Cmd {
+	st, kinds, id := m.st.Clone(), m.kinds, a.ID
+	return action("", func() error { return deck.OpenAgent(st, id, kinds) })
 }
 
 func (m *model) activate(r row) tea.Cmd {
@@ -572,28 +533,10 @@ func (m *model) activate(r row) tea.Cmd {
 	return nil
 }
 
-// applyExternals records outside sessions and auto-adds their projects.
-func (m *model) applyExternals(ext []External) {
-	m.externals = ext
-	var added []string
-	for _, e := range ext {
-		if m.st.findProject(e.Root) != nil || m.st.isIgnored(e.Root) || !usableDir(e.Root) {
-			continue
-		}
-		p, _ := m.st.addProject(e.Root)
-		added = append(added, p.Name)
-	}
-	if len(added) > 0 {
-		m.save()
-		m.setFlash("synced: " + strings.Join(added, ", "))
-	}
-	m.rebuildRows()
-}
-
 // adopt moves a terminal session into the deck: the original process is
 // asked to exit, then the same session resumes here.
-func (m *model) adopt(p *Project, e External) tea.Cmd {
-	a := &Agent{ID: newUUID(), Kind: e.Kind, SessionID: e.SessionID, CreatedAt: time.Now()}
+func (m *model) adopt(p *state.Project, e discover.External) tea.Cmd {
+	a := &state.Agent{ID: state.NewUUID(), Kind: e.Kind, SessionID: e.SessionID, CreatedAt: time.Now()}
 	if e.Cwd != p.Path {
 		a.Dir = e.Cwd
 	}
@@ -603,16 +546,16 @@ func (m *model) adopt(p *Project, e External) tea.Cmd {
 			break
 		}
 	}
-	return m.launch(p, a, true, func() error { return terminateExternal(e.PID) })
+	return m.launch(p, a, true, func() error { return discover.TerminateExternal(e.PID) })
 }
 
-func (m *model) newAgent(p *Project, kind string) tea.Cmd {
-	return m.launch(p, &Agent{ID: newUUID(), Kind: kind, CreatedAt: time.Now()}, false, nil)
+func (m *model) newAgent(p *state.Project, kind string) tea.Cmd {
+	return m.launch(p, &state.Agent{ID: state.NewUUID(), Kind: kind, CreatedAt: time.Now()}, false, nil)
 }
 
 // launch adds a to p and starts it in the stage; before runs first (off
 // the UI goroutine) and can abort the start.
-func (m *model) launch(p *Project, a *Agent, resume bool, before func() error) tea.Cmd {
+func (m *model) launch(p *state.Project, a *state.Agent, resume bool, before func() error) tea.Cmd {
 	p.Agents = append(p.Agents, a)
 	p.Collapsed = false
 	m.save()
@@ -625,41 +568,41 @@ func (m *model) launch(p *Project, a *Agent, resume bool, before func() error) t
 				return err
 			}
 		}
-		if err := startAgent(&pc, &ac, resume, kinds); err != nil {
+		if err := deck.StartAgent(&pc, &ac, resume, kinds); err != nil {
 			return err
 		}
-		return showPane(ac.ID, true)
+		return deck.ShowPane(ac.ID, true)
 	})
 }
 
-func (m *model) restart(p *Project, a *Agent) tea.Cmd {
+func (m *model) restart(p *state.Project, a *state.Agent) tea.Cmd {
 	pane, ok := m.panes[a.ID]
 	pc, ac, kinds := *p, *a, m.kinds
 	return action(a.ID, func() error {
 		var err error
 		if ok {
-			err = restartAgent(&pc, &ac, pane.ID, kinds)
+			err = deck.RestartAgent(&pc, &ac, pane.ID, kinds)
 		} else {
-			err = startAgent(&pc, &ac, true, kinds)
+			err = deck.StartAgent(&pc, &ac, true, kinds)
 		}
 		if err != nil {
 			return err
 		}
-		return showPane(ac.ID, true)
+		return deck.ShowPane(ac.ID, true)
 	})
 }
 
 func (m *model) removeAgents(ids ...string) tea.Cmd {
 	for _, id := range ids {
-		m.st.removeAgent(id)
-		delete(m.views, id)
-		os.Remove(hookStatusPath(id))
+		m.st.RemoveAgent(id)
+		delete(m.trackers, id)
+		status.RemoveHook(id)
 	}
 	m.save()
 	m.rebuildRows()
 	return action("", func() error {
 		for _, id := range ids {
-			if err := killAgent(id); err != nil {
+			if err := deck.KillAgent(id); err != nil {
 				return err
 			}
 		}
@@ -685,14 +628,14 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return m.activate(r)
 		}
 	case "<", "-":
-		return action("", func() error { return tmuxRun("resize-pane", "-t", sidebarPane, "-L", "2") })
+		return action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-L", "2") })
 	case ">", "=", "+":
-		return action("", func() error { return tmuxRun("resize-pane", "-t", sidebarPane, "-R", "2") })
+		return action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-R", "2") })
 	case "tab":
-		return action("", func() error { return tmuxRun("select-pane", "-t", stagePane) })
+		return action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		n := int(k.String()[0] - '0')
-		if agents := m.st.orderedAgents(); n <= len(agents) {
+		if agents := m.st.OrderedAgents(); n <= len(agents) {
 			return m.openCmd(agents[n-1])
 		}
 	case "n":
@@ -713,27 +656,27 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		}
 		if r.agent != nil {
 			id := r.agent.ID
-			m.confirm(fmt.Sprintf("kill %s? (y/n)", r.proj.displayName(r.agent)), func() tea.Cmd { return m.removeAgents(id) })
-		} else {
-			p := r.proj
-			var ids []string
-			for _, a := range p.Agents {
-				ids = append(ids, a.ID)
-			}
-			msg := fmt.Sprintf("remove %s? (y/n)", p.Name)
-			if len(ids) > 0 {
-				msg = fmt.Sprintf("remove %s + kill %d? (y/n)", p.Name, len(ids))
-			}
-			m.confirm(msg, func() tea.Cmd {
-				cmd := m.removeAgents(ids...)
-				m.st.removeProject(p)
-				m.save()
-				m.rebuildRows()
-				return cmd
-			})
+			m.confirm(fmt.Sprintf("kill %s? (y/n)", r.proj.DisplayName(r.agent)), func() tea.Cmd { return m.removeAgents(id) })
+			return nil
 		}
+		p := r.proj
+		var ids []string
+		for _, a := range p.Agents {
+			ids = append(ids, a.ID)
+		}
+		msg := fmt.Sprintf("remove %s? (y/n)", p.Name)
+		if len(ids) > 0 {
+			msg = fmt.Sprintf("remove %s + kill %d? (y/n)", p.Name, len(ids))
+		}
+		m.confirm(msg, func() tea.Cmd {
+			cmd := m.removeAgents(ids...)
+			m.st.RemoveProject(p)
+			m.save()
+			m.rebuildRows()
+			return cmd
+		})
 	case "q", "ctrl+c":
-		return action("", func() error { return tmuxRun("detach-client") })
+		return action("", func() error { return tmux.Run("detach-client") })
 	}
 	return nil
 }
@@ -807,18 +750,31 @@ func (m *model) handleMouse(ev tea.MouseMsg) tea.Cmd {
 
 // ---- view ----
 
+// View never draws past the pane width: tmux would wrap the line and push
+// the whole layout down.
 func (m *model) View() string {
 	if m.width == 0 {
 		return ""
 	}
+	var v string
 	switch m.mode {
 	case modeAddProject:
-		return m.pickerView()
+		v = m.pickerView()
 	case modePickSession:
-		return m.sessionsView()
+		v = m.sessionsView()
+	default:
+		v = m.sidebarView()
 	}
+	lines := strings.Split(v, "\n")
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, m.width, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *model) sidebarView() string {
 	var b strings.Builder
-	b.WriteString(stHeader.Render(" ⧉ mad") + stDim.Render(fmt.Sprintf("  %d agents", len(m.st.orderedAgents()))) + "\n\n")
+	b.WriteString(stHeader.Render(" ⧉ mad") + stDim.Render(fmt.Sprintf("  %d agents", len(m.st.OrderedAgents()))) + "\n\n")
 
 	h := m.listHeight()
 	lines := 0
@@ -831,7 +787,7 @@ func (m *model) View() string {
 		if i == m.cursor {
 			// Inner styles reset the background, so the cursor row is
 			// rendered plain on a solid bar.
-			line = padRight(ansi.Strip(line), m.width)
+			line = textutil.PadRight(ansi.Strip(line), m.width)
 			if m.focused {
 				line = stCursor.Render(line)
 			} else {
@@ -851,28 +807,21 @@ func (m *model) View() string {
 func (m *model) renderRow(r row) string {
 	switch {
 	case r.ext != nil:
-		return fmt.Sprintf("    %s %s %s", stDim.Render("↗"), padRight(r.ext.Kind, 11), stDim.Render(r.ext.TTY))
+		return fmt.Sprintf("    %s %s %s", stDim.Render("↗"), textutil.PadRight(r.ext.Kind, 11), stDim.Render(r.ext.TTY))
 	case r.desktop > 0:
 		return stDim.Render(fmt.Sprintf("    ◇ %d in desktop", r.desktop))
-	}
-	if r.agent == nil {
-		arrow := "▾"
-		extra := ""
+	case r.agent == nil:
+		arrow, extra := "▾", ""
 		if r.proj.Collapsed {
-			arrow = "▸"
-			extra = m.projectSummary(r.proj)
+			arrow, extra = "▸", m.projectSummary(r.proj)
 		}
-		name := truncate(r.proj.Name, m.width-6)
-		return " " + arrow + " " + stProject.Render(name) + extra
+		return " " + arrow + " " + stProject.Render(textutil.Truncate(r.proj.Name, m.width-6)) + extra
 	}
 	a := r.agent
-	v := m.views[a.ID]
-	status := statusStopped
-	attention := false
-	if v != nil && v.status != "" {
-		status, attention = v.status, v.attention
+	st, attention := status.Stopped, false
+	if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
+		st, attention = tr.Status, tr.Attention
 	}
-
 	mark := " "
 	if a.ID == m.stageID {
 		mark = stStage.Render("▶")
@@ -881,23 +830,23 @@ func (m *model) renderRow(r row) string {
 	if r.num <= 9 {
 		num = stDim.Render(fmt.Sprint(r.num))
 	}
-	icon, label := m.statusGlyph(status, attention)
-	name := padRight(truncate(r.proj.displayName(a), 11), 11)
+	icon, label := m.statusGlyph(st, attention)
+	name := textutil.PadRight(textutil.Truncate(r.proj.DisplayName(a), 11), 11)
 	return fmt.Sprintf("  %s%s %s %s %s", mark, num, icon, name, label)
 }
 
-func (m *model) statusGlyph(status string, attention bool) (string, string) {
-	switch status {
-	case statusRunning:
+func (m *model) statusGlyph(s string, attention bool) (string, string) {
+	switch s {
+	case status.Running:
 		return stRunning.Render(spinner[m.frame%len(spinner)]), stRunning.Render("running")
-	case statusWaiting:
+	case status.Waiting:
 		return stWaiting.Render("?"), stWaiting.Render("waiting")
-	case statusIdle:
+	case status.Idle:
 		if attention {
 			return stDone.Render("●"), stDone.Render("done")
 		}
 		return stDim.Render("○"), stDim.Render("idle")
-	case statusExited:
+	case status.Exited:
 		return stDim.Render("✗"), stDim.Render("exited")
 	default:
 		return stDim.Render("·"), stDim.Render("stopped")
@@ -906,19 +855,19 @@ func (m *model) statusGlyph(status string, attention bool) (string, string) {
 
 // projectSummary is shown next to a collapsed project: agent count plus
 // the most urgent status inside it.
-func (m *model) projectSummary(p *Project) string {
+func (m *model) projectSummary(p *state.Project) string {
 	if len(p.Agents) == 0 {
 		return ""
 	}
 	waiting, running, done := 0, 0, 0
 	for _, a := range p.Agents {
-		if v := m.views[a.ID]; v != nil {
+		if tr := m.trackers[a.ID]; tr != nil {
 			switch {
-			case v.status == statusWaiting:
+			case tr.Status == status.Waiting:
 				waiting++
-			case v.status == statusRunning:
+			case tr.Status == status.Running:
 				running++
-			case v.attention:
+			case tr.Attention:
 				done++
 			}
 		}
@@ -938,9 +887,6 @@ func (m *model) projectSummary(p *Project) string {
 func (m *model) renderFooter() string {
 	var l1, l2 string
 	switch m.mode {
-	case modeAddProject:
-		l1 = " add project (enter/esc)"
-		l2 = " " + m.input.View()
 	case modeConfirm:
 		l1 = " " + stWaiting.Render(m.confirmMsg)
 	case modePickKind:
@@ -950,33 +896,18 @@ func (m *model) renderFooter() string {
 		for i, k := range m.kinds {
 			line := fmt.Sprintf("  %d %s", i+1, k.Name)
 			if i == m.kindCursor {
-				line = stCursor.Render(padRight(line, m.width))
+				line = stCursor.Render(textutil.PadRight(line, m.width))
 			}
 			b.WriteString(line + "\n")
 		}
 		return strings.TrimRight(b.String(), "\n")
 	default:
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
-			l1 = " " + stFlash.Render(truncate(m.flash, m.width-2))
+			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		} else {
 			l1 = stDim.Render(" ⏎ open  n new  a project")
 		}
 		l2 = stDim.Render(" r resume  x kill  q detach")
 	}
 	return stDim.Render(strings.Repeat("─", m.width)) + "\n" + l1 + "\n" + l2
-}
-
-// truncate cuts s to n display columns (CJK counts double).
-func truncate(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	return ansi.Truncate(s, n, "…")
-}
-
-func padRight(s string, n int) string {
-	if w := lipgloss.Width(s); w < n {
-		return s + strings.Repeat(" ", n-w)
-	}
-	return s
 }
