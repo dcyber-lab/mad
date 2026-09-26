@@ -1,0 +1,5 @@
+/jqgo
+*.test
+!testdata/**/*.test
+*.out
+*.prof

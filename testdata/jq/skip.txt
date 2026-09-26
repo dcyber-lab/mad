@@ -1,0 +1,38 @@
+# Cases from jq's test suites that jqgo deliberately does not follow.
+# Each "## " line gives the reason for the programs listed under it.
+
+## modules (import/include/modulemeta) are not supported
+import "a" as foo; import "b" as bar; def fooa: foo::a; [fooa, bar::a, bar::b, foo::a]
+import "c" as foo; [foo::a, foo::c]
+include "c"; [a, c]
+import "data" as $e; import "data" as $d; [$d[].this,$e[].that,$d::d[].this,$e::e[].that]|join(";")
+import "data" as $a; import "data" as $b; def f: {$a, $b}; f
+include "shadow1"; e
+include "shadow1"; include "shadow2"; e
+import "shadow1" as f; import "shadow2" as f; import "shadow1" as e; [e::e, f::e]
+modulemeta
+modulemeta | .deps | length
+modulemeta | .defs | length
+import "test_bind_order" as check; check::check
+
+## jqgo keeps integers exact in 64 bits; jq rounds them to doubles
+. - 10
+.[0] - 10
+.x - 10
+.[] as $n | $n+0 | [., tostring, . == $n]
+
+## jq 1.7 preserves number literals (1.000, big integers); jqgo normalizes numbers
+[., tojson]
+map([., . == 1]) | tojson
+. as $big | [$big, $big + 1] | map(. > 10000000000000000000000000000000)
+
+## Go's RE2 differs from Oniguruma: no lookaround, ASCII-only \b, unmatched
+## empty groups, and empty matches right after a previous match
+[match("( )*"; "g")]
+[match(".+?\\b")]
+gsub("(?=u)"; "u")
+gsub("[^a-z]*(?<x>[a-z]*)"; "Z\(.x)")
+
+## jq quirks: fromjson accepting "nan1234", input's error text in jq's test harness
+fromjson | isnan
+try input catch .

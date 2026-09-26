@@ -1,0 +1,148 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	"github.com/dcyber-lab/jqgo"
+)
+
+// inputStream reads JSON values (or raw lines) from the input files in
+// order, or from stdin when there are none. It also backs the input and
+// inputs builtins, so a query can pull values ahead of the main loop.
+type inputStream struct {
+	files []string
+	stdin io.Reader
+	raw   bool
+
+	next  int // index of the next file to open
+	name  string
+	f     *os.File
+	dec   *jqgo.Decoder
+	lines *bufio.Reader
+	count int // values read from the current source
+	err   error
+}
+
+func newInputStream(opts options, stdin io.Reader) *inputStream {
+	s := &inputStream{files: opts.files, stdin: stdin, raw: opts.rawInput}
+	if len(s.files) == 0 {
+		s.open("<stdin>", stdin)
+		s.next = -1
+	}
+	return s
+}
+
+func (s *inputStream) open(name string, r io.Reader) {
+	s.name = name
+	s.count = 0
+	br := bufio.NewReaderSize(r, 64*1024)
+	if s.raw {
+		s.lines, s.dec = br, nil
+	} else {
+		s.dec, s.lines = jqgo.NewDecoder(br), nil
+	}
+}
+
+// advance opens the next file; it reports false when none are left.
+func (s *inputStream) advance() bool {
+	if s.f != nil {
+		s.f.Close()
+		s.f = nil
+	}
+	for s.next >= 0 && s.next < len(s.files) {
+		name := s.files[s.next]
+		s.next++
+		f, err := os.Open(name)
+		if err != nil {
+			s.err = fmt.Errorf("Could not open %s: %v", name, err)
+			fmt.Fprintf(os.Stderr, "jqgo: error: %s\n", s.err)
+			continue
+		}
+		s.f = f
+		s.open(name, f)
+		return true
+	}
+	s.dec, s.lines = nil, nil
+	return false
+}
+
+// Next implements jqgo.Inputs.
+func (s *inputStream) Next() (any, error) {
+	for {
+		if s.dec == nil && s.lines == nil {
+			if !s.advance() {
+				return nil, io.EOF
+			}
+		}
+		if s.raw {
+			line, err := s.lines.ReadString('\n')
+			if err == io.EOF && line == "" {
+				s.lines = nil
+				continue
+			}
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
+			s.count++
+			return strings.TrimSuffix(line, "\n"), nil
+		}
+		v, err := s.dec.Decode()
+		if err == io.EOF {
+			s.dec = nil
+			continue
+		}
+		if err != nil {
+			s.dec = nil // give up on this source after a syntax error
+			return nil, err
+		}
+		s.count++
+		return v, nil
+	}
+}
+
+// Filename implements input_filename.
+func (s *inputStream) Filename() any {
+	if s.name == "" || s.name == "<stdin>" {
+		return nil
+	}
+	return s.name
+}
+
+func (s *inputStream) position() string {
+	name := s.name
+	if name == "" {
+		name = "<stdin>"
+	}
+	return fmt.Sprintf("%s:%d", name, s.count)
+}
+
+// slurp reads everything: an array of values, or one string with -R.
+func (s *inputStream) slurp() (any, error) {
+	if s.raw {
+		var sb strings.Builder
+		for {
+			if s.lines == nil && !s.advance() {
+				return sb.String(), nil
+			}
+			if _, err := io.Copy(&sb, s.lines); err != nil {
+				return nil, err
+			}
+			s.lines = nil
+		}
+	}
+	all := []any{}
+	for {
+		v, err := s.Next()
+		if err == io.EOF {
+			return all, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, v)
+	}
+}
