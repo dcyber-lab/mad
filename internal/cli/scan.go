@@ -7,6 +7,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
@@ -24,8 +25,12 @@ func scan(args []string, out io.Writer) {
 		fmt.Fprintf(out, "  %-4s %-50s %v\n", textutil.Age(c.LastUsed), paths.Short(c.Path), c.Sources)
 	}
 
+	var taken map[string]bool
+	if st, err := state.Load(); err == nil {
+		taken = st.OpenSessions()
+	}
 	t = time.Now()
-	ext := discover.ScanExternal(nil)
+	ext := discover.ScanExternal(nil, taken)
 	fmt.Fprintf(out, "\nopen outside the deck: %d (%s)\n", len(ext), time.Since(t).Round(time.Millisecond))
 	for _, e := range ext {
 		fmt.Fprintf(out, "  %-7d %-8s %-6s desktop=%-5v %-40s %s\n", e.PID, e.TTY, e.Kind, e.Desktop, paths.Short(e.Root), e.SessionID)
