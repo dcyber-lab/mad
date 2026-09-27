@@ -8,6 +8,7 @@ package tmux
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -198,18 +199,49 @@ func tracksFocus() bool {
 	return focusVersion.ok
 }
 
-// versionAtLeast parses "tmux 3.3a" or "tmux next-3.5"; anything without a
-// version number counts as too old.
-func versionAtLeast(v string, major, minor int) bool {
+// parseVersion reads the numbers of "tmux 3.3a" or "tmux next-3.5"; ok is
+// false for a version without them ("tmux master").
+func parseVersion(v string) (major, minor int, ok bool) {
 	i := strings.IndexAny(v, "0123456789")
 	if i < 0 {
-		return false
+		return 0, 0, false
 	}
-	var ma, mi int
-	if n, _ := fmt.Sscanf(v[i:], "%d.%d", &ma, &mi); n < 2 {
-		return false
+	if n, _ := fmt.Sscanf(v[i:], "%d.%d", &major, &minor); n < 2 {
+		return 0, 0, false
 	}
-	return ma > major || ma == major && mi >= minor
+	return major, minor, true
+}
+
+// versionAtLeast: anything without a version number counts as too old.
+func versionAtLeast(v string, major, minor int) bool {
+	ma, mi, ok := parseVersion(v)
+	return ok && (ma > major || ma == major && mi >= minor)
+}
+
+// The oldest tmux mad runs on. 3.0 brought pane options, which tell mad's
+// panes apart (@mad_id), and -e, which hands an agent its id.
+const minMajor, minMinor = 3, 0
+
+// CheckVersion says what is wrong when tmux is missing or too old for mad,
+// rather than leave it to the first tmux command that fails.
+func CheckVersion() error {
+	out, err := exec.Command("tmux", "-V").Output()
+	if errors.Is(err, exec.ErrNotFound) {
+		return fmt.Errorf("tmux is not installed (or not on your PATH); mad needs tmux %d.%d or newer", minMajor, minMinor)
+	}
+	if err != nil {
+		return nil // tmux is there; what it does will show
+	}
+	return checkVersion(string(out))
+}
+
+// checkVersion lets a version it can't read pass: a build from tmux's
+// master says "tmux master".
+func checkVersion(v string) error {
+	if _, _, ok := parseVersion(v); !ok || versionAtLeast(v, minMajor, minMinor) {
+		return nil
+	}
+	return fmt.Errorf("%s is too old: mad needs tmux %d.%d or newer", strings.TrimSpace(v), minMajor, minMinor)
 }
 
 // Versions returns the version of the running server and of the installed
