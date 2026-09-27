@@ -171,6 +171,30 @@ func TestVersionAtLeast(t *testing.T) {
 	}
 }
 
+func TestClientVersion(t *testing.T) {
+	for v, want := range map[string]string{
+		"tmux 3.7c\n": "3.7c", "tmux next-3.5": "next-3.5", "tmux openbsd-7.4\n": "openbsd-7.4", "": "",
+	} {
+		if got := clientVersion(v); got != want {
+			t.Errorf("clientVersion(%q) = %q, want %q", v, got, want)
+		}
+	}
+}
+
+func TestVersions(t *testing.T) {
+	useServer(t)
+	if server, _ := Versions(); server != "" {
+		t.Errorf("no server is running, got version %q", server)
+	}
+	if err := Run("new-session", "-d", "-s", MainSession, "-x", "80", "-y", "20", "sleep 30"); err != nil {
+		t.Fatal(err)
+	}
+	server, client := Versions()
+	if server == "" || server != client {
+		t.Errorf("server %q, client %q: one tmux started both", server, client)
+	}
+}
+
 func TestCaptureAll(t *testing.T) {
 	useServer(t)
 	var ids []string
