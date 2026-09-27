@@ -2,7 +2,9 @@ package tmux
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +194,51 @@ func TestVersions(t *testing.T) {
 	server, client := Versions()
 	if server == "" || server != client {
 		t.Errorf("server %q, client %q: one tmux started both", server, client)
+	}
+}
+
+func TestCheckVersion(t *testing.T) {
+	for _, v := range []string{
+		"tmux 3.7c\n", "tmux 3.0", "tmux 3.0a", "tmux next-3.5", "tmux openbsd-7.4",
+		"tmux master", "", // not readable: let tmux show what it can do
+	} {
+		if err := checkVersion(v); err != nil {
+			t.Errorf("checkVersion(%q) = %v", v, err)
+		}
+	}
+	for _, v := range []string{"tmux 2.9a\n", "tmux 2.6", "tmux 1.8"} {
+		err := checkVersion(v)
+		if err == nil || !strings.Contains(err.Error(), strings.TrimSpace(v)+" is too old") || !strings.Contains(err.Error(), "tmux 3.0 or newer") {
+			t.Errorf("checkVersion(%q) = %v", v, err)
+		}
+	}
+}
+
+// fakeTmux puts a tmux that only knows -V first (and alone) on PATH.
+func fakeTmux(t *testing.T, version string) {
+	t.Helper()
+	dir := t.TempDir()
+	if version != "" {
+		script := "#!/bin/sh\necho '" + version + "'\n"
+		if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestCheckVersionRunsTmux(t *testing.T) {
+	fakeTmux(t, "tmux 2.9a")
+	if err := CheckVersion(); err == nil || !strings.Contains(err.Error(), "tmux 2.9a is too old") {
+		t.Errorf("old tmux: %v", err)
+	}
+	fakeTmux(t, "tmux 3.4")
+	if err := CheckVersion(); err != nil {
+		t.Errorf("tmux 3.4: %v", err)
+	}
+	fakeTmux(t, "")
+	if err := CheckVersion(); err == nil || !strings.Contains(err.Error(), "not installed") {
+		t.Errorf("no tmux: %v", err)
 	}
 }
 

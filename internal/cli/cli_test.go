@@ -74,6 +74,26 @@ func TestVersionNote(t *testing.T) {
 	}
 }
 
+// A tmux too old for mad: the deck isn't started, and nothing is written.
+func TestOpenWithOldTmux(t *testing.T) {
+	home := isolate(t)
+	t.Setenv("TMUX", "") // the tests may run in a deck
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\necho 'tmux 2.9a'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	for _, args := range [][]string{nil, {"open"}} {
+		code, _, errOut := run(t, "", args...)
+		if code != 1 || errOut != "mad: tmux 2.9a is too old: mad needs tmux 3.0 or newer\n" {
+			t.Errorf("%v: code=%d err=%q", args, code, errOut)
+		}
+	}
+	if left, _ := os.ReadDir(home); len(left) != 0 {
+		t.Errorf("written before the check: %v", left)
+	}
+}
+
 func TestAdd(t *testing.T) {
 	dir := isolate(t)
 	proj := filepath.Join(dir, "code", "app")

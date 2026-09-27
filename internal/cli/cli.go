@@ -140,6 +140,9 @@ func open(errOut io.Writer) error {
 	if tmux.InDeck() {
 		return tmux.Run("select-pane", "-t", tmux.SidebarPane)
 	}
+	if err := tmux.CheckVersion(); err != nil {
+		return err
+	}
 	if err := deck.WriteConfigs(); err != nil {
 		return err
 	}

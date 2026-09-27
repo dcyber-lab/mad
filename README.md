@@ -46,7 +46,7 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 ## Requirements
 
 - macOS or Linux (developed and tested on macOS)
-- [tmux](https://github.com/tmux/tmux) — 3.2+ recommended (see
+- [tmux](https://github.com/tmux/tmux) 3.0 or newer — 3.2+ recommended (see
   [Known limitations](#known-limitations))
 - Go 1.24+ only if you build from source (older Go links macOS binaries
   that recent macOS refuses to load); the release binaries need no Go
