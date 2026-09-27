@@ -57,6 +57,28 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 
 ## Installation
 
+One line installs mad and what it needs:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dcyber-lab/mad/main/install.sh | sh
+```
+
+The latest release goes to `~/.local/bin`, checked against the release's
+checksums. tmux, git, `ps` and `lsof` are installed with your package
+manager (Homebrew, apt, dnf, yum, pacman, zypper or apk) when they are
+missing, and left alone when they are there. The agents are yours to
+install.
+
+| Option          | Meaning                                                      |
+| --------------- | ------------------------------------------------------------ |
+| `--all`         | Also lazygit, `gh` and, on Linux, `notify-send`              |
+| `--no-deps`     | Only mad, no packages                                        |
+| `--dir DIR`     | Where mad goes (default: `~/.local/bin`)                     |
+| `--version TAG` | A release such as `v0.2.0` (default: the latest)             |
+| `--dry-run`     | Say what would be done, change nothing                       |
+
+Options follow `sh -s --`, as in `curl ... | sh -s -- --all`.
+
 With [Homebrew](https://brew.sh) (macOS or Linux):
 
 ```sh
