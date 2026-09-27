@@ -74,6 +74,7 @@ func tick() tea.Cmd {
 // scanCmd looks for agent sessions outside the deck.
 func (m *model) scanCmd() tea.Cmd {
 	m.scanning, m.lastScan = true, time.Now()
+	taken := m.st.OpenSessions()
 	return func() tea.Msg {
 		deckTTYs := map[string]bool{}
 		if panes, err := tmux.ListPanes(); err == nil {
@@ -81,7 +82,7 @@ func (m *model) scanCmd() tea.Cmd {
 				deckTTYs[p.TTY] = true
 			}
 		}
-		return externalsMsg(discover.ScanExternal(deckTTYs))
+		return externalsMsg(discover.ScanExternal(deckTTYs, taken))
 	}
 }
 

@@ -242,8 +242,9 @@ var (
 )
 
 // ScanExternal finds the sessions of every provider running outside the
-// deck, whose own terminals are deckTTYs (e.g. /dev/ttys004).
-func ScanExternal(deckTTYs map[string]bool) []External {
+// deck, whose own terminals are deckTTYs (e.g. /dev/ttys004). taken are the
+// session ids the deck's agents have open, never handed out as a guess.
+func ScanExternal(deckTTYs, taken map[string]bool) []External {
 	out, err := listProcesses()
 	if err != nil {
 		return nil
@@ -285,6 +286,9 @@ func ScanExternal(deckTTYs map[string]bool) []External {
 	// first. A guess, but right for the one-per-dir case.
 	sort.Slice(guess, func(i, j int) bool { return res[guess[i]].PID > res[guess[j]].PID })
 	used := map[string]bool{}
+	for id := range taken {
+		used[id] = true
+	}
 	for _, e := range res {
 		used[e.SessionID] = true
 	}

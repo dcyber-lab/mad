@@ -290,7 +290,7 @@ func TestScanExternal(t *testing.T) {
 	externalCache = map[int]External{}
 	externalMu.Unlock()
 
-	ext := ScanExternal(nil)
+	ext := ScanExternal(nil, nil)
 	var got []string
 	for _, e := range ext {
 		got = append(got, fmt.Sprintf("%d %s %s desktop=%v %s", e.PID, e.Kind, filepath.Base(e.Root), e.Desktop, e.SessionID))
@@ -308,9 +308,14 @@ func TestScanExternal(t *testing.T) {
 		t.Errorf("cwd/where = %s %s %s", ext[3].Cwd, ext[3].Where(), ext[0].Where())
 	}
 
+	// A session a deck agent has open is never guessed for one outside.
+	if ext := ScanExternal(nil, map[string]bool{uuid(11): true}); ext[1].SessionID != uuid(10) {
+		t.Errorf("guessed a deck agent's session: %s", ext[1].SessionID)
+	}
+
 	// Exited processes drop out of the cache.
 	ps = "201 ttys001 claude --resume " + uuid(99)
-	if ext := ScanExternal(nil); len(ext) != 1 {
+	if ext := ScanExternal(nil, nil); len(ext) != 1 {
 		t.Errorf("after exits: %+v", ext)
 	}
 	externalMu.Lock()

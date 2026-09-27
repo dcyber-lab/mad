@@ -158,6 +158,21 @@ func (s *State) OrderedAgents() []*Agent {
 	return out
 }
 
+// OpenSessions are the session ids the agents hold: the current one, and
+// the agent's own id, which a claude agent's first session is started with.
+func (s *State) OpenSessions() map[string]bool {
+	ids := map[string]bool{}
+	for _, p := range s.Projects {
+		for _, a := range p.Agents {
+			ids[a.ID] = true
+			if a.SessionID != "" {
+				ids[a.SessionID] = true
+			}
+		}
+	}
+	return ids
+}
+
 // Clone deep-copies the tree, so background work never races the UI.
 func (s *State) Clone() *State {
 	cp := &State{Ignored: append([]string(nil), s.Ignored...)}
