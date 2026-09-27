@@ -389,6 +389,10 @@ picker, sessions open elsewhere) is Go code, one file per agent in
 - tmux older than 3.2 lacks `extended-keys`, so Shift+Enter for a newline in
   claude does not work there (use `\` + Enter instead). On macOS, upgrade
   with `brew upgrade tmux`.
+- A running deck stays on the tmux it was started with. After a tmux
+  upgrade, `mad` says so when the versions differ, and may fail to open the
+  deck with `open terminal failed: not a terminal`. Run `mad kill-server`
+  and then `mad`; that stops every agent, press `enter` on each to resume.
 - codex and pi have no hooks, so their `waiting` state relies on matching
   on-screen text and may miss new prompt wording. Their `running` state comes
   from screen changes: a long command that prints nothing can briefly look

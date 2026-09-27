@@ -60,6 +60,20 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestVersionNote(t *testing.T) {
+	for _, c := range [][2]string{{"3.7c", "3.7c"}, {"", "3.7c"}, {"3.4", ""}} {
+		if got := versionNote(c[0], c[1]); got != "" {
+			t.Errorf("versionNote(%q, %q) = %q, want nothing", c[0], c[1], got)
+		}
+	}
+	got := versionNote("3.4", "3.7c")
+	for _, want := range []string{"runs on tmux 3.4", "installed tmux is 3.7c", "mad kill-server"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("versionNote = %q, missing %q", got, want)
+		}
+	}
+}
+
 func TestAdd(t *testing.T) {
 	dir := isolate(t)
 	proj := filepath.Join(dir, "code", "app")

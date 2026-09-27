@@ -79,7 +79,7 @@ func Run(args []string, stdio IO) int {
 	var err error
 	switch cmd {
 	case "", "open":
-		err = open()
+		err = open(stdio.Err)
 	case "add":
 		err = add(args, stdio.Out)
 	case "switch":
@@ -121,8 +121,22 @@ func Run(args []string, stdio IO) int {
 	return 0
 }
 
+// versionNote is what to say before attaching when tmux was upgraded under
+// a running deck. Commands still reach a server of another version, but
+// attaching may not: a 3.7c client gets "open terminal failed: not a
+// terminal" from a 3.4 server.
+func versionNote(server, client string) string {
+	if server == "" || client == "" || server == client {
+		return ""
+	}
+	return fmt.Sprintf(`mad: the deck runs on tmux %s, the installed tmux is %s.
+     If the deck does not open, run "mad kill-server" and then "mad".
+     That stops every agent; press enter on each one to resume it.
+`, server, client)
+}
+
 // open builds the deck if needed and attaches this terminal to it.
-func open() error {
+func open(errOut io.Writer) error {
 	if tmux.InDeck() {
 		return tmux.Run("select-pane", "-t", tmux.SidebarPane)
 	}
@@ -149,6 +163,7 @@ func open() error {
 	}
 	if tmux.Run("list-sessions") == nil {
 		_ = tmux.Run("source-file", paths.TmuxConf())
+		fmt.Fprint(errOut, versionNote(tmux.Versions()))
 	}
 	if err := deck.EnsureLayout(cwd, w, h); err != nil {
 		return err

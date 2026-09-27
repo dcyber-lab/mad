@@ -212,6 +212,20 @@ func versionAtLeast(v string, major, minor int) bool {
 	return ma > major || ma == major && mi >= minor
 }
 
+// Versions returns the version of the running server and of the installed
+// tmux, as in "3.4" and "3.7c"; "" for one that cannot be told. They differ
+// once tmux is upgraded under a running deck.
+func Versions() (server, client string) {
+	server, _ = Out("display-message", "-p", "#{version}")
+	out, _ := exec.Command("tmux", "-V").Output()
+	return server, clientVersion(string(out))
+}
+
+// clientVersion takes the version out of what "tmux -V" prints.
+func clientVersion(v string) string {
+	return strings.TrimPrefix(strings.TrimSpace(v), "tmux ")
+}
+
 // CaptureAll returns the visible text of several panes, keyed by pane id,
 // with one tmux call instead of one per pane: a marker line printed before
 // each capture splits the output. If any pane is gone tmux stops at it, so
