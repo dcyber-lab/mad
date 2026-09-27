@@ -29,7 +29,8 @@ usage:
   mad                 open the deck (adds the current git project)
   mad add [path]      add a project (default: current directory)
   mad switch N|next|prev
-                      show agent N (1-based, sidebar order) in the stage
+                      show agent N of the project on stage, or the
+                      next / previous agent
   mad jump            show the next agent that is waiting or done
   mad diff            toggle the diff view for the agent on stage
   mad scan [path]     show what sync sees: history, open sessions, and

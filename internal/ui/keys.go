@@ -35,9 +35,9 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 	case "tab":
 		return m.action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		n := int(k.String()[0] - '0')
-		if agents := m.st.OrderedAgents(); n <= len(agents) {
-			return m.openCmd(agents[n-1])
+		// Numbers count within a project: the one the cursor is in.
+		if n := int(k.String()[0] - '0'); ok && n <= len(r.proj.Agents) {
+			return m.openCmd(r.proj.Agents[n-1])
 		}
 	case "n":
 		if ok {
@@ -129,17 +129,13 @@ func (m *model) jumpNext() tea.Cmd {
 	agents := m.st.OrderedAgents()
 	start := 0 // index into agents to search from
 	if r, ok := m.current(); ok {
-		switch {
-		case r.agent != nil:
-			start = r.num // r.num is 1-based: the agent after it
-		default:
-			for _, p := range m.st.Projects {
-				if p == r.proj {
-					break
-				}
-				start += len(p.Agents)
+		for _, p := range m.st.Projects {
+			if p == r.proj {
+				break
 			}
+			start += len(p.Agents)
 		}
+		start += r.num // 1-based on an agent: the one after it
 	}
 	for k := range agents {
 		if a := agents[(start+k)%len(agents)]; m.needsYou(a) {

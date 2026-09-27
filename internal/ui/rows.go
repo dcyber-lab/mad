@@ -12,17 +12,13 @@ import (
 func (m *model) rebuildRows() {
 	prev, hadPrev := m.current()
 	m.rows = m.rows[:0]
-	num := 0
 	for _, p := range m.st.Projects {
 		m.rows = append(m.rows, row{proj: p})
-		for _, a := range p.Agents {
-			num++
-			if !p.Collapsed {
-				m.rows = append(m.rows, row{proj: p, agent: a, num: num})
-			}
-		}
 		if p.Collapsed {
 			continue
+		}
+		for i, a := range p.Agents {
+			m.rows = append(m.rows, row{proj: p, agent: a, num: i + 1})
 		}
 		desk := row{proj: p}
 		for i := range m.externals {

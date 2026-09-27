@@ -45,6 +45,32 @@ func TestSwitchIndex(t *testing.T) {
 	}
 }
 
+func TestSwitchTarget(t *testing.T) {
+	st := &state.State{}
+	st.AddProject("/code/a")
+	st.AddProject("/code/b")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1"}, {ID: "a2"}}
+	st.Projects[1].Agents = []*state.Agent{{ID: "b1"}, {ID: "b2"}, {ID: "b3"}}
+	cases := []struct{ arg, stage, want string }{
+		{"2", "b1", "b2"}, // N counts within the project on stage
+		{"3", "b1", "b3"},
+		{"3", "a1", ""},          // project a has two agents
+		{"2", "", "a2"},          // nothing on stage: the first project
+		{"2", tmux.IDTask, "a2"}, // nor an agent
+		{"next", "a2", "b1"},     // next and prev cross projects
+		{"prev", "b1", "a2"},
+	}
+	for _, c := range cases {
+		got := ""
+		if a, ok := switchTarget(st, c.arg, c.stage); ok {
+			got = a.ID
+		}
+		if got != c.want {
+			t.Errorf("switch %s with %q on stage → %q, want %q", c.arg, c.stage, got, c.want)
+		}
+	}
+}
+
 func TestSidebarWidth(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if got := SidebarWidth(); got != DefaultSidebarWidth {
