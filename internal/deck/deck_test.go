@@ -93,6 +93,8 @@ func TestTmuxConfigBindings(t *testing.T) {
 	for _, want := range []string{
 		"set -g remain-on-exit on",
 		"set -g mouse on",
+		"set -sq extended-keys on",
+		`set -asq terminal-features ",xterm*:extkeys"`,
 		"bind -n M-s ",
 		"bind -n M-1 run-shell -b ",
 		"bind -n M-j run-shell -b ",
@@ -173,6 +175,13 @@ func TestConfigLoadsInTmux(t *testing.T) {
 	out, err := tmux.Out("show-options", "-g", "remain-on-exit")
 	if err != nil || !strings.Contains(out, "on") {
 		t.Errorf("remain-on-exit = %q, %v", out, err)
+	}
+	// Shift+Enter: tmux 3.2 and later tell it from Enter when asked to.
+	if out, err := tmux.Out("show-options", "-s", "extended-keys"); err != nil || !strings.Contains(out, "on") {
+		t.Errorf("extended-keys = %q, %v", out, err)
+	}
+	if out, err := tmux.Out("show-options", "-s", "terminal-features"); err != nil || !strings.Contains(out, "xterm*:extkeys") {
+		t.Errorf("terminal-features = %q, %v", out, err)
 	}
 }
 

@@ -477,6 +477,10 @@ set -g remain-on-exit on
 set -g set-clipboard on
 set -g default-terminal "tmux-256color"
 set -ga terminal-overrides ",xterm-256color:RGB,xterm-ghostty:RGB"
+# Shift+Enter and the like reach the agents that ask for them. -q: a tmux
+# older than 3.2 knows neither option.
+set -sq extended-keys on
+set -asq terminal-features ",xterm*:extkeys"
 set -g pane-border-style "fg=colour238"
 set -g pane-active-border-style "fg=colour75"
 `)
