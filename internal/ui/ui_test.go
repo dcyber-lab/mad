@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
@@ -458,6 +459,33 @@ func TestSidebarGapsAndMouse(t *testing.T) {
 	click(headerLines + 4) // project b
 	if m.cursor != 2 || !st.Projects[1].Collapsed {
 		t.Errorf("project click: cursor=%d collapsed=%v", m.cursor, st.Projects[1].Collapsed)
+	}
+}
+
+func TestAgentNumbersPerProject(t *testing.T) {
+	m, st := setup(t, "/code/a", "/code/b")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "a2", Kind: "claude"}}
+	st.Projects[1].Agents = []*state.Agent{{ID: "b1", Kind: "codex"}}
+	m.rebuildRows()
+	var nums []string
+	for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if f := strings.Fields(line); len(f) > 3 && strings.HasPrefix(f[3], "c") {
+			nums = append(nums, f[0]+" "+f[3]) // number, icon, kind, name
+		}
+	}
+	if got := strings.Join(nums, ", "); got != "1 claude, 2 claude#2, 1 codex" {
+		t.Errorf("numbers: %s", got)
+	}
+
+	// A digit opens agent N of the project the cursor is in.
+	opens := func(k string) bool { e := m.epoch; press(m, k); return m.epoch != e }
+	press(m, "G") // on b's codex
+	if opens("2") || !opens("1") {
+		t.Error("project b has one agent: 1 opens it, 2 opens nothing")
+	}
+	press(m, "g") // on project a
+	if !opens("2") || opens("3") {
+		t.Error("project a has two agents: 2 opens one, 3 opens nothing")
 	}
 }
 

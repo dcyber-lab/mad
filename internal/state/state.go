@@ -148,8 +148,8 @@ func (s *State) RemoveAgent(id string) {
 	}
 }
 
-// OrderedAgents is the global numbering used by `mad switch N` and the
-// sidebar's 1-9 labels.
+// OrderedAgents are all agents in sidebar order, which `mad switch
+// next|prev` steps through.
 func (s *State) OrderedAgents() []*Agent {
 	var out []*Agent
 	for _, p := range s.Projects {

@@ -419,24 +419,19 @@ func SwitchIndex(arg string, cur, n int) (int, bool) {
 	return k - 1, true
 }
 
-// Switch shows the agent chosen by arg (see SwitchIndex).
+// Switch shows the agent chosen by arg (see switchTarget).
 func Switch(arg string) error {
 	st, err := state.Load()
 	if err != nil {
 		return err
 	}
-	agents := st.OrderedAgents()
-	cur := -1
+	stageID := ""
 	if panes, err := tmux.ListPanes(); err == nil {
 		if stage, ok := tmux.Stage(panes); ok {
-			for i, a := range agents {
-				if a.ID == stage.MadID {
-					cur = i
-				}
-			}
+			stageID = stage.MadID
 		}
 	}
-	i, ok := SwitchIndex(arg, cur, len(agents))
+	a, ok := switchTarget(st, arg, stageID)
 	if !ok {
 		return nil
 	}
@@ -444,11 +439,37 @@ func Switch(arg string) error {
 	if kinds == nil {
 		kinds = agent.Builtin()
 	}
-	if err := OpenAgent(st, agents[i].ID, kinds); err != nil {
+	if err := OpenAgent(st, a.ID, kinds); err != nil {
 		return err
 	}
 	_ = poke.Send(poke.Poll) // so the sidebar shows it now, not a poll later
 	return nil
+}
+
+// switchTarget is the agent `mad switch arg` shows while stageID is on
+// stage: next and prev step through all agents, N counts within a project
+// as the sidebar numbers them, the project on stage or else the first.
+func switchTarget(st *state.State, arg, stageID string) (*state.Agent, bool) {
+	agents := st.OrderedAgents()
+	if _, err := strconv.Atoi(arg); err == nil {
+		agents = nil
+		if p, _ := st.FindAgent(stageID); p != nil {
+			agents = p.Agents
+		} else if len(st.Projects) > 0 {
+			agents = st.Projects[0].Agents
+		}
+	}
+	cur := -1
+	for i, a := range agents {
+		if a.ID == stageID {
+			cur = i
+		}
+	}
+	i, ok := SwitchIndex(arg, cur, len(agents))
+	if !ok {
+		return nil, false
+	}
+	return agents[i], true
 }
 
 // WriteConfigs writes the tmux config and what each agent reads to report

@@ -18,14 +18,15 @@ const PlaceholderText = `
      v         diff view       f       finish: push / PR / rebase / merge
      a         add project     t       name the agent
      r         restart/resume  x       kill agent / remove project
-     1-9       open agent N    q       detach (agents keep running)
+     1-9       open agent N of the project the cursor is in
+     q         detach (agents keep running)
      < / >     narrower / wider sidebar (or drag the border)
 
    anywhere  (Option must act as Alt in Ghostty)
      Alt-s     sidebar ⇄ agent
      Alt-j/k   next / prev agent
      Alt-v     diff view of the agent on stage, and back
-     Alt-1..9  open agent N
+     Alt-1..9  open agent N of the project on stage
      Ctrl-] then s / n / p / 1-9 / d   same, without Alt
 `
 

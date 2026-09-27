@@ -145,7 +145,7 @@ is done.
 | `t`            | Name the agent (empty to go back to its title) |
 | `i`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
-| `1`–`9`        | Open agent N                                   |
+| `1`–`9`        | Open agent N of the project the cursor is in   |
 | `tab`          | Focus the agent pane                           |
 | `<` / `>`      | Narrow / widen the sidebar                     |
 | `q`            | Detach (agents keep running)                   |
@@ -161,7 +161,7 @@ width is remembered.
 | `Alt-j` / `Alt-k` | Next / previous agent                      |
 | `Alt-n`           | Next agent that is waiting or done         |
 | `Alt-v`           | Changes of the agent on stage, and back    |
-| `Alt-1`…`Alt-9`   | Open agent N                               |
+| `Alt-1`…`Alt-9`   | Open agent N of the project on stage       |
 
 If Alt is inconvenient, use the prefix `Ctrl-]` followed by
 `s` / `n` / `p` / `v` / `1`–`9` / `d` (detach).
@@ -173,7 +173,8 @@ If Alt is inconvenient, use the prefix `Ctrl-]` followed by
 ```
 mad                     open the deck (adds the current git project)
 mad add [path]          add a project (default: current directory)
-mad switch N|next|prev  show agent N (1-based, sidebar order)
+mad switch N|next|prev  show agent N of the project on stage, or the next /
+                        previous agent
 mad jump                show the next agent that is waiting or done
 mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)

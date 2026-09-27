@@ -101,7 +101,7 @@ type row struct {
 	ext      *discover.External
 	desktop  int
 	deskKind string
-	num      int // 1-based global agent number
+	num      int // 1-based agent number within its project
 }
 
 func (r row) isProject() bool { return r.agent == nil && r.ext == nil && r.desktop == 0 }
