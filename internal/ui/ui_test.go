@@ -326,6 +326,44 @@ func TestPickerPathModeAndAdd(t *testing.T) {
 	}
 }
 
+func TestPickerTabCompletesCommonPrefix(t *testing.T) {
+	m, _ := setup(t)
+	base := t.TempDir()
+	for _, d := range []string{"project-alpha", "project-beta", "Other"} {
+		_ = os.MkdirAll(filepath.Join(base, d), 0o755)
+	}
+	press(m, "a")
+	typePath := func(s string) {
+		m.input.SetValue(s)
+		m.refreshPicker()
+	}
+
+	typePath(base + "/pro")
+	press(m, "tab")
+	if got := m.input.Value(); got != base+"/project-" {
+		t.Errorf("shared prefix: %q", got)
+	}
+	press(m, "b", "tab")
+	if got := m.input.Value(); got != base+"/project-beta/" {
+		t.Errorf("unique match: %q", got)
+	}
+
+	// Case-insensitive, taking the name's own case.
+	typePath(base + "/oth")
+	press(m, "tab")
+	if got := m.input.Value(); got != base+"/Other/" {
+		t.Errorf("case: %q", got)
+	}
+
+	// Nothing to extend: tab descends into the selection, and a moved
+	// selection wins over the shared prefix.
+	typePath(base + "/project-")
+	press(m, "down", "tab")
+	if got := m.input.Value(); got != paths.Short(base)+"/project-beta/" {
+		t.Errorf("moved selection: %q", got)
+	}
+}
+
 func TestPickerMouseRowMapping(t *testing.T) {
 	m, st := setup(t)
 	dirs := []string{t.TempDir(), t.TempDir()}

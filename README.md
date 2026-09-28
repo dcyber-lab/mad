@@ -195,7 +195,8 @@ mad version             print the version
 - **`a` — add project.** Opens a picker listing projects used by Claude/Codex
   (CLI and desktop) in the last 60 days, most recent first; `●` marks projects
   with a live session. Type to fuzzy-search, or start with `/` or `~` to
-  switch to path completion (`tab` descends into a directory).
+  switch to path completion: `tab` completes like a shell (the part all
+  matches share, then the whole name), or descends into the selected one.
 - **`n` — new claude/codex.** Shows the project's session history: start a
   new session or continue an old one (titles match the desktop app; `◇` marks
   desktop sessions). If that session is open elsewhere, claude forks it with

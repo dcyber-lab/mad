@@ -190,6 +190,16 @@ func (m *model) keyPicker(k tea.KeyMsg) tea.Cmd {
 		m.movePicker(m.pickerListHeight())
 		return nil
 	case "tab":
+		// Like a shell: extend a path to what all matches share first,
+		// unless the selection was moved to pick one.
+		if q := m.input.Value(); m.pk.cursor == 0 && isPathQuery(q) {
+			if c := commonPrefixCompletion(q, m.pk.items); c != q {
+				m.input.SetValue(c)
+				m.input.CursorEnd()
+				m.refreshPicker()
+				return nil
+			}
+		}
 		// Descend into the selected directory (or start browsing from it).
 		if m.pk.cursor < len(m.pk.items) {
 			m.input.SetValue(paths.Short(m.pk.items[m.pk.cursor].path) + "/")
@@ -212,6 +222,36 @@ func (m *model) keyPicker(k tea.KeyMsg) tea.Cmd {
 	m.pk.cursor = 0
 	m.refreshPicker()
 	return cmd
+}
+
+// commonPrefixCompletion extends the last element of the path query q to
+// the longest prefix its directory matches share, adding a "/" when only
+// one matches. It returns q unchanged when there is nothing to add.
+func commonPrefixCompletion(q string, items []pickItem) string {
+	if q == "~" {
+		return "~/"
+	}
+	if len(items) == 0 {
+		return q
+	}
+	i := strings.LastIndex(q, "/")
+	typed := q[i+1:]
+	common := filepath.Base(items[0].path)
+	for _, it := range items[1:] {
+		name := filepath.Base(it.path)
+		n := 0
+		for n < len(common) && n < len(name) && strings.EqualFold(common[n:n+1], name[n:n+1]) {
+			n++
+		}
+		common = common[:n]
+	}
+	if len(items) == 1 {
+		common += "/"
+	}
+	if len(common) <= len(typed) {
+		return q
+	}
+	return q[:i+1] + common
 }
 
 func (m *model) addPicked(dir string) tea.Cmd {
