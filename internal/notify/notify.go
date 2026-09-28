@@ -77,8 +77,8 @@ func (c Config) Wants(kind string) bool {
 const timeout = 10 * time.Second
 
 // Send delivers e: the configured command, else the platform's desktop
-// notification (osascript on macOS, notify-send on Linux; nothing where
-// neither exists). Replaceable in tests.
+// notification (terminal-notifier or else osascript on macOS, notify-send
+// on Linux; nothing where neither exists). Replaceable in tests.
 var Send = func(c Config, e Event) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -100,6 +100,15 @@ func command(ctx context.Context, c Config, e Event, goos string, lookPath func(
 	}
 	switch goos {
 	case "darwin":
+		// osascript's notifications belong to Script Editor, so clicking one
+		// opens it. terminal-notifier's bring back the terminal instead.
+		if p, err := lookPath("terminal-notifier"); err == nil {
+			args := []string{"-title", e.Title(), "-message", e.Body(), "-sound", "Glass", "-group", "mad." + e.Project}
+			if id := os.Getenv("__CFBundleIdentifier"); id != "" {
+				args = append(args, "-activate", id)
+			}
+			return exec.CommandContext(ctx, p, args...)
+		}
 		return exec.CommandContext(ctx, "osascript",
 			"-e", "on run argv",
 			"-e", `display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"`,
