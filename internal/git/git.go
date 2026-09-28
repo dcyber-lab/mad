@@ -123,7 +123,11 @@ func ValidBranch(name string) error {
 
 // AddWorktree checks branch out in dir, creating the branch from repo's
 // HEAD when it doesn't exist yet. An existing worktree at dir is reused.
-func AddWorktree(repo, branch, dir string) error {
+func AddWorktree(repo, branch, dir string) error { return AddWorktreeFrom(repo, branch, dir, "") }
+
+// AddWorktreeFrom is AddWorktree with a new branch starting at base (a
+// commit) instead of HEAD.
+func AddWorktreeFrom(repo, branch, dir, base string) error {
 	if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return nil
@@ -139,6 +143,9 @@ func AddWorktree(repo, branch, dir string) error {
 		args = append(args, dir, branch)
 	} else {
 		args = append(args, "-b", branch, dir)
+		if base != "" {
+			args = append(args, base)
+		}
 	}
 	return run(args...)
 }

@@ -1196,15 +1196,15 @@ func TestDetailLines(t *testing.T) {
 		t.Errorf("j moved to %+v, want a2", r)
 	}
 
-	// i hides the lines and remembers that.
-	press(m, "i")
+	// c hides the lines and remembers that.
+	press(m, "c")
 	if got := m.lineOf; got[3] != 3 || !st.Compact {
 		t.Errorf("compact: lineOf=%v compact=%v", got, st.Compact)
 	}
 	if v := m.View(); !strings.Contains(v, "Build speed") || strings.Contains(v, "now the docs") {
 		t.Errorf("compact should keep titles and drop the line under:\n%s", v)
 	}
-	press(m, "i")
+	press(m, "c")
 	if st.Compact || m.lineOf[3] != 5 {
 		t.Errorf("not back: compact=%v lineOf=%v", st.Compact, m.lineOf)
 	}

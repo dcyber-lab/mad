@@ -10,6 +10,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/resume"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -23,6 +24,9 @@ func (m *model) action(selectID string, f func() error) tea.Cmd {
 }
 
 func (m *model) openCmd(a *state.Agent) tea.Cmd {
+	if m.inbox.MarkSeen(a.ID, time.Now()) { // seen, not handled: the items stay
+		m.saveInbox()
+	}
 	st, kinds, id := m.st.Clone(), m.kinds, a.ID
 	return m.action("", func() error { return deck.OpenAgent(st, id, kinds) })
 }
@@ -30,7 +34,7 @@ func (m *model) openCmd(a *state.Agent) tea.Cmd {
 func (m *model) activate(r row) tea.Cmd {
 	switch {
 	case r.agent != nil:
-		return m.openCmd(r.agent)
+		return m.openAgentResuming(r.proj, r.agent)
 	case r.ext != nil:
 		e, p := *r.ext, r.proj
 		m.confirm(fmt.Sprintf("take over %s from %s? it exits there (y/n)", e.Kind, e.TTY), func() tea.Cmd {
@@ -329,7 +333,11 @@ func (m *model) removeAgents(ids ...string) tea.Cmd {
 		m.st.RemoveAgent(id)
 		delete(m.trackers, id)
 		status.RemoveHook(id)
+		m.inbox.SettleAll(id, time.Now())
+		resume.Remove(id)
+		delete(m.ctxs, id)
 	}
+	m.saveInbox()
 	m.save()
 	m.rebuildRows()
 	return m.action("", func() error {

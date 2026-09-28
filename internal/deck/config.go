@@ -3,6 +3,7 @@ package deck
 import (
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/resume/summarize"
 )
 
 // Config is ~/.config/mad/config.json; every section is optional:
@@ -17,6 +18,8 @@ type Config struct {
 	// its status line, codex through its rollout) and shows them under the
 	// sidebar's header. On unless turned off.
 	Quota bool
+	// Brief configures the model layer of the resume brief (off unless set).
+	Brief summarize.Config
 }
 
 // DefaultConfig is what an empty or missing config.json means.
@@ -26,10 +29,11 @@ func DefaultConfig() Config { return Config{Notify: notify.Default(), Quota: tru
 // an error naming the line, for the caller to show.
 func LoadConfig() (Config, error) {
 	var file struct {
-		Notify *notify.Config `json:"notify"`
-		Diff   *DiffConfig    `json:"diff"`
-		Finish []FinishAction `json:"finish"`
-		Quota  *bool          `json:"quota"`
+		Notify *notify.Config   `json:"notify"`
+		Diff   *DiffConfig      `json:"diff"`
+		Finish []FinishAction   `json:"finish"`
+		Quota  *bool            `json:"quota"`
+		Brief  summarize.Config `json:"brief"`
 	}
 	c := DefaultConfig()
 	if err := paths.ReadJSON(paths.ConfigFile(), &file); err != nil {
@@ -40,6 +44,7 @@ func LoadConfig() (Config, error) {
 		c.Diff = *file.Diff
 	}
 	c.Finish = file.Finish
+	c.Brief = file.Brief
 	if file.Quota != nil {
 		c.Quota = *file.Quota
 	}

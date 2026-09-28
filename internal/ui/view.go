@@ -28,6 +28,14 @@ func (m *model) View() string {
 		v = m.pickerView()
 	case modePickSession:
 		v = m.sessionsView()
+	case modeInbox:
+		v = m.inboxView()
+	case modePalette:
+		v = m.paletteView()
+	case modeTemplate:
+		v = m.templateView()
+	case modeBrief:
+		v = m.briefView()
 	default:
 		v = m.sidebarView()
 	}
@@ -117,6 +125,9 @@ func (m *model) renderHeader() string {
 		if n > 0 {
 			right = append(right, seg{st, fmt.Sprintf("%s%d", icon, n)}, seg{stPlain, "  "})
 		}
+	}
+	if n, _ := m.inbox.Count(time.Now()); n > 0 {
+		right = append(right, seg{stKey, fmt.Sprintf("⚑%d", n)}, seg{stPlain, "  "})
 	}
 	add(waiting, stWaiting, "?")
 	add(running, stRunning, m.spin())
@@ -232,6 +243,9 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		}
 		if len(r.proj.Agents) == 0 {
 			right = nil
+		}
+		if _, by := m.inbox.Count(time.Now()); by[r.proj.Path] > 0 {
+			right = append([]seg{{stKey, fmt.Sprintf("⚑%d", by[r.proj.Path])}, {stPlain, " "}}, right...)
 		}
 		left = []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}
 		left = append(left, m.gitSegs(r.proj.Path, "")...)
@@ -426,13 +440,16 @@ func (m *model) renderFooter() string {
 		}
 		return m.menu(m.finTitle, names, m.finCursor)
 	default:
-		if m.flash != "" && time.Now().Before(m.flashUntil) {
+		switch {
+		case m.flash != "" && time.Now().Before(m.flashUntil):
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
-		} else {
-			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
+		case len(m.runs) > 0:
+			l1 = m.runProgress()
+		default:
+			l1 = hints("⏎", "open", "b", "brief", "n", "new", "a", "add", "d", "next")
 		}
-		l2 = hints("w", "worktree", "v", "diff", "f", "finish")
-		l3 = hints("t", "name", "x", "kill", "q", "detach")
+		l2 = hints("w", "worktree", "W", "template", "v", "diff", "f", "finish")
+		l3 = hints("i", "inbox", ":", "palette", "x", "kill", "q", "detach")
 	}
 	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3
 }

@@ -63,10 +63,22 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		if ok {
 			m.openFinish(r)
 		}
+	case "b":
+		if ok && r.agent != nil {
+			return m.openBrief(r.proj, r.agent)
+		}
+		m.setFlash("select an agent for its brief")
+	case "c":
+		m.toggleCompact()
 	case "i":
-		m.st.Compact = !m.st.Compact
-		m.save()
-		m.rebuildRows()
+		return m.openInbox()
+	case ":", "ctrl+k":
+		return m.openPalette(false)
+	case "W":
+		if ok {
+			return m.openTemplateForm(r.proj)
+		}
+		m.setFlash("add a project first (a)")
 	case "a":
 		return m.openPicker()
 	case "d":
@@ -80,41 +92,64 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if r.agent != nil {
-			p, a := r.proj, r.agent
-			m.confirm(fmt.Sprintf("kill %s? (y/n)", p.DisplayName(a)), func() tea.Cmd {
-				cmd := m.removeAgents(a.ID)
-				// Its worktree was made for it: offer to clean up too. git
-				// refuses when there are uncommitted changes.
-				if dir := a.Dir; dir != "" && git.IsWorktree(p.Path, dir) && !dirInUse(p, dir) {
-					repo := p.Path
-					m.confirm(fmt.Sprintf("remove worktree %s? (y/n)", filepath.Base(dir)), func() tea.Cmd {
-						return m.action("", func() error { return git.RemoveWorktree(repo, dir) })
-					})
-				}
-				return cmd
-			})
+			m.confirmKill(r.proj, r.agent)
 			return nil
 		}
-		p := r.proj
-		var ids []string
-		for _, a := range p.Agents {
-			ids = append(ids, a.ID)
-		}
-		msg := fmt.Sprintf("remove %s? (y/n)", p.Name)
-		if len(ids) > 0 {
-			msg = fmt.Sprintf("remove %s + kill %d? (y/n)", p.Name, len(ids))
-		}
-		m.confirm(msg, func() tea.Cmd {
-			cmd := m.removeAgents(ids...)
-			m.st.RemoveProject(p)
-			m.save()
-			m.rebuildRows()
-			return cmd
-		})
+		m.confirmRemoveProject(r.proj)
 	case "q", "ctrl+c":
 		return m.action("", func() error { return tmux.Run("detach-client") })
 	}
 	return nil
+}
+
+// confirmKill asks before killing a, naming it in full; a worktree made
+// for it is offered for removal after.
+func (m *model) confirmKill(p *state.Project, a *state.Agent) {
+	m.confirm(fmt.Sprintf("kill %s? (y/n)", p.DisplayName(a)), func() tea.Cmd {
+		cmd := m.removeAgents(a.ID)
+		// Its worktree was made for it: offer to clean up too. git
+		// refuses when there are uncommitted changes.
+		if dir := a.Dir; dir != "" && git.IsWorktree(p.Path, dir) && !dirInUse(p, dir) {
+			repo := p.Path
+			m.confirm(fmt.Sprintf("remove worktree %s? (y/n)", filepath.Base(dir)), func() tea.Cmd {
+				return m.action("", func() error { return git.RemoveWorktree(repo, dir) })
+			})
+		}
+		return cmd
+	})
+}
+
+func (m *model) confirmRemoveProject(p *state.Project) {
+	var ids []string
+	for _, a := range p.Agents {
+		ids = append(ids, a.ID)
+	}
+	msg := fmt.Sprintf("remove %s? (y/n)", p.Name)
+	if len(ids) > 0 {
+		msg = fmt.Sprintf("remove %s + kill %d? (y/n)", p.Name, len(ids))
+	}
+	m.confirm(msg, func() tea.Cmd {
+		cmd := m.removeAgents(ids...)
+		m.st.RemoveProject(p)
+		m.save()
+		m.rebuildRows()
+		return cmd
+	})
+}
+
+func (m *model) toggleCompact() {
+	m.st.Compact = !m.st.Compact
+	m.save()
+	m.rebuildRows()
+}
+
+// focusSidebar moves the keyboard to the sidebar, for views opened from
+// the stage.
+func (m *model) focusSidebar() tea.Cmd {
+	return func() tea.Msg {
+		_ = tmux.Run("select-pane", "-t", tmux.SidebarPane)
+		return nil
+	}
 }
 
 // needsYou: waiting for input, or finished while you were elsewhere.
@@ -209,6 +244,8 @@ func (m *model) handleMouse(ev tea.MouseMsg) tea.Cmd {
 		m.move(-1)
 	case ev.Button == tea.MouseButtonWheelDown:
 		m.move(1)
+	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress && ev.Y == 0:
+		return m.openInbox() // the header line with its count
 	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress:
 		if i, ok := m.rowAt(ev.Y - m.headerH()); ok && ev.Y >= m.headerH() {
 			m.cursor = i

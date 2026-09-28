@@ -249,6 +249,7 @@ type alert struct {
 func (m *model) observe(only map[string]bool, now time.Time) []alert {
 	dirty := false
 	var alerts []alert
+	inboxChanged := false
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
 			if only != nil && !only[a.ID] {
@@ -266,6 +267,10 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			if prev == status.Running && tr.Status != status.Running {
 				m.gitDue, m.readDue = true, true // a turn ended: its changes and cost are worth showing now
 			}
+			m.scheduleWarm(p, a, prev, tr.Status, now)
+			if m.attend(p, a, prev, tr.Status, hook, a.ID == m.stageID, now) {
+				inboxChanged = true
+			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
 				alerts = append(alerts, alert{e, a.ID == m.stageID})
 			}
@@ -275,6 +280,9 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 				dirty = true
 			}
 		}
+	}
+	if inboxChanged {
+		m.saveInbox()
 	}
 	if dirty {
 		m.save()

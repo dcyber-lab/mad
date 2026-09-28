@@ -33,6 +33,8 @@ usage:
                       next / previous agent
   mad jump            show the next agent that is waiting or done
   mad diff            toggle the diff view for the agent on stage
+  mad palette         search sessions and run commands (prefix + space)
+  mad inbox           what needs you (prefix + i)
   mad scan [path]     show what sync sees: history, open sessions, and
                       the sessions of one project
   mad kill-server     stop the deck and every agent in it
@@ -93,6 +95,10 @@ func Run(args []string, stdio IO) int {
 		err = poke.Send(poke.Jump)
 	case "diff":
 		err = poke.Send(poke.Diff)
+	case "palette":
+		err = poke.Send(poke.Palette)
+	case "inbox":
+		err = poke.Send(poke.Inbox)
 	case "poke":
 		err = poke.Send(strings.Join(args, " "))
 	case "scan":

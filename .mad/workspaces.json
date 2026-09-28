@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "go-dev",
+      "name": "Go dev",
+      "workspace": { "mode": "new-worktree", "default_base": "HEAD" },
+      "setup": [
+        { "id": "download-deps", "argv": ["go", "mod", "download"], "timeout_seconds": 180 },
+        { "id": "build", "argv": ["go", "build", "./..."], "timeout_seconds": 300 }
+      ],
+      "launch": { "agent": "claude" },
+      "checks": [
+        { "id": "unit-tests", "argv": ["go", "test", "./..."], "timeout_seconds": 300, "trigger": "manual" }
+      ]
+    }
+  ]
+}

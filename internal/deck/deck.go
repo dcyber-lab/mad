@@ -517,6 +517,9 @@ set -g pane-active-border-style "fg=colour75"
 	fmt.Fprintf(&b, "bind -n M-n run-shell -b %s\n", tmuxQuote(SelfCommand("jump")))
 	// The diff view of the agent on stage, and back.
 	fmt.Fprintf(&b, "bind -n M-v run-shell -b %s\nbind v run-shell -b %s\n", tmuxQuote(SelfCommand("diff")), tmuxQuote(SelfCommand("diff")))
+	// The palette and the inbox, opened in the sidebar from anywhere.
+	fmt.Fprintf(&b, "bind Space run-shell -b %s\n", tmuxQuote(SelfCommand("palette")))
+	fmt.Fprintf(&b, "bind i run-shell -b %s\n", tmuxQuote(SelfCommand("inbox")))
 	run := func(key, arg string) {
 		fmt.Fprintf(&b, "bind %s run-shell -b %s\n", key, tmuxQuote(SelfCommand("switch "+arg)))
 	}

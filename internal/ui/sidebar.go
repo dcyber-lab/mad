@@ -15,15 +15,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	"github.com/dcyber-lab/mad/internal/resume"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
 	"github.com/dcyber-lab/mad/internal/transcript"
+	"github.com/dcyber-lab/mad/internal/workspace"
 )
 
 // Status comes from events where there are any: agents' own hooks and
@@ -90,6 +93,10 @@ const (
 	modeWorktree   // naming the branch for a new worktree
 	modeRename     // naming an agent
 	modePickFinish // choosing how to wrap up a branch
+	modeInbox      // what needs you
+	modePalette    // search and commands
+	modeTemplate   // a workspace from a template
+	modeBrief      // the resume brief of an agent
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
@@ -174,6 +181,19 @@ type model struct {
 	kindsMod time.Time            // agents.json's mtime when kinds were read
 	runSince map[string]time.Time // agent id → when its current run started
 	notified map[string]time.Time // agent id + event kind → last notification
+
+	inbox    *attention.Inbox
+	ib       inboxView
+	pal      palette
+	tf       tmplForm
+	runs     map[string]*workspace.Run  // workspace runs setting up, by id
+	wideFrom int                        // width before a takeover view widened the sidebar; 0 when not
+	ctxs     map[string]*resume.Context // resume points, by agent id
+	br       briefView
+	snapping bool
+	lastSnap time.Time
+	warmDue  map[string]time.Time // agent id → when to summarize it in the background
+	warming  bool
 }
 
 // Run is `mad sidebar`. A panic is logged to the sidebar log and exits
@@ -237,6 +257,15 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		reader:      transcript.NewReader(),
 		runSince:    map[string]time.Time{},
 		notified:    map[string]time.Time{},
+		runs:        map[string]*workspace.Run{},
+		ctxs:        resume.LoadAll(),
+		warmDue:     map[string]time.Time{},
+	}
+	if b, err := attention.Load(); err == nil {
+		m.inbox = b
+	} else {
+		m.inbox = b // empty; the broken file is left for you to look at
+		m.configError(err)
 	}
 	m.rebuildRows()
 	return m
@@ -246,7 +275,17 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.readCmd(), tick())
 }
 
+// Update is update, then the sidebar goes back to its width once a view
+// that widened it is gone.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, cmd := m.update(msg)
+	if m.wideFrom != 0 && !wideMode(m.mode) {
+		cmd = tea.Batch(cmd, m.unwiden())
+	}
+	return m, cmd
+}
+
+func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -255,7 +294,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w := msg.Width
 		return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return widthSettledMsg{w} })
 	case widthSettledMsg:
-		if msg.width == m.width && msg.width != deck.SidebarWidth() {
+		if m.wideFrom == 0 && msg.width == m.width && msg.width != deck.SidebarWidth() {
 			if err := deck.SaveSidebarWidth(msg.width); err != nil {
 				m.setFlash(err.Error())
 			}
@@ -279,13 +318,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.reading && (m.readDue || time.Since(m.lastRead) > transcriptScanEvery) {
 			cmds = append(cmds, m.readCmd())
 		}
+		if c := m.warmNext(time.Now()); c != nil {
+			cmds = append(cmds, c)
+		}
+		if !m.snapping && len(m.ctxs) > 0 && time.Since(m.lastSnap) > snapEvery {
+			cmds = append(cmds, m.snapCmd())
+		}
+		if m.mode == modeBrief && !m.br.loading && !m.br.checking && time.Since(m.br.lastRef) > 5*time.Second {
+			if p, a := m.st.FindAgent(m.br.agentID); a != nil {
+				m.br.checking, m.br.lastRef = true, time.Now()
+				cmds = append(cmds, m.collect(p, a, false, true))
+			}
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
 		if msg.epoch != m.epoch {
 			return m, m.pollCmd() // began before an action finished: stale
 		}
-		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.taskCleanup(msg.panes))
+		left := m.stageID
+		cmd := tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.taskCleanup(msg.panes))
+		if left != m.stageID && tmux.IsAgentID(left) {
+			cmd = tea.Batch(cmd, m.leave(left)) // you moved away from it: note where it was
+		}
+		return m, cmd
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
@@ -326,6 +382,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.pollNow()
 		case poke.Diff: // Alt-v: the agent on stage, or back from its diff
 			return m, m.diffFromStage()
+		case poke.Palette: // prefix + space, from wherever you are
+			if m.mode != modeNormal {
+				return m, nil
+			}
+			return m, tea.Batch(m.openPalette(true), m.focusSidebar())
+		case poke.Inbox:
+			if m.mode != modeNormal {
+				return m, nil
+			}
+			return m, tea.Batch(m.openInbox(), m.focusSidebar())
 		}
 		return m, nil
 	case doneMsg:
@@ -343,6 +409,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.gitDue, m.readDue = true, true
 		return m, m.pollNow()
+	case runMsg:
+		return m, m.applyRun(msg)
+	case briefMsg:
+		return m, m.applyBrief(msg)
+	case aiMsg:
+		m.applyAI(msg)
+	case warmMsg:
+		m.applyWarm(msg)
+	case snapsMsg:
+		m.applySnaps(msg)
+	case leaveMsg:
+		m.applyLeave(msg)
 	case historyMsg:
 		m.pk.history, m.pk.loading = msg, false
 		if m.mode == modeAddProject {
@@ -358,6 +436,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.mousePicker(msg)
 		case modePickSession:
 			return m, m.mouseSessions(msg)
+		case modeInbox, modePalette, modeTemplate, modeBrief:
+			return m, nil
 		}
 		return m, m.handleMouse(msg)
 	case tea.KeyMsg:
@@ -376,6 +456,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyRename(msg)
 		case modePickFinish:
 			return m, m.keyPickFinish(msg)
+		case modeInbox:
+			return m, m.keyInbox(msg)
+		case modePalette:
+			return m, m.keyPalette(msg)
+		case modeTemplate:
+			return m, m.keyTemplate(msg)
+		case modeBrief:
+			return m, m.keyBrief(msg)
 		default:
 			// Fast typing arrives as one multi-rune key; handle each rune.
 			if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 {
@@ -388,7 +476,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyNormal(msg)
 		}
 	}
-	if m.mode == modeAddProject || m.mode == modeWorktree || m.mode == modeRename {
+	if m.mode == modeTemplate {
+		var c1, c2 tea.Cmd
+		m.tf.base, c1 = m.tf.base.Update(msg)
+		m.tf.branch, c2 = m.tf.branch.Update(msg)
+		return m, tea.Batch(c1, c2)
+	}
+	if m.mode == modeAddProject || m.mode == modeWorktree || m.mode == modeRename || m.mode == modePalette || m.mode == modeBrief && m.br.edit != editNone {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd

@@ -144,7 +144,11 @@ is done.
 | `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
 | `t`            | Name the agent (empty to go back to its title) |
-| `i`            | Show / hide the line under each agent          |
+| `i`            | Inbox: what still needs you                    |
+| `:`            | Palette: find sessions, run commands           |
+| `b`            | Resume brief of the agent                      |
+| `W`            | New workspace from a template                  |
+| `c`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
 | `1`–`9`        | Open agent N of the project the cursor is in   |
 | `tab`          | Focus the agent pane                           |
@@ -165,7 +169,8 @@ width is remembered.
 | `Alt-1`…`Alt-9`   | Open agent N of the project on stage       |
 
 If Alt is inconvenient, use the prefix `Ctrl-]` followed by
-`s` / `n` / `p` / `v` / `1`–`9` / `d` (detach).
+`s` / `n` / `p` / `v` / `1`–`9` / `d` (detach). The prefix
+followed by `space` opens the palette on the agent on stage, `i` the inbox.
 
 > **Ghostty users:** set `macos-option-as-alt = true` so Option works as Alt.
 
@@ -215,7 +220,7 @@ you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
 your own instead, kept until you clear it. The line under a claude or codex
 agent says what it is on: the tool being called and what it was pointed at
 while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
-otherwise the prompt it is working on or was last given. `i` hides that
+otherwise the prompt it is working on or was last given. `c` hides that
 line everywhere, for a shorter list.
 
 The number before an agent's status (`1.2M`, `340k`) is every token its
@@ -269,6 +274,63 @@ right after. Your own list in `config.json` replaces the built-in one;
 {"finish": [{"name": "open PR", "command": "gh pr create --web --base {base}"},
             {"name": "squash onto {base}", "command": "git rebase -i {base}"}]}
 ```
+
+## Inbox, palette, templates and resume briefs
+
+**Inbox** (`i`, or prefix + `i`): what still needs you, blocked work first.
+An item is raised when an agent waits for input, ends a turn, exits on its
+own, or a workspace setup fails, whether or not a notification went out.
+Opening the agent marks it seen, not handled; it closes when the agent
+reports it went on, or when you press `r`. `s` snoozes it for 30 minutes.
+Items survive a sidebar restart (`inbox.json`), and the same hook report
+read again is not a new item.
+
+**Palette** (`:`, or prefix + `space`): type to find a session or project;
+start with `>` for a command. A command acts on the target captured when
+the palette opened and is checked again before it runs, so it never lands
+on whatever moved into its place; one that can't run says why.
+
+**Workspace templates** (`W`): a project's `.mad/workspaces.json` names
+setup steps to run in a new worktree before an agent starts:
+
+```json
+{"version": 1, "templates": [{"id": "go-dev", "name": "Go dev",
+  "workspace": {"mode": "new-worktree", "default_base": "HEAD"},
+  "setup": [{"id": "deps", "argv": ["go", "mod", "download"], "timeout_seconds": 180}],
+  "launch": {"agent": "claude"}}]}
+```
+
+The preview shows the base resolved to a commit and every step before
+anything runs, and asks again when the template changed since you last ran
+it. Steps run one by one with a log each. A failed step keeps the worktree,
+starts no agent and goes to the inbox, where `R` retries from that step.
+
+**Resume brief** (`b`): what you need to pick an agent's work back up.
+Your bookmark (`e`, or `p` to pin your last message), decisions you pinned
+(`D`), the last exchange and one line per earlier one, and facts with what
+they rest on: test runs tied to the workspace snapshot they saw, so a pass
+on older code is flagged, and files changed since. Leaving an agent sets
+where the brief starts; opening it doesn't move that, only `c` ("caught up
+here") does. Opening an agent shows the brief by itself when something in
+it needs you.
+
+A summarizer plugin can add a short summary, open questions and candidate
+decisions, each citing the turn it rests on; candidates become yours only
+when you take them (`1`–`9`, `B`). It is off unless `config.json` turns it
+on for a project:
+
+```json
+"brief": {"summarizer": "claude", "model": "haiku",
+          "projects": ["~/code/api"], "daily_usd": 1}
+```
+
+`claude` runs `claude -p` with your Claude Code login (no tools, no
+settings, no saved session). `"summarizer": "command"` with `"command"`
+runs any program instead: the request as JSON on stdin, the response as
+JSON on stdout. With `"auto"` (on by default) a summary is made in the
+background 20 seconds after a turn ends on an agent you aren't looking at,
+so the brief has it when you come back; results are cached, and
+`daily_usd` caps the spend.
 
 ## Usage limits
 
@@ -401,9 +463,13 @@ picker, sessions open elsewhere) is Go code, one file per agent in
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
-| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota) |
+| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota, brief) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks; `quota-<kind>.json` usage limits |
+| `~/.local/state/mad/inbox.json`       | Inbox items, open and recently closed             |
+| `~/.local/state/mad/contexts/`        | Resume points: bookmarks, decisions, workspace snapshots |
+| `~/.local/state/mad/runs/`            | Workspace template runs and their step logs       |
+| `~/.local/state/mad/briefs/`          | Cached summaries and daily summary spend          |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |
 | `~/.local/state/mad/sidebar.log`      | Sidebar crash log (the sidebar auto-restarts)     |
 | `~/.local/state/mad/sidebar-mad.sock` | How `mad hook`, `switch`, `jump` and `diff` reach the sidebar |

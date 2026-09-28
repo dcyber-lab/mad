@@ -40,6 +40,10 @@ with dependencies pointing downwards in this list:
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux config              |
+| `internal/workspace` | Workspace templates: plan, worktree, setup steps, run records    |
+| `internal/resume`    | Resume briefs: bookmarks, decisions, snapshots, transcript facts |
+| `internal/resume/summarize` | Summarizer plugins for the brief (`claude`, `command`)    |
+| `internal/attention` | The inbox: items that need you, kept apart from agent status     |
 | `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/discover`  | Per-agent providers: history, sessions, transcript lines, processes outside the deck |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |
