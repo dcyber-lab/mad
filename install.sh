@@ -60,7 +60,8 @@ note() { NOTES="${NOTES}$*
 
 usage() {
 	cat <<'EOF'
-Installs mad and what it needs to run: tmux, git, ps and lsof.
+Installs mad and what it needs to run: tmux, git, ps and lsof, and on
+macOS terminal-notifier for its notifications.
 
 usage: install.sh [options]
        curl -fsSL https://raw.githubusercontent.com/dcyber-lab/mad/main/install.sh | sh -s -- [options]
@@ -308,6 +309,72 @@ install_deps() {
 			need optional lazygit gh
 		fi
 	fi
+	[ "$OS" != darwin ] || install_notifier
+}
+
+# terminal-notifier: osascript's notifications belong to Script Editor,
+# and clicking one opens it; terminal-notifier's bring back the terminal.
+# Homebrew has no bottle of it for Intel Macs and building it needs Xcode,
+# so where brew cannot install it the release's app is used, which runs
+# on both.
+TN_VERSION=3.1.0
+TN_SHA256=e969d4ae20287da1ba55495ae31dcedd8e9069deb8ce4eed24f6561a5fc3e4d5
+
+install_notifier() {
+	step "Notifications"
+	if have terminal-notifier; then
+		info "terminal-notifier: $(command -v terminal-notifier)"
+		return 0
+	fi
+	if [ "$PM" = brew ] && [ "$ARCH" = arm64 ]; then
+		run brew install terminal-notifier || true
+		if [ -n "$DRY_RUN" ]; then return 0; fi
+		if have terminal-notifier; then
+			info "terminal-notifier: installed"
+			return 0
+		fi
+	fi
+
+	app="$HOME/Applications/terminal-notifier.app"
+	url="https://github.com/julienXX/terminal-notifier/releases/download/$TN_VERSION/terminal-notifier-$TN_VERSION.zip"
+	fallback="mad notifies with osascript, and clicking a notification opens Script Editor"
+	if [ -n "$DRY_RUN" ]; then
+		info "would download $url"
+		info "would install it as $app, run as $DIR/terminal-notifier"
+		return 0
+	fi
+	have unzip || {
+		note "no unzip to unpack terminal-notifier: $fallback"
+		return 0
+	}
+	[ -n "$TMP" ] || TMP=$(mktemp -d "${TMPDIR:-/tmp}/mad-install.XXXXXX")
+	info "downloading $url"
+	if ! fetch "$url" "$TMP/tn.zip"; then
+		note "terminal-notifier could not be downloaded: $fallback"
+		return 0
+	fi
+	got=$(sha256_of "$TMP/tn.zip")
+	if [ -n "$got" ] && [ "$got" != "$TN_SHA256" ]; then
+		note "terminal-notifier $TN_VERSION is not what was released (sha256 $got): $fallback"
+		return 0
+	fi
+	unzip -q -o "$TMP/tn.zip" -d "$TMP/tn"
+	mkdir -p "$HOME/Applications" "$DIR" 2>/dev/null || true
+	if [ ! -w "$DIR" ]; then
+		note "$DIR is not yours to write to, so terminal-notifier is not installed: $fallback"
+		return 0
+	fi
+	rm -rf "$app"
+	cp -R "$TMP/tn/terminal-notifier.app" "$app"
+	xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
+	# The binary finds its app bundle from where it lies, so it is run
+	# there rather than linked.
+	printf '#!/bin/sh\nexec "%s/Contents/MacOS/terminal-notifier" "$@"\n' "$app" >"$DIR/terminal-notifier"
+	chmod 755 "$DIR/terminal-notifier"
+	info "terminal-notifier: $app"
+	# Opened once, it asks macOS to allow its notifications; until then
+	# it cannot show any.
+	open -g "$app" --args -title mad -message "mad will notify you here" 2>/dev/null || true
 }
 
 # ---- mad itself -----------------------------------------------------
@@ -334,7 +401,6 @@ sha256_of() {
 }
 
 install_mad() {
-	[ -n "$DIR" ] || DIR="$HOME/.local/bin"
 	asset="mad_${OS}_${ARCH}.tar.gz"
 	if [ -n "$VERSION" ]; then
 		base="https://github.com/$REPO/releases/download/$VERSION"
@@ -350,7 +416,7 @@ install_mad() {
 		return 0
 	fi
 
-	TMP=$(mktemp -d "${TMPDIR:-/tmp}/mad-install.XXXXXX")
+	[ -n "$TMP" ] || TMP=$(mktemp -d "${TMPDIR:-/tmp}/mad-install.XXXXXX")
 	info "downloading $base/$asset"
 	fetch "$base/$asset" "$TMP/$asset" || die "could not download $base/$asset"
 	fetch "$base/checksums.txt" "$TMP/checksums.txt" || die "could not download $base/checksums.txt"
@@ -472,6 +538,7 @@ main() {
 		shift
 	done
 	case "$VERSION" in "" | v*) ;; *) VERSION="v$VERSION" ;; esac
+	[ -n "$DIR" ] || DIR="$HOME/.local/bin"
 
 	trap cleanup EXIT
 	trap 'exit 130' INT TERM

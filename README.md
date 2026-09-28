@@ -66,8 +66,9 @@ curl -fsSL https://raw.githubusercontent.com/dcyber-lab/mad/main/install.sh | sh
 The latest release goes to `~/.local/bin`, checked against the release's
 checksums. tmux, git, `ps` and `lsof` are installed with your package
 manager (Homebrew, apt, dnf, yum, pacman, zypper or apk) when they are
-missing, and left alone when they are there. The agents are yours to
-install.
+missing, and left alone when they are there. On macOS it also installs
+`terminal-notifier` for notifications (with brew, or the release app where
+brew can't). The agents are yours to install.
 
 | Option          | Meaning                                                      |
 | --------------- | ------------------------------------------------------------ |
@@ -326,10 +327,12 @@ whole thing off with `{"quota": false}` in `config.json`.
 ## Notifications
 
 When an agent finishes a run (running → idle) or starts waiting for you,
-mad shows a desktop notification: `osascript` on macOS, `notify-send` on
-Linux. Nothing is sent for the agent on stage while its terminal has focus,
-for runs shorter than 5 seconds, or twice for the same agent and event
-within 15 seconds. They keep coming while the deck is detached.
+mad shows a desktop notification: `terminal-notifier` on macOS, and
+`osascript` when it isn't installed (clicking one of those opens Script
+Editor, not the terminal); `notify-send` on Linux. Nothing is sent for the
+agent on stage while its terminal has focus, for runs shorter than 5
+seconds, or twice for the same agent and event within 15 seconds. They
+keep coming while the deck is detached.
 
 Configure them in `~/.config/mad/config.json`:
 
@@ -343,8 +346,7 @@ Configure them in `~/.config/mad/config.json`:
 | `command` | Run through `sh` instead of the desktop notification                    |
 
 The command gets `MAD_EVENT`, `MAD_PROJECT`, `MAD_AGENT`, `MAD_TITLE` and
-`MAD_MESSAGE` in its environment, e.g. `terminal-notifier -title
-"$MAD_TITLE" -message "$MAD_MESSAGE"`, or a curl to ntfy.sh for your phone.
+`MAD_MESSAGE` in its environment, e.g. a curl to ntfy.sh for your phone.
 Changes to the file apply right away. A mistake in it (a stray comma) is
 shown at the bottom of the sidebar with its line, and the last good
 settings stay in effect until it's fixed.

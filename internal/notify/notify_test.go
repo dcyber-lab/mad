@@ -57,6 +57,11 @@ func TestCommand(t *testing.T) {
 	if mac == nil || filepath.Base(mac.Path) != "osascript" || mac.Args[len(mac.Args)-2] != e.Title() {
 		t.Errorf("darwin: %v", mac)
 	}
+	t.Setenv("__CFBundleIdentifier", "com.mitchellh.ghostty")
+	tn := command(ctx, Default(), e, "darwin", func(string) (string, error) { return "/opt/homebrew/bin/terminal-notifier", nil })
+	if tn == nil || filepath.Base(tn.Path) != "terminal-notifier" || !strings.Contains(strings.Join(tn.Args, " "), "-activate com.mitchellh.ghostty") {
+		t.Errorf("darwin with terminal-notifier: %v", tn)
+	}
 	linux := command(ctx, Default(), e, "linux", found)
 	if linux == nil || linux.Args[len(linux.Args)-1] != "claude finished" {
 		t.Errorf("linux: %v", linux)
