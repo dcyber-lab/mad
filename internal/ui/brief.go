@@ -458,7 +458,7 @@ func (m *model) briefBody() []string {
 	// match, at most n lines.
 	para := func(first []seg, st lipgloss.Style, text string, n int) {
 		lead := segWidth(first)
-		w := max(m.width-lead-1, 8)
+		w := max(m.width-lead-3, 8) // room for hanging punctuation
 		lines := wrapText(text, w)
 		if len(lines) > n {
 			lines = lines[:n]
@@ -606,7 +606,9 @@ func wrapText(s string, w int) []string {
 		if tok == " " && cw == 0 {
 			continue
 		}
-		if cw+tw > w && cw > 0 {
+		// Closing punctuation hangs at the end of the line rather than
+		// starting the next one; callers leave a column for it.
+		if cw+tw > w && cw > 0 && !(hangs(tok) && cw+tw <= w+2) {
 			flush()
 			if tok == " " {
 				continue
@@ -626,6 +628,11 @@ func wrapText(s string, w int) []string {
 		flush()
 	}
 	return lines
+}
+
+// hangs: CJK punctuation that must not start a line.
+func hangs(tok string) bool {
+	return strings.Contains("，。、；：？！）」』”》", tok) && tok != ""
 }
 
 // tokens splits s into words, single spaces, and single wide characters.

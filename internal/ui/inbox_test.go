@@ -273,3 +273,15 @@ func TestWarmScheduling(t *testing.T) {
 		t.Error("auto: false turns it off")
 	}
 }
+
+func TestWrapTextCJK(t *testing.T) {
+	lines := wrapText("代码重写为英文文档（README.md、CONTRIBUTING.md）是否需要打版本 tag？", 20)
+	for _, l := range lines {
+		if strings.HasPrefix(l, "、") || strings.HasPrefix(l, "？") || strings.HasPrefix(l, "）") {
+			t.Errorf("line starts with punctuation: %q in %q", l, lines)
+		}
+	}
+	if len(lines) < 2 {
+		t.Errorf("not wrapped: %q", lines)
+	}
+}
