@@ -40,6 +40,10 @@ type Provider interface {
 	// session's own first, then any whose tokens count towards it
 	// (subagents). None until the session was written.
 	Transcripts(dir, sid string) []string
+	// Written returns every transcript written since t, of every session
+	// and subagent on the machine, deck or not: what a day's spending is
+	// added up from. Nil for kinds whose usage has no price.
+	Written(t time.Time) []string
 	// Parse reads one transcript line; ok is false for lines that say
 	// nothing mad shows.
 	Parse(line []byte) (e Event, ok bool)
@@ -132,6 +136,8 @@ type Event struct {
 	// Message report the same response again, and the last one counts.
 	Usage   *Tokens
 	Message string
+	// At is when the line was written, where the agent says.
+	At time.Time
 	// Total replaces everything counted so far, for agents that log a
 	// running total.
 	Total *Tokens

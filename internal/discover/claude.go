@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -341,16 +342,37 @@ func (claude) Transcripts(dir, sid string) []string {
 	return append(out, subs...)
 }
 
+// Written walks every project's sessions and their subagents.
+func (claude) Written(t time.Time) []string {
+	var out []string
+	root := claudeProjectsDir()
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+			return nil
+		}
+		// <project>/<session>.jsonl or <project>/<session>/subagents/<agent>.jsonl
+		if dir := filepath.Dir(path); filepath.Dir(dir) != root && filepath.Base(dir) != "subagents" {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil && !fi.ModTime().Before(t) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out
+}
+
 var usageKey = []byte(`"usage"`)
 
 // Parse reads titles, prompts, tool calls and usage. A response is logged
 // once per content block, each line repeating the usage of the whole.
 func (claude) Parse(line []byte) (Event, bool) {
 	var ln struct {
-		Type        string `json:"type"`
-		IsMeta      bool   `json:"isMeta"`
-		AITitle     string `json:"aiTitle"`
-		CustomTitle string `json:"customTitle"`
+		Type        string    `json:"type"`
+		Timestamp   time.Time `json:"timestamp"`
+		IsMeta      bool      `json:"isMeta"`
+		AITitle     string    `json:"aiTitle"`
+		CustomTitle string    `json:"customTitle"`
 		Message     struct {
 			ID      string          `json:"id"`
 			Model   string          `json:"model"`
@@ -361,7 +383,7 @@ func (claude) Parse(line []byte) (Event, bool) {
 	if json.Unmarshal(line, &ln) != nil {
 		return Event{}, false
 	}
-	var e Event
+	e := Event{At: ln.Timestamp}
 	switch ln.Type {
 	case "ai-title":
 		e.Title, e.TitleSource = ln.AITitle, TitleAI

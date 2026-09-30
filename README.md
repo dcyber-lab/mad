@@ -25,8 +25,8 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
   conversation's title, with the tool it is calling or the prompt it was
   given under it. `t` gives it a name of your own.
 - **Cost at a glance** — every claude agent shows what its session has
-  cost so far at API prices (codex: tokens), and every project the sum of
-  its agents.
+  cost so far at API prices (codex: tokens), every project the sum of its
+  agents, and the header what all of today's claude sessions cost.
 - **Usage limits** — under the header, how much of the claude and codex
   subscription windows (5-hour, weekly) is used and when they reset.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
@@ -234,6 +234,13 @@ writes (`~/.claude/projects`, `~/.codex/sessions`), read from where the
 last poll stopped, so agents are never asked. A project row shows the sum
 of its agents (`$4.10 + 1.2M` when it has both). `/clear` starts a new
 session, so the count starts over.
+
+The header adds up today at the same prices (`today $158`): every claude
+response logged since local midnight, in any session on the machine
+(the deck's, other terminals', the desktop app's, subagents), each counted
+once. Runs that keep no transcript (`claude -p --no-session-persistence`)
+are not in it. It is left out when the sidebar is too narrow to show it
+whole.
 
 Every project row shows the branch of the main checkout, `±N` for files
 changed or untracked, and `↑N` for commits not on the upstream; agents in

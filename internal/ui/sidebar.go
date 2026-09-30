@@ -66,6 +66,8 @@ type (
 	gitMsg map[string]git.Info
 	// transcriptMsg is a read of every agent's transcript: agent id → what it says.
 	transcriptMsg map[string]transcript.Info
+	// dayMsg is what today cost so far, in USD.
+	dayMsg float64
 	// widthSettledMsg fires a moment after a resize; if the width is still
 	// the same then, it was deliberate (drag, </>) and gets saved.
 	widthSettledMsg struct{ width int }
@@ -177,6 +179,11 @@ type model struct {
 
 	sleeping       bool      // idle agents are being put to sleep
 	lastSleepCheck time.Time // when they were last looked for
+
+	day        *transcript.Day // only the day command touches it
+	dayCost    float64         // what today cost so far, every session on the machine
+	dayReading bool
+	lastDay    time.Time
 }
 
 // Run is `mad sidebar`. A panic is logged to the sidebar log and exits
@@ -238,6 +245,7 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		transcripts: map[string]transcript.Info{},
 		quota:       map[string]status.Quota{},
 		reader:      transcript.NewReader(),
+		day:         transcript.NewDay(),
 		runSince:    map[string]time.Time{},
 		notified:    map[string]time.Time{},
 	}
@@ -246,7 +254,7 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.readCmd(), tick())
+	return tea.Batch(m.pollCmd(), m.scanCmd(), m.gitCmd(), m.readCmd(), m.dayCmd(), tick())
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -282,6 +290,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.reading && (m.readDue || time.Since(m.lastRead) > transcriptScanEvery) {
 			cmds = append(cmds, m.readCmd())
 		}
+		if !m.dayReading && time.Since(m.lastDay) > transcriptScanEvery {
+			cmds = append(cmds, m.dayCmd())
+		}
 		if m.cfg.SleepAfter > 0 && !m.sleeping && time.Since(m.lastSleepCheck) >= sleepCheckEvery {
 			cmds = append(cmds, m.sleepCmd(time.Now()))
 		}
@@ -297,6 +308,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case sleptMsg:
 		return m, m.applySlept(msg)
+	case dayMsg:
+		m.dayReading, m.dayCost = false, float64(msg)
 	case gitMsg:
 		m.gitScanning, m.gitInfo = false, msg
 	case transcriptMsg:

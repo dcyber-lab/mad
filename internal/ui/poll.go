@@ -67,6 +67,15 @@ func (m *model) readCmd() tea.Cmd {
 	return func() tea.Msg { return transcriptMsg(r.Read(agents)) }
 }
 
+// dayCmd brings today's spending up to date. The first read goes through
+// every transcript written today, a fraction of a second; later ones read
+// what was appended.
+func (m *model) dayCmd() tea.Cmd {
+	m.dayReading, m.lastDay = true, time.Now()
+	d := m.day
+	return func() tea.Msg { return dayMsg(d.Read(time.Now())) }
+}
+
 func tick() tea.Cmd {
 	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
