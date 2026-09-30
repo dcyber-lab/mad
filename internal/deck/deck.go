@@ -351,6 +351,10 @@ func StartAgent(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kin
 // RestartAgent reruns a in its existing pane, resuming its session.
 func RestartAgent(p *state.Project, a *state.Agent, paneID string, kinds []agent.Kind) error {
 	cmd := command(p, a, true, kinds)
+	// Awake again: the mark would outlive the new process otherwise.
+	if err := tmux.Run("set-option", "-p", "-u", "-t", paneID, "@mad_asleep"); err != nil {
+		return err
+	}
 	return tmux.Run("respawn-pane", "-k", "-t", paneID, "-c", p.Dir(a), "-e", "MAD_AGENT_ID="+a.ID, cmd)
 }
 

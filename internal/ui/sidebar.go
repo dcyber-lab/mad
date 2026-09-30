@@ -174,6 +174,9 @@ type model struct {
 	kindsMod time.Time            // agents.json's mtime when kinds were read
 	runSince map[string]time.Time // agent id → when its current run started
 	notified map[string]time.Time // agent id + event kind → last notification
+
+	sleeping       bool      // idle agents are being put to sleep
+	lastSleepCheck time.Time // when they were last looked for
 }
 
 // Run is `mad sidebar`. A panic is logged to the sidebar log and exits
@@ -279,6 +282,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.reading && (m.readDue || time.Since(m.lastRead) > transcriptScanEvery) {
 			cmds = append(cmds, m.readCmd())
 		}
+		if m.cfg.SleepAfter > 0 && !m.sleeping && time.Since(m.lastSleepCheck) >= sleepCheckEvery {
+			cmds = append(cmds, m.sleepCmd(time.Now()))
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
@@ -289,6 +295,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)
+	case sleptMsg:
+		return m, m.applySlept(msg)
 	case gitMsg:
 		m.gitScanning, m.gitInfo = false, msg
 	case transcriptMsg:

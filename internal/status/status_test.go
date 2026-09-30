@@ -47,6 +47,53 @@ func TestObservePaneState(t *testing.T) {
 	if s := tr.Observe(codex, tmux.Pane{Dead: true}, true, nil, "", false, t0); s != Exited {
 		t.Errorf("dead pane = %s", s)
 	}
+	if s := tr.Observe(codex, tmux.Pane{Dead: true, Asleep: true}, true, nil, "", false, t0); s != Asleep {
+		t.Errorf("pane put to sleep = %s", s)
+	}
+}
+
+func TestQuietSinceAndDone(t *testing.T) {
+	var tr Tracker
+	at := func(d time.Duration) time.Time { return t0.Add(d) }
+	idle := &Hook{State: Idle, At: at(-time.Hour)}
+	// First sight counts as activity: an old hook doesn't make it older.
+	tr.Observe(claude, alive, true, idle, "x", false, at(0))
+	if got := tr.QuietSince(); !got.Equal(at(0)) {
+		t.Errorf("first sight: quiet since %v", got)
+	}
+	tr.Observe(claude, alive, true, idle, "x", false, at(time.Minute))
+	if got := tr.QuietSince(); !got.Equal(at(0)) {
+		t.Errorf("nothing happened: quiet since %v", got)
+	}
+	// A screen change, a hook report and time on stage all count.
+	tr.Observe(claude, alive, true, idle, "y", false, at(2*time.Minute))
+	if got := tr.QuietSince(); !got.Equal(at(2 * time.Minute)) {
+		t.Errorf("screen changed: quiet since %v", got)
+	}
+	tr.Observe(claude, alive, true, &Hook{State: Idle, At: at(3 * time.Minute)}, "y", false, at(4*time.Minute))
+	if got := tr.QuietSince(); !got.Equal(at(3 * time.Minute)) {
+		t.Errorf("hook: quiet since %v", got)
+	}
+	tr.Observe(claude, alive, true, idle, "y", true, at(5*time.Minute))
+	if got := tr.QuietSince(); !got.Equal(at(5 * time.Minute)) {
+		t.Errorf("on stage: quiet since %v", got)
+	}
+
+	// Done survives being put to sleep, and goes once looked at.
+	var d Tracker
+	d.Observe(claude, alive, true, &Hook{State: Running, At: at(0)}, "x", false, at(0))
+	d.Observe(claude, alive, true, &Hook{State: Idle, At: at(time.Second)}, "x", false, at(time.Second))
+	if !d.Done() {
+		t.Error("finished off stage should be done")
+	}
+	d.Observe(claude, tmux.Pane{Dead: true, Asleep: true}, true, nil, "", false, at(time.Hour))
+	if !d.Done() {
+		t.Error("done lost on falling asleep")
+	}
+	d.Observe(claude, alive, true, &Hook{State: Idle, At: at(2 * time.Hour)}, "x", true, at(2*time.Hour))
+	if d.Done() {
+		t.Error("still done after being opened")
+	}
 }
 
 func TestObserveScreenHeuristics(t *testing.T) {

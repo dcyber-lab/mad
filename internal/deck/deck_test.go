@@ -101,11 +101,17 @@ func TestLoadConfig(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(body), 0o644)
 	}
 	write(`{"notify": {"on": []}, "diff": {"command": "x {dir}"},
-		"finish": [{"name": "x", "command": "y"}], "quota": false}`)
+		"finish": [{"name": "x", "command": "y"}], "quota": false, "sleep": {"after": "90m"}}`)
 	c, err := LoadConfig()
 	if err != nil || c.Notify.Wants(notify.Done) || c.Diff.Command != "x {dir}" ||
-		len(c.Finish) != 1 || c.Finish[0].Name != "x" || c.Quota {
+		len(c.Finish) != 1 || c.Finish[0].Name != "x" || c.Quota || c.SleepAfter != 90*time.Minute {
 		t.Errorf("full file: %+v %v", c, err)
+	}
+	for _, bad := range []string{`"soon"`, `"-1h"`, `"60"`} {
+		write(`{"sleep": {"after": ` + bad + `}}`)
+		if c, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "sleep.after") || c.SleepAfter != 0 {
+			t.Errorf("sleep.after %s: %+v %v", bad, c, err)
+		}
 	}
 	// A typo is reported with its line, not silently read as defaults.
 	write("{\n  \"quota\": false,\n}")

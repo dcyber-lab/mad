@@ -18,7 +18,7 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 - **Project-first layout** — agents are grouped under the git project they
   work on; worktrees are folded into their main repository.
 - **Live status** — each agent shows `running`, `waiting` (needs your input),
-  `idle`, or `done` (finished while you were looking elsewhere).
+  `idle`, `done` (finished while you were looking elsewhere), or `asleep`.
 - **Git at a glance** — every project and worktree shows its branch, how
   many files changed and how many commits are unpushed.
 - **What each agent is on** — a claude or codex agent is listed by its
@@ -36,6 +36,8 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
   you, and `d` / `Alt-n` to jump to the next one.
 - **Never lose a session** — agents are started with a known session id, so
   after a crash or reboot you press `enter` and the conversation resumes.
+- **Sleep when idle** — optionally, agents left idle for a while give their
+  memory back and resume when you open them.
 - **Auto-sync** — Claude/Codex sessions running in other terminals or in the
   Claude desktop app are discovered and can be taken over or reopened.
 - **Non-invasive** — uses its own private tmux server and never touches your
@@ -143,6 +145,7 @@ is done.
 | `a`            | Add a project                                  |
 | `d`            | Jump to the next agent that is waiting or done |
 | `r`            | Restart or resume the agent                    |
+| `z`            | Put the agent to sleep (opening it resumes it) |
 | `t`            | Name the agent (empty to go back to its title) |
 | `i`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
@@ -351,6 +354,34 @@ Changes to the file apply right away. A mistake in it (a stray comma) is
 shown at the bottom of the sidebar with its line, and the last good
 settings stay in effect until it's fixed.
 
+## Sleeping idle agents
+
+Every agent in the deck is a live process: an idle claude holds a few hundred
+MB whether or not you come back to it. With `sleep` set in
+`~/.config/mad/config.json`, mad ends the process of an agent that has sat
+idle off stage for that long; it shows `◌ asleep`, and opening it (`enter`,
+`d`, `Alt-j`, `mad switch`) resumes the same conversation in a few seconds.
+`z` puts the selected agent to sleep at once.
+
+```json
+{"sleep": {"after": "60m"}}
+```
+
+Off unless set. Only agents whose kind can resume a session (`resume` in
+`agents.json`: claude and codex) are put to sleep, and never while running,
+waiting for you or on stage. One that finished while you were elsewhere
+stays `● done` while asleep.
+
+- **Background work keeps an agent awake.** A shell anywhere under the
+  agent's process (a command it runs, a background task, an MCP server
+  started through `sh -c`) means it is busy; `z` says so.
+- **What only the process held is lost:** text typed into the prompt but
+  not sent, and whatever else the agent keeps in memory rather than in its
+  transcript. Resuming reads the transcript back.
+- **60 minutes or more is cheapest.** The model's prompt cache lasts up to
+  an hour; a conversation resumed sooner than that can miss it and pay for
+  its whole context again on the next message.
+
 ## Custom agents
 
 Create `~/.config/mad/agents.json`. Entries are merged with the built-in
@@ -401,7 +432,7 @@ picker, sessions open elsewhere) is Go code, one file per agent in
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
-| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota) |
+| `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota, sleep) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks; `quota-<kind>.json` usage limits |
 | `~/.local/state/mad/sidebar_width`    | Saved sidebar width                               |

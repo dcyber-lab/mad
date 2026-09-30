@@ -1486,3 +1486,155 @@ func TestWaitForState(t *testing.T) {
 		t.Errorf("pane shows %q", out.String())
 	}
 }
+
+func TestSleepIdleAgents(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	m.cfg.SleepAfter = time.Hour
+	ids := []string{"old", "stage", "run", "wait", "sh", "new", "busy"}
+	for _, id := range ids {
+		kind := "claude"
+		if id == "sh" {
+			kind = "shell"
+		}
+		st.Projects[0].Agents = append(st.Projects[0].Agents, &state.Agent{ID: id, Kind: kind})
+	}
+	m.rebuildRows()
+	var calls []string
+	old := sleepAgent
+	t.Cleanup(func() { sleepAgent = old })
+	sleepAgent = func(id string, away bool) (bool, error) {
+		calls = append(calls, fmt.Sprintf("%s away=%v", id, away))
+		if id == "busy" {
+			return false, &deck.BusyError{Shell: "zsh"}
+		}
+		return true, nil
+	}
+
+	t0 := time.Now()
+	poll := func(now time.Time, hooks map[string]*status.Hook) {
+		msg := pollMsg{screens: map[string]string{}, hooks: hooks}
+		for i, id := range ids {
+			p := tmux.Pane{ID: fmt.Sprint("%", i+10), MadID: id, Session: tmux.PoolSession, Index: -1}
+			if id == "stage" {
+				p.Session, p.Index = tmux.MainSession, 1
+			}
+			msg.panes = append(msg.panes, p)
+			msg.screens[id] = "screen of " + id
+		}
+		m.applyPoll(msg, now)
+	}
+	idleSince := func(at time.Time) *status.Hook { return &status.Hook{State: status.Idle, At: at} }
+	poll(t0, nil) // first sight: the clocks start here
+	later := t0.Add(time.Hour + time.Minute)
+	poll(later, map[string]*status.Hook{
+		"old":  idleSince(t0.Add(-5 * time.Hour)),
+		"run":  {State: status.Running, At: later},
+		"wait": {State: status.Waiting, At: t0},
+		"new":  idleSince(t0.Add(31 * time.Minute)),
+		"busy": idleSince(t0),
+	})
+
+	if got := strings.Join(m.sleepers(later), ","); got != "old,busy" {
+		t.Errorf("sleepers = %q", got)
+	}
+	// Its diff on stage keeps an agent awake: closing the diff shows it.
+	m.stageID, m.taskFor = tmux.IDTask, "old"
+	if got := strings.Join(m.sleepers(later), ","); got != "busy" {
+		t.Errorf("sleepers with old's diff up = %q", got)
+	}
+	m.stageID, m.taskFor = "stage", ""
+	cmd := m.sleepCmd(later)
+	if cmd == nil || !m.sleeping {
+		t.Fatal("no sleep round started")
+	}
+	msg := cmd()
+	if got := strings.Join(calls, ","); got != "old away=true,busy away=true" {
+		t.Errorf("slept %q", got)
+	}
+	m.Update(msg)
+	if m.sleeping || m.flash != "" {
+		t.Errorf("after the round: sleeping=%v flash=%q", m.sleeping, m.flash)
+	}
+	if m.sleepCmd(t0.Add(time.Minute)) != nil || m.sleeping {
+		t.Error("a round started with nobody idle long enough")
+	}
+
+	// The tick looks only when sleep.after is set, every sleepCheckEvery.
+	m.cfg.SleepAfter, m.lastSleepCheck = 0, time.Time{}
+	m.Update(tickMsg(time.Now()))
+	if !m.lastSleepCheck.IsZero() {
+		t.Error("checked with sleep.after unset")
+	}
+	m.cfg.SleepAfter = time.Hour
+	m.Update(tickMsg(time.Now()))
+	if time.Since(m.lastSleepCheck) > time.Second {
+		t.Error("no check with sleep.after set")
+	}
+}
+
+func TestSleepKey(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}, {ID: "s1", Kind: "shell"}}
+	m.rebuildRows()
+	var calls []string
+	busy := false
+	old := sleepAgent
+	t.Cleanup(func() { sleepAgent = old })
+	sleepAgent = func(id string, away bool) (bool, error) {
+		calls = append(calls, fmt.Sprintf("%s away=%v", id, away))
+		if busy {
+			return false, &deck.BusyError{Shell: "zsh"}
+		}
+		return true, nil
+	}
+	set := func(id, s string) { m.trackers[id] = &status.Tracker{Status: s} }
+	z := func() tea.Cmd { m.flash = ""; return m.keyNormal(key("z")) }
+
+	press(m, "j") // c1
+	set("c1", status.Running)
+	if z() != nil || !strings.Contains(m.flash, "is running") {
+		t.Errorf("running: flash %q", m.flash)
+	}
+	set("c1", status.Asleep)
+	if z() != nil {
+		t.Error("asleep already: nothing to do")
+	}
+	set("c1", status.Idle)
+	cmd := z()
+	if cmd == nil {
+		t.Fatal("idle agent not put to sleep")
+	}
+	m.Update(cmd())
+	if got := strings.Join(calls, ","); got != "c1 away=false" || m.flash != "" {
+		t.Errorf("calls %q flash %q", got, m.flash)
+	}
+	busy = true
+	m.Update(z()())
+	if !strings.Contains(m.flash, "zsh runs under it") {
+		t.Errorf("busy: flash %q", m.flash)
+	}
+
+	press(m, "j") // s1
+	set("s1", status.Idle)
+	if z() != nil || !strings.Contains(m.flash, "can't resume") {
+		t.Errorf("shell: flash %q", m.flash)
+	}
+}
+
+func TestAsleepInSidebar(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}}
+	m.rebuildRows()
+	if _, label := m.statusGlyph(status.Asleep, false); label.s != "asleep" {
+		t.Errorf("asleep reads %q", label.s)
+	}
+	// Finished while you were away, then put to sleep: still done, and d
+	// still finds it.
+	m.trackers["c1"] = &status.Tracker{Status: status.Asleep, Attention: true}
+	if _, label := m.statusGlyph(status.Asleep, true); label.s != "done" {
+		t.Errorf("asleep and done reads %q", label.s)
+	}
+	if !m.needsYou(st.Projects[0].Agents[0]) || !strings.Contains(ansi.Strip(m.renderHeader()), "●1") {
+		t.Error("done agent asleep not counted")
+	}
+}
