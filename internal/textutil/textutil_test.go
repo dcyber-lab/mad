@@ -79,6 +79,18 @@ func TestCount(t *testing.T) {
 	}
 }
 
+func TestUSD(t *testing.T) {
+	cases := map[float64]string{
+		0: "$0.00", 0.4234: "$0.42", 12.34: "$12.34", 99.999: "$100", 123.4: "$123",
+		1234: "$1234", 12_345: "$12.3k",
+	}
+	for v, want := range cases {
+		if got := USD(v); got != want {
+			t.Errorf("USD(%v) = %q, want %q", v, got, want)
+		}
+	}
+}
+
 func TestUntil(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	cases := map[time.Duration]string{

@@ -72,6 +72,18 @@ func Until(t, now time.Time) string {
 	}
 }
 
+// USD is a compact amount of dollars: $0.42, $12.34, $123, $1234, $12.3k.
+func USD(v float64) string {
+	switch {
+	case v < 99.995:
+		return fmt.Sprintf("$%.2f", v)
+	case v < 9999.5:
+		return fmt.Sprintf("$%.0f", v)
+	default:
+		return fmt.Sprintf("$%.1fk", v/1e3)
+	}
+}
+
 // Count is a compact token count: 980, 4.2k, 340k, 1.2M, 12M, 1.1B.
 func Count(n int64) string {
 	f := float64(n)
