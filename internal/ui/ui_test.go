@@ -1068,7 +1068,7 @@ func TestDiffView(t *testing.T) {
 	}
 }
 
-func TestTokensInRows(t *testing.T) {
+func TestUsageInRows(t *testing.T) {
 	m, st := setup(t, "/p/one", "/p/two")
 	st.Projects[0].Agents = []*state.Agent{
 		{ID: "a1", Kind: "claude", SessionID: "s1"},
@@ -1091,14 +1091,14 @@ func TestTokensInRows(t *testing.T) {
 	}
 
 	m.Update(transcriptMsg{
-		"a1": {Tokens: transcript.Totals{Input: 10, CacheRead: 1_200_000, Output: 500}},
-		"a2": {Tokens: transcript.Totals{Input: 33_000, Output: 1_000}},
+		"a1": {Tokens: transcript.Totals{Input: 10, CacheRead: 1_200_000, Output: 500, Cost: 1.234}},
+		"a2": {Tokens: transcript.Totals{Input: 33_000, Output: 1_000}}, // no price: tokens
 	})
 	if m.reading {
 		t.Error("scan still marked in flight")
 	}
 	v := m.View()
-	for _, want := range []string{"1.2M  stopped", "34k  stopped", "1.2M  3 "} {
+	for _, want := range []string{"$1.23  stopped", "34k  stopped", "$1.23 + 34k  3 "} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
 		}
@@ -1116,7 +1116,7 @@ func TestTokensInRows(t *testing.T) {
 	// Too narrow for both: the count goes, the status stays.
 	m.Update(tea.WindowSizeMsg{Width: 25, Height: 30})
 	v = m.View()
-	if strings.Contains(v, "1.2M  stopped") || !strings.Contains(v, "claude") || strings.Count(v, "stopped") != 3 {
+	if strings.Contains(v, "$1.23  stopped") || !strings.Contains(v, "claude") || strings.Count(v, "stopped") != 3 {
 		t.Errorf("at width 25:\n%s", v)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})

@@ -1,10 +1,11 @@
 // Package transcript follows what an agent writes about its own session:
-// the tokens it consumed, the title it gave the conversation, the last
-// thing the user asked and the tool it is running. The agent itself is
-// never asked: the files are followed from where the last read stopped,
-// so a poll costs a stat per file and a parse of what was appended. Where
-// the files are and what a line means is up to the kind's provider (see
-// discover.Provider); this package keeps the running sums.
+// the tokens it consumed and what they cost, the title it gave the
+// conversation, the last thing the user asked and the tool it is running.
+// The agent itself is never asked: the files are followed from where the
+// last read stopped, so a poll costs a stat per file and a parse of what
+// was appended. Where the files are and what a line means is up to the
+// kind's provider (see discover.Provider); this package keeps the running
+// sums.
 package transcript
 
 import (
@@ -16,24 +17,25 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
-// Totals is what a session has consumed so far, in tokens. It has the
-// fields of discover.Tokens, so either converts to the other.
+// Totals is what a session has consumed so far. It has the fields of
+// discover.Tokens, so either converts to the other.
 type Totals struct {
 	Input      int64 // uncached prompt tokens
 	CacheRead  int64
 	CacheWrite int64
 	Output     int64
+	Cost       float64 // USD at API list prices, 0 when unknown
 }
 
 // Total is every token that went through the model.
 func (t Totals) Total() int64 { return t.Input + t.CacheRead + t.CacheWrite + t.Output }
 
 func (t Totals) add(o Totals) Totals {
-	return Totals{t.Input + o.Input, t.CacheRead + o.CacheRead, t.CacheWrite + o.CacheWrite, t.Output + o.Output}
+	return Totals{t.Input + o.Input, t.CacheRead + o.CacheRead, t.CacheWrite + o.CacheWrite, t.Output + o.Output, t.Cost + o.Cost}
 }
 
 func (t Totals) sub(o Totals) Totals {
-	return Totals{t.Input - o.Input, t.CacheRead - o.CacheRead, t.CacheWrite - o.CacheWrite, t.Output - o.Output}
+	return Totals{t.Input - o.Input, t.CacheRead - o.CacheRead, t.CacheWrite - o.CacheWrite, t.Output - o.Output, t.Cost - o.Cost}
 }
 
 // Info is what a session's transcript says about it.

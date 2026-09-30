@@ -114,6 +114,9 @@ type Tokens struct {
 	CacheRead  int64
 	CacheWrite int64
 	Output     int64
+	// Cost is what they come to at API list prices, in USD; 0 when the
+	// model's prices are not known.
+	Cost float64
 }
 
 // Title sources, in the order a title from one beats the next.

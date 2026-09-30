@@ -24,8 +24,9 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 - **What each agent is on** — a claude or codex agent is listed by its
   conversation's title, with the tool it is calling or the prompt it was
   given under it. `t` gives it a name of your own.
-- **Tokens at a glance** — every claude and codex agent shows what its
-  session has consumed so far, and every project the sum of its agents.
+- **Cost at a glance** — every claude agent shows what its session has
+  cost so far at API prices (codex: tokens), and every project the sum of
+  its agents.
 - **Usage limits** — under the header, how much of the claude and codex
   subscription windows (5-hour, weekly) is used and when they reset.
 - **One agent per branch** — `w` creates a git worktree on a new branch and
@@ -221,13 +222,18 @@ while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
 otherwise the prompt it is working on or was last given. `i` hides that
 line everywhere, for a shorter list.
 
-The number before an agent's status (`1.2M`, `340k`) is every token its
-current session has sent through the model: input, cache reads and writes,
-and output, added up. Names, the line underneath and tokens all come from
-the transcript claude or codex writes (`~/.claude/projects`,
-`~/.codex/sessions`), read from where the last poll stopped, so agents are
-never asked. A project row shows the sum of its
-agents. `/clear` starts a new session, so the count starts over.
+The amount before a claude agent's status (`$1.23`) is what its current
+session, subagents included, would cost at Anthropic's API list prices:
+input, cache writes (five-minute and one-hour), cache reads and output,
+each at its model's rate, doubled in fast mode, plus web searches. It is
+an estimate like claude's own `/cost`; on a subscription nothing is billed
+per token. Codex models have no price in mad, so a codex agent shows every
+token its session sent through the model instead (`1.2M`, `340k`). Names,
+the line underneath and usage all come from the transcript claude or codex
+writes (`~/.claude/projects`, `~/.codex/sessions`), read from where the
+last poll stopped, so agents are never asked. A project row shows the sum
+of its agents (`$4.10 + 1.2M` when it has both). `/clear` starts a new
+session, so the count starts over.
 
 Every project row shows the branch of the main checkout, `±N` for files
 changed or untracked, and `↑N` for commits not on the upstream; agents in
@@ -421,7 +427,7 @@ hooks), `{codex_notify}` (codex notify wiring; empty when your codex config
 sets its own `notify`).
 
 Kinds added here start, resume and show `waiting` like the built-ins. What
-mad reads from claude's and codex's own files (titles, tokens, the session
+mad reads from claude's and codex's own files (titles, usage, the session
 picker, sessions open elsewhere) is Go code, one file per agent in
 `internal/discover`; see [CONTRIBUTING](CONTRIBUTING.md#adding-an-agent).
 
@@ -458,11 +464,14 @@ picker, sessions open elsewhere) is Go code, one file per agent in
   picks the newest session in that process's directory. This is exact when
   each conversation has its own directory (the app's default worktrees).
 - Desktop-app discovery is macOS only; everything else also works on Linux.
-- Titles, the line under each agent and token counts come from the
+- Titles, the line under each agent and usage come from the
   transcripts claude and codex write, a format neither documents. An agent
   update can change it; the sidebar then falls back to `claude`, `claude#2`
   and shows no counts until mad catches up. They refresh every 5 seconds
   and when a turn ends, so they can trail the status a little.
+- Claude prices are built into mad (`internal/discover/price.go`). A model
+  released after it is priced like the latest of its family (Opus, Sonnet,
+  Haiku, Fable) until mad is updated.
 
 ## Contributing
 

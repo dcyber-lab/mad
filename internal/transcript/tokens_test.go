@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,27 @@ func TestClaudeTokens(t *testing.T) {
 	}
 	if got.Total() != 2243 {
 		t.Errorf("total %d", got.Total())
+	}
+}
+
+func TestClaudeCost(t *testing.T) {
+	// claude-sonnet-5: $2 per million in, $10 out.
+	priced := func(id string, in, out int64) map[string]any {
+		m := claudeMsg(id, in, 0, 0, out)
+		m["message"].(map[string]any)["model"] = "claude-sonnet-5"
+		return m
+	}
+	dir := t.TempDir()
+	main, sub := filepath.Join(dir, "s.jsonl"), filepath.Join(dir, "sub.jsonl")
+	writeLines(t, main,
+		priced("m1", 1_000_000, 0),
+		priced("m1", 1_000_000, 0), // logged again: counted once
+		priced("m2", 0, 100_000),
+	)
+	writeLines(t, sub, priced("x1", 500_000, 0))
+	r := reader(t, map[string][]string{"a": {main, sub}})
+	if got := r.Read([]Agent{{ID: "a", Kind: "claude"}})["a"].Tokens.Cost; math.Abs(got-4) > 1e-9 {
+		t.Errorf("cost $%v, want $4", got)
 	}
 }
 

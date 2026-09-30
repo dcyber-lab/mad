@@ -14,6 +14,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
+	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 // View never draws past the pane width: tmux would wrap the line and push
@@ -235,7 +236,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		}
 		left = []seg{{stPlain, " "}, {stDim, arrow}, {stProject, r.proj.Name}}
 		left = append(left, m.gitSegs(r.proj.Path, "")...)
-		return left, m.withTokens(left, right, m.projectTokens(r.proj))
+		return left, m.withUsage(left, right, m.projectUsage(r.proj))
 	}
 	a := r.agent
 	st, attention := status.Stopped, false
@@ -261,17 +262,17 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
-	return left, m.withTokens(left, []seg{label, {stPlain, " "}}, m.transcripts[a.ID].Tokens.Total())
+	return left, m.withUsage(left, []seg{label, {stPlain, " "}}, usageText(m.transcripts[a.ID].Tokens))
 }
 
-// withTokens puts a token count before the right side of a row, unless
-// that would cut into the title: the count goes before the title does,
-// and before the status.
-func (m *model) withTokens(left, right []seg, tokens int64) []seg {
-	if tokens <= 0 {
+// withUsage puts what was consumed before the right side of a row, unless
+// that would cut into the title: it goes before the title does, and
+// before the status.
+func (m *model) withUsage(left, right []seg, usage string) []seg {
+	if usage == "" {
 		return right
 	}
-	with := append([]seg{{stFaint, textutil.Count(tokens)}, {stPlain, "  "}}, right...)
+	with := append([]seg{{stFaint, usage}, {stPlain, "  "}}, right...)
 	if m.width-segWidth(with)-1 < segWidth(left) {
 		return right
 	}
@@ -312,13 +313,39 @@ func (m *model) detailSegs(a *state.Agent) []seg {
 	return []seg{indent, {stFaint, info.Prompt}}
 }
 
-// projectTokens is what all of p's agents consumed together.
-func (m *model) projectTokens(p *state.Project) int64 {
-	var n int64
-	for _, a := range p.Agents {
-		n += m.transcripts[a.ID].Tokens.Total()
+// usageText is what a session consumed: what it cost, else, for a model
+// without a known price, its tokens.
+func usageText(t transcript.Totals) string {
+	switch {
+	case t.Cost > 0:
+		return textutil.USD(t.Cost)
+	case t.Total() > 0:
+		return textutil.Count(t.Total())
 	}
-	return n
+	return ""
+}
+
+// projectUsage is what all of p's agents consumed together: what they
+// cost, plus the tokens of those without a price.
+func (m *model) projectUsage(p *state.Project) string {
+	var usd float64
+	var unpriced int64
+	for _, a := range p.Agents {
+		if t := m.transcripts[a.ID].Tokens; t.Cost > 0 {
+			usd += t.Cost
+		} else {
+			unpriced += t.Total()
+		}
+	}
+	switch {
+	case usd == 0 && unpriced == 0:
+		return ""
+	case usd == 0:
+		return textutil.Count(unpriced)
+	case unpriced == 0:
+		return textutil.USD(usd)
+	}
+	return textutil.USD(usd) + " + " + textutil.Count(unpriced)
 }
 
 // gitSegs is the checkout of dir as shown after a name: the branch, then

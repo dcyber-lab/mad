@@ -353,13 +353,9 @@ func (claude) Parse(line []byte) (Event, bool) {
 		CustomTitle string `json:"customTitle"`
 		Message     struct {
 			ID      string          `json:"id"`
+			Model   string          `json:"model"`
 			Content json.RawMessage `json:"content"`
-			Usage   *struct {
-				Input      int64 `json:"input_tokens"`
-				CacheWrite int64 `json:"cache_creation_input_tokens"`
-				CacheRead  int64 `json:"cache_read_input_tokens"`
-				Output     int64 `json:"output_tokens"`
-			} `json:"usage"`
+			Usage   *claudeUsage    `json:"usage"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(line, &ln) != nil {
@@ -390,7 +386,8 @@ func (claude) Parse(line []byte) (Event, bool) {
 			}
 		}
 		if u := ln.Message.Usage; u != nil && bytes.Contains(line, usageKey) {
-			e.Usage = &Tokens{Input: u.Input, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite, Output: u.Output}
+			e.Usage = &Tokens{Input: u.Input, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite, Output: u.Output,
+				Cost: u.cost(ln.Message.Model)}
 			e.Message = ln.Message.ID
 		}
 	default:
