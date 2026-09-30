@@ -1638,3 +1638,24 @@ func TestAsleepInSidebar(t *testing.T) {
 		t.Error("done agent asleep not counted")
 	}
 }
+
+func TestDayCostInHeader(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}}
+	m.rebuildRows()
+	if h := ansi.Strip(m.renderHeader()); strings.Contains(h, "today") {
+		t.Errorf("nothing spent yet: %q", h)
+	}
+	m.Update(dayMsg(12.345))
+	if m.dayReading || m.dayCost != 12.345 {
+		t.Errorf("dayMsg not taken in: %v %v", m.dayReading, m.dayCost)
+	}
+	if h := ansi.Strip(m.renderHeader()); !strings.Contains(h, "⧉ mad  today $12.35") || !strings.Contains(h, "1 agent") {
+		t.Errorf("header = %q", h)
+	}
+	// Too narrow for all of it: left out whole, never cut.
+	m.Update(tea.WindowSizeMsg{Width: 22, Height: 30})
+	if h := ansi.Strip(m.renderHeader()); strings.Contains(h, "today") || strings.Contains(h, "$") {
+		t.Errorf("narrow header = %q", h)
+	}
+}

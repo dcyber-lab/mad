@@ -325,6 +325,10 @@ func (w *codexWindow) window(at time.Time) status.Window {
 
 func (codex) Titles() map[string]string { return codexThreadNames() }
 
+// Written: codex's models have no price in mad, so nothing adds to a day's
+// spending.
+func (codex) Written(time.Time) []string { return nil }
+
 // codexNames is session_index.jsonl as last read. The file lists every
 // thread ever named, and the sidebar asks for it every few seconds, so it
 // is read again only when it changes.

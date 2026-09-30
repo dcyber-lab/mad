@@ -131,7 +131,15 @@ func (m *model) renderHeader() string {
 		}
 		right = []seg{{stFaint, n}}
 	}
-	return layout(m.width, nil, []seg{{stHeader, " ⧉ mad"}}, right)
+	left := []seg{{stHeader, " ⧉ mad"}}
+	// What today cost so far, where it fits whole: a cut amount misleads.
+	if m.dayCost > 0 {
+		with := append(left, seg{stPlain, "  "}, seg{stFaint, "today " + textutil.USD(m.dayCost)})
+		if segWidth(with)+1+segWidth(right) <= m.width {
+			left = with
+		}
+	}
+	return layout(m.width, nil, left, right)
 }
 
 func (m *model) spin() string { return spinner[m.frame%len(spinner)] }

@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClaudePrice(t *testing.T) {
@@ -51,5 +52,15 @@ func TestClaudeCost(t *testing.T) {
 		if math.Abs(e.Usage.Cost-want) > 1e-9 {
 			t.Errorf("cost %v, want %v, for %s", e.Usage.Cost, want, l)
 		}
+	}
+}
+
+// A response is dated by the line's timestamp, for the day's spending.
+func TestClaudeParseTime(t *testing.T) {
+	line := `{"type":"assistant","timestamp":"2026-09-29T16:05:07.123Z","message":{"id":"m1","model":"claude-opus-5-5",
+		"content":[],"usage":{"input_tokens":1,"output_tokens":1}}}`
+	e, ok := claude{}.Parse([]byte(line))
+	if want := time.Date(2026, 9, 29, 16, 5, 7, 123e6, time.UTC); !ok || !e.At.Equal(want) {
+		t.Errorf("At = %v, want %v", e.At, want)
 	}
 }

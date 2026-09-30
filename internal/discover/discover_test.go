@@ -507,6 +507,36 @@ func TestTranscripts(t *testing.T) {
 	}
 }
 
+// Written finds every session and subagent file written since a time,
+// under any project.
+func TestWritten(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now()
+	line := []any{map[string]any{"type": "user"}}
+	base := claudeProjectDir(f.project("app"))
+	recent := []string{
+		filepath.Join(base, "s1.jsonl"),
+		filepath.Join(base, "s1", "subagents", "agent-x.jsonl"),
+		filepath.Join(claudeProjectDir(f.project("other")), "s2.jsonl"),
+	}
+	for _, p := range recent {
+		f.write(p, line, now)
+	}
+	f.write(filepath.Join(base, "old.jsonl"), line, now.Add(-48*time.Hour))
+	f.write(filepath.Join(base, "s1", "tool-results", "r.jsonl"), line, now) // not a transcript
+	f.write(filepath.Join(base, "notes.txt"), line, now)
+
+	got := (claude{}).Written(now.Add(-time.Hour))
+	sort.Strings(got)
+	sort.Strings(recent)
+	if strings.Join(got, "\n") != strings.Join(recent, "\n") {
+		t.Errorf("Written = %q\nwant %q", got, recent)
+	}
+	if got := (codex{}).Written(now.Add(-time.Hour)); got != nil {
+		t.Errorf("codex has no prices, got %q", got)
+	}
+}
+
 // A file being written keeps one cache entry, parsed again only when its
 // mtime moves.
 func TestSessionCacheIsPerFile(t *testing.T) {
