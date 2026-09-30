@@ -86,14 +86,18 @@ type Pane struct {
 	WindowID string
 	Index    int // 0 sidebar, 1 stage, -1 anywhere else
 	Dead     bool
-	Active   bool
-	TTY      string
-	Width    int
-	Height   int
+	// Asleep: mad ended the agent's process to free what it held (the
+	// @mad_asleep pane option); the dead pane waits to be resumed.
+	Asleep bool
+	Active bool
+	TTY    string
+	PID    int // the pane's process
+	Width  int
+	Height int
 }
 
 const paneFormat = "#{pane_id}\t#{@mad_id}\t#{session_name}\t#{window_id}\t#{window_index}.#{pane_index}\t" +
-	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}"
+	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}"
 
 func ListPanes() ([]Pane, error) {
 	out, err := Out("list-panes", "-a", "-F", paneFormat)
@@ -107,12 +111,14 @@ func parsePanes(out string) []Pane {
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 10 {
+		if len(f) != 12 {
 			continue
 		}
-		p := Pane{ID: f[0], MadID: f[1], Session: f[2], WindowID: f[3], Dead: f[5] == "1", Active: f[8] == "1", TTY: f[9]}
+		p := Pane{ID: f[0], MadID: f[1], Session: f[2], WindowID: f[3], Dead: f[5] == "1", Active: f[8] == "1", TTY: f[9],
+			Asleep: f[11] == "1"}
 		p.Width, _ = strconv.Atoi(f[6])
 		p.Height, _ = strconv.Atoi(f[7])
+		p.PID, _ = strconv.Atoi(f[10])
 		switch {
 		case p.Session != MainSession:
 			p.Index = -1

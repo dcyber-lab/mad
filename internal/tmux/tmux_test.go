@@ -12,10 +12,10 @@ import (
 
 func TestParsePanes(t *testing.T) {
 	out := strings.Join([]string{
-		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001",
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003",
-		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004",
+		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t",
+		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1",
 		"garbage line",
 		"",
 	}, "\n")
@@ -31,7 +31,10 @@ func TestParsePanes(t *testing.T) {
 	if sb := panes[1]; sb.Index != 0 || !sb.Active || sb.Width != 30 || sb.TTY != "/dev/ttys002" {
 		t.Errorf("sidebar = %+v", sb)
 	}
-	if b := panes[3]; !b.Dead || b.WindowID != "@2" || b.Index != -1 {
+	if a := panes[2]; a.PID != 102 || a.Asleep {
+		t.Errorf("stage agent = %+v", a)
+	}
+	if b := panes[3]; !b.Dead || !b.Asleep || b.WindowID != "@2" || b.Index != -1 {
 		t.Errorf("pool agent = %+v", b)
 	}
 

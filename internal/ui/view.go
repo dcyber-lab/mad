@@ -107,7 +107,7 @@ func (m *model) renderHeader() string {
 				waiting++
 			case tr.Status == status.Running:
 				running++
-			case tr.Status == status.Idle && tr.Attention:
+			case tr.Done():
 				done++
 			}
 		}
@@ -351,9 +351,12 @@ func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
 		return seg{stRunning, m.spin()}, seg{stRunning, "running"}
 	case status.Waiting:
 		return seg{stWaiting, "?"}, seg{stWaiting, "waiting"}
-	case status.Idle:
-		if attention {
+	case status.Idle, status.Asleep:
+		switch {
+		case attention: // what it did outweighs where it is
 			return seg{stDone, "●"}, seg{stDone, "done"}
+		case s == status.Asleep:
+			return seg{stDim, "◌"}, seg{stFaint, "asleep"}
 		}
 		return seg{stDim, "○"}, seg{stFaint, "idle"}
 	case status.Exited:

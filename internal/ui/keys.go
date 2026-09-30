@@ -75,6 +75,10 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		if ok && r.agent != nil {
 			return m.restart(r.proj, r.agent)
 		}
+	case "z":
+		if ok && r.agent != nil {
+			return m.sleepNow(r.proj, r.agent)
+		}
 	case "x":
 		if !ok || r.ext != nil || r.desktop > 0 {
 			return nil
@@ -120,7 +124,7 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 // needsYou: waiting for input, or finished while you were elsewhere.
 func (m *model) needsYou(a *state.Agent) bool {
 	tr := m.trackers[a.ID]
-	return tr != nil && (tr.Status == status.Waiting || tr.Status == status.Idle && tr.Attention)
+	return tr != nil && (tr.Status == status.Waiting || tr.Done())
 }
 
 // jumpNext opens the next agent after the cursor that needs you, wrapping

@@ -22,6 +22,7 @@ const (
 	Waiting = "waiting" // needs the user: permission prompt, question
 	Idle    = "idle"
 	Exited  = "exited"  // process ended, pane kept (remain-on-exit)
+	Asleep  = "asleep"  // process ended by mad to free what it held; resumes when opened
 	Stopped = "stopped" // no pane, e.g. after a reboot
 )
 
@@ -82,6 +83,7 @@ type Tracker struct {
 	hash       uint64
 	seen       bool
 	lastChange time.Time
+	quiet      time.Time
 
 	Status string
 	// Attention: the agent finished or got blocked while not on stage.
@@ -99,7 +101,28 @@ func (t *Tracker) Observe(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 		t.Attention = true
 	}
 	t.Status = s
+	if t.quiet.IsZero() || onStage || s == Running || s == Waiting {
+		t.quiet = now
+	}
+	if t.lastChange.After(t.quiet) {
+		t.quiet = t.lastChange
+	}
+	if hook != nil && hook.At.After(t.quiet) {
+		t.quiet = hook.At
+	}
 	return s
+}
+
+// QuietSince is when the agent last did or showed anything: ran, waited,
+// reported through a hook, changed its screen or was on stage. It is
+// never earlier than the first observation, so a restarted sidebar starts
+// counting afresh.
+func (t *Tracker) QuietSince() time.Time { return t.quiet }
+
+// Done: the agent finished while you were elsewhere and you haven't looked
+// since, whether or not it has been put to sleep meanwhile.
+func (t *Tracker) Done() bool {
+	return t.Attention && (t.Status == Idle || t.Status == Asleep)
 }
 
 func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook, screen string, now time.Time) string {
@@ -107,6 +130,9 @@ func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 		return Stopped
 	}
 	if pane.Dead {
+		if pane.Asleep {
+			return Asleep
+		}
 		return Exited
 	}
 	h := fnv.New64a()
