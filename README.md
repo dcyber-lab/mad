@@ -370,6 +370,11 @@ whole thing off with `{"quota": false}` in `config.json`.
   for codex the thread id is recorded. If tmux dies or the machine restarts,
   press `enter` on the agent to resume the same conversation.
 
+For the proposed runtime direction, see [agent threads and file
+communication](docs/agent-runtime.md): lifecycle, message delivery, recovery,
+and scheduling. This is an architecture proposal, not a description of
+features available today.
+
 ## Notifications
 
 When an agent finishes a run (running → idle) or starts waiting for you,
