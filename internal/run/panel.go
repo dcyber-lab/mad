@@ -52,7 +52,9 @@ func (x *runner) paint() {
 	h--
 	lines := p.render(w, h)
 	var b strings.Builder
-	b.WriteString("\x1b[?25l\x1b[H")
+	// No cursor, and no wrapping: a line too long is cut, not carried
+	// over to push the panel up.
+	b.WriteString("\x1b[?25l\x1b[?7l\x1b[H")
 	for i, l := range lines {
 		if i >= h {
 			break
