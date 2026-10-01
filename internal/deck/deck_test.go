@@ -119,7 +119,7 @@ func TestSidebarWidth(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if c, err := LoadConfig(); err != nil || !reflect.DeepEqual(c, DefaultConfig()) || !c.Quota {
+	if c, err := LoadConfig(); err != nil || !reflect.DeepEqual(c, DefaultConfig()) || !c.Quota || c.SleepAfter != time.Hour {
 		t.Errorf("no file: %+v %v", c, err)
 	}
 	write := func(body string) {
@@ -135,9 +135,13 @@ func TestLoadConfig(t *testing.T) {
 	}
 	for _, bad := range []string{`"soon"`, `"-1h"`, `"60"`} {
 		write(`{"sleep": {"after": ` + bad + `}}`)
-		if c, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "sleep.after") || c.SleepAfter != 0 {
+		if c, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "sleep.after") || c.SleepAfter != time.Hour {
 			t.Errorf("sleep.after %s: %+v %v", bad, c, err)
 		}
+	}
+	write(`{"sleep": {"after": "0"}}`)
+	if c, err := LoadConfig(); err != nil || c.SleepAfter != 0 {
+		t.Errorf("sleep.after 0: %+v %v", c, err)
 	}
 	// A typo is reported with its line, not silently read as defaults.
 	write("{\n  \"quota\": false,\n}")

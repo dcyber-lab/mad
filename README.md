@@ -400,17 +400,19 @@ settings stay in effect until it's fixed.
 ## Sleeping idle agents
 
 Every agent in the deck is a live process: an idle claude holds a few hundred
-MB whether or not you come back to it. With `sleep` set in
-`~/.config/mad/config.json`, mad ends the process of an agent that has sat
-idle off stage for that long; it shows `◌ asleep`, and opening it (`enter`,
-`d`, `Alt-j`, `mad switch`) resumes the same conversation in a few seconds.
-`z` puts the selected agent to sleep at once.
+MB whether or not you come back to it. So mad ends the process of an agent
+that has sat idle off stage for an hour; it shows `◌ asleep`, and opening it
+(`enter`, `d`, `Alt-j`, `mad switch`) resumes the same conversation in a few
+seconds. `z` puts the selected agent to sleep at once.
+
+Set another wait in `~/.config/mad/config.json`, or `"0"` to keep every
+agent awake:
 
 ```json
-{"sleep": {"after": "60m"}}
+{"sleep": {"after": "2h"}}
 ```
 
-Off unless set. Only agents whose kind can resume a session (`resume` in
+Only agents whose kind can resume a session (`resume` in
 `agents.json`: claude and codex) are put to sleep, and never while running,
 waiting for you or on stage. One that finished while you were elsewhere
 stays `● done` while asleep.

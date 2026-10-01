@@ -23,12 +23,14 @@ type Config struct {
 	Quota bool
 	// SleepAfter is how long an agent that can resume may sit idle off
 	// stage before mad ends its process to free the memory it holds;
-	// opening it resumes the session. 0, the default, never.
+	// opening it resumes the session. An hour unless set; 0 never.
 	SleepAfter time.Duration
 }
 
 // DefaultConfig is what an empty or missing config.json means.
-func DefaultConfig() Config { return Config{Notify: notify.Default(), Quota: true} }
+func DefaultConfig() Config {
+	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour}
+}
 
 // LoadConfig reads config.json. A malformed file gives DefaultConfig and
 // an error naming the line, for the caller to show.
