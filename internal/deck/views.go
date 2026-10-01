@@ -14,12 +14,12 @@ import (
 const MaxViews = 4
 
 // ErrFullStage: the stage shows MaxViews panes already.
-var ErrFullStage = fmt.Errorf("the stage shows %d already: s on one of them closes it", MaxViews)
+var ErrFullStage = fmt.Errorf("%d views max: s closes one", MaxViews)
 
 // AddView shows the pane tagged madID beside those on stage, rather than
-// in place of the one in use; focus moves to it. One shown already is
-// only focused. On a stage with nothing on it, it takes the stage.
-func AddView(madID string) error {
+// in place of the one in use, and with focus moves the focus to it. On a
+// stage with nothing on it, it takes the stage.
+func AddView(madID string, focus bool) error {
 	panes, err := tmux.ListPanes()
 	if err != nil {
 		return err
@@ -31,14 +31,21 @@ func AddView(madID string) error {
 	views := tmux.Views(panes)
 	switch {
 	case tmux.OnStage(target):
-		return tmux.Run("select-pane", "-t", target.ID)
+		if focus {
+			return tmux.Run("select-pane", "-t", target.ID)
+		}
+		return nil
 	case len(views) == 0 || len(views) == 1 && views[0].MadID == tmux.IDPlaceholder:
-		return ShowPane(madID, true)
+		return ShowPane(madID, focus)
 	case len(views) >= MaxViews:
 		return ErrFullStage
 	}
 	// After the last view: Arrange keeps the panes in their order.
-	if err := tmux.Run("join-pane", "-h", "-s", target.ID, "-t", views[len(views)-1].ID); err != nil {
+	args := []string{"join-pane", "-h", "-s", target.ID, "-t", views[len(views)-1].ID}
+	if !focus {
+		args = append(args, "-d")
+	}
+	if err := tmux.Run(args...); err != nil {
 		return err
 	}
 	return Arrange()
@@ -72,11 +79,19 @@ func CloseView(madID string) error {
 
 // OpenAgentView is OpenAgent with the agent shown beside what is on
 // stage (AddView).
-func OpenAgentView(st *state.State, id string, kinds []agent.Kind) error {
+func OpenAgentView(st *state.State, id string, kinds []agent.Kind, focus bool) error {
+	// No agent started for a view there is no room for.
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return err
+	}
+	if p, ok := tmux.FindPane(panes, id); (!ok || !tmux.OnStage(p)) && len(tmux.Views(panes)) >= MaxViews {
+		return ErrFullStage
+	}
 	if err := ensureAgent(st, id, kinds); err != nil {
 		return err
 	}
-	return AddView(id)
+	return AddView(id, focus)
 }
 
 // Arrange lays the deck's window out: the sidebar at its width on the
@@ -229,8 +244,9 @@ func FocusStage(madID string) error {
 
 // ShowViews makes the stage show the panes tagged ids, at most MaxViews,
 // and nothing else: the first in the view in use, the others beside it.
-// Agents among them are started or resumed as needed.
-func ShowViews(st *state.State, ids []string, kinds []agent.Kind) error {
+// Agents among them are started or resumed as needed. With focus the
+// first takes the focus; else it stays where it is.
+func ShowViews(st *state.State, ids []string, kinds []agent.Kind, focus bool) error {
 	ids = ids[:min(len(ids), MaxViews)]
 	for _, id := range ids {
 		if tmux.IsAgentID(id) {
@@ -239,7 +255,7 @@ func ShowViews(st *state.State, ids []string, kinds []agent.Kind) error {
 			}
 		}
 	}
-	if err := ShowPane(ids[0], true); err != nil {
+	if err := ShowPane(ids[0], false); err != nil {
 		return err
 	}
 	panes, err := tmux.ListPanes()
@@ -258,9 +274,12 @@ func ShowViews(st *state.State, ids []string, kinds []agent.Kind) error {
 		}
 	}
 	for _, id := range ids[1:] {
-		if err := AddView(id); err != nil {
+		if err := AddView(id, false); err != nil {
 			return err
 		}
 	}
-	return FocusStage(ids[0])
+	if focus {
+		return FocusStage(ids[0])
+	}
+	return nil
 }

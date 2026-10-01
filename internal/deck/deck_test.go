@@ -548,11 +548,11 @@ func TestViews(t *testing.T) {
 		return out
 	}
 	// Onto an empty stage, a view takes the placeholder's place.
-	if err := OpenAgentView(st, "agent-1", fakeKind); err != nil {
+	if err := OpenAgentView(st, "agent-1", fakeKind, true); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"agent-2", "agent-3", "agent-4"} {
-		if err := OpenAgentView(st, id, fakeKind); err != nil {
+		if err := OpenAgentView(st, id, fakeKind, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -574,7 +574,7 @@ func TestViews(t *testing.T) {
 			t.Errorf("view %s is %dx%d", v.MadID, v.Width, v.Height)
 		}
 	}
-	if err := OpenAgentView(st, "agent-5", fakeKind); !errors.Is(err, ErrFullStage) {
+	if err := OpenAgentView(st, "agent-5", fakeKind, true); !errors.Is(err, ErrFullStage) {
 		t.Errorf("a fifth view: %v", err)
 	}
 	// The one in use is the focused one; opening another puts it there.
@@ -616,8 +616,8 @@ func TestViews(t *testing.T) {
 		t.Errorf("views after closing all = %s", got)
 	}
 	// Killing an agent in one of several views closes that view.
-	OpenAgentView(st, "agent-1", fakeKind)
-	OpenAgentView(st, "agent-2", fakeKind)
+	OpenAgentView(st, "agent-1", fakeKind, true)
+	OpenAgentView(st, "agent-2", fakeKind, true)
 	if err := KillAgent("agent-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -625,7 +625,7 @@ func TestViews(t *testing.T) {
 		t.Errorf("views after kill = %s", got)
 	}
 	// A run's views take the whole stage, and give it back.
-	if err := ShowViews(st, []string{"agent-3", "agent-4", "agent-5"}, fakeKind); err != nil {
+	if err := ShowViews(st, []string{"agent-3", "agent-4", "agent-5"}, fakeKind, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(ids(), " "); got != "agent-3 agent-4 agent-5" {
@@ -634,7 +634,7 @@ func TestViews(t *testing.T) {
 	if s, _ := tmux.Stage(panes(t)); s.MadID != "agent-3" {
 		t.Errorf("focus after ShowViews = %s", s.MadID)
 	}
-	if err := ShowViews(st, []string{"agent-3"}, fakeKind); err != nil {
+	if err := ShowViews(st, []string{"agent-3"}, fakeKind, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(ids(), " "); got != "agent-3" {

@@ -18,6 +18,9 @@ const PlaceholderText = `
      v         diff view       f       finish: push / PR / rebase / merge
      a         add project     t       name the agent
      r         restart/resume  x       kill agent / remove project
+     s         show the agent beside the others (up to 4), or close
+               its view; on a run, its panel with its agents
+     o         new run         c       continue a waiting run
      1-9       open agent N of the project the cursor is in
      q         detach (agents keep running)
      < / >     narrower / wider sidebar (or drag the border)

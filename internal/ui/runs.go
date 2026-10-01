@@ -187,12 +187,12 @@ func (m *model) toggleView(r row) tea.Cmd {
 		pane, has := m.panes[ids[0]]
 		return m.action("", func() error {
 			if tiled {
-				return deck.ShowViews(st, ids[:1], kinds)
+				return deck.ShowViews(st, ids[:1], kinds, false)
 			}
 			if err := ensureRunner(run.ID, pane, has); err != nil {
 				return err
 			}
-			return deck.ShowViews(st, ids, kinds)
+			return deck.ShowViews(st, ids, kinds, false)
 		})
 	}
 	if r.agent == nil {
@@ -203,7 +203,8 @@ func (m *model) toggleView(r row) tea.Cmd {
 	if m.shown[id] {
 		return m.action("", func() error { return deck.CloseView(id) })
 	}
-	return m.action("", func() error { return deck.OpenAgentView(st, id, kinds) })
+	// The focus stays here, for the next one to pick.
+	return m.action("", func() error { return deck.OpenAgentView(st, id, kinds, false) })
 }
 
 // openRunForm puts the form for a new run in p on stage.
