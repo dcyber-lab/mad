@@ -1538,11 +1538,11 @@ func TestSleepIdleAgents(t *testing.T) {
 		t.Errorf("sleepers = %q", got)
 	}
 	// Its diff on stage keeps an agent awake: closing the diff shows it.
-	m.stageID, m.taskFor = tmux.IDTask, "old"
+	m.shown, m.taskFor = map[string]bool{tmux.IDTask: true}, "old"
 	if got := strings.Join(m.sleepers(later), ","); got != "busy" {
 		t.Errorf("sleepers with old's diff up = %q", got)
 	}
-	m.stageID, m.taskFor = "stage", ""
+	m.shown, m.taskFor = map[string]bool{"stage": true}, ""
 	cmd := m.sleepCmd(later)
 	if cmd == nil || !m.sleeping {
 		t.Fatal("no sleep round started")

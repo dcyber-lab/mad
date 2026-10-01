@@ -1,6 +1,7 @@
 package deck
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -526,5 +527,146 @@ func waitFor(t *testing.T, cond func() bool, what string) {
 			t.Fatalf("timed out waiting: %s", what)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestViews(t *testing.T) {
+	useDeck(t)
+	if err := tmux.Run("resize-window", "-t", tmux.MainSession+":0", "-x", "220", "-y", "50"); err != nil {
+		t.Fatal(err)
+	}
+	st := &state.State{}
+	p, _ := st.AddProject(os.TempDir())
+	for i := 1; i <= 5; i++ {
+		p.Agents = append(p.Agents, &state.Agent{ID: fmt.Sprintf("agent-%d", i), Kind: "fake"})
+	}
+	ids := func() []string {
+		var out []string
+		for _, v := range tmux.Views(panes(t)) {
+			out = append(out, v.MadID)
+		}
+		return out
+	}
+	// Onto an empty stage, a view takes the placeholder's place.
+	if err := OpenAgentView(st, "agent-1", fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"agent-2", "agent-3", "agent-4"} {
+		if err := OpenAgentView(st, id, fakeKind); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := strings.Join(ids(), " "); got != "agent-1 agent-2 agent-3 agent-4" {
+		t.Fatalf("views = %s", got)
+	}
+	// Two rows of two, right of the sidebar at its width.
+	var sb tmux.Pane
+	for _, pn := range panes(t) {
+		if pn.Session == tmux.MainSession && pn.Index == 0 {
+			sb = pn
+		}
+	}
+	if sb.Width != DefaultSidebarWidth {
+		t.Errorf("sidebar width = %d", sb.Width)
+	}
+	for _, v := range tmux.Views(panes(t)) {
+		if v.Height < 23 || v.Height > 25 || v.Width < 90 {
+			t.Errorf("view %s is %dx%d", v.MadID, v.Width, v.Height)
+		}
+	}
+	if err := OpenAgentView(st, "agent-5", fakeKind); !errors.Is(err, ErrFullStage) {
+		t.Errorf("a fifth view: %v", err)
+	}
+	// The one in use is the focused one; opening another puts it there.
+	a2, _ := tmux.FindPane(panes(t), "agent-2")
+	tmux.Run("select-pane", "-t", a2.ID)
+	if err := OpenAgent(st, "agent-5", fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(), " "); got != "agent-1 agent-5 agent-3 agent-4" {
+		t.Errorf("views after open = %s", got)
+	}
+	// Opening one on stage only focuses it.
+	if err := OpenAgent(st, "agent-3", fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := tmux.Stage(panes(t)); s.MadID != "agent-3" || len(ids()) != 4 {
+		t.Errorf("stage = %s, views %v", s.MadID, ids())
+	}
+	// Closing views sends them back to the pool, still running; the last
+	// gives way to the placeholder.
+	for _, id := range []string{"agent-5", "agent-3", "agent-4"} {
+		if err := CloseView(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := strings.Join(ids(), " "); got != "agent-1" {
+		t.Errorf("views after closing = %s", got)
+	}
+	if v := tmux.Views(panes(t)); len(v) == 1 && v[0].Width != 220-DefaultSidebarWidth-1 {
+		t.Errorf("a lone view is %d wide", v[0].Width)
+	}
+	if a3, _ := tmux.FindPane(panes(t), "agent-3"); a3.Session != tmux.PoolSession || a3.Dead {
+		t.Errorf("closed view = %+v", a3)
+	}
+	if err := CloseView("agent-1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(), " "); got != tmux.IDPlaceholder {
+		t.Errorf("views after closing all = %s", got)
+	}
+	// Killing an agent in one of several views closes that view.
+	OpenAgentView(st, "agent-1", fakeKind)
+	OpenAgentView(st, "agent-2", fakeKind)
+	if err := KillAgent("agent-1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(), " "); got != "agent-2" {
+		t.Errorf("views after kill = %s", got)
+	}
+	// A run's views take the whole stage, and give it back.
+	if err := ShowViews(st, []string{"agent-3", "agent-4", "agent-5"}, fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(), " "); got != "agent-3 agent-4 agent-5" {
+		t.Errorf("views shown = %s", got)
+	}
+	if s, _ := tmux.Stage(panes(t)); s.MadID != "agent-3" {
+		t.Errorf("focus after ShowViews = %s", s.MadID)
+	}
+	if err := ShowViews(st, []string{"agent-3"}, fakeKind); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(), " "); got != "agent-3" {
+		t.Errorf("views back to one = %s", got)
+	}
+}
+
+func TestStageLayout(t *testing.T) {
+	// Checksum and shape as tmux itself writes them.
+	if got := stageLayout(200, 50, 30, []int{0, 1}); got != "fab5,200x50,0,0{30x50,0,0,0,169x50,31,0,1}" {
+		t.Errorf("one view: %s", got)
+	}
+	for _, c := range []struct {
+		w, views int
+		want     string
+	}{
+		{120, 2, "[89x19,31,0,2,89x20,31,20,3]"}, // too narrow for two abreast
+		{200, 2, "{84x50,31,0,2,84x50,116,0,3}"},
+		{200, 3, "[169x24,31,0{84x24,31,0,2,84x24,116,0,3},169x25,31,25,4]"}, // the odd one out spans its row
+		{200, 4, "[169x24,31,0{84x24,31,0,2,84x24,116,0,3},169x25,31,25{84x25,31,25,4,84x25,116,25,5}]"},
+		{260, 3, "{75x50,31,0,2,75x50,107,0,3,77x50,183,0,4}"}, // wide enough for three abreast
+	} {
+		ids := []int{1}
+		for i := range c.views {
+			ids = append(ids, i+2)
+		}
+		h := 50
+		if c.w == 120 {
+			h = 40
+		}
+		if got := stageLayout(c.w, h, 30, ids); !strings.Contains(got, c.want) {
+			t.Errorf("%d views in %d columns: %s, want %s", c.views, c.w, got, c.want)
+		}
 	}
 }

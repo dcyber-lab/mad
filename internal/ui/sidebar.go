@@ -125,7 +125,8 @@ type model struct {
 	screens  map[string]string       // latest screen per agent
 	lastFull time.Time               // when the last full poll started
 	fullDue  bool                    // a full poll is wanted as soon as the one in flight lands
-	stageID  string
+	stageID  string                  // the view in use on stage
+	shown    map[string]bool         // every view on stage
 	focused  bool
 	polling  bool
 	// epoch counts actions started and finished. A poll that began in

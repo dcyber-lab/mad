@@ -161,7 +161,8 @@ is done.
 | `i`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
 | `1`–`9`        | Open agent N of the run or project the cursor is in |
-| `tab`          | Focus the agent pane                           |
+| `s`            | Show the agent beside the others on stage, or close its view; on a run, its panel with its agents |
+| `tab`          | Focus the view in use on stage                 |
 | `<` / `>`      | Narrow / widen the sidebar                     |
 | `q`            | Detach (agents keep running)                   |
 
@@ -224,6 +225,16 @@ mad version             print the version
   `--fork-session`; codex asks you to close the other one first.
 - Sessions started programmatically (desktop workflows, `-p`/SDK calls, codex
   sub-tasks) are filtered out.
+
+## Several agents at once
+
+The stage shows up to four views side by side. `s` on an agent adds it
+beside those on stage, and `s` again closes its view (the agent keeps
+running). `s` on a run shows its panel and its agents together, and `s`
+again only the panel. The views are laid out in a grid right of the
+sidebar, as many to a row as the stage has room for at 70 columns each.
+`enter` puts an agent in the view in use (the one focused last) unless it
+is on stage already; click a view, or `tab`, to work in it.
 
 ## Reading the sidebar
 
@@ -440,9 +451,12 @@ claude reviewer may not edit.
 
 The run is a row in the sidebar with its three agents under it, numbered
 1–3 within it; `enter` on it folds or unfolds them, and shows its panel
-on stage: each step, what it came to, what it cost,
-each role's context and the log. Every agent is a real TUI: `enter` on
-one to watch it or step in.
+on stage: the flow as boxes, with each review's way back under them;
+the roles, with how full each one's context is; and the steps on a
+timeline of the run, with what each cost and came to. The log keeps
+what the steps don't say. Every agent is a real TUI: `enter` on one to
+watch it or step in, and `s` on the run to watch the panel and its agents
+at once.
 
 A run never waits silently. When it needs you (a permission prompt, a
 folder to trust, a review out of rounds, the budget spent, a turn that

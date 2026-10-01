@@ -14,7 +14,6 @@ import (
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
-	"github.com/dcyber-lab/mad/internal/tmux"
 	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
@@ -261,7 +260,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		st, attention = tr.Status, tr.Attention
 	}
 	bar, name := seg{stPlain, " "}, seg{stName, m.agentTitle(r.proj, a)}
-	if a.ID == m.stageID || m.stageID == tmux.IDTask && a.ID == m.taskFor {
+	if m.onStage(a.ID) {
 		bar, name = seg{stStage, "▌"}, seg{stStage, name.s}
 	}
 	num := " "
@@ -517,7 +516,7 @@ func (m *model) renderFooter() string {
 		} else {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
-		l2 = hints("w", "worktree", "v", "diff", "f", "finish")
+		l2 = hints("w", "worktree", "s", "split", "v", "diff", "f", "finish")
 		l3 = hints("o", "run", "t", "name", "x", "kill", "q", "detach")
 	}
 	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3

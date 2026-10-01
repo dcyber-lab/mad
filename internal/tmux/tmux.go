@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ const (
 	MainSession = "main"
 	PoolSession = "_pool"
 	SidebarPane = "main:0.0"
-	StagePane   = "main:0.1"
+	StagePane   = "main:0.1" // the first view
 
 	IDSidebar     = "_sidebar"
 	IDPlaceholder = "_placeholder"
@@ -84,12 +85,16 @@ type Pane struct {
 	MadID    string // @mad_id pane option
 	Session  string
 	WindowID string
-	Index    int // 0 sidebar, 1 stage, -1 anywhere else
-	Dead     bool
+	// Index is the pane's place in the deck's window: 0 the sidebar, 1
+	// and on the views on stage; -1 anywhere else.
+	Index int
+	Dead  bool
 	// Asleep: mad ended the agent's process to free what it held (the
 	// @mad_asleep pane option); the dead pane waits to be resumed.
 	Asleep bool
 	Active bool
+	// Last: the pane was active before the active one, in its window.
+	Last   bool
 	TTY    string
 	PID    int // the pane's process
 	Width  int
@@ -97,7 +102,7 @@ type Pane struct {
 }
 
 const paneFormat = "#{pane_id}\t#{@mad_id}\t#{session_name}\t#{window_id}\t#{window_index}.#{pane_index}\t" +
-	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}"
+	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}\t#{pane_last}"
 
 func ListPanes() ([]Pane, error) {
 	out, err := Out("list-panes", "-a", "-F", paneFormat)
@@ -111,23 +116,17 @@ func parsePanes(out string) []Pane {
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 12 {
+		if len(f) != 13 {
 			continue
 		}
 		p := Pane{ID: f[0], MadID: f[1], Session: f[2], WindowID: f[3], Dead: f[5] == "1", Active: f[8] == "1", TTY: f[9],
-			Asleep: f[11] == "1"}
+			Asleep: f[11] == "1", Last: f[12] == "1"}
 		p.Width, _ = strconv.Atoi(f[6])
 		p.Height, _ = strconv.Atoi(f[7])
 		p.PID, _ = strconv.Atoi(f[10])
-		switch {
-		case p.Session != MainSession:
-			p.Index = -1
-		case f[4] == "0.0":
-			p.Index = 0
-		case f[4] == "0.1":
-			p.Index = 1
-		default:
-			p.Index = -1
+		p.Index = -1
+		if w, i, ok := strings.Cut(f[4], "."); ok && p.Session == MainSession && w == "0" {
+			p.Index, _ = strconv.Atoi(i)
 		}
 		panes = append(panes, p)
 	}
@@ -143,14 +142,39 @@ func FindPane(panes []Pane, madID string) (Pane, bool) {
 	return Pane{}, false
 }
 
-// Stage is the pane currently shown right of the sidebar.
-func Stage(panes []Pane) (Pane, bool) {
+// OnStage reports whether p is one of the views right of the sidebar.
+func OnStage(p Pane) bool { return p.Session == MainSession && p.Index >= 1 }
+
+// Views are the panes on stage, right of the sidebar, in order.
+func Views(panes []Pane) []Pane {
+	var out []Pane
 	for _, p := range panes {
-		if p.Session == MainSession && p.Index == 1 {
+		if OnStage(p) {
+			out = append(out, p)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Index < out[j].Index })
+	return out
+}
+
+// Stage is the view in use: the one focused, else the one last focused
+// (the sidebar has the focus), else the first.
+func Stage(panes []Pane) (Pane, bool) {
+	views := Views(panes)
+	if len(views) == 0 {
+		return Pane{}, false
+	}
+	for _, p := range views {
+		if p.Active {
 			return p, true
 		}
 	}
-	return Pane{}, false
+	for _, p := range views {
+		if p.Last {
+			return p, true
+		}
+	}
+	return views[0], true
 }
 
 func Tag(paneID, madID string) error {

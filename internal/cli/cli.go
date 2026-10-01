@@ -127,6 +127,8 @@ func Run(args []string, stdio IO) int {
 		err = skillCmd(args, stdio)
 	case "fit":
 		err = deck.FitSidebar()
+	case "focus":
+		err = deck.FocusStage("")
 	case "kill-server":
 		err = tmux.Run("kill-server")
 	case "sidebar":

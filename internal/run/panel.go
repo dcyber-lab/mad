@@ -130,45 +130,93 @@ func (x *runner) panel(panes []tmux.Pane) *panel {
 	return p
 }
 
-// render lays the panel out in w columns and about h rows: what does not
-// fit is the oldest steps and log lines.
+// render lays the panel out in w columns and about h rows, one block
+// after another: the run, what it is about, its flow, its roles, the
+// steps taken, how it ended, and its log in the room left. On a short
+// pane the steps keep their latest few and the log what is left; the
+// blocks that matter least go first.
 func (p *panel) render(w, h int) []string {
-	var lines []string
-	add := func(s ...string) { lines = append(lines, s...) }
-	add(p.head(w)...)
-	add("")
-	add(p.flowLines(w)...)
-	add("")
-	add(p.roleLines(w)...)
-	tail := p.ending()
-
-	// The steps get the room left, keeping a few lines for the log.
-	head, rows := p.timeline(w)
-	room := h - len(lines) - len(tail) - 1 - len(head) - 4
-	if len(rows) > 0 {
-		add("")
-		add(head...)
-		if room < len(rows) {
-			k := max(room-1, 1)
-			add(pDim.Render(fmt.Sprintf("   … %d steps before", len(rows)-k)))
-			rows = rows[len(rows)-k:]
-		}
-		add(rows...)
+	w-- // a margin of one on the left
+	blocks := []block{
+		{text: p.title(w), keep: keepAlways},
+		{text: p.about(w), keep: 2, joined: true},
+		{text: p.flowView(w), keep: 4},
+		{text: p.rolesView(w), keep: 3},
+		{steps: true, keep: keepAlways},
+		p.endingView(),
+		{log: true, keep: keepAlways},
 	}
-	add(tail...)
-
-	room = h - len(lines) - 2
-	if room >= 1 {
-		add("")
-		add(pDim.Render(" log  " + paths.Short(p.logDir)))
-		for _, l := range events(p.logDir, room) {
-			add(pDim.Render(" " + l))
+	const fewestSteps = 3
+	stepRows := min(len(p.pr.Entries), fewestSteps)
+	if stepRows > 0 {
+		stepRows++ // the head
+	}
+	for height(blocks)+stepRows > h {
+		drop := -1
+		for i, b := range blocks {
+			if b.text != "" && b.keep < keepAlways && (drop < 0 || b.keep < blocks[drop].keep) {
+				drop = i
+			}
+		}
+		if drop < 0 {
+			break
+		}
+		blocks[drop].text = ""
+	}
+	var out []string
+	for i, b := range blocks {
+		text := b.text
+		switch {
+		case b.steps:
+			text = p.stepsView(w, h-height(blocks[i+1:])-len(out)-1)
+		case b.log:
+			if room := h - len(out) - 1; room >= 1 {
+				text = p.logView(room)
+			}
+		}
+		if text == "" {
+			continue
+		}
+		if len(out) > 0 && !b.joined {
+			out = append(out, "")
+		}
+		for _, l := range strings.Split(text, "\n") {
+			out = append(out, " "+l)
 		}
 	}
-	return lines
+	return out
 }
 
-func (p *panel) head(w int) []string {
+// block is a part of the panel: what it says, and how long it stays when
+// the pane is short, the higher the longer. The steps and the log are
+// drawn last, in the room the others leave.
+type block struct {
+	text       string
+	keep       int
+	joined     bool // right under the block before, without a blank line
+	steps, log bool
+}
+
+const keepAlways = 9
+
+// height is the lines blocks take, a blank one between each two (but for
+// one joined to the block before); the steps and the log count as
+// nothing.
+func height(blocks []block) int {
+	n := 0
+	for _, b := range blocks {
+		if b.text != "" {
+			n += lipgloss.Height(b.text) + 1
+			if b.joined {
+				n--
+			}
+		}
+	}
+	return n
+}
+
+// title is the run's name and how it stands, over a rule.
+func (p *panel) title(w int) string {
 	pr := p.pr
 	end := pr.Ended
 	if end.IsZero() {
@@ -202,8 +250,18 @@ func (p *panel) head(w int) []string {
 	case Failed:
 		st = pBad.Render("✗ failed") + pDim.Render(" · "+spent)
 	}
-	title := pBold.Render(" run " + p.name)
-	budget := pDim.Render("no budget")
+	name := pBold.Render("run " + p.name)
+	line := name + "\n" + st // on a narrow pane, one under the other
+	if gap := w - lipgloss.Width(name) - lipgloss.Width(st); gap >= 2 {
+		line = name + strings.Repeat(" ", gap) + st
+	}
+	return line + "\n" + pRule.Render(strings.Repeat("─", w))
+}
+
+// about is what the run is about: its task, branch, flow and budget.
+func (p *panel) about(w int) string {
+	pr := p.pr
+	budget := pDim.Render("none")
 	if p.spec.Budget > 0 {
 		frac := pr.Cost / p.spec.Budget
 		style := pRun
@@ -213,28 +271,276 @@ func (p *panel) head(w int) []string {
 		case frac >= 0.7:
 			style = pWarn
 		}
-		budget = bar(frac, 20, style) + " " + textutil.USD(pr.Cost) + pDim.Render(" of "+textutil.USD(p.spec.Budget))
+		budget = gauge(frac, share(w, 0.15, 8, 20), style) + " " + textutil.USD(pr.Cost) + pDim.Render(" of "+textutil.USD(p.spec.Budget))
 	}
 	if pr.Tokens > 0 {
 		budget += pDim.Render(" · and " + kTokens(pr.Tokens) + " tokens of models without a price")
 	}
-	return []string{
-		title + strings.Repeat(" ", max(w-lipgloss.Width(title)-lipgloss.Width(st)-1, 1)) + st,
-		pRule.Render(" " + strings.Repeat("─", max(w-2, 1))),
-		" " + pLabel.Render("task") + firstLine(p.spec.Task),
-		" " + pLabel.Render("branch") + p.branch + pDim.Render("  "+paths.Short(p.dir)),
-		" " + pLabel.Render("flow") + p.flow.Name + pDim.Render("  "+p.flow.Description),
-		" " + pLabel.Render("budget") + budget,
-	}
+	return columns(w, [][]string{
+		{pDim.Render("task"), firstLine(p.spec.Task)},
+		{pDim.Render("branch"), p.branch + pDim.Render("  "+paths.Short(p.dir))},
+		{pDim.Render("flow"), p.flow.Name + pDim.Render("  "+p.flow.Description)},
+		{pDim.Render("budget"), budget},
+	}, 1)
 }
 
-// bar is a gauge width cells long, frac of it filled.
-func bar(frac float64, width int, style lipgloss.Style) string {
-	n := min(max(int(frac*float64(width)+0.5), 0), width)
-	if frac > 0 && n == 0 {
-		n = 1
+// flowView draws the flow: a box for each step, saying how it stands and
+// who takes it, arrows between them, and under them each review's way
+// back. A flow too wide for the pane is one line.
+func (p *panel) flowView(w int) string {
+	loops := p.loops()
+	arrowStyle := func(i int) lipgloss.Style {
+		if p.stepView(i).runs > 0 {
+			return pGood
+		}
+		return pRule
 	}
-	return style.Render(strings.Repeat("█", n)) + pRule.Render(strings.Repeat("░", width-n))
+	var parts []string
+	var centers []int
+	x := 0
+	for i, s := range p.flow.Steps {
+		v := p.stepView(i)
+		if i > 0 {
+			// On the line of the steps' names, under the boxes' tops.
+			arrow := "\n" + arrowStyle(i).Render("──▶")
+			parts = append(parts, arrow)
+			x += lipgloss.Width(arrow)
+		}
+		head := v.glyph + " " + s.Label
+		if v.runs > 1 {
+			head += fmt.Sprintf(" ×%d", v.runs)
+		}
+		text := v.style
+		if v.glyph == "●" {
+			text = text.Bold(true)
+		}
+		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(v.style.GetForeground()).Padding(0, 1).
+			Render(text.Render(head) + "\n" + pDim.Render(p.flow.RoleLabel(s.Role)))
+		parts = append(parts, box)
+		centers = append(centers, x+lipgloss.Width(box)/2)
+		x += lipgloss.Width(box)
+	}
+	if x > w {
+		return p.chain(loops)
+	}
+	boxes := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	if len(loops) == 0 {
+		return boxes
+	}
+	// Under the boxes: an arrow up into each step a review sends work
+	// back to, a line down from the review, and the way between them
+	// below, the shortest nearest.
+	c := newCanvas(x, len(loops)+1)
+	for k, l := range loops {
+		a, b, st := centers[l.to], centers[l.from], l.style()
+		c.set(0, a, '▲', st)
+		for r := 0; r <= k; r++ {
+			c.set(r, a, '│', st)
+			c.set(r, b, '│', st)
+		}
+		c.set(k+1, a, '╰', st)
+		c.set(k+1, b, '╯', st)
+		c.line(k+1, a+1, b-1, st)
+		c.label(k+1, a+1, b-1, l.label(), st)
+	}
+	return boxes + "\n" + c.String()
+}
+
+// chain is the flow in one line, for a pane too narrow for its boxes.
+func (p *panel) chain(loops []loop) string {
+	var parts []string
+	for i, s := range p.flow.Steps {
+		v := p.stepView(i)
+		t := s.Label
+		if v.runs > 1 {
+			t += fmt.Sprintf(" ×%d", v.runs)
+		}
+		parts = append(parts, v.style.Render(v.glyph)+" "+t)
+	}
+	line := strings.Join(parts, pRule.Render(" → "))
+	for _, l := range loops {
+		line += "  " + l.style().Render(fmt.Sprintf("↺ %s → %s%s", p.flow.Steps[l.from].Label, p.flow.Steps[l.to].Label,
+			strings.TrimSuffix(strings.TrimPrefix(l.label(), " CHANGES"), " ")))
+	}
+	return line
+}
+
+// rolesView is the run's roles: who plays each, how it stands, how full
+// its context is against where a claude role gets compacted, what it
+// cost, and what it is doing.
+func (p *panel) rolesView(w int) string {
+	gw := share(w, 0.1, 6, 16)
+	rows := [][]string{{pDim.Render("role"), pDim.Render("agent"), pDim.Render("state"), pDim.Render("context"), pDim.Render("cost"),
+		pDim.Render(fmt.Sprintf("(context compacts past %s)", kTokens(p.spec.Compact)))}}
+	for _, r := range p.flow.Roles {
+		who := agent.ByName(p.kinds, r.Kind).Glyph() + " " + r.Label
+		v, started := p.roles[r.Name]
+		if !started {
+			rows = append(rows, []string{who, pDim.Render(roleModel(r)), pRule.Render("not started")})
+			continue
+		}
+		state := pDim
+		switch v.state {
+		case "working":
+			state = pRun
+		case "waiting":
+			state = pWarn
+		case "exited", "stopped":
+			state = pBad
+		}
+		ctx := ""
+		if c := p.pr.Context[r.Name]; c > 0 {
+			ctx = kTokens(c)
+			if gw > 0 && p.spec.Compact > 0 {
+				frac := float64(c) / float64(p.spec.Compact)
+				style := pRun
+				if frac >= 0.8 {
+					style = pWarn
+				}
+				ctx = gauge(frac, gw, style) + " " + ctx
+			}
+		}
+		cost := textutil.USD(v.cost)
+		if v.cost == 0 && v.tokens > 0 {
+			cost = kTokens(v.tokens) + " tok"
+		}
+		now := ""
+		if v.state == "working" {
+			now = pDim.Render(v.tool)
+		}
+		rows = append(rows, []string{who, pDim.Render(roleModel(r)), state.Render(v.state), ctx, cost, now})
+	}
+	return columns(w, rows, 5)
+}
+
+// roleModel is what plays a role: its model or kind, and its effort.
+func roleModel(r Role) string {
+	s := r.Kind
+	if r.Model != "" {
+		s = r.Model
+	}
+	if r.Effort != "" {
+		s += "@" + r.Effort
+	}
+	return s
+}
+
+// stepsView is the steps taken, at most room lines of them, the latest:
+// for each, who took it, when and for how long against the whole run,
+// what it cost and what it came to.
+func (p *panel) stepsView(w, room int) string {
+	pr := p.pr
+	if len(pr.Entries) == 0 {
+		return ""
+	}
+	start := pr.Started
+	if start.IsZero() || pr.Entries[0].Start.Before(start) {
+		start = pr.Entries[0].Start
+	}
+	end := pr.Ended
+	if end.IsZero() {
+		end = p.now
+	}
+	total := float64(max(end.Sub(start), time.Second))
+	sw := share(w, 0.2, 8, 32)
+
+	when := ""
+	if sw > 0 {
+		from, to := start.Local().Format("15:04"), end.Local().Format("15:04")
+		when = from + strings.Repeat(" ", max(sw-len(from)-len(to), 1)) + to
+	}
+	rows := [][]string{{"", pDim.Render("step"), pDim.Render("role"), pDim.Render(when), pDim.Render("time"), pDim.Render("cost"), ""}}
+	// The latest that fit under the head, one line saying how many
+	// earlier ones did not.
+	entries := pr.Entries
+	if fit := max(room-1, 1); len(entries) > fit {
+		keep := max(fit-1, 1)
+		rows = append(rows, []string{"", pDim.Render(fmt.Sprintf("… %d before", len(entries)-keep))})
+		entries = entries[len(entries)-keep:]
+	}
+	for _, e := range entries {
+		glyph, style := entryGlyph(e, pr.Status)
+		stop := e.End
+		if stop.IsZero() {
+			stop = p.now
+		}
+		label := e.Step
+		if i := p.flow.StepIndex(e.Step); i >= 0 {
+			label = p.flow.Steps[i].Label
+		}
+		if e.Round > 1 {
+			label += fmt.Sprintf(" #%d", e.Round)
+		}
+		place := ""
+		if sw > 0 {
+			place = span(float64(e.Start.Sub(start))/total, float64(stop.Sub(start))/total, sw, style)
+		}
+		cost := ""
+		switch {
+		case e.Cost > 0:
+			cost = textutil.USD(e.Cost)
+		case e.Tokens > 0:
+			cost = kTokens(e.Tokens)
+		}
+		came := result(e.Result)
+		if e.Status == "running" {
+			came = pDim.Render(p.roles[e.Role].tool)
+		}
+		rows = append(rows, []string{style.Render(glyph), label, pDim.Render(p.flow.RoleLabel(e.Role)), place, dur(stop.Sub(e.Start)), cost, came})
+	}
+	return columns(w, rows, 6)
+}
+
+// endingView is what the run waits for, or how it ended, and what you
+// told it: what it waits for stays longest on a short pane.
+func (p *panel) endingView() block {
+	var blocks []string
+	pr := p.pr
+	switch pr.Status {
+	case Waiting:
+		blocks = append(blocks, pWarn.Bold(true).Render("◆ waiting for you: ")+pWarn.Render(pr.Waiting)+"\n"+
+			pDim.Render("  on this run in the sidebar: c continue · x cancel · enter on a role to step in"))
+	case Failed:
+		blocks = append(blocks, pBad.Render("✗ "+pr.Waiting))
+	case Done:
+		if len(p.diff) > 0 {
+			lines := []string{pDim.Render("changes")}
+			for i, l := range p.diff {
+				if i >= 6 {
+					lines = append(lines, pDim.Render(fmt.Sprintf("  … %d more", len(p.diff)-i)))
+					break
+				}
+				lines = append(lines, " "+l)
+			}
+			blocks = append(blocks, strings.Join(lines, "\n"))
+		}
+		blocks = append(blocks, pDim.Render("on this run in the sidebar: f pull request or merge · v diff · x remove"))
+	}
+	if n := len(pr.Notes); n > 0 {
+		rows := [][]string{{pDim.Render("from you"), pDim.Render(fmt.Sprintf("%d · %s/notes.md", n, strings.TrimPrefix(p.logDir, p.dir+"/")))}}
+		for _, note := range pr.Notes[max(n-3, 0):] {
+			who := "every role"
+			if note.Role != "" {
+				who = "the " + p.flow.RoleLabel(note.Role)
+			}
+			rows = append(rows, []string{"", pDim.Render(who+": ") + firstLine(note.Text)})
+		}
+		blocks = append(blocks, columns(1<<16, rows, -1))
+	}
+	keep := 1
+	if pr.Status == Waiting || pr.Status == Failed {
+		keep = keepAlways
+	}
+	return block{text: strings.Join(blocks, "\n\n"), keep: keep}
+}
+
+// logView is the last n lines of the log that the steps do not say.
+func (p *panel) logView(n int) string {
+	lines := []string{pDim.Render("log  " + paths.Short(p.logDir))}
+	for _, l := range events(p.logDir, n-1) {
+		lines = append(lines, pDim.Render(l))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // stepView is how a step of the flow stands.
@@ -313,348 +619,6 @@ func (l loop) label() string {
 		return fmt.Sprintf(" CHANGES ×%d ", l.n)
 	}
 	return " CHANGES "
-}
-
-// flowLines draws the flow: a box for each step, how it stands and who
-// takes it, arrows between them, and under them each review's way back.
-// A flow too wide for the pane is one line.
-func (p *panel) flowLines(w int) []string {
-	type box struct {
-		top, mid, low, bottom string
-		center                int
-	}
-	loops := p.loops()
-	anchors := map[int]loop{} // box → the loop that ends or starts under it
-	for _, l := range loops {
-		anchors[l.to], anchors[l.from] = l, l
-	}
-	var boxes []box
-	x := 1
-	for i, s := range p.flow.Steps {
-		v := p.stepView(i)
-		l1 := v.glyph + " " + s.Label
-		if v.runs > 1 {
-			l1 += fmt.Sprintf(" ×%d", v.runs)
-		}
-		l2 := p.flow.RoleLabel(s.Role)
-		inner := max(lipgloss.Width(l1), lipgloss.Width(l2))
-		width := inner + 4
-		b := box{center: x + width/2}
-		edge := v.style
-		label := v.style
-		if v.glyph == "●" {
-			label = label.Bold(true)
-		}
-		b.top = edge.Render("╭" + strings.Repeat("─", width-2) + "╮")
-		b.mid = edge.Render("│ ") + label.Render(textutil.PadRight(l1, inner)) + edge.Render(" │")
-		b.low = edge.Render("│ ") + pDim.Render(textutil.PadRight(l2, inner)) + edge.Render(" │")
-		bottom := edge.Render("╰" + strings.Repeat("─", width-2) + "╯")
-		if l, ok := anchors[i]; ok {
-			mark := "┬"
-			if l.to == i {
-				mark = "▲"
-			}
-			left := width/2 - 1
-			bottom = edge.Render("╰"+strings.Repeat("─", left)) + l.style().Render(mark) +
-				edge.Render(strings.Repeat("─", width-3-left)+"╯")
-		}
-		b.bottom = bottom
-		boxes = append(boxes, b)
-		x += width + 3
-	}
-	if x-3 > w {
-		return []string{p.chain(loops)}
-	}
-
-	var top, mid, low, bottom strings.Builder
-	for _, s := range []*strings.Builder{&top, &mid, &low, &bottom} {
-		s.WriteString(" ")
-	}
-	for i, b := range boxes {
-		if i > 0 {
-			arrow := pRule
-			if p.stepView(i).runs > 0 {
-				arrow = pGood
-			}
-			top.WriteString("   ")
-			mid.WriteString(arrow.Render("──▶"))
-			low.WriteString("   ")
-			bottom.WriteString("   ")
-		}
-		top.WriteString(b.top)
-		mid.WriteString(b.mid)
-		low.WriteString(b.low)
-		bottom.WriteString(b.bottom)
-	}
-	lines := []string{top.String(), mid.String(), low.String(), bottom.String()}
-
-	// The ways back, the shortest nearest: one row each, the lines of
-	// those below it passing through.
-	c := newCanvas(x, len(loops))
-	for k, l := range loops {
-		a, b := boxes[l.to].center, boxes[l.from].center
-		st := l.style()
-		for r := 0; r < k; r++ {
-			c.set(r, a, '│', st)
-			c.set(r, b, '│', st)
-		}
-		c.set(k, a, '╰', st)
-		c.set(k, b, '╯', st)
-		for i := a + 1; i < b; i++ {
-			c.set(k, i, '─', st)
-		}
-		if lbl := []rune(l.label()); b-a-1 >= len(lbl)+2 {
-			at := a + 1 + (b-a-1-len(lbl))/2
-			for i, r := range lbl {
-				c.put(k, at+i, r, st)
-			}
-		}
-	}
-	return append(lines, c.lines()...)
-}
-
-// chain is the flow in one line, for a pane too narrow for its boxes.
-func (p *panel) chain(loops []loop) string {
-	var parts []string
-	for i, s := range p.flow.Steps {
-		v := p.stepView(i)
-		t := s.Label
-		if v.runs > 1 {
-			t += fmt.Sprintf(" ×%d", v.runs)
-		}
-		parts = append(parts, v.style.Render(v.glyph)+" "+t)
-	}
-	line := " " + strings.Join(parts, pRule.Render(" → "))
-	for _, l := range loops {
-		line += "  " + l.style().Render(fmt.Sprintf("↺ %s → %s%s", p.flow.Steps[l.from].Label, p.flow.Steps[l.to].Label,
-			strings.TrimSuffix(strings.TrimPrefix(l.label(), " CHANGES"), " ")))
-	}
-	return line
-}
-
-// canvas is a grid of one-column runes, each with its style.
-type canvas struct {
-	cells  [][]rune
-	styles [][]lipgloss.Style
-}
-
-func newCanvas(w, h int) *canvas {
-	c := &canvas{}
-	for range h {
-		row := make([]rune, w)
-		for i := range row {
-			row[i] = ' '
-		}
-		c.cells = append(c.cells, row)
-		c.styles = append(c.styles, make([]lipgloss.Style, w))
-	}
-	return c
-}
-
-// set draws a line's rune, joining it with one already there.
-func (c *canvas) set(r, col int, ch rune, st lipgloss.Style) {
-	if col < 0 || col >= len(c.cells[r]) {
-		return
-	}
-	switch old := c.cells[r][col]; {
-	case old == ' ':
-	case ch == '│' && old == '─', ch == '─' && old == '│':
-		ch = '┼'
-	case ch == '│' && old == '╰':
-		ch = '├'
-	case ch == '│' && old == '╯':
-		ch = '┤'
-	default:
-		return
-	}
-	c.cells[r][col], c.styles[r][col] = ch, st
-}
-
-// put writes text over a line, but not over another line crossing it.
-func (c *canvas) put(r, col int, ch rune, st lipgloss.Style) {
-	if col >= 0 && col < len(c.cells[r]) && c.cells[r][col] == '─' {
-		c.cells[r][col], c.styles[r][col] = ch, st
-	}
-}
-
-func (c *canvas) lines() []string {
-	var out []string
-	for r, row := range c.cells {
-		var b strings.Builder
-		for i := 0; i < len(row); {
-			j := i
-			for j < len(row) && c.styles[r][j].GetForeground() == c.styles[r][i].GetForeground() {
-				j++
-			}
-			b.WriteString(c.styles[r][i].Render(string(row[i:j])))
-			i = j
-		}
-		out = append(out, strings.TrimRight(b.String(), " "))
-	}
-	return out
-}
-
-// roleLines are the run's roles: who plays each, how it stands, how full
-// its context is (against where a claude role is compacted), and what it
-// cost.
-func (p *panel) roleLines(w int) []string {
-	nameW, agentW := 4, 5
-	for _, r := range p.flow.Roles {
-		nameW = max(nameW, lipgloss.Width(r.Label))
-		agentW = max(agentW, lipgloss.Width(roleModel(r)))
-	}
-	barW := 16
-	if w < 90 {
-		barW = 0
-	}
-	lines := []string{pDim.Render(" " + textutil.PadRight("roles", 5+nameW+agentW+2+9) + textutil.PadRight("context", barW+6) +
-		textutil.PadRight("  cost", 11) + fmt.Sprintf("a claude role is compacted past %s", kTokens(p.spec.Compact)))}
-	for _, r := range p.flow.Roles {
-		v, started := p.roles[r.Name]
-		glyph := textutil.PadRight(agent.ByName(p.kinds, r.Kind).Glyph(), 2)
-		line := "  " + glyph + " " + textutil.PadRight(r.Label, nameW) + "  " + pDim.Render(textutil.PadRight(roleModel(r), agentW)) + "  "
-		if !started {
-			lines = append(lines, line+pRule.Render("not started"))
-			continue
-		}
-		state := pDim
-		switch v.state {
-		case "working":
-			state = pRun
-		case "waiting":
-			state = pWarn
-		case "exited", "stopped":
-			state = pBad
-		}
-		line += state.Render(textutil.PadRight(v.state, 9))
-		c := p.pr.Context[r.Name]
-		if barW > 0 {
-			gauge := pRun
-			if p.spec.Compact > 0 && float64(c) >= 0.8*float64(p.spec.Compact) {
-				gauge = pWarn
-			}
-			frac := 0.0
-			if p.spec.Compact > 0 {
-				frac = float64(c) / float64(p.spec.Compact)
-			}
-			line += bar(frac, barW, gauge) + " "
-		}
-		ctx := ""
-		if c > 0 {
-			ctx = kTokens(c)
-		}
-		line += fmt.Sprintf("%5s  ", ctx)
-		cost := textutil.USD(v.cost)
-		if v.cost == 0 && v.tokens > 0 {
-			cost = kTokens(v.tokens) + " tok"
-		}
-		line += textutil.PadRight(cost, 9)
-		if v.state == "working" && v.tool != "" {
-			line += pDim.Render(v.tool)
-		}
-		lines = append(lines, line)
-	}
-	return lines
-}
-
-// roleModel is what plays a role: its model or kind, and its effort.
-func roleModel(r Role) string {
-	s := r.Kind
-	if r.Model != "" {
-		s = r.Model
-	}
-	if r.Effort != "" {
-		s += "@" + r.Effort
-	}
-	return s
-}
-
-// timeline is the head and rows of the steps taken: for each, who took
-// it, when and how long against the whole run, what it cost and what it
-// came to.
-func (p *panel) timeline(w int) (head, rows []string) {
-	pr := p.pr
-	if len(pr.Entries) == 0 {
-		return nil, nil
-	}
-	start := pr.Started
-	if start.IsZero() || pr.Entries[0].Start.Before(start) {
-		start = pr.Entries[0].Start
-	}
-	end := pr.Ended
-	if end.IsZero() {
-		end = p.now
-	}
-	total := max(end.Sub(start), time.Second)
-
-	stepW, roleW := 4, 4
-	label := func(e Entry) string {
-		l := e.Step
-		if i := p.flow.StepIndex(e.Step); i >= 0 {
-			l = p.flow.Steps[i].Label
-		}
-		if e.Round > 1 {
-			l += fmt.Sprintf(" #%d", e.Round)
-		}
-		return l
-	}
-	for _, e := range pr.Entries {
-		stepW = max(stepW, lipgloss.Width(label(e)))
-		roleW = max(roleW, lipgloss.Width(p.flow.RoleLabel(e.Role)))
-	}
-	barW := 0
-	switch {
-	case w >= 120:
-		barW = 32
-	case w >= 95:
-		barW = 20
-	}
-	lead := 4 + stepW + 2 + roleW + 2
-	h := " " + textutil.PadRight("steps", lead-1)
-	if barW > 0 {
-		from, to := start.Local().Format("15:04"), end.Local().Format("15:04")
-		h += from + strings.Repeat(" ", max(barW-len(from)-len(to), 1)) + to + " "
-	}
-	h += textutil.PadRight(" time", 6) + "  cost"
-	head = []string{pDim.Render(h)}
-
-	for _, e := range pr.Entries {
-		glyph, style := entryGlyph(e, pr.Status)
-		stop := e.End
-		if stop.IsZero() {
-			stop = p.now
-		}
-		line := "  " + style.Render(glyph) + " " + textutil.PadRight(label(e), stepW) + "  " +
-			pDim.Render(textutil.PadRight(p.flow.RoleLabel(e.Role), roleW)) + "  "
-		if barW > 0 {
-			off := int(float64(e.Start.Sub(start)) / float64(total) * float64(barW))
-			n := int(float64(stop.Sub(e.Start))/float64(total)*float64(barW) + 0.5)
-			off = min(max(off, 0), barW-1)
-			n = min(n, barW-off)
-			fill := strings.Repeat("█", n)
-			if n == 0 {
-				fill, n = "▏", 1
-			}
-			line += strings.Repeat(" ", off) + style.Render(fill) + strings.Repeat(" ", barW-off-n) + " "
-		}
-		cost := ""
-		switch {
-		case e.Cost > 0:
-			cost = textutil.USD(e.Cost)
-		case e.Tokens > 0:
-			cost = kTokens(e.Tokens)
-		}
-		line += fmt.Sprintf("%5s  %-6s  ", dur(stop.Sub(e.Start)), cost)
-		if e.Status == "running" {
-			if v := p.roles[e.Role]; v.tool != "" {
-				line += pDim.Render(v.tool)
-			}
-		} else {
-			line += result(e.Result)
-		}
-		rows = append(rows, line)
-	}
-	return head, rows
 }
 
 var resultVerdict = regexp.MustCompile(`^(APPROVE|CHANGES):\s*`)

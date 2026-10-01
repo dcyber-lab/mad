@@ -38,8 +38,7 @@ func SleepAgent(id string, away bool) (bool, error) {
 	if !ok || pane.Dead {
 		return false, nil
 	}
-	stage, onStage := tmux.Stage(panes)
-	onStage = onStage && stage.ID == pane.ID
+	onStage := tmux.OnStage(pane)
 	if onStage && away {
 		return false, nil
 	}
@@ -55,7 +54,7 @@ func SleepAgent(id string, away bool) (bool, error) {
 		return false, err
 	}
 	if onStage {
-		if err := ShowPane(tmux.IDPlaceholder, false); err != nil {
+		if err := CloseView(id); err != nil {
 			return false, err
 		}
 	}
