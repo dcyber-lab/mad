@@ -27,6 +27,21 @@ type Project struct {
 	Path      string   `json:"path"`
 	Collapsed bool     `json:"collapsed,omitempty"`
 	Agents    []*Agent `json:"agents"`
+	// Runs are tasks handed through agents in roles (package run); the
+	// agents in them are among Agents, marked with the run's id.
+	Runs []*Run `json:"runs,omitempty"`
+}
+
+// Run is a task its agents work on in turn, each in a role: one designs,
+// one implements, one reviews. What it is and how far it got is in its
+// own directory (package run); here is what the sidebar lists.
+type Run struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Dir       string    `json:"dir"` // the worktree its agents work in
+	Branch    string    `json:"branch"`
+	Collapsed bool      `json:"collapsed,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Agent struct {
@@ -43,7 +58,13 @@ type Agent struct {
 	Fork bool `json:"fork,omitempty"`
 	// Name is what the user called the agent; shown under it instead of
 	// the conversation's own title.
-	Name      string    `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
+	// Args are added to the kind's command, on resume too: the model,
+	// permission flags (`mad spawn`).
+	Args []string `json:"args,omitempty"`
+	// Run is the id of the run the agent works in, Role its part there.
+	Run       string    `json:"run,omitempty"`
+	Role      string    `json:"role,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -137,6 +158,41 @@ func (s *State) FindAgent(id string) (*Project, *Agent) {
 	return nil, nil
 }
 
+// FindRun finds a run by id.
+func (s *State) FindRun(id string) (*Project, *Run) {
+	for _, p := range s.Projects {
+		for _, r := range p.Runs {
+			if r.ID == id {
+				return p, r
+			}
+		}
+	}
+	return nil, nil
+}
+
+// RemoveRun drops run id; its agents stay.
+func (s *State) RemoveRun(id string) {
+	for _, p := range s.Projects {
+		for i, r := range p.Runs {
+			if r.ID == id {
+				p.Runs = append(p.Runs[:i], p.Runs[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+// RunAgents are the agents of run id in p, in their order there.
+func (p *Project) RunAgents(id string) []*Agent {
+	var out []*Agent
+	for _, a := range p.Agents {
+		if a.Run == id {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 func (s *State) RemoveAgent(id string) {
 	for _, p := range s.Projects {
 		for i, a := range p.Agents {
@@ -149,13 +205,50 @@ func (s *State) RemoveAgent(id string) {
 }
 
 // OrderedAgents are all agents in sidebar order, which `mad switch
-// next|prev` steps through.
+// next|prev` steps through: in each project the agents of its runs, run
+// by run, then its own.
 func (s *State) OrderedAgents() []*Agent {
 	var out []*Agent
 	for _, p := range s.Projects {
-		out = append(out, p.Agents...)
+		for _, r := range p.Runs {
+			out = append(out, p.RunAgents(r.ID)...)
+		}
+		out = append(out, p.TopAgents()...)
 	}
 	return out
+}
+
+// InRun reports whether a plays a role in one of p's runs.
+func (p *Project) InRun(a *Agent) bool {
+	if a.Run == "" {
+		return false
+	}
+	for _, r := range p.Runs {
+		if r.ID == a.Run {
+			return true
+		}
+	}
+	return false
+}
+
+// TopAgents are p's agents in none of its runs.
+func (p *Project) TopAgents() []*Agent {
+	var out []*Agent
+	for _, a := range p.Agents {
+		if !p.InRun(a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// Group is the agents a is numbered among, as the sidebar shows them
+// and 1-9 open them: its run's, or p's own.
+func (p *Project) Group(a *Agent) []*Agent {
+	if p.InRun(a) {
+		return p.RunAgents(a.Run)
+	}
+	return p.TopAgents()
 }
 
 // OpenSessions are the session ids the agents hold: the current one, and
@@ -178,9 +271,15 @@ func (s *State) Clone() *State {
 	cp := &State{Ignored: append([]string(nil), s.Ignored...)}
 	for _, p := range s.Projects {
 		pc := *p
+		pc.Runs = nil
+		for _, r := range p.Runs {
+			rc := *r
+			pc.Runs = append(pc.Runs, &rc)
+		}
 		pc.Agents = make([]*Agent, 0, len(p.Agents))
 		for _, a := range p.Agents {
 			ac := *a
+			ac.Args = append([]string(nil), a.Args...)
 			pc.Agents = append(pc.Agents, &ac)
 		}
 		cp.Projects = append(cp.Projects, &pc)

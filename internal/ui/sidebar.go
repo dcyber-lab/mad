@@ -20,6 +20,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -99,6 +100,7 @@ const (
 // conversations in a desktop app (deskKind's; so far only claude has one).
 type row struct {
 	proj     *state.Project
+	run      *state.Run // a run's own row; its agents are rows of their own
 	agent    *state.Agent
 	ext      *discover.External
 	desktop  int
@@ -106,7 +108,9 @@ type row struct {
 	num      int // 1-based agent number within its project
 }
 
-func (r row) isProject() bool { return r.agent == nil && r.ext == nil && r.desktop == 0 }
+func (r row) isProject() bool {
+	return r.agent == nil && r.ext == nil && r.desktop == 0 && r.run == nil
+}
 
 type model struct {
 	st       *state.State
@@ -180,6 +184,10 @@ type model struct {
 	sleeping       bool      // idle agents are being put to sleep
 	lastSleepCheck time.Time // when they were last looked for
 
+	runs          map[string]*madrun.File // run id → its run.json as last read
+	runnerStarted map[string]time.Time    // run id → when its runner was last started here
+	runnerMissing map[string]int          // run id → polls in a row without its runner
+
 	day        *transcript.Day // only the day command touches it
 	dayCost    float64         // what today cost so far, every session on the machine
 	dayReading bool
@@ -231,23 +239,26 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 	ti.Prompt = "› "
 	ti.CharLimit = 512
 	m := &model{
-		st:          st,
-		stMod:       state.ModTime(),
-		kinds:       kinds,
-		trackers:    map[string]*status.Tracker{},
-		panes:       map[string]tmux.Pane{},
-		hooks:       map[string]*status.Hook{},
-		screens:     map[string]string{},
-		input:       ti,
-		cfg:         deck.DefaultConfig(),
-		baseOf:      map[string]string{},
-		gitInfo:     map[string]git.Info{},
-		transcripts: map[string]transcript.Info{},
-		quota:       map[string]status.Quota{},
-		reader:      transcript.NewReader(),
-		day:         transcript.NewDay(),
-		runSince:    map[string]time.Time{},
-		notified:    map[string]time.Time{},
+		st:            st,
+		stMod:         state.ModTime(),
+		kinds:         kinds,
+		trackers:      map[string]*status.Tracker{},
+		panes:         map[string]tmux.Pane{},
+		hooks:         map[string]*status.Hook{},
+		screens:       map[string]string{},
+		input:         ti,
+		cfg:           deck.DefaultConfig(),
+		baseOf:        map[string]string{},
+		gitInfo:       map[string]git.Info{},
+		transcripts:   map[string]transcript.Info{},
+		quota:         map[string]status.Quota{},
+		reader:        transcript.NewReader(),
+		day:           transcript.NewDay(),
+		runSince:      map[string]time.Time{},
+		runs:          map[string]*madrun.File{},
+		runnerStarted: map[string]time.Time{},
+		runnerMissing: map[string]int{},
+		notified:      map[string]time.Time{},
 	}
 	m.rebuildRows()
 	return m
@@ -302,7 +313,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.epoch != m.epoch {
 			return m, m.pollCmd() // began before an action finished: stale
 		}
-		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.taskCleanup(msg.panes))
+		return m, tea.Batch(m.notifyCmd(m.applyPoll(msg, time.Now())), m.taskCleanup(msg.panes), m.ensureRunners())
 	case externalsMsg:
 		m.scanning = false
 		m.applyExternals(msg)

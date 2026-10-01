@@ -17,7 +17,18 @@ func (m *model) rebuildRows() {
 		if p.Collapsed {
 			continue
 		}
-		for i, a := range p.Agents {
+		// A run, then the agents in its roles, numbered within it; the
+		// project's own agents after.
+		for _, r := range p.Runs {
+			m.rows = append(m.rows, row{proj: p, run: r})
+			if r.Collapsed {
+				continue
+			}
+			for i, a := range p.RunAgents(r.ID) {
+				m.rows = append(m.rows, row{proj: p, agent: a, num: i + 1})
+			}
+		}
+		for i, a := range p.TopAgents() {
 			m.rows = append(m.rows, row{proj: p, agent: a, num: i + 1})
 		}
 		desk := row{proj: p}
@@ -46,6 +57,8 @@ func (m *model) rebuildRows() {
 			switch {
 			case prev.agent != nil:
 				same = r.agent != nil && r.agent.ID == prev.agent.ID
+			case prev.run != nil:
+				same = r.run != nil && r.run.ID == prev.run.ID
 			case prev.ext != nil:
 				same = same && r.ext != nil && r.ext.PID == prev.ext.PID
 			case prev.desktop > 0:
@@ -80,7 +93,7 @@ func (m *model) rebuildRows() {
 // rowHeight is how many screen lines a row takes: an agent whose
 // transcript is followed gets a second line for what it is on.
 func (m *model) rowHeight(r row) int {
-	if r.agent != nil && !m.st.Compact && transcript.Followed(r.agent.Kind) {
+	if r.agent != nil && !m.st.Compact && transcript.Followed(r.agent.Kind) || r.run != nil && !m.st.Compact {
 		return 2
 	}
 	return 1
@@ -98,11 +111,18 @@ func (m *model) rowAt(y int) (int, bool) {
 }
 
 func (m *model) selectAgent(id string) {
-	p, _ := m.st.FindAgent(id)
+	p, a := m.st.FindAgent(id)
 	if p != nil && p.Collapsed {
 		p.Collapsed = false
 		m.save()
 		m.rebuildRows()
+	}
+	if p != nil && p.InRun(a) {
+		if _, r := m.st.FindRun(a.Run); r != nil && r.Collapsed {
+			r.Collapsed = false
+			m.save()
+			m.rebuildRows()
+		}
 	}
 	for i, r := range m.rows {
 		if r.agent != nil && r.agent.ID == id {

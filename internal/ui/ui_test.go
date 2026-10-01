@@ -1659,3 +1659,67 @@ func TestDayCostInHeader(t *testing.T) {
 		t.Errorf("narrow header = %q", h)
 	}
 }
+
+// A run folds and unfolds with its agents, which it numbers itself.
+func TestRunRows(t *testing.T) {
+	m, st := setup(t, "/p")
+	p := st.Projects[0]
+	own := &state.Agent{ID: "own", Kind: "shell"}
+	d, b := &state.Agent{ID: "d", Kind: "claude", Run: "r", Role: "designer"}, &state.Agent{ID: "b", Kind: "claude", Run: "r", Role: "builder"}
+	p.Agents = []*state.Agent{own, d, b}
+	p.Runs = []*state.Run{{ID: "r", Name: "audit"}}
+	m.rebuildRows()
+	shape := func() string {
+		var s []string
+		for _, r := range m.rows {
+			switch {
+			case r.run != nil:
+				s = append(s, "run")
+			case r.agent != nil:
+				s = append(s, fmt.Sprintf("%s%d", r.agent.ID, r.num))
+			default:
+				s = append(s, "proj")
+			}
+		}
+		return strings.Join(s, " ")
+	}
+	if got := shape(); got != "proj run d1 b2 own1" {
+		t.Fatalf("rows = %s", got)
+	}
+	m.cursor = 1 // the run
+	if g := groupOf(m.rows[m.cursor]); len(g) != 2 || g[1] != b {
+		t.Errorf("2 on the run would open %v", g)
+	}
+	m.cursor = 4 // the project's own agent
+	if g := groupOf(m.rows[m.cursor]); len(g) != 1 || g[0] != own {
+		t.Errorf("1 on the project's agent would open %v", g)
+	}
+	view := m.View()
+	for _, want := range []string{"run audit", "designer", "implementer"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%s", want, view)
+		}
+	}
+
+	// enter folds it, enter again unfolds it.
+	m.cursor = 1
+	m.activate(m.rows[1])
+	if got := shape(); got != "proj run own1" || !p.Runs[0].Collapsed {
+		t.Errorf("folded: %s", got)
+	}
+	m.activate(m.rows[1])
+	if got := shape(); got != "proj run d1 b2 own1" {
+		t.Errorf("unfolded: %s", got)
+	}
+	// h on one of its agents folds it too, and leaves the cursor on it.
+	m.cursor = 3
+	m.keyNormal(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	if got := shape(); got != "proj run own1" || m.cursor != 1 {
+		t.Errorf("h: %s, cursor %d", got, m.cursor)
+	}
+	// Jumping to one of its agents unfolds it.
+	m.selectAgent("b")
+	if m.rows[m.cursor].agent != b || p.Runs[0].Collapsed {
+		t.Errorf("select in a folded run: cursor on %+v", m.rows[m.cursor])
+	}
+}

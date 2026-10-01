@@ -71,6 +71,31 @@ func TestSwitchTarget(t *testing.T) {
 	}
 }
 
+// Numbers count within the run on stage, its panel included.
+func TestSwitchTargetInRun(t *testing.T) {
+	st := &state.State{}
+	p, _ := st.AddProject("/p")
+	top, r1, r2 := &state.Agent{ID: "top"}, &state.Agent{ID: "r1", Run: "run"}, &state.Agent{ID: "r2", Run: "run"}
+	p.Agents = []*state.Agent{top, r1, r2}
+	p.Runs = []*state.Run{{ID: "run", Name: "x"}}
+	for _, c := range []struct{ arg, stage, want string }{
+		{"2", "r1", "r2"},
+		{"1", "top", "top"},
+		{"2", "top", ""}, // the project's own: only one
+		{"2", RunnerID("run"), "r2"},
+		{"next", "top", "r1"}, // wraps, in sidebar order: the run first
+	} {
+		a, ok := switchTarget(st, c.arg, c.stage)
+		got := ""
+		if ok {
+			got = a.ID
+		}
+		if got != c.want {
+			t.Errorf("switch %s with %s on stage = %q, want %q", c.arg, c.stage, got, c.want)
+		}
+	}
+}
+
 func TestSidebarWidth(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if got := SidebarWidth(); got != DefaultSidebarWidth {

@@ -70,7 +70,8 @@ var builtin = []Kind{
 		Start:        "codex {codex_notify}",
 		Resume:       "codex resume {codex_notify} {sid}",
 		ResumeLatest: "codex resume {codex_notify} --last",
-		Waiting:      []string{`Would you like to`, `Allow command`, `Approve`},
+		// The last two: the folder trust and update prompts at its start.
+		Waiting: []string{`Would you like to`, `Allow command`, `Approve`, `Trust this folder`, `enter continue`},
 	},
 	{
 		// pi creates the session on first use, so start == resume.
@@ -199,7 +200,7 @@ type Launch struct {
 }
 
 // Command builds the shell command for a, resuming its previous session
-// when resume is set and one can be found.
+// when resume is set and one can be found. a's own Args come last.
 func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	sid := a.SessionID
 	tpl := k.Start
@@ -228,7 +229,11 @@ func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	for name, text := range l.Vars {
 		pairs = append(pairs, name, text)
 	}
-	return strings.NewReplacer(pairs...).Replace(tpl)
+	cmd := strings.NewReplacer(pairs...).Replace(tpl)
+	for _, arg := range a.Args {
+		cmd += " " + paths.ShellQuote(arg)
+	}
+	return cmd
 }
 
 // ScreenWaiting reports whether screen text shows the agent asking for

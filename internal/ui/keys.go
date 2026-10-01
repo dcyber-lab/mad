@@ -8,6 +8,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
+	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -35,9 +36,13 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 	case "tab":
 		return m.action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		// Numbers count within a project: the one the cursor is in.
-		if n := int(k.String()[0] - '0'); ok && n <= len(r.proj.Agents) {
-			return m.openCmd(r.proj.Agents[n-1])
+		// Numbers count as the rows show them: within the run the cursor
+		// is in, else within its project's own agents.
+		if !ok {
+			return nil
+		}
+		if group, n := groupOf(r), int(k.String()[0]-'0'); n <= len(group) {
+			return m.openCmd(group[n-1])
 		}
 	case "n":
 		if ok {
@@ -50,6 +55,28 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return m.openWorktreeInput(r.proj)
 		}
 		m.setFlash("add a project first (a)")
+	case "o":
+		if ok {
+			return m.openRunForm(r.proj)
+		}
+		m.setFlash("add a project first (a)")
+	case "c":
+		if run := runOf(r); ok && run != nil {
+			return m.runCommand(run, madrun.Continue)
+		}
+		m.setFlash("select a run to continue")
+	case "h", "left":
+		if run := runOf(r); ok && run != nil && !run.Collapsed {
+			run.Collapsed = true
+			m.save()
+			m.rebuildRows()
+			for i, row := range m.rows { // off the rows just hidden
+				if row.run == run {
+					m.cursor = i
+					m.clampScroll()
+				}
+			}
+		}
 	case "v":
 		if ok {
 			return m.diffRow(r)
@@ -81,6 +108,10 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		}
 	case "x":
 		if !ok || r.ext != nil || r.desktop > 0 {
+			return nil
+		}
+		if r.run != nil {
+			m.cancelOrRemoveRun(r.proj, r.run)
 			return nil
 		}
 		if r.agent != nil {
@@ -131,15 +162,19 @@ func (m *model) needsYou(a *state.Agent) bool {
 // around; opening it clears its mark, so pressing again moves on.
 func (m *model) jumpNext() tea.Cmd {
 	agents := m.st.OrderedAgents()
-	start := 0 // index into agents to search from
+	start := 0 // index into agents to search from: the one after the cursor
 	if r, ok := m.current(); ok {
-		for _, p := range m.st.Projects {
-			if p == r.proj {
+		for i, a := range agents {
+			p, _ := m.st.FindAgent(a.ID)
+			if r.agent != nil && a == r.agent {
+				start = i + 1
 				break
 			}
-			start += len(p.Agents)
+			if r.agent == nil && p == r.proj {
+				start = i
+				break
+			}
 		}
-		start += r.num // 1-based on an agent: the one after it
 	}
 	for k := range agents {
 		if a := agents[(start+k)%len(agents)]; m.needsYou(a) {

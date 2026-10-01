@@ -82,26 +82,31 @@ func (claude) Hook(args []string, stdin io.Reader, stdout io.Writer, now time.Ti
 	if len(args) > 0 && args[0] == "statusline" {
 		return Report{Quota: claudeStatusLine(stdin, stdout, now)}
 	}
-	return Report{Hook: parseClaudeHook(stdin)}
+	h, turn := parseClaudeHook(stdin)
+	return Report{Hook: h, Turn: turn}
 }
 
 // parseClaudeHook maps a hook event to a status; nil means the event
-// doesn't change it.
-func parseClaudeHook(r io.Reader) *status.Hook {
+// doesn't change it. Stop also ends a turn, with claude's last message.
+func parseClaudeHook(r io.Reader) (*status.Hook, *status.Turn) {
 	var ev struct {
 		Event            string `json:"hook_event_name"`
 		SessionID        string `json:"session_id"`
 		ToolName         string `json:"tool_name"`
 		Message          string `json:"message"`
 		NotificationType string `json:"notification_type"`
+		LastMessage      string `json:"last_assistant_message"`
 	}
 	data, _ := io.ReadAll(r)
 	if json.Unmarshal(data, &ev) != nil {
-		return nil
+		return nil, nil
 	}
 	h := &status.Hook{Event: ev.Event, SessionID: ev.SessionID}
 	switch ev.Event {
-	case "SessionStart", "Stop":
+	case "Stop":
+		h.State = status.Idle
+		return h, &status.Turn{Reply: ev.LastMessage, SessionID: ev.SessionID}
+	case "SessionStart":
 		h.State = status.Idle
 	case "UserPromptSubmit", "PostToolUse":
 		h.State = status.Running
@@ -118,12 +123,12 @@ func parseClaudeHook(r io.Reader) *status.Hook {
 		case ev.NotificationType == "idle_prompt", strings.Contains(msg, "waiting for your input"):
 			h.State = status.Idle
 		default:
-			return nil
+			return nil, nil
 		}
 	default:
-		return nil
+		return nil, nil
 	}
-	return h
+	return h, nil
 }
 
 // claudeStatusLine reads the usage limits off the status line JSON, then

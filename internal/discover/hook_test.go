@@ -28,7 +28,7 @@ func TestClaudeHook(t *testing.T) {
 		{`not json`, ""},
 	}
 	for _, c := range cases {
-		h := parseClaudeHook(strings.NewReader(c.in))
+		h, _ := parseClaudeHook(strings.NewReader(c.in))
 		switch {
 		case c.state == "" && h != nil:
 			t.Errorf("%s: want ignored, got %+v", c.in, h)
@@ -36,19 +36,30 @@ func TestClaudeHook(t *testing.T) {
 			t.Errorf("%s: got %+v, want state %s", c.in, h, c.state)
 		}
 	}
-	if h := parseClaudeHook(strings.NewReader(`{"hook_event_name":"SessionStart","session_id":"s1"}`)); h.SessionID != "s1" {
+	if h, _ := parseClaudeHook(strings.NewReader(`{"hook_event_name":"SessionStart","session_id":"s1"}`)); h.SessionID != "s1" {
 		t.Errorf("session id not kept: %+v", h)
+	}
+	// Only Stop ends a turn, with what claude said last.
+	if _, turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"PostToolUse"}`)); turn != nil {
+		t.Errorf("PostToolUse ended a turn: %+v", turn)
+	}
+	_, turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"Stop","session_id":"s1","last_assistant_message":"pong"}`))
+	if turn == nil || turn.Reply != "pong" || turn.SessionID != "s1" {
+		t.Errorf("Stop: turn = %+v", turn)
 	}
 }
 
 func TestCodexHook(t *testing.T) {
-	h := parseCodexHook(`{"type":"agent-turn-complete","thread-id":"t-1","last-assistant-message":"done"}`)
+	h, turn := parseCodexHook(`{"type":"agent-turn-complete","thread-id":"t-1","last-assistant-message":"done"}`)
 	if h == nil || h.State != status.Idle || h.SessionID != "t-1" {
 		t.Errorf("got %+v", h)
 	}
+	if turn == nil || turn.Reply != "done" || turn.SessionID != "t-1" {
+		t.Errorf("turn = %+v", turn)
+	}
 	for _, in := range []string{`{"type":"other"}`, `nope`} {
-		if h := parseCodexHook(in); h != nil {
-			t.Errorf("%s: want nil, got %+v", in, h)
+		if h, turn := parseCodexHook(in); h != nil || turn != nil {
+			t.Errorf("%s: want nil, got %+v %+v", in, h, turn)
 		}
 	}
 }

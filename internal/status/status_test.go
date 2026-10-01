@@ -32,6 +32,30 @@ func TestHookFiles(t *testing.T) {
 	}
 }
 
+func TestTurnAndSentFiles(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	now := time.Date(2026, 1, 1, 0, 0, 0, 123, time.UTC)
+	if ReadTurn("a") != nil || !SentAt("a").IsZero() {
+		t.Fatal("nothing written should read as nothing")
+	}
+	if err := WriteTurn("a", &Turn{Reply: "done\nfor now", SessionID: "s1"}, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkSent("a", now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if tr := ReadTurn("a"); tr == nil || tr.Reply != "done\nfor now" || tr.SessionID != "s1" || !tr.At.Equal(now) {
+		t.Errorf("turn = %+v", tr)
+	}
+	if got := SentAt("a"); !got.Equal(now.Add(time.Second)) {
+		t.Errorf("sent at %v", got)
+	}
+	RemoveHook("a")
+	if ReadTurn("a") != nil || !SentAt("a").IsZero() {
+		t.Error("RemoveHook left the turn or the sent mark")
+	}
+}
+
 var (
 	t0     = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	claude = agent.ByName(agent.Builtin(), "claude")

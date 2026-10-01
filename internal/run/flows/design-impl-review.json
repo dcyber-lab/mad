@@ -1,0 +1,55 @@
+{
+  "name": "design-impl-review",
+  "description": "design → implement → review",
+  "roles": [
+    {"name": "designer", "agent": "claude:opus"},
+    {"name": "builder", "label": "implementer", "agent": "claude:sonnet"},
+    {"name": "reviewer", "agent": "codex", "read_only": true}
+  ],
+  "steps": [
+    {
+      "name": "design",
+      "role": "designer",
+      "gate": true,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Read the relevant code first, then write a design; change no code. Put it in {{run}}/design.md, as short as the task allows: what the implementer needs to know (the files and functions to change, changes to interfaces or data, edge cases, how to test it), no code listings."
+      ]
+    },
+    {
+      "name": "implement",
+      "label": "implementation",
+      "role": "builder",
+      "ask": ["designer"],
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "The design is in {{run}}/design.md: read it, implement it, and run the relevant tests. Change nothing in {{run}}/.",
+        "When done, commit the change as one commit."
+      ],
+      "again": [
+        "Review findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Fix them one by one; where you disagree, say why. Run the relevant tests, and commit as one commit."
+      ]
+    },
+    {
+      "name": "review",
+      "role": "reviewer",
+      "review": true,
+      "back": "implement",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Review the change, git diff {{base}} (uncommitted work included), against {{run}}/design.md. Read only: change no files.",
+        "Report only real problems: bugs, missed requirements, clear risks. At most 5, one line each, naming the file and why."
+      ],
+      "again": [
+        "The implementer has worked through your last review. Review git diff {{base}} again: are those problems solved, and are there new ones? At most 5."
+      ]
+    }
+  ]
+}

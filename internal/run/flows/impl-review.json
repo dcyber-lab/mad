@@ -1,0 +1,43 @@
+{
+  "name": "impl-review",
+  "description": "implement → review",
+  "roles": [
+    {"name": "builder", "label": "implementer", "agent": "claude:sonnet"},
+    {"name": "reviewer", "agent": "codex", "read_only": true}
+  ],
+  "steps": [
+    {
+      "name": "implement",
+      "label": "implementation",
+      "role": "builder",
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Read the relevant code before you change it, implement the task, and run the relevant tests. Change nothing in {{run}}/.",
+        "When done, commit the change as one commit."
+      ],
+      "again": [
+        "Review findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Fix them one by one; where you disagree, say why. Run the relevant tests, and commit as one commit."
+      ]
+    },
+    {
+      "name": "review",
+      "role": "reviewer",
+      "review": true,
+      "back": "implement",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Review the change, git diff {{base}} (uncommitted work included): does it do the task? Read only: change no files.",
+        "Report only real problems: bugs, missed requirements, clear risks. At most 5, one line each, naming the file and why."
+      ],
+      "again": [
+        "The implementer has worked through your last review. Review git diff {{base}} again: are those problems solved, and are there new ones? At most 5."
+      ]
+    }
+  ]
+}

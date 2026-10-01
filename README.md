@@ -44,6 +44,13 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 - **Non-invasive** — uses its own private tmux server and never touches your
   `~/.claude/settings.json` or your own tmux config; what the sidebar shows
   about a conversation is read from the transcripts the agents already write.
+- **Runs** — `o` hands a task to agents in roles: claude on Opus designs,
+  claude on Sonnet implements, codex reviews and sends the work back until
+  it passes. The run waits for you only when something needs you, and
+  says what.
+- **Hand work between agents** — `mad spawn`, `mad send` and `mad wait`
+  let a script, or an agent, start agents of any kind, give them work and
+  pass their answers on.
 - **Extensible** — add any other TUI agent with a few lines of JSON.
 
 ## Requirements
@@ -141,6 +148,8 @@ is done.
 | `enter`        | Open agent (or fold/unfold a project)          |
 | `n`            | New agent in the current project               |
 | `w`            | New agent in a new worktree (asks for a branch) |
+| `o`            | New run: a task handed through agents in roles |
+| `c`            | Continue the run where it waits for you        |
 | `v`            | Show / hide the changes of the agent or project |
 | `f`            | Finish the branch: push, open a PR, rebase, merge |
 | `a`            | Add a project                                  |
@@ -150,7 +159,7 @@ is done.
 | `t`            | Name the agent (empty to go back to its title) |
 | `i`            | Show / hide the line under each agent          |
 | `x`            | Remove                                         |
-| `1`–`9`        | Open agent N of the project the cursor is in   |
+| `1`–`9`        | Open agent N of the run or project the cursor is in |
 | `tab`          | Focus the agent pane                           |
 | `<` / `>`      | Narrow / widen the sidebar                     |
 | `q`            | Detach (agents keep running)                   |
@@ -166,7 +175,7 @@ width is remembered.
 | `Alt-j` / `Alt-k` | Next / previous agent                      |
 | `Alt-n`           | Next agent that is waiting or done         |
 | `Alt-v`           | Changes of the agent on stage, and back    |
-| `Alt-1`…`Alt-9`   | Open agent N of the project on stage       |
+| `Alt-1`…`Alt-9`   | Open agent N of the run or project on stage |
 
 If Alt is inconvenient, use the prefix `Ctrl-]` followed by
 `s` / `n` / `p` / `v` / `1`–`9` / `d` (detach).
@@ -183,6 +192,12 @@ mad switch N|next|prev  show agent N of the project on stage, or the next /
 mad jump                show the next agent that is waiting or done
 mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)
+mad ls                  list the agents: id, name, kind, status, directory
+mad spawn [flags] [-- agent flags]
+                        start an agent off stage and print its id
+mad send [-w] AGENT TEXT
+                        type a message into an agent; -w prints its reply
+mad wait AGENT          wait for the agent's turn to end, print its reply
 mad kill-server         stop the deck and every agent in it
 mad version             print the version
 ```
@@ -324,10 +339,13 @@ whole thing off with `{"quota": false}` in `config.json`.
     untouched) and report running / waiting (permission prompts, questions) /
     idle.
   - *codex*: running/idle is inferred from screen changes, waiting from
-    on-screen text. `-c notify=...` reports the thread id so resume reopens
-    the right conversation; if your `~/.codex/config.toml` (or
-    `$CODEX_HOME`) sets `notify` itself, mad leaves yours alone and resume
-    falls back to `codex resume --last`.
+    on-screen text. `-c notify=...` reports the end of every turn, with the
+    thread id so resume reopens the right conversation. A `notify` of your
+    own in `~/.codex/config.toml` (or `$CODEX_HOME`) is run after mad's
+    with the same payload, so it keeps working. One set only in a profile,
+    or written in a way mad doesn't read, is left alone instead: resume
+    then falls back to `codex resume --last`, and `mad wait` can't tell
+    when codex is done.
   - Agents that finish in the background show a green `● done` until you
     look at them.
   - Updates are pushed where possible: a hook report reaches the sidebar
@@ -395,6 +413,121 @@ stays `● done` while asleep.
   an hour; a conversation resumed sooner than that can miss it and pay for
   its whole context again on the next message.
 
+## Runs
+
+A run hands one task through agents in roles, in a worktree of its own.
+Press `o` on a project, write the task in one line and press enter:
+
+1. **Design.** claude on Opus reads the code and writes
+   `.mad/runs/<name>/design.md`.
+2. **Implement.** claude on Sonnet implements it, runs the tests and
+   commits. If the design leaves something open, it asks the designer
+   (`QUESTION(@designer): ...`), and the answer comes back to it.
+3. **Review.** codex, read only, reviews `git diff` against the design and
+   ends with `VERDICT: APPROVE` or `VERDICT: CHANGES`. Changes go back to
+   the same implementer, at most three rounds.
+
+The form also picks who plays each role (←→: claude on Opus, Sonnet or
+Haiku, codex with the model its config sets, or any model codex lists
+for your account), how hard each thinks (its effort: claude's `low` to
+`max`, or the levels codex lists for the model; `default` leaves it to
+the agent's own setting) and what claude agents may do unasked: `auto` (claude
+judges each action, and asks only about risky ones; the default),
+`allowlist` (edits, and test, build and commit commands) or `bypass`
+(everything). codex works in its sandbox, read only as a reviewer; a
+claude reviewer may not edit.
+
+The run is a row in the sidebar with its three agents under it, numbered
+1–3 within it; `enter` on it folds or unfolds them, and shows its panel
+on stage: each step, what it came to, what it cost,
+each role's context and the log. Every agent is a real TUI: `enter` on
+one to watch it or step in.
+
+A run never waits silently. When it needs you (a permission prompt, a
+folder to trust, a review out of rounds, the budget spent, a turn that
+ended without a reply) its row says why, you get one notification, and
+it goes on by itself once that is settled, or when you press `c`. `x`
+cancels a run, and removes one that is over; its branch stays. When it
+is done, `f` on it opens a pull request or merges the branch.
+
+Hand-over is through files, not conversations, so each role reads only
+its part. A claude role whose context passes 150k tokens is compacted
+before its next step; a run stops for you at $10 of claude, or when an
+account's five-hour window is 90% spent. The runner of a run is a hidden
+pane (`mad run exec`), which picks the run up where it stopped after a
+crash or a rebuilt deck. `mad run start TASK` starts a run without the
+form (`--agent builder=codex:gpt-6-sol@xhigh`, `--perm allowlist`); `mad run ls`,
+`continue` and `cancel` do the rest.
+
+### Flows
+
+A flow is a run's template: its roles, who plays each, and its steps. mad
+comes with two (`design-impl-review`, the default, and `impl-review`);
+more are JSON files in a project's `.mad/flows/` (shared with whoever
+clones it) or in `~/.config/mad/flows/` (yours), and one named as an
+existing flow takes its place. The form lists them all.
+
+```sh
+mad run flow ls                         # the flows here, and where each is from
+mad run flow show design-impl-review    # a flow as JSON: a start for your own
+mad run flow check .mad/flows/mine.json # what is wrong with a flow file
+mad run flow agents                     # the agents and efforts a role can have
+```
+
+A step says only what to do; mad adds how to end the reply (`DONE`,
+`VERDICT: ...`, `QUESTION(@role): ...`). Steps run one at a time; a
+review sends its changes back to an earlier step. A run keeps the flow it
+started with, whatever becomes of the file.
+
+You need not write flows yourself: `mad skill install` puts the
+`mad-flow` skill in `~/.claude/skills/`, and claude then designs a flow
+with you from what you describe ("opus designs, codex implements, two
+reviews"), writes the file, and checks it until mad takes it.
+
+## Handing work between agents
+
+`mad spawn`, `mad send` and `mad wait` put agents to work from a script,
+or from another agent's shell, and hand their answers on. Here claude on
+Opus designs, claude on Sonnet implements and codex reviews, all in one
+worktree, passing the design on in a file:
+
+```sh
+mad spawn -n architect -m opus   -w wordfreq -- --permission-mode acceptEdits
+mad spawn -n builder   -m sonnet -w wordfreq -- --permission-mode acceptEdits
+mad spawn -n reviewer  -k codex  -w wordfreq -- -s read-only -a never
+
+mad send -w architect "Design a word-frequency CLI; write it to .mad/run/design.md"
+mad send -w builder   "Implement .mad/run/design.md"
+mad send -w reviewer  "Review the change against .mad/run/design.md; end with VERDICT: APPROVE or VERDICT: CHANGES"
+```
+
+- **`spawn`** starts an agent off stage (it is in the sidebar like any
+  other) and returns once it can take a message. `-k` picks the kind
+  (default claude), `-m` the model, `-C` the directory, and `-w` a worktree
+  on that branch, as `w` in the sidebar; several agents can share one.
+  What follows `--` is passed to the agent, on resume too. It prints the
+  agent's id; `-n` gives it a name to use instead. One that comes up
+  asking something (claude's folder trust, codex's update notice) exits 1
+  saying so: answer it in the deck.
+- **`send`** types the message in as one paste, then enter (`-f file` or
+  `-` for stdin instead of text). An agent asleep or stopped is resumed
+  first. One that is working, or waiting for your answer, is refused;
+  right after claude reports a turn done, `send` gives it a minute to
+  finish its own Stop hooks.
+- **`wait`**, or `send -w`, waits for the turn to end and prints the
+  agent's last message: claude's Stop hook and codex's notify hand it
+  over. A permission prompt meanwhile is told on stderr, and waited
+  through while you answer it in the deck. It exits 124 on a `-t`
+  timeout, and 1 when the agent exits or the turn ends without a reply
+  (interrupted, a tool call refused).
+
+`mad ls` lists the agents with their ids, names and status. Agents are
+found by id, by a unique start of it, or by name (the one in the current
+project first). Give unattended agents the permissions they need (claude's
+`--permission-mode` and `--allowedTools`, codex's `-s` and `-a`), and keep
+your own typing out of an agent a script is driving: `send` types into the
+same prompt.
+
 ## Custom agents
 
 Create `~/.config/mad/agents.json`. Entries are merged with the built-in
@@ -431,7 +564,7 @@ fixed.
 Placeholders: `{id}` (agent UUID), `{sid}` (current session id, falls back
 to `{id}`), `{claude_settings}` (mad's generated Claude settings with status
 hooks), `{codex_notify}` (codex notify wiring; empty when your codex config
-sets its own `notify`).
+sets a `notify` mad can't run for you).
 
 Kinds added here start, resume and show `waiting` like the built-ins. What
 mad reads from claude's and codex's own files (titles, usage, the session
@@ -480,6 +613,8 @@ the mad you use: its state and the generated files go in
   update can change it; the sidebar then falls back to `claude`, `claude#2`
   and shows no counts until mad catches up. They refresh every 5 seconds
   and when a turn ends, so they can trail the status a little.
+- `mad wait` needs claude or codex: other kinds can be sent messages,
+  but don't say when they are done.
 - Claude prices are built into mad (`internal/discover/price.go`). A model
   released after it is priced like the latest of its family (Opus, Sonnet,
   Haiku, Fable) until mad is updated.

@@ -73,6 +73,7 @@ type Provider interface {
 type Report struct {
 	Hook  *status.Hook  // a change of status; nil when none
 	Quota *status.Quota // the account's usage limits; nil when not given
+	Turn  *status.Turn  // a turn ended, with its reply; nil otherwise
 }
 
 // providers are the kinds mad follows, in the order they are scanned.

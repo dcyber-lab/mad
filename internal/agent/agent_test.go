@@ -84,7 +84,8 @@ func TestCodexCommand(t *testing.T) {
 	if start := codex.Command(a, false, none); start != "codex -c 'notify=[mad]'" {
 		t.Errorf("start should wire notify to mad: %q", start)
 	}
-	// The user's own notify: codex's wiring fills in nothing.
+	// A notify mad can't run in the user's stead: codex's wiring fills in
+	// nothing.
 	if got := codex.Command(a, false, Launch{Vars: map[string]string{"{codex_notify}": ""}}); got != "codex " {
 		t.Errorf("start without mad's notify = %q", got)
 	}
@@ -95,6 +96,21 @@ func TestCodexCommand(t *testing.T) {
 	a.SessionID = "thread-9"
 	if got := codex.Command(a, true, none); !strings.HasPrefix(got, "codex resume ") || !strings.HasSuffix(got, " thread-9") {
 		t.Errorf("resume by id = %q", got)
+	}
+}
+
+// An agent's own flags come last, quoted, when it starts and resumes.
+func TestAgentArgs(t *testing.T) {
+	withHome(t)
+	codex := ByName(Builtin(), "codex")
+	a := &state.Agent{ID: "id-3", Kind: "codex", SessionID: "thread-1", Args: []string{"--model", "gpt 5", "-s", "read-only"}}
+	none := written{}.launch()
+	const args = ` '--model' 'gpt 5' '-s' 'read-only'`
+	if got := codex.Command(a, false, none); !strings.HasSuffix(got, args) {
+		t.Errorf("start = %q", got)
+	}
+	if got := codex.Command(a, true, none); got != "codex resume -c 'notify=[mad]' thread-1"+args {
+		t.Errorf("resume = %q", got)
 	}
 }
 
@@ -214,6 +230,9 @@ func TestScreenWaiting(t *testing.T) {
 		{"claude", "> ", false},
 		{"codex", "Would you like to run the following command?", true},
 		{"codex", "Working (3s)", false},
+		{"codex", "Trust this folder? Codex can read, edit, and run files here", true},
+		{"codex", "› 1. Update now\n  2. Skip\n  enter continue · esc skip", true},
+		{"codex", "› Ask Codex to do anything\n  ? for shortcuts", false},
 		{"pi", "anything", false},
 	}
 	for _, c := range cases {
