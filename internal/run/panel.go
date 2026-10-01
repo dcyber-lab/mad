@@ -149,7 +149,8 @@ func (x *runner) panel(panes []tmux.Pane) *panel {
 // blocks that matter least go first.
 func (p *panel) render(pw, h int) []string {
 	// The panel is a column at most maxWidth wide, in the middle of the
-	// pane both ways; on a pane it fills, a margin of one on the left.
+	// pane's width, at its top; on a pane it fills, a margin of one on
+	// the left.
 	w := min(pw-1, maxWidth)
 	blocks := []block{
 		{text: p.title(w), keep: keepAlways},
@@ -200,8 +201,10 @@ func (p *panel) render(pw, h int) []string {
 	for i, l := range out {
 		out[i] = strings.TrimRight(left+l, " ")
 	}
-	top := make([]string, max((h-len(out))/2, 0))
-	return append(top, out...)
+	if len(out) < h {
+		out = append([]string{""}, out...) // a line of air above, if there is room
+	}
+	return out
 }
 
 // maxWidth is the widest the panel gets: wider, its lines are hard to

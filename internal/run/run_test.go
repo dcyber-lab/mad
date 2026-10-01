@@ -837,16 +837,16 @@ func TestPanelMoves(t *testing.T) {
 	}
 }
 
-// The panel stands in the middle of a wide pane, its flow's lines
-// together.
+// The panel stands in the middle of a wide pane's width, at its top, its
+// flow's lines together.
 func TestPanelCentered(t *testing.T) {
 	lines := bigPanel().render(200, 120)
 	first := 0
 	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
 		first++
 	}
-	if first == 0 {
-		t.Error("no room left above a short panel")
+	if first != 1 {
+		t.Errorf("%d lines above the panel, want 1", first)
 	}
 	if indent := len(lines[first]) - len(strings.TrimLeft(lines[first], " ")); indent != (200-maxWidth)/2 {
 		t.Errorf("panel starts at column %d", indent)
