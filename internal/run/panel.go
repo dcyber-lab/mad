@@ -147,12 +147,14 @@ func (x *runner) panel(panes []tmux.Pane) *panel {
 // steps taken, how it ended, and its log in the room left. On a short
 // pane the steps keep their latest few and the log what is left; the
 // blocks that matter least go first.
-func (p *panel) render(w, h int) []string {
-	w-- // a margin of one on the left
+func (p *panel) render(pw, h int) []string {
+	// The panel is a column at most maxWidth wide, in the middle of the
+	// pane both ways; on a pane it fills, a margin of one on the left.
+	w := min(pw-1, maxWidth)
 	blocks := []block{
 		{text: p.title(w), keep: keepAlways},
 		{text: p.about(w), keep: 2, joined: true},
-		{text: p.flowView(w), keep: 4},
+		{text: center(w, p.flowView(w)), keep: 4},
 		{text: p.rolesView(w), keep: 3},
 		{steps: true, keep: keepAlways},
 		p.endingView(),
@@ -192,12 +194,19 @@ func (p *panel) render(w, h int) []string {
 		if len(out) > 0 && !b.joined {
 			out = append(out, "")
 		}
-		for _, l := range strings.Split(text, "\n") {
-			out = append(out, " "+l)
-		}
+		out = append(out, strings.Split(text, "\n")...)
 	}
-	return out
+	left := strings.Repeat(" ", max((pw-w)/2, 1))
+	for i, l := range out {
+		out[i] = strings.TrimRight(left+l, " ")
+	}
+	top := make([]string, max((h-len(out))/2, 0))
+	return append(top, out...)
 }
+
+// maxWidth is the widest the panel gets: wider, its lines are hard to
+// follow across.
+const maxWidth = 150
 
 // block is a part of the panel: what it says, and how long it stays when
 // the pane is short, the higher the longer. The steps and the log are
@@ -289,7 +298,7 @@ func (p *panel) about(w int) string {
 		budget += pDim.Render(" · and " + kTokens(pr.Tokens) + " tokens of models without a price")
 	}
 	return columns(w, [][]string{
-		{pDim.Render("task"), firstLine(p.spec.Task)},
+		{pDim.Render("task"), strings.Join(strings.Fields(firstLine(p.spec.Task)), " ")},
 		{pDim.Render("branch"), p.branch + pDim.Render("  "+paths.Short(p.dir))},
 		{pDim.Render("flow"), p.flow.Name + pDim.Render("  "+p.flow.Description)},
 		{pDim.Render("budget"), budget},
