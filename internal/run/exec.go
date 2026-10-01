@@ -167,7 +167,7 @@ func (x *runner) work() error {
 	pr := &x.f.Progress
 	if !Active(pr.Status) {
 		if pr.Status == Done {
-			x.diff = diffStat(x.run.Dir, x.f.Spec.Base)
+			x.setDiff()
 		}
 		return nil
 	}
@@ -248,7 +248,7 @@ func (x *runner) work() error {
 		x.update(func() { pr.Step = next })
 	}
 	x.update(func() { pr.Status, pr.Waiting, pr.Ended = Done, "", now() })
-	x.diff = diffStat(x.run.Dir, x.f.Spec.Base)
+	x.setDiff()
 	x.logf("run done")
 	x.tell(notify.Done, "")
 	return nil
@@ -326,6 +326,15 @@ func (x *runner) step(s Step) (string, error) {
 	})
 	x.logf("%s finished the %s: %s", role.Label, s.Label, pr.Entries[idx].Result)
 	return reply, nil
+}
+
+// setDiff takes in what the run changed, for the panel to show; the
+// panel is drawn meanwhile.
+func (x *runner) setDiff() {
+	d := diffStat(x.run.Dir, x.f.Spec.Base)
+	x.mu.Lock()
+	x.diff = d
+	x.mu.Unlock()
 }
 
 func ifNotEmpty(sep, s string) string {
