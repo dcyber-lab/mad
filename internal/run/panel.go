@@ -386,7 +386,9 @@ func (p *panel) rolesView(w int) string {
 		case "waiting":
 			state = pWarn
 		case "exited", "stopped":
-			state = pBad
+			if Active(p.pr.Status) {
+				state = pBad // a role the run still needs
+			}
 		}
 		ctx := ""
 		if c := p.pr.Context[r.Name]; c > 0 {
