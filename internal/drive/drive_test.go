@@ -386,3 +386,64 @@ func TestDraft(t *testing.T) {
 		}
 	}
 }
+
+func TestTook(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("MAD_SOCKET", "")
+	kinds := []agent.Kind{{Name: "claude", Hooks: true}, {Name: "codex"}}
+	claude, codex := &state.Agent{ID: "a", Kind: "claude"}, &state.Agent{ID: "b", Kind: "codex"}
+	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	step := Digest("[mad run x · design] write it")
+	if Digest("  [mad run x · design] write it\n") != step || Digest("other") == step {
+		t.Fatal("a digest should stand for the trimmed text alone")
+	}
+	mark := func(a *state.Agent, at time.Time, d string) {
+		if err := status.MarkSent(a.ID, at, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hook := func(at time.Time, st, event string) {
+		if err := status.WriteHook(claude.ID, &status.Hook{State: st, Event: event}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if Took(claude, kinds, step, t0) || Took(claude, kinds, "", t0) {
+		t.Error("took with nothing sent")
+	}
+	mark(claude, t0.Add(time.Second), step)
+	if Took(claude, kinds, step, t0) {
+		t.Error("took before it said it did")
+	}
+	hook(t0.Add(2*time.Second), status.Idle, "SessionStart") // restarted under the paste
+	if Took(claude, kinds, step, t0) {
+		t.Error("an agent that only started took the message")
+	}
+	hook(t0.Add(3*time.Second), status.Running, "UserPromptSubmit")
+	if !Took(claude, kinds, step, t0) {
+		t.Error("an agent at work on it did not take the message")
+	}
+	if Took(claude, kinds, step, t0.Add(2*time.Second)) {
+		t.Error("a message sent before since was taken")
+	}
+	if Took(claude, kinds, Digest("other"), t0) {
+		t.Error("took a message that was not the last one")
+	}
+	hook(t0.Add(4*time.Second), status.Idle, "Stop")
+	if err := status.WriteTurn(claude.ID, &status.Turn{Reply: "done"}, t0.Add(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if !Took(claude, kinds, step, t0) {
+		t.Error("an agent done with it did not take the message")
+	}
+	mark(claude, t0.Add(5*time.Second), Digest("/compact")) // something sent since
+	if Took(claude, kinds, step, t0) {
+		t.Error("took a message followed by another")
+	}
+
+	// Nothing tells more of an agent without hooks than the paste.
+	mark(codex, t0.Add(time.Second), step)
+	if !Took(codex, kinds, step, t0) {
+		t.Error("codex did not take the message typed in")
+	}
+}

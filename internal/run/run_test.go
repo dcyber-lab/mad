@@ -31,6 +31,17 @@ func TestMain(m *testing.M) {
 		fakeRole()
 		return
 	}
+	if id := os.Getenv("MAD_TEST_RUNNER"); id != "" {
+		// A runner of a fakeDeck, in a process of its own to stop.
+		tmux.Socket = os.Getenv("MAD_TEST_SOCKET")
+		deck.SelfCommand = func(sub string) string { return "sleep 600 # mad " + sub }
+		tmux.PasteSettle, retryEvery = 50*time.Millisecond, 200*time.Millisecond
+		if err := Exec(id, io.Discard); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	os.Exit(m.Run())
 }
 
@@ -111,10 +122,10 @@ func readMessage(in *bufio.Reader) (string, bool) {
 	}
 }
 
-// A whole run on a real tmux server and git repository, every role a
-// fake: the question goes to the designer and back, the first review
-// sends the work back, the second approves.
-func TestRunEndToEnd(t *testing.T) {
+// fakeDeck sets up a deck on a tmux server of its own, every agent kind
+// played by fakeRole, and returns a git repository to run in.
+func fakeDeck(t *testing.T) string {
+	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}
@@ -157,6 +168,14 @@ func TestRunEndToEnd(t *testing.T) {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
+	return repo
+}
+
+// A whole run on a real tmux server and git repository, every role a
+// fake: the question goes to the designer and back, the first review
+// sends the work back, the second approves.
+func TestRunEndToEnd(t *testing.T) {
+	repo := fakeDeck(t)
 
 	// The builder played by codex (the fake too), and a stop after the
 	// design for you.
@@ -283,6 +302,83 @@ func TestRunEndToEnd(t *testing.T) {
 	// A runner started again on a run that is over just draws it.
 	if err := Exec(r.ID, io.Discard); err != nil {
 		t.Errorf("runner on a finished run: %v", err)
+	}
+}
+
+// A runner stopped after it sent a step but before it noted so (killed,
+// the machine down): the one started again sees the agent took the step,
+// and waits for its reply instead of sending it a second time.
+func TestRunnerStoppedAfterSend(t *testing.T) {
+	repo := fakeDeck(t)
+	r, err := Create(Options{Project: repo, Task: "add an audit log", Gate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := filepath.Join(os.Getenv("XDG_STATE_HOME"), "fake-messages")
+	designs := func() int {
+		data, _ := os.ReadFile(messages)
+		return strings.Count(string(data), "· design]")
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := exec.Command(self)
+	first.Env = append(os.Environ(), "MAD_TEST_RUNNER="+r.ID, "MAD_TEST_SOCKET="+tmux.Socket)
+	var errOut strings.Builder
+	first.Stderr = &errOut
+	if err := first.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for end := time.Now().Add(time.Minute); designs() == 0; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(end) {
+			_ = first.Process.Kill()
+			log, _ := os.ReadFile(logPath(Dir(r)))
+			t.Fatalf("the design never went out: %s\nlog:\n%s", errOut.String(), log)
+		}
+	}
+	_ = first.Process.Kill()
+	_ = first.Wait()
+	f, err := Load(Dir(r))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Progress.Entries) != 1 || f.Progress.Entries[0].Digest == "" {
+		t.Fatalf("entries after the send: %+v", f.Progress.Entries)
+	}
+	f.Progress.Entries[0].Sent = false // stopped before it could say so
+	if err := f.Save(Dir(r)); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- Exec(r.ID, io.Discard) }()
+	for end := time.Now().Add(time.Minute); ; time.Sleep(100 * time.Millisecond) {
+		if f, err := Load(Dir(r)); err == nil && f.Progress.Status == Waiting && strings.Contains(f.Progress.Waiting, "look it over") {
+			if e := f.Progress.Entries[0]; e.Status != "done" || e.Result != "The design is written." {
+				t.Errorf("the design came to %+v", e)
+			}
+			break
+		}
+		if time.Now().After(end) {
+			f, _ := Load(Dir(r))
+			t.Fatalf("never got to the gate: %+v", f.Progress)
+		}
+	}
+	if n := designs(); n != 1 {
+		t.Errorf("the design went out %d times", n)
+	}
+	if log, _ := os.ReadFile(logPath(Dir(r))); !strings.Contains(string(log), "had the design already") {
+		t.Errorf("log:\n%s", log)
+	}
+	if err := Command(r, Cancel); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Minute):
+		t.Fatal("the runner never ended")
 	}
 }
 
