@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -723,5 +724,77 @@ func TestWorktreeArgs(t *testing.T) {
 	}
 	if args := (Role{Kind: "codex"}).WorktreeArgs(root); args != nil {
 		t.Errorf("main checkout: %q", args)
+	}
+}
+
+func TestContextCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	usage := func(in int) string {
+		return fmt.Sprintf(`{"message":{"usage":{"input_tokens":%d,"cache_read_input_tokens":1000}}}`+"\n", in)
+	}
+	os.WriteFile(path, []byte(usage(1)+`{"type":"user"}`+"\n"), 0o644)
+	c := &contextCache{marks: map[string]contextMark{}}
+	if got := c.look("claude", path); got != 1001 {
+		t.Errorf("first look = %d", got)
+	}
+	// Only what was added is read; a line still being written waits.
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(usage(2) + `{"message":{"usage":{"input_tok`)
+	if got := c.look("claude", path); got != 1002 {
+		t.Errorf("after a response = %d", got)
+	}
+	f.WriteString(`ens":3}}}` + "\n")
+	f.Close()
+	if got := c.look("claude", path); got != 3 {
+		t.Errorf("after the line was done = %d", got)
+	}
+	// A transcript written anew is read from its start.
+	os.WriteFile(path, []byte(usage(4)), 0o644)
+	if got := c.look("claude", path); got != 1004 {
+		t.Errorf("rewritten = %d", got)
+	}
+}
+
+// bigPanel is a run of many steps, for what drawing its panel costs.
+func bigPanel() *panel {
+	f, _ := FlowByName("", "")
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	pr := Progress{Status: Running, Step: 1, Round: 9, Started: at, Context: map[string]int64{"builder": 90_000}}
+	for i := range 40 {
+		step, role := "implement", "builder"
+		if i%2 == 1 {
+			step, role = "review", "reviewer"
+		}
+		pr.Entries = append(pr.Entries, Entry{Step: step, Role: role, Round: i/2 + 1, Status: "done",
+			Result: "CHANGES: **VERDICT: CHANGES** 修复提交还混入了与 F1–F3 无关的代码，单看这次提交会让 run 直接失败", Start: at.Add(time.Duration(i) * time.Minute),
+			End: at.Add(time.Duration(i+1) * time.Minute), Cost: 0.25})
+	}
+	return &panel{name: "big", flow: f, spec: Spec{Budget: 10, Compact: 150_000}, pr: pr, now: at.Add(time.Hour),
+		roles: map[string]roleView{"builder": {state: "working", tool: "Bash · go test ./..."}}}
+}
+
+// The panel is drawn every second for as long as a run lasts: drawing it
+// must leave nothing behind.
+func TestPanelKeepsNothing(t *testing.T) {
+	p := bigPanel()
+	var m runtime.MemStats
+	heap := func() uint64 { runtime.GC(); runtime.ReadMemStats(&m); return m.HeapAlloc }
+	for range 100 {
+		p.render(190, 55)
+	}
+	before := heap()
+	for range 3000 {
+		p.render(190, 55)
+	}
+	if after := heap(); after > before+1<<20 {
+		t.Errorf("heap grew from %d KB to %d KB over 3000 panels", before>>10, after>>10)
+	}
+}
+
+func BenchmarkPanel(b *testing.B) {
+	p := bigPanel()
+	b.ReportAllocs()
+	for range b.N {
+		p.render(190, 55)
 	}
 }
