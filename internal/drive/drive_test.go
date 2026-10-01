@@ -263,7 +263,10 @@ func TestSendAndWait(t *testing.T) {
 		t.Errorf("dropped turn: %v", err)
 	}
 
-	// An agent that exited is resumed by the next message.
+	// An agent that exited is resumed by the next message. Its screen
+	// stays still while it exits, which takes a while on a slow machine:
+	// that must not pass for a turn that ended without a word.
+	stale = 10 * time.Second
 	if err := Send(st, a, "quit", kinds); err != nil {
 		t.Fatal(err)
 	}
