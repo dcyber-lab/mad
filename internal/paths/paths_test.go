@@ -10,6 +10,7 @@ import (
 
 func TestDirsFollowXDG(t *testing.T) {
 	t.Setenv("HOME", "/home/u")
+	t.Setenv("MAD_SOCKET", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_STATE_HOME", "")
 	if got, want := ConfigDir(), "/home/u/.config/mad"; got != want {
@@ -28,6 +29,31 @@ func TestDirsFollowXDG(t *testing.T) {
 		StatusDir():        "/st/mad/status",
 		SidebarWidthFile(): "/st/mad/sidebar_width",
 		SidebarLog():       "/st/mad/sidebar.log",
+	} {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}
+
+// A deck on a tmux server of its own keeps its state and generated files
+// apart, and shares the user's config.
+func TestOtherDeck(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/cfg")
+	t.Setenv("XDG_STATE_HOME", "/st")
+	for _, s := range []string{"", "mad"} {
+		t.Setenv("MAD_SOCKET", s)
+		if OtherDeck() != "" || StateDir() != "/st/mad" || GenDir() != "/cfg/mad" {
+			t.Errorf("MAD_SOCKET=%q: deck %q, state %q, generated %q", s, OtherDeck(), StateDir(), GenDir())
+		}
+	}
+	t.Setenv("MAD_SOCKET", "mad-pre")
+	for got, want := range map[string]string{
+		OtherDeck():    "mad-pre",
+		StateFile():    "/st/mad/decks/mad-pre/state.json",
+		TmuxConf():     "/st/mad/decks/mad-pre/tmux.conf",
+		ConfigFile():   "/cfg/mad/config.json",
+		AgentsConfig(): "/cfg/mad/agents.json",
 	} {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
