@@ -12,10 +12,10 @@ import (
 
 func TestParsePanes(t *testing.T) {
 	out := strings.Join([]string{
-		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t",
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t",
-		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1",
+		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t\t0",
+		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1\t0",
 		"garbage line",
 		"",
 	}, "\n")
@@ -50,6 +50,24 @@ func TestParsePanes(t *testing.T) {
 	}
 	if _, ok := Stage(panes[:1]); ok {
 		t.Error("Stage without a main window")
+	}
+
+	// Several views: the one in use is the focused one, else the one
+	// focused last.
+	views := parsePanes(strings.Join([]string{
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0",
+		"%5\tagent-c\tmain\t@1\t0.2\t0\t84\t50\t0\t/dev/ttys005\t105\t\t1",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t84\t50\t0\t/dev/ttys003\t102\t\t0",
+	}, "\n"))
+	if v := Views(views); len(v) != 2 || v[0].MadID != "agent-a" || v[1].Index != 2 {
+		t.Errorf("Views = %+v", v)
+	}
+	if stage, _ := Stage(views); stage.MadID != "agent-c" {
+		t.Errorf("Stage with the sidebar focused = %s", stage.MadID)
+	}
+	views[2].Active = true
+	if stage, _ := Stage(views); stage.MadID != "agent-a" {
+		t.Errorf("Stage of the focused view = %s", stage.MadID)
 	}
 }
 

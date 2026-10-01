@@ -213,15 +213,18 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		}
 	}
 
-	m.panes = map[string]tmux.Pane{}
+	m.panes, m.shown = map[string]tmux.Pane{}, map[string]bool{}
 	prevStage := m.stageID
 	m.stageID = ""
+	if stage, ok := tmux.Stage(msg.panes); ok {
+		m.stageID = stage.MadID
+	}
 	for _, p := range msg.panes {
 		if p.MadID != "" {
 			m.panes[p.MadID] = p
 		}
-		if p.Session == tmux.MainSession && p.Index == 1 {
-			m.stageID = p.MadID
+		if tmux.OnStage(p) {
+			m.shown[p.MadID] = true
 		}
 		if p.Session == tmux.MainSession && p.Index == 0 {
 			m.focused = p.Active
@@ -244,6 +247,12 @@ func (m *model) noteQuota(kind string, q status.Quota) {
 		return
 	}
 	m.quota[kind] = q
+}
+
+// onStage reports whether agent id is in one of the views on stage, or
+// its diff is.
+func (m *model) onStage(id string) bool {
+	return m.shown[id] || m.shown[tmux.IDTask] && id == m.taskFor
 }
 
 // alert is a notification to send; one about the agent on stage is
@@ -272,12 +281,12 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			hook := m.hooks[a.ID]
 			pane, ok := m.panes[a.ID]
 			prev := tr.Status
-			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], a.ID == m.stageID, now)
+			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], m.onStage(a.ID), now)
 			if prev == status.Running && tr.Status != status.Running {
 				m.gitDue, m.readDue = true, true // a turn ended: its changes and cost are worth showing now
 			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
-				alerts = append(alerts, alert{e, a.ID == m.stageID})
+				alerts = append(alerts, alert{e, m.onStage(a.ID)})
 			}
 			if hook != nil && hook.SessionID != "" && hook.SessionID != a.SessionID {
 				// A forked resume reports its new id here; later resumes use it.

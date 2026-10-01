@@ -465,8 +465,8 @@ func TestPanel(t *testing.T) {
 	}
 	// Narrow, the flow is one line.
 	p := x.panel(nil)
-	if lines := p.flowLines(30); len(lines) != 1 || !strings.Contains(ansi.Strip(lines[0]), "↺ review → implementation ×1") {
-		t.Errorf("narrow flow: %q", lines)
+	if got := ansi.Strip(p.flowView(30)); strings.Contains(got, "\n") || !strings.Contains(got, "↺ review → implementation ×1") {
+		t.Errorf("narrow flow: %q", got)
 	}
 	// What a step came to, without markdown or its verdict twice.
 	if got := ansi.Strip(result("CHANGES: **VERDICT: CHANGES。** F1 still has a gap")); got != "CHANGES: F1 still has a gap" {

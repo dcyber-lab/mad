@@ -59,9 +59,12 @@ func clampWidth(w int) int {
 }
 
 // FitSidebar restores the saved width, e.g. after the terminal resized and
-// tmux spread the change over both panes.
+// tmux spread the change over every pane, and lays the views out anew.
 func FitSidebar() error {
-	return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-x", strconv.Itoa(SidebarWidth()))
+	if err := tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-x", strconv.Itoa(SidebarWidth())); err != nil {
+		return err
+	}
+	return Arrange()
 }
 
 // sidebarCommand keeps the sidebar alive: a crash is logged and the sidebar
@@ -155,7 +158,8 @@ func EnsureStage(panes []tmux.Pane) error {
 	return FitSidebar()
 }
 
-// ShowPane swaps the pane tagged madID into the stage, optionally focusing it.
+// ShowPane swaps the pane tagged madID into the view in use, optionally
+// focusing it. One on stage already stays where it is.
 func ShowPane(madID string, focus bool) error {
 	panes, err := tmux.ListPanes()
 	if err != nil {
@@ -177,6 +181,12 @@ func ShowPane(madID string, focus bool) error {
 	if !ok {
 		return fmt.Errorf("pane for %s not found", madID)
 	}
+	if tmux.OnStage(target) {
+		if focus {
+			return tmux.Run("select-pane", "-t", target.ID)
+		}
+		return nil
+	}
 	if target.ID != stage.ID {
 		// Pre-size the agent's window so the swap doesn't trigger a resize.
 		_ = tmux.Run("resize-window", "-t", target.WindowID,
@@ -191,7 +201,8 @@ func ShowPane(madID string, focus bool) error {
 		}
 	}
 	if focus {
-		return tmux.Run("select-pane", "-t", tmux.StagePane)
+		// The swapped in pane holds the view's place, under its own id.
+		return tmux.Run("select-pane", "-t", target.ID)
 	}
 	return nil
 }
@@ -214,9 +225,9 @@ func OpenTask(dir, command string) error {
 	return ShowPane(tmux.IDTask, true)
 }
 
-// CloseTask removes the task pane. When it is on stage, backID (an agent,
-// or the placeholder when empty) takes its place; focus is left where it
-// is.
+// CloseTask removes the task pane. When it is on stage, backID (an agent)
+// takes its place, unless it is on stage already or empty: then the view
+// closes. The view the task was in takes the focus.
 func CloseTask(backID string) error {
 	panes, err := tmux.ListPanes()
 	if err != nil {
@@ -226,14 +237,17 @@ func CloseTask(backID string) error {
 	if !ok {
 		return nil
 	}
-	if stage, ok := tmux.Stage(panes); ok && stage.ID == pane.ID {
-		if backID == "" {
-			backID = tmux.IDPlaceholder
+	if tmux.OnStage(pane) {
+		back, ok := tmux.FindPane(panes, backID)
+		if !ok || tmux.OnStage(back) {
+			return CloseView(tmux.IDTask)
 		}
-		if _, ok := tmux.FindPane(panes, backID); !ok {
-			backID = tmux.IDPlaceholder
+		// The agent takes its view back, which ends the task pane: the
+		// view in use is the focused one.
+		if err := tmux.Run("select-pane", "-t", pane.ID); err != nil {
+			return err
 		}
-		return ShowPane(backID, false) // kills the outgoing diff pane
+		return ShowPane(backID, false)
 	}
 	return tmux.Run("kill-pane", "-t", pane.ID)
 }
@@ -358,25 +372,10 @@ func RestartAgent(p *state.Project, a *state.Agent, paneID string, kinds []agent
 	return tmux.Run("respawn-pane", "-k", "-t", paneID, "-c", p.Dir(a), "-e", "MAD_AGENT_ID="+a.ID, cmd)
 }
 
-// OpenAgent shows agent id in the stage, (re)starting it with its previous
-// session if its process is gone.
+// OpenAgent shows agent id in the view in use, (re)starting it with its
+// previous session if its process is gone.
 func OpenAgent(st *state.State, id string, kinds []agent.Kind) error {
-	p, a := st.FindAgent(id)
-	if a == nil {
-		return fmt.Errorf("unknown agent %s", id)
-	}
-	panes, err := tmux.ListPanes()
-	if err != nil {
-		return err
-	}
-	pane, ok := tmux.FindPane(panes, id)
-	switch {
-	case !ok:
-		err = StartAgent(p, a, true, kinds)
-	case pane.Dead:
-		err = RestartAgent(p, a, pane.ID, kinds)
-	}
-	if err != nil {
+	if err := ensureAgent(st, id, kinds); err != nil {
 		return err
 	}
 	return ShowPane(id, true)
@@ -397,7 +396,7 @@ func StartRunner(id string) error {
 }
 
 // KillAgent stops an agent's process and closes its pane, putting the
-// placeholder back first if the agent was on stage.
+// placeholder back first if it was the only view on stage.
 func KillAgent(id string) error {
 	panes, err := tmux.ListPanes()
 	if err != nil {
@@ -407,9 +406,13 @@ func KillAgent(id string) error {
 	if !ok {
 		return nil
 	}
-	if stage, ok := tmux.Stage(panes); ok && stage.ID == pane.ID {
-		if err := ShowPane(tmux.IDPlaceholder, false); err != nil {
-			return err
+	if tmux.OnStage(pane) {
+		if len(tmux.Views(panes)) == 1 {
+			if err := ShowPane(tmux.IDPlaceholder, false); err != nil {
+				return err
+			}
+		} else {
+			defer Arrange()
 		}
 	}
 	return tmux.Run("kill-pane", "-t", pane.ID)
@@ -532,7 +535,9 @@ set -g pane-active-border-style "fg=colour75"
 	fmt.Fprintf(&b, "set-hook -g pane-died %s\n", tmuxQuote("run-shell -b "+tmuxQuote(SelfCommand("poke poll"))))
 	// Sidebar width: drag the border, or prefix + < / >.
 	fmt.Fprintf(&b, "bind -r < resize-pane -t %s -L 2\nbind -r > resize-pane -t %s -R 2\n", tmux.SidebarPane, tmux.SidebarPane)
-	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" "select-pane -t %s" "select-pane -t %s"`, tmux.StagePane, tmux.SidebarPane)
+	// From the sidebar to the view in use, and back.
+	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" %s "select-pane -t %s"`,
+		tmuxQuote("run-shell -b "+tmuxQuote(SelfCommand("focus"))), tmux.SidebarPane)
 	fmt.Fprintf(&b, "bind -n M-s %s\nbind s %s\n", toggle, toggle)
 	// The sidebar knows which agents need you; let it pick the next one.
 	fmt.Fprintf(&b, "bind -n M-n run-shell -b %s\n", tmuxQuote(SelfCommand("jump")))

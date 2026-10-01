@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	madrun "github.com/dcyber-lab/mad/internal/run"
@@ -34,7 +35,11 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 	case ">", "=", "+":
 		return m.action("", func() error { return tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-R", "2") })
 	case "tab":
-		return m.action("", func() error { return tmux.Run("select-pane", "-t", tmux.StagePane) })
+		return m.action("", func() error { return deck.FocusStage(m.stageID) })
+	case "s":
+		if ok {
+			return m.toggleView(r)
+		}
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		// Numbers count as the rows show them: within the run the cursor
 		// is in, else within its project's own agents.

@@ -65,7 +65,7 @@ func runOf(r row) *state.Run {
 func (m *model) runRowSegs(r row) (left, right []seg) {
 	run := r.run
 	bar := seg{stPlain, " "}
-	if m.stageID == deck.RunnerID(run.ID) {
+	if m.shown[deck.RunnerID(run.ID)] {
 		bar = seg{stStage, "▌"}
 	}
 	arrow := "▾ "
@@ -147,20 +147,63 @@ func (m *model) openRun(run *state.Run) tea.Cmd {
 	id := run.ID
 	pane, has := m.panes[deck.RunnerID(id)]
 	return m.action("", func() error {
-		switch {
-		case !has:
-			if err := deck.StartRunner(id); err != nil {
-				return err
-			}
-		case pane.Dead:
-			// A runner that ended (an older mad's): one now draws the
-			// panel to the stage's size.
-			if err := tmux.Run("respawn-pane", "-k", "-t", pane.ID, deck.SelfCommand("run exec "+id)); err != nil {
-				return err
-			}
+		if err := ensureRunner(id, pane, has); err != nil {
+			return err
 		}
 		return deck.ShowPane(deck.RunnerID(id), false)
 	})
+}
+
+// ensureRunner starts run id's runner when it has none (a deck rebuilt:
+// the runner picks the run up), and respawns one whose pane is dead.
+func ensureRunner(id string, pane tmux.Pane, has bool) error {
+	switch {
+	case !has:
+		return deck.StartRunner(id)
+	case pane.Dead:
+		// A runner that ended (an older mad's): one now draws the panel
+		// to the stage's size.
+		return tmux.Run("respawn-pane", "-k", "-t", pane.ID, deck.SelfCommand("run exec "+id))
+	}
+	return nil
+}
+
+// toggleView is s. On an agent: show it beside the views on stage, or
+// take its view away. On a run: its panel with its roles beside it, in
+// place of what was on stage, or the panel alone again.
+func (m *model) toggleView(r row) tea.Cmd {
+	st, kinds := m.st.Clone(), m.kinds
+	if run := r.run; run != nil {
+		ids := []string{deck.RunnerID(run.ID)}
+		for _, a := range r.proj.RunAgents(run.ID) {
+			if len(ids) < deck.MaxViews {
+				ids = append(ids, a.ID)
+			}
+		}
+		tiled := len(m.shown) == len(ids)
+		for _, id := range ids {
+			tiled = tiled && m.shown[id]
+		}
+		pane, has := m.panes[ids[0]]
+		return m.action("", func() error {
+			if tiled {
+				return deck.ShowViews(st, ids[:1], kinds)
+			}
+			if err := ensureRunner(run.ID, pane, has); err != nil {
+				return err
+			}
+			return deck.ShowViews(st, ids, kinds)
+		})
+	}
+	if r.agent == nil {
+		m.setFlash("s shows an agent beside the others: move to one")
+		return nil
+	}
+	id := r.agent.ID
+	if m.shown[id] {
+		return m.action("", func() error { return deck.CloseView(id) })
+	}
+	return m.action("", func() error { return deck.OpenAgentView(st, id, kinds) })
 }
 
 // openRunForm puts the form for a new run in p on stage.

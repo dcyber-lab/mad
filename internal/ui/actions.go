@@ -116,7 +116,7 @@ func dirInUse(p *state.Project, dir string) bool {
 // toggleDiff shows the changes in dir (of agent id, or a project when id
 // is empty) on stage, or takes them down again when they are up already.
 func (m *model) toggleDiff(id, dir string, focusStage bool) tea.Cmd {
-	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.stageID == tmux.IDTask && m.taskFor == id {
+	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && m.taskFor == id {
 		return m.closeTask(focusStage)
 	}
 	m.taskFor = id
@@ -131,11 +131,10 @@ func (m *model) closeTask(focusStage bool) tea.Cmd {
 		if err := deck.CloseTask(back); err != nil {
 			return err
 		}
-		target := tmux.SidebarPane
 		if focusStage {
-			target = tmux.StagePane
+			return deck.FocusStage(back)
 		}
-		return tmux.Run("select-pane", "-t", target)
+		return tmux.Run("select-pane", "-t", tmux.SidebarPane)
 	})
 }
 
@@ -172,7 +171,7 @@ func (m *model) taskCleanup(panes []tmux.Pane) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	onStage := d.Session == tmux.MainSession && d.Index == 1
+	onStage := tmux.OnStage(d)
 	if onStage && !d.Dead {
 		return nil
 	}

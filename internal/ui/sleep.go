@@ -11,7 +11,6 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
-	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
 // sleepCheckEvery is how often agents are checked against sleep.after.
@@ -40,7 +39,7 @@ func (m *model) sleepers(now time.Time) []string {
 	var ids []string
 	for _, a := range m.st.OrderedAgents() {
 		tr := m.trackers[a.ID]
-		shown := a.ID == m.stageID || m.stageID == tmux.IDTask && a.ID == m.taskFor
+		shown := m.onStage(a.ID)
 		// A working run comes back to its agents; it would only wake them.
 		if tr == nil || tr.Status != status.Idle || shown || !m.canSleep(a) || a.Run != "" && m.runActive(a.Run) {
 			continue
