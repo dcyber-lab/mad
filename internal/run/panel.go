@@ -23,6 +23,7 @@ var (
 	pBold  = lipgloss.NewStyle().Bold(true)
 	pDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	pRun   = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	pLit   = lipgloss.NewStyle().Foreground(lipgloss.Color("153")) // the bright moment of what is moving
 	pGood  = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
 	pWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 	pBad   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
@@ -83,6 +84,8 @@ type panel struct {
 	roles                     map[string]roleView
 	diff                      []string
 	now                       time.Time
+	// frame counts the panel's frames: what is at work moves with it.
+	frame int
 }
 
 // roleView is how the agent of a role stands.
@@ -106,12 +109,15 @@ func (x *runner) panel(panes []tmux.Pane) *panel {
 	pr.Context = ctx
 	p := &panel{name: x.run.Name, branch: x.run.Branch, dir: x.run.Dir, logDir: x.dir, flow: x.flow, kinds: x.kinds,
 		spec: x.f.Spec, pr: pr, diff: x.diff, now: now(), roles: map[string]roleView{}}
+	p.frame = int(p.now.UnixMilli() / frameEvery.Milliseconds())
 	cur := ""
 	if Active(pr.Status) && pr.Step >= 0 && pr.Step < len(x.flow.Steps) {
 		cur = x.flow.Steps[pr.Step].Role
 	}
-	for id, info := range x.usage {
-		role := x.roleOf[id]
+	// Every agent of the run: one whose session has nothing to read yet
+	// (codex writes its own once it answers) is no less there.
+	for id, role := range x.roleOf {
+		info := x.usage[id]
 		v := roleView{tool: info.Tool, cost: info.Tokens.Cost}
 		if v.cost == 0 {
 			v.tokens = info.Tokens.Total()
@@ -246,7 +252,7 @@ func (p *panel) title(w int) string {
 			s := p.flow.Steps[pr.Step]
 			cur = s.Label + " (" + p.flow.RoleLabel(s.Role) + ")"
 		}
-		st = pRun.Render(fmt.Sprintf("● %s · round %d · %s · %s", cur, pr.Round, took, spent))
+		st = pRun.Render(fmt.Sprintf("%s %s · round %d · %s · %s", p.spin(), cur, pr.Round, took, spent))
 	case Waiting:
 		st = pWarn.Bold(true).Render("◆ waiting for you") + pDim.Render(fmt.Sprintf(" · %s · %s", took, spent))
 	case Done:
@@ -309,6 +315,9 @@ func (p *panel) flowView(w int) string {
 		if i > 0 {
 			// On the line of the steps' names, under the boxes' tops.
 			arrow := "\n" + arrowStyle(i).Render("──▶")
+			if v.working {
+				arrow = "\n" + p.flowing(arrowStyle(i))
+			}
 			parts = append(parts, arrow)
 			x += lipgloss.Width(arrow)
 		}
@@ -317,7 +326,7 @@ func (p *panel) flowView(w int) string {
 			head += fmt.Sprintf(" ×%d", v.runs)
 		}
 		text := v.style
-		if v.glyph == "●" {
+		if v.working {
 			text = text.Bold(true)
 		}
 		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(v.style.GetForeground()).Padding(0, 1).
@@ -416,7 +425,11 @@ func (p *panel) rolesView(w int) string {
 		if v.state == "working" {
 			now = pDim.Render(v.tool)
 		}
-		rows = append(rows, []string{who, pDim.Render(roleModel(r)), state.Render(v.state), ctx, cost, now})
+		said := v.state
+		if v.state == "working" {
+			said = p.spin() + " " + said
+		}
+		rows = append(rows, []string{who, pDim.Render(roleModel(r)), state.Render(said), ctx, cost, now})
 	}
 	return columns(w, rows, 5)
 }
@@ -467,7 +480,7 @@ func (p *panel) stepsView(w, room int) string {
 		entries = entries[len(entries)-keep:]
 	}
 	for _, e := range entries {
-		glyph, style := entryGlyph(e, pr.Status)
+		glyph, style := p.entryGlyph(e)
 		stop := e.End
 		if stop.IsZero() {
 			stop = p.now
@@ -481,7 +494,10 @@ func (p *panel) stepsView(w, room int) string {
 		}
 		place := ""
 		if sw > 0 {
-			place = span(float64(e.Start.Sub(start))/total, float64(stop.Sub(start))/total, sw, style)
+			place = span(float64(e.Start.Sub(start))/total, float64(stop.Sub(start))/total, sw, style, -1)
+			if e.Status == "running" && p.working() {
+				place = span(float64(e.Start.Sub(start))/total, float64(stop.Sub(start))/total, sw, pRun, p.frame)
+			}
 		}
 		cost := ""
 		switch {
@@ -553,9 +569,10 @@ func (p *panel) logView(n int) string {
 
 // stepView is how a step of the flow stands.
 type stepView struct {
-	glyph string
-	style lipgloss.Style
-	runs  int // how often it was taken
+	glyph   string
+	style   lipgloss.Style
+	runs    int  // how often it was taken
+	working bool // under way now
 }
 
 func (p *panel) stepView(i int) stepView {
@@ -568,26 +585,57 @@ func (p *panel) stepView(i int) stepView {
 		}
 	}
 	if last != nil {
-		v.glyph, v.style = entryGlyph(*last, p.pr.Status)
+		v.glyph, v.style = p.entryGlyph(*last)
+		v.working = last.Status == "running" && p.working()
 	}
 	return v
 }
 
-// entryGlyph marks a step taken: under way, waiting, sent back, done.
-func entryGlyph(e Entry, run string) (string, lipgloss.Style) {
+// working: a step is under way, not waiting for you.
+func (p *panel) working() bool { return p.pr.Status == Running || p.pr.Status == Starting }
+
+// entryGlyph marks a step taken: under way (turning, its colour
+// breathing), waiting, sent back, done.
+func (p *panel) entryGlyph(e Entry) (string, lipgloss.Style) {
 	switch e.Status {
 	case "running":
-		switch run {
-		case Waiting:
+		switch {
+		case p.pr.Status == Waiting:
 			return "◆", pWarn
-		case Running, Starting:
-			return "●", pRun
+		case p.working():
+			style := pRun
+			if p.frame/4%2 == 1 {
+				style = pLit
+			}
+			return p.spin(), style
 		}
 		return "✗", pBad
 	case "changes":
 		return "↺", pWarn
 	}
 	return "✓", pGood
+}
+
+var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func (p *panel) spin() string { return spinner[p.frame%len(spinner)] }
+
+// flowing is the arrow into the step at work, a light running along it.
+func (p *panel) flowing(style lipgloss.Style) string {
+	cells := []string{"─", "─", "▶"}
+	at := p.frame % len(cells)
+	var b strings.Builder
+	for i, c := range cells {
+		if i == at {
+			if c == "─" {
+				c = "•"
+			}
+			b.WriteString(pLit.Render(c))
+		} else {
+			b.WriteString(style.Render(c))
+		}
+	}
+	return b.String()
 }
 
 // loop is a review's way back to the step it sends changes to.
