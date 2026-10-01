@@ -417,8 +417,11 @@ func (p *panel) rolesView(w int) string {
 				ctx = gauge(frac, gw, style) + " " + ctx
 			}
 		}
-		cost := textutil.USD(v.cost)
-		if v.cost == 0 && v.tokens > 0 {
+		cost := ""
+		switch {
+		case v.cost > 0:
+			cost = textutil.USD(v.cost)
+		case v.tokens > 0:
 			cost = kTokens(v.tokens) + " tok"
 		}
 		now := ""
