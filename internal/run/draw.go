@@ -59,6 +59,21 @@ func columns(w int, rows [][]string, flex int) string {
 	return strings.Join(lines, "\n")
 }
 
+// center moves a block to the middle of w cells, as one: its lines keep
+// their places against each other.
+func center(w int, block string) string {
+	lines := strings.Split(block, "\n")
+	bw := 0
+	for _, l := range lines {
+		bw = max(bw, lipgloss.Width(l))
+	}
+	left := strings.Repeat(" ", max((w-bw)/2, 0))
+	for i, l := range lines {
+		lines[i] = left + l
+	}
+	return strings.Join(lines, "\n")
+}
+
 // gauge is a bar width cells long, frac of it filled.
 func gauge(frac float64, width int, style lipgloss.Style) string {
 	n := min(max(int(frac*float64(width)+0.5), 0), width)

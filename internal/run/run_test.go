@@ -836,3 +836,49 @@ func TestPanelMoves(t *testing.T) {
 		t.Error("a waiting run's panel moves")
 	}
 }
+
+// The panel stands in the middle of a wide pane, its flow's lines
+// together.
+func TestPanelCentered(t *testing.T) {
+	lines := bigPanel().render(200, 120)
+	first := 0
+	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
+		first++
+	}
+	if first == 0 {
+		t.Error("no room left above a short panel")
+	}
+	if indent := len(lines[first]) - len(strings.TrimLeft(lines[first], " ")); indent != (200-maxWidth)/2 {
+		t.Errorf("panel starts at column %d", indent)
+	}
+	// The way back rises into the middle of the box it goes back to,
+	// the second: implementation.
+	var top, loop []rune
+	for _, l := range lines {
+		r := []rune(ansi.Strip(l))
+		switch {
+		case top == nil && strings.ContainsRune(string(r), '╭'):
+			top = r
+		case loop == nil && strings.ContainsRune(string(r), '▲'):
+			loop = r
+		}
+	}
+	var starts, ends []int
+	for i, c := range top {
+		switch c {
+		case '╭':
+			starts = append(starts, i)
+		case '╮':
+			ends = append(ends, i)
+		}
+	}
+	arrow := -1
+	for i, c := range loop {
+		if c == '▲' {
+			arrow = i
+		}
+	}
+	if len(starts) < 2 || arrow != (starts[1]+ends[1]+1)/2 {
+		t.Errorf("the way back is not under its box:\n%s\n%s", string(top), string(loop))
+	}
+}
