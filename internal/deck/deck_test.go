@@ -646,6 +646,24 @@ func TestViews(t *testing.T) {
 	}
 }
 
+// A window given a size of its own follows the terminal again once the
+// deck is fitted.
+func TestFitUnpinsWindow(t *testing.T) {
+	useDeck(t)
+	if err := tmux.Run("resize-window", "-t", tmux.MainSession+":0", "-x", "100", "-y", "30"); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := tmux.Out("show-window-options", "-t", tmux.MainSession+":0", "window-size"); !strings.Contains(out, "manual") {
+		t.Fatalf("resize-window left window-size %q", out)
+	}
+	if err := FitSidebar(); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := tmux.Out("show-window-options", "-t", tmux.MainSession+":0", "window-size"); strings.Contains(out, "manual") {
+		t.Errorf("window-size still %q", out)
+	}
+}
+
 func TestStageLayout(t *testing.T) {
 	// Checksum and shape as tmux itself writes them.
 	if got := stageLayout(200, 50, 30, []int{0, 1}); got != "fab5,200x50,0,0{30x50,0,0,0,169x50,31,0,1}" {

@@ -60,7 +60,11 @@ func clampWidth(w int) int {
 
 // FitSidebar restores the saved width, e.g. after the terminal resized and
 // tmux spread the change over every pane, and lays the views out anew.
+// A deck's window takes the size of the terminal it is shown in: one
+// given a size of its own (window-size manual) leaves the rest of the
+// terminal dotted, so that goes first.
 func FitSidebar() error {
+	_ = tmux.Run("set-window-option", "-u", "-t", tmux.MainSession+":0", "window-size")
 	if err := tmux.Run("resize-pane", "-t", tmux.SidebarPane, "-x", strconv.Itoa(SidebarWidth())); err != nil {
 		return err
 	}
