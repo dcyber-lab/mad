@@ -70,6 +70,7 @@ type runner struct {
 	reader *transcript.Reader
 	usage  map[string]transcript.Info // agent id → what its session says
 	roleOf map[string]string          // agent id → its role
+	panes  []tmux.Pane                // the deck's, as usage last read them
 	lastUs time.Time
 	diff   []string // git diff --stat, once done
 
@@ -159,10 +160,12 @@ func Exec(id string, out io.Writer) error {
 	// panel drawn to the pane's size; a pane left dead would keep the
 	// lines it had, wrapped anew at every resize.
 	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		// Nothing changes now but the pane's size: drawn anew when it
+		// does, and once a minute should a resize go unnoticed.
 		for {
 			select {
 			case <-resized:
-			case <-time.After(5 * paintEvery):
+			case <-time.After(time.Minute):
 			}
 			x.paint()
 		}
@@ -859,6 +862,7 @@ func (x *runner) readUsage(force bool) bool {
 		agents = append(agents, transcript.Agent{ID: a.ID, Kind: a.Kind, Dir: p.Dir(a), Session: session(a)})
 	}
 	x.usage = x.reader.Read(agents)
+	x.panes, _ = listPanes() // how the roles' panes stand, for the panel
 	x.roleOf = map[string]string{}
 	ctx := map[string]int64{}
 	for _, a := range p.RunAgents(x.id) {
@@ -916,50 +920,96 @@ func lastContext(kind, dir, sid string) int64 {
 	if len(files) == 0 {
 		return 0
 	}
-	f, err := os.Open(files[0])
+	return contexts.look(kind, files[0])
+}
+
+// contexts keeps, for each transcript looked at, how far it was read and
+// the context its last response read. Transcripts only grow, so a look
+// reads what was added since the last one: nothing, mostly.
+var contexts = &contextCache{marks: map[string]contextMark{}}
+
+type contextCache struct {
+	mu    sync.Mutex
+	marks map[string]contextMark
+}
+
+type contextMark struct {
+	read int64 // where the next look starts: after the last whole line
+	last int64
+}
+
+func (c *contextCache) look(kind, path string) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fi, err := os.Stat(path)
 	if err != nil {
 		return 0
 	}
-	defer f.Close()
-	if fi, err := f.Stat(); err == nil && fi.Size() > 1<<20 {
-		_, _ = f.Seek(fi.Size()-1<<20, io.SeekStart)
+	m := c.marks[path]
+	switch {
+	case fi.Size() == m.read:
+		return m.last
+	case fi.Size() < m.read: // written anew
+		m = contextMark{}
 	}
-	var last int64
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<20), 16<<20)
-	for sc.Scan() {
-		line := sc.Bytes()
-		switch {
-		case kind == "claude" && bytes.Contains(line, []byte(`"usage"`)):
-			var ln struct {
-				Message struct {
-					Usage *struct {
-						In int64 `json:"input_tokens"`
-						W  int64 `json:"cache_creation_input_tokens"`
-						R  int64 `json:"cache_read_input_tokens"`
-					} `json:"usage"`
-				} `json:"message"`
-			}
-			if json.Unmarshal(line, &ln) == nil && ln.Message.Usage != nil {
-				u := ln.Message.Usage
-				last = u.In + u.W + u.R
-			}
-		case kind == "codex" && bytes.Contains(line, []byte(`"last_token_usage"`)):
-			var ln struct {
-				Payload struct {
-					Info struct {
-						Last struct {
-							In int64 `json:"input_tokens"`
-						} `json:"last_token_usage"`
-					} `json:"info"`
-				} `json:"payload"`
-			}
-			if json.Unmarshal(line, &ln) == nil && ln.Payload.Info.Last.In > 0 {
-				last = ln.Payload.Info.Last.In
-			}
+	f, err := os.Open(path)
+	if err != nil {
+		return m.last
+	}
+	defer f.Close()
+	if m.read == 0 && fi.Size() > 1<<20 {
+		m.read = fi.Size() - 1<<20 // the first look: the tail says it
+	}
+	if _, err := f.Seek(m.read, io.SeekStart); err != nil {
+		return m.last
+	}
+	r := bufio.NewReader(f)
+	for {
+		line, err := r.ReadBytes('\n')
+		if err != nil {
+			break // a line still being written is read whole next time
+		}
+		m.read += int64(len(line))
+		if n, ok := lineContext(kind, line); ok {
+			m.last = n
 		}
 	}
-	return last
+	c.marks[path] = m
+	return m.last
+}
+
+// lineContext is the context a transcript line says a response read.
+func lineContext(kind string, line []byte) (int64, bool) {
+	switch {
+	case kind == "claude" && bytes.Contains(line, []byte(`"usage"`)):
+		var ln struct {
+			Message struct {
+				Usage *struct {
+					In int64 `json:"input_tokens"`
+					W  int64 `json:"cache_creation_input_tokens"`
+					R  int64 `json:"cache_read_input_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(line, &ln) == nil && ln.Message.Usage != nil {
+			u := ln.Message.Usage
+			return u.In + u.W + u.R, true
+		}
+	case kind == "codex" && bytes.Contains(line, []byte(`"last_token_usage"`)):
+		var ln struct {
+			Payload struct {
+				Info struct {
+					Last struct {
+						In int64 `json:"input_tokens"`
+					} `json:"last_token_usage"`
+				} `json:"info"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(line, &ln) == nil && ln.Payload.Info.Last.In > 0 {
+			return ln.Payload.Info.Last.In, true
+		}
+	}
+	return 0, false
 }
 
 func kTokens(n int64) string {

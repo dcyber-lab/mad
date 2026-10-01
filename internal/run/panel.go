@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -35,12 +36,15 @@ var listPanes = tmux.ListPanes
 // paint draws the run's panel over the runner's pane: what the run is,
 // its flow, its roles, the steps taken, and what happened besides.
 func (x *runner) paint() {
-	if x.readUsage(false) {
+	// A run that is over costs nothing more: its usage is read once.
+	x.mu.Lock()
+	fresh := Active(x.f.Progress.Status) || x.lastUs.IsZero()
+	x.mu.Unlock()
+	if fresh && x.readUsage(false) {
 		x.save() // what it cost so far, for the sidebar too
 	}
-	panes, _ := listPanes()
 	x.mu.Lock()
-	p := x.panel(panes)
+	p := x.panel(x.panes)
 	x.mu.Unlock()
 
 	w, h, err := term.GetSize(int(os.Stdout.Fd()))
@@ -698,19 +702,32 @@ func (p *panel) ending() []string {
 }
 
 // events are the last n lines of the run's log that the steps above do
-// not already say: questions, waits, notes, compactions, failures.
+// not already say: questions, waits, notes, compactions, failures. The
+// log is read again only when it grew.
 func events(dir string, n int) []string {
-	var out []string
-	for _, l := range logTail(dir, 500) {
-		if strings.Contains(l, " starts the ") || strings.Contains(l, " finished the ") || strings.Contains(l, " starting the ") {
-			continue
+	logs.mu.Lock()
+	defer logs.mu.Unlock()
+	fi, err := os.Stat(logPath(dir))
+	if err != nil {
+		return nil
+	}
+	if fi.Size() != logs.size || dir != logs.dir {
+		logs.dir, logs.size, logs.lines = dir, fi.Size(), nil
+		for _, l := range logTail(dir, 500) {
+			if !strings.Contains(l, " starts the ") && !strings.Contains(l, " finished the ") && !strings.Contains(l, " starting the ") {
+				logs.lines = append(logs.lines, l)
+			}
 		}
-		out = append(out, l)
 	}
-	if len(out) > n {
-		out = out[len(out)-n:]
-	}
-	return out
+	return logs.lines[max(len(logs.lines)-n, 0):]
+}
+
+// logs is the run's log as events last read it.
+var logs struct {
+	mu    sync.Mutex
+	dir   string
+	size  int64
+	lines []string
 }
 
 func firstLine(s string) string {
