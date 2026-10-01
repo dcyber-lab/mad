@@ -183,14 +183,11 @@ func open(errOut io.Writer) error {
 
 	cwd, _ := os.Getwd()
 	if root, ok := paths.ProjectRoot(cwd); ok {
-		st, err := state.Load()
-		if err != nil {
+		if err := state.Update(func(st *state.State) error {
+			st.AddProject(root)
+			return nil
+		}); err != nil {
 			return err
-		}
-		if _, added := st.AddProject(root); added {
-			if err := st.Save(); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -231,16 +228,19 @@ func add(args []string, out io.Writer) error {
 		return fmt.Errorf("not a directory: %s", dir)
 	}
 	root, _ := paths.ProjectRoot(abs)
-	st, err := state.Load()
-	if err != nil {
+	added := false
+	if err := state.Update(func(st *state.State) error {
+		_, added = st.AddProject(root)
+		return nil
+	}); err != nil {
 		return err
 	}
-	if _, added := st.AddProject(root); !added {
+	if !added {
 		fmt.Fprintln(out, "already added:", paths.Short(root))
 		return nil
 	}
 	fmt.Fprintln(out, "added:", paths.Short(root))
-	return st.Save()
+	return nil
 }
 
 // hook takes a report from an agent to its kind's provider, and records

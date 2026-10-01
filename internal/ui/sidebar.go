@@ -115,7 +115,8 @@ func (r row) isProject() bool {
 type model struct {
 	st       *state.State
 	stMod    time.Time
-	stErr    error // the state file as last seen doesn't parse: not saved over
+	base     *state.State // st as last loaded or saved, to merge others' additions
+	stErr    error        // the state file as last seen doesn't parse: not saved over
 	kinds    []agent.Kind
 	trackers map[string]*status.Tracker
 	panes    map[string]tmux.Pane
@@ -241,6 +242,7 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 	m := &model{
 		st:            st,
 		stMod:         state.ModTime(),
+		base:          st.Clone(),
 		kinds:         kinds,
 		trackers:      map[string]*status.Tracker{},
 		panes:         map[string]tmux.Pane{},

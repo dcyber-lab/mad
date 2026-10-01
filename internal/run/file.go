@@ -80,13 +80,27 @@ type Progress struct {
 	Round   int    `json:"round"` // of review, from 1
 	Waiting string `json:"waiting,omitempty"`
 	// Review is what the last review found, for the next fix.
-	Review  string           `json:"review,omitempty"`
-	Entries []Entry          `json:"entries"`
-	Cost    float64          `json:"cost"`
-	Tokens  int64            `json:"tokens"`
-	Context map[string]int64 `json:"context,omitempty"` // role → tokens in its context
-	Started time.Time        `json:"started,omitzero"`
-	Ended   time.Time        `json:"ended,omitzero"`
+	Review string `json:"review,omitempty"`
+	// Rounds and Reviews are the round and findings of each review step
+	// by name, BackFrom the review that last sent the work back: a flow
+	// with two reviews counts and quotes each its own.
+	Rounds   map[string]int    `json:"rounds,omitempty"`
+	Reviews  map[string]string `json:"reviews,omitempty"`
+	BackFrom string            `json:"back_from,omitempty"`
+	Entries  []Entry           `json:"entries"`
+	Cost     float64           `json:"cost"`
+	Tokens   int64             `json:"tokens"`
+	Context  map[string]int64  `json:"context,omitempty"` // role → tokens in its context
+	Started  time.Time         `json:"started,omitzero"`
+	Ended    time.Time         `json:"ended,omitzero"`
+}
+
+// roundOf is the round of review step name, from 1.
+func (p *Progress) roundOf(name string) int {
+	if r := p.Rounds[name]; r > 0 {
+		return r
+	}
+	return 1
 }
 
 // File is run.json.

@@ -177,6 +177,7 @@ func (x *runner) work() error {
 		if pr.Round == 0 {
 			pr.Round = 1
 		}
+		x.migrateRounds()
 		pr.Status, pr.Waiting = Running, ""
 	})
 	// Every role up front, so what they ask at their start (a folder to
@@ -213,7 +214,7 @@ func (x *runner) work() error {
 			switch verdict(reply) {
 			case Changes:
 				x.mu.Lock()
-				round := pr.Round
+				round := pr.roundOf(s.Name)
 				x.mu.Unlock()
 				limit := s.MaxRounds
 				if limit == 0 {
@@ -224,7 +225,13 @@ func (x *runner) work() error {
 						return x.cancelled()
 					}
 				}
-				x.update(func() { pr.Round, pr.Review = pr.Round+1, body(reply) })
+				x.update(func() {
+					if pr.Rounds == nil {
+						pr.Rounds, pr.Reviews = map[string]int{}, map[string]string{}
+					}
+					pr.Round, pr.Review, pr.BackFrom = pr.Round+1, body(reply), s.Name
+					pr.Rounds[s.Name], pr.Reviews[s.Name] = round+1, body(reply)
+				})
 				next = x.flow.StepIndex(s.Back)
 			case "":
 				if err := x.hold("the review gave no VERDICT: read its reply, press c to take it as approved"); err != nil {
@@ -256,9 +263,10 @@ func (x *runner) step(s Step) (string, error) {
 	x.mu.Lock()
 	x.limitOK = false
 	n := len(pr.Entries)
-	resumed := n > 0 && pr.Entries[n-1].Step == s.Name && pr.Entries[n-1].Round == pr.Round && pr.Entries[n-1].Status == "running"
+	round, _ := x.roundOf(s)
+	resumed := n > 0 && pr.Entries[n-1].Step == s.Name && pr.Entries[n-1].Round == round && pr.Entries[n-1].Status == "running"
 	if !resumed {
-		pr.Entries = append(pr.Entries, Entry{Step: s.Name, Role: s.Role, Round: pr.Round, Status: "running", Start: now()})
+		pr.Entries = append(pr.Entries, Entry{Step: s.Name, Role: s.Role, Round: round, Status: "running", Start: now()})
 	}
 	idx := len(pr.Entries) - 1
 	sent := pr.Entries[idx].Sent
@@ -273,7 +281,7 @@ func (x *runner) step(s Step) (string, error) {
 	before := x.usageOf(a.ID)
 	text := x.prompt(s, role)
 	if !sent {
-		x.logf("%s starts the %s (round %d)", role.Label, s.Label, pr.Round)
+		x.logf("%s starts the %s (round %d)", role.Label, s.Label, round)
 		if err := x.compactIfBig(a, role); err != nil {
 			return "", err
 		}
@@ -288,7 +296,7 @@ func (x *runner) step(s Step) (string, error) {
 	}
 	x.readUsage(true)
 	after := x.usageOf(a.ID)
-	file := filepath.Join("steps", fmt.Sprintf("%02d-%s-%d.md", idx+1, s.Name, pr.Round))
+	file := filepath.Join("steps", fmt.Sprintf("%02d-%s-%d.md", idx+1, s.Name, round))
 	_ = os.MkdirAll(filepath.Join(x.dir, "steps"), 0o755)
 	_ = os.WriteFile(filepath.Join(x.dir, file), []byte(reply+"\n"), 0o644)
 	st := "done"
@@ -331,9 +339,8 @@ func firstFinding(reply string) string {
 
 // prompt is the message for step s.
 func (x *runner) prompt(s Step, role Role) string {
-	pr := &x.f.Progress
 	x.mu.Lock()
-	round, review := pr.Round, pr.Review
+	round, review := x.roundOf(s)
 	x.mu.Unlock()
 	tpl := s.Prompt
 	if round > 1 && (s.Review || x.backTarget(s.Name)) {
@@ -352,6 +359,40 @@ func (x *runner) prompt(s Step, role Role) string {
 		"task": x.f.Spec.Task, "run": RelDir(x.run), "base": x.f.Spec.Base,
 		"review": review, "round": strconv.Itoa(round - 1),
 	}) + x.flow.ending(s)
+}
+
+// roundOf is the round step s is in and the findings it works from: a
+// review's own, or for the step a review sends back to, those of the
+// review that sent it. The caller holds x.mu.
+func (x *runner) roundOf(s Step) (int, string) {
+	pr := &x.f.Progress
+	if s.Review {
+		return pr.roundOf(s.Name), pr.Reviews[s.Name]
+	}
+	if i := x.flow.StepIndex(pr.BackFrom); i >= 0 && x.flow.Steps[i].Back == s.Name {
+		return pr.roundOf(pr.BackFrom), pr.Reviews[pr.BackFrom]
+	}
+	return 1, ""
+}
+
+// migrateRounds gives a run from before reviews counted their own
+// rounds the count of the review it is at.
+func (x *runner) migrateRounds() {
+	pr := &x.f.Progress
+	if pr.Rounds != nil || pr.Round <= 1 {
+		return
+	}
+	cur := ""
+	if pr.Step >= 0 && pr.Step < len(x.flow.Steps) {
+		cur = x.flow.Steps[pr.Step].Name
+	}
+	for i, s := range x.flow.Steps {
+		if s.Review && (s.Back == cur || cur == "" || i >= pr.Step) {
+			pr.Rounds, pr.Reviews = map[string]int{s.Name: pr.Round}, map[string]string{s.Name: pr.Review}
+			pr.BackFrom = s.Name
+			return
+		}
+	}
 }
 
 // backTarget: a review sends its changes back to step name.

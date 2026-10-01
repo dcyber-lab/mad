@@ -11,6 +11,13 @@ import (
 	"github.com/dcyber-lab/mad/internal/paths"
 )
 
+// readOnlyTools are what a read only claude role runs without asking:
+// looking at the work.
+var readOnlyTools = strings.Join([]string{
+	"Read", "Grep", "Glob",
+	"Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git status:*)",
+}, ",")
+
 // builderTools are the commands an implementer runs without asking: tests
 // and builds of the common toolchains, and committing its work.
 var builderTools = strings.Join([]string{
@@ -186,16 +193,18 @@ func (r Role) Args(p string) []string {
 		return args
 	case "claude":
 		var args []string
-		switch p {
-		case PermAllowlist:
+		switch {
+		case r.ReadOnly:
+			// Whatever the run's permission: no edits, and no commands but
+			// reading the diff; the rest asks.
+			args = []string{"--permission-mode", "default", "--allowedTools", readOnlyTools,
+				"--disallowedTools", "Edit,Write,NotebookEdit"}
+		case p == PermAllowlist:
 			args = []string{"--permission-mode", "acceptEdits", "--allowedTools", builderTools}
-		case PermBypass:
+		case p == PermBypass:
 			args = []string{"--permission-mode", "bypassPermissions"}
 		default:
 			args = []string{"--permission-mode", "auto"}
-		}
-		if r.ReadOnly {
-			args = append(args, "--disallowedTools", "Edit,Write,NotebookEdit")
 		}
 		if r.Effort != "" {
 			args = append(args, "--effort", r.Effort)
@@ -215,7 +224,7 @@ func (r Role) Permits(p string) string {
 	case r.Kind != "claude":
 		return "as its own settings say"
 	case r.ReadOnly:
-		return "read only"
+		return "read only; asks before any command but git diff, log, show, status"
 	case p == PermAllowlist:
 		return "edits, tests, builds, commits"
 	case p == PermBypass:

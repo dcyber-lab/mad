@@ -145,14 +145,12 @@ func Create(o Options) (*state.Run, error) {
 	if err := drive.EnsureDeck(root); err != nil {
 		return nil, err
 	}
-	st, err := state.Load()
-	if err != nil {
-		return nil, err
-	}
-	p, _ := st.AddProject(root)
-	p.Runs = append(p.Runs, r)
-	p.Collapsed = false
-	if err := st.Save(); err != nil {
+	if err := state.Update(func(st *state.State) error {
+		p, _ := st.AddProject(root)
+		p.Runs = append(p.Runs, r)
+		p.Collapsed = false
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	if err := deck.StartRunner(r.ID); err != nil {

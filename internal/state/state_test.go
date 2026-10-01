@@ -1,10 +1,13 @@
 package state
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func useTempState(t *testing.T) {
@@ -192,5 +195,72 @@ func TestRunGroups(t *testing.T) {
 	}
 	if p.InRun(gone) || !p.InRun(b) {
 		t.Error("InRun")
+	}
+}
+
+func TestUpdateKeepsConcurrentWrites(t *testing.T) {
+	useTempState(t)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			err := Update(func(s *State) error {
+				p, _ := s.AddProject(fmt.Sprintf("/p/%d", i))
+				p.Agents = append(p.Agents, &Agent{ID: NewUUID(), Kind: "claude"})
+				return nil
+			})
+			if err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	s, _ := Load()
+	if len(s.Projects) != 20 {
+		t.Errorf("%d projects after 20 updates", len(s.Projects))
+	}
+}
+
+func TestSaveMergedKeepsOthersAdditions(t *testing.T) {
+	useTempState(t)
+	s := &State{}
+	p, _ := s.AddProject("/p")
+	_ = s.Save()
+	base, since := s.Clone(), ModTime()
+	time.Sleep(10 * time.Millisecond)
+	_ = Update(func(o *State) error {
+		o.FindProject("/p").Agents = append(o.FindProject("/p").Agents, &Agent{ID: "theirs", Kind: "claude"})
+		return nil
+	})
+	p.Collapsed = true
+	if err := s.SaveMerged(base, since); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load()
+	if _, a := got.FindAgent("theirs"); a == nil || !got.FindProject("/p").Collapsed {
+		t.Errorf("merged state lost an agent or my change: %+v", got.FindProject("/p"))
+	}
+}
+
+func TestSaveMergedKeepsProjectAddedBack(t *testing.T) {
+	useTempState(t)
+	s := &State{}
+	p, _ := s.AddProject("/p")
+	s.RemoveProject(p)
+	_ = s.Save()
+	base, since := s.Clone(), ModTime()
+	time.Sleep(10 * time.Millisecond)
+	_ = Update(func(o *State) error {
+		q, _ := o.AddProject("/p")
+		q.Runs = append(q.Runs, &Run{ID: "r1"})
+		return nil
+	})
+	if err := s.SaveMerged(base, since); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load()
+	if _, r := got.FindRun("r1"); r == nil || got.IsIgnored("/p") {
+		t.Errorf("project added back was lost: projects=%d ignored=%v", len(got.Projects), got.Ignored)
 	}
 }
