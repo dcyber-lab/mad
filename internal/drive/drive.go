@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
@@ -52,6 +54,14 @@ type AskingError struct{ Label, Question string }
 
 func (e *AskingError) Error() string {
 	return fmt.Sprintf("%s is waiting for you%s; answer it in the deck first", e.Label, describe(e.Question))
+}
+
+// DraftError: there is a message in the agent's prompt that you typed and
+// have not sent; mad's would be typed after it.
+type DraftError struct{ Label, Text string }
+
+func (e *DraftError) Error() string {
+	return fmt.Sprintf("%s has a message of yours not sent yet (%q); send or clear it first", e.Label, textutil.Truncate(e.Text, 40))
 }
 
 var (
@@ -350,7 +360,8 @@ func waitHook(id string, ok func(*status.Hook) bool) error {
 }
 
 // free returns nil when agent a, whose screen is watched for window, is
-// neither working nor waiting for an answer.
+// neither working nor waiting for an answer, and has nothing of yours in
+// its prompt.
 func free(k agent.Kind, a *state.Agent, paneID string, window time.Duration) error {
 	switch s, msg := settle(k, a.ID, paneID, window); s {
 	case status.Running:
@@ -358,7 +369,40 @@ func free(k agent.Kind, a *state.Agent, paneID string, window time.Duration) err
 	case status.Waiting:
 		return &AskingError{Label(a), msg}
 	}
+	if d := Draft(tmux.CaptureStyled(paneID)); d != "" {
+		return &DraftError{Label(a), d}
+	}
 	return nil
+}
+
+var (
+	ansiRe = regexp.MustCompile(`\x1b\[[0-9;:]*[A-Za-z]`)
+	// faintRe is text drawn faint, as agents draw their prompt's
+	// placeholder and suggestions.
+	faintRe = regexp.MustCompile(`\x1b\[(?:[0-9;]*;)?2m[^\x1b]*`)
+)
+
+// promptMarks start the line agents type into: claude's ❯, codex's ›.
+var promptMarks = []string{"❯", "›"}
+
+// Draft is what stands typed in the prompt of an agent's screen, given
+// with its colors (tmux.CaptureStyled): the text after the last prompt
+// mark, without what is drawn faint (a placeholder, a suggestion). The
+// last mark is the prompt's; ones above it are messages already sent.
+func Draft(styled string) string {
+	lines := strings.Split(styled, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		plain := strings.TrimSpace(strings.Trim(ansiRe.ReplaceAllString(lines[i], ""), "│ "))
+		for _, mark := range promptMarks {
+			if !strings.HasPrefix(plain, mark) {
+				continue
+			}
+			line := lines[i][strings.Index(lines[i], mark)+len(mark):]
+			line = faintRe.ReplaceAllString(line, "")
+			return strings.TrimSpace(strings.TrimRight(ansiRe.ReplaceAllString(line, ""), "│ "))
+		}
+	}
+	return ""
 }
 
 // up waits for agent a, started at since, to come up: its screen settles

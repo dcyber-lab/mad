@@ -162,6 +162,17 @@ func (x *runner) paint() {
 		add("")
 		add(pDim.Render(" on this run in the sidebar: f pull request or merge · v diff · x remove"))
 	}
+	if n := len(pr.Notes); n > 0 {
+		add("")
+		add(" " + pLabel.Render("from you") + pDim.Render(fmt.Sprintf("%d · %s/notes.md", n, RelDir(x.run))))
+		for _, note := range pr.Notes[max(n-3, 0):] {
+			who := "every role"
+			if note.Role != "" {
+				who = "the " + x.flow.RoleLabel(note.Role)
+			}
+			add("   " + pDim.Render(who+": ") + firstLine(note.Text))
+		}
+	}
 	if len(ctx) > 0 {
 		var parts []string
 		for _, r := range x.flow.Roles {

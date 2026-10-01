@@ -19,6 +19,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -243,6 +244,47 @@ func add(args []string, out io.Writer) error {
 	return nil
 }
 
+// noteTyped passes on what you typed into an agent of a run, rather than
+// its runner sent, as a note the run's other roles hear of.
+func noteTyped(id string, prompts []string) {
+	var typed []string
+	for _, p := range prompts {
+		if !madrun.FromRunner(p) && strings.TrimSpace(p) != "" {
+			typed = append(typed, p)
+		}
+	}
+	if len(typed) == 0 {
+		return
+	}
+	st, err := state.Load()
+	if err != nil {
+		return
+	}
+	p, a := st.FindAgent(id)
+	if a == nil || !p.InRun(a) {
+		return
+	}
+	_, r := st.FindRun(a.Run)
+	for _, text := range typed {
+		_ = madrun.AddNote(r, a.Role, text)
+	}
+}
+
+// outsideRun says why agent id may not make tool call t: the agent plays
+// a role in a run, and the call reaches out of the run's worktree.
+func outsideRun(id string, t *discover.Tool) string {
+	st, err := state.Load()
+	if err != nil {
+		return ""
+	}
+	p, a := st.FindAgent(id)
+	if a == nil || !p.InRun(a) {
+		return ""
+	}
+	_, r := st.FindRun(a.Run)
+	return madrun.Outside(r.Dir, p.Path, t)
+}
+
 // hook takes a report from an agent to its kind's provider, and records
 // the status and usage limits it carries. It never fails: a broken hook
 // must not disturb the agent that called it.
@@ -269,6 +311,14 @@ func hook(args []string, in io.Reader, out io.Writer, now time.Time) {
 	}
 	if id != "" && r.Hook != nil && status.WriteHook(id, r.Hook, now) == nil {
 		_ = poke.Send(poke.Hook + " " + id) // the sidebar shows it now
+	}
+	if id != "" && len(r.Prompts) > 0 {
+		noteTyped(id, r.Prompts)
+	}
+	if id != "" && r.Tool != nil && r.Tool.Deny != nil && (r.Tool.Path != "" || r.Tool.Command != "") {
+		if why := outsideRun(id, r.Tool); why != "" {
+			r.Tool.Deny(why)
+		}
 	}
 	if r.Quota != nil && status.WriteQuota(p.Kind(), *r.Quota, now) == nil {
 		_ = poke.Send(poke.Poll)

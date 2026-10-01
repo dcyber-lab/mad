@@ -163,6 +163,13 @@ func Capture(paneID string) string {
 	return out
 }
 
+// CaptureStyled returns the visible text of a pane with its colors and
+// attributes as escape sequences.
+func CaptureStyled(paneID string) string {
+	out, _ := Out("capture-pane", "-p", "-e", "-t", paneID)
+	return out
+}
+
 // PasteSettle is how long Paste waits between the text and enter: an agent
 // that gets enter in the same read as a paste can take it for part of it.
 var PasteSettle = 300 * time.Millisecond

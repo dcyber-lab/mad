@@ -365,3 +365,21 @@ func TestPending(t *testing.T) {
 		}
 	}
 }
+
+func TestDraft(t *testing.T) {
+	for screen, want := range map[string]string{
+		// claude: empty with its placeholder, typed, empty after a reply
+		"\x1b[39m❯ \x1b[2mTry \"fix typecheck errors\"\x1b[0m": "",
+		"\x1b[39m❯ my draft": "my draft",
+		"\x1b[38;5;239m\x1b[48;5;237m❯ \x1b[38;5;231mReply ok\x1b[39m\n\x1b[38;5;246m❯ \x1b[39m": "",
+		// codex: its placeholder, typed; a message sent above the prompt
+		"\x1b[1m›\x1b[0m \x1b[2mAsk Codex to do anything\x1b[0m":  "",
+		"› Round 1: reply\n…\n\x1b[1m›\x1b[0m half a thought":     "half a thought",
+		"› sent earlier\n\x1b[1m›\x1b[0m \x1b[2mAsk Codex\x1b[0m": "",
+		"no prompt here": "",
+	} {
+		if got := Draft(screen); got != want {
+			t.Errorf("Draft(%q) = %q, want %q", screen, got, want)
+		}
+	}
+}

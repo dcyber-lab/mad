@@ -74,6 +74,21 @@ type Report struct {
 	Hook  *status.Hook  // a change of status; nil when none
 	Quota *status.Quota // the account's usage limits; nil when not given
 	Turn  *status.Turn  // a turn ended, with its reply; nil otherwise
+	// Prompts are messages the agent was given: a prompt submitted, or a
+	// finished turn's.
+	Prompts []string
+	// Tool is a tool the agent is about to use, from an agent that lets
+	// its hook refuse one; nil otherwise.
+	Tool *Tool
+}
+
+// Tool is a call an agent is about to make to one of its tools.
+type Tool struct {
+	Name    string
+	Path    string // the file it writes, for a tool that edits one
+	Command string // for a tool that runs a shell command
+	// Deny refuses the call and tells the agent why.
+	Deny func(reason string)
 }
 
 // providers are the kinds mad follows, in the order they are scanned.

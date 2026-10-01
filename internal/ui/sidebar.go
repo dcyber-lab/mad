@@ -93,6 +93,7 @@ const (
 	modeWorktree   // naming the branch for a new worktree
 	modeRename     // naming an agent
 	modePickFinish // choosing how to wrap up a branch
+	modeNote       // writing a note to every role of a run
 )
 
 // row is one sidebar line: a project, a deck agent, an agent running in
@@ -169,6 +170,7 @@ type model struct {
 	wt          *state.Project      // project a worktree is being named for
 	wtBranch    string              // branch chosen; the kind menu comes next
 	renameID    string              // agent being named
+	noteRun     *state.Run          // run a note is being written for
 	fin         []deck.FinishAction // the finish menu being shown
 	finCursor   int
 	finTitle    string
@@ -408,6 +410,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyWorktree(msg)
 		case modeRename:
 			return m, m.keyRename(msg)
+		case modeNote:
+			return m, m.keyNote(msg)
 		case modePickFinish:
 			return m, m.keyPickFinish(msg)
 		default:
@@ -422,7 +426,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyNormal(msg)
 		}
 	}
-	if m.mode == modeAddProject || m.mode == modeWorktree || m.mode == modeRename {
+	if m.mode == modeAddProject || m.mode == modeWorktree || m.mode == modeRename || m.mode == modeNote {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd

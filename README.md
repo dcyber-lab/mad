@@ -150,6 +150,7 @@ is done.
 | `w`            | New agent in a new worktree (asks for a branch) |
 | `o`            | New run: a task handed through agents in roles |
 | `c`            | Continue the run where it waits for you        |
+| `m`            | Leave a note every role of the run hears       |
 | `v`            | Show / hide the changes of the agent or project |
 | `f`            | Finish the branch: push, open a PR, rebase, merge |
 | `a`            | Add a project                                  |
@@ -449,6 +450,24 @@ ended without a reply) its row says why, you get one notification, and
 it goes on by itself once that is settled, or when you press `c`. `x`
 cancels a run, and removes one that is over; its branch stays. When it
 is done, `f` on it opens a pull request or merges the branch.
+
+What you type into a role's agent counts for the whole run: the other
+roles hear it with their next step, as a note from you that holds over
+the task where they differ. `m` on a run leaves a note without picking an
+agent (`mad run note NAME TEXT` from a shell). mad never types over a
+message you have started in an agent; it waits until you send or clear
+it.
+
+Every role works in the run's worktree alone:
+
+- codex's sandbox lets it write there, and to the repository's git data
+  its commits need; nowhere else.
+- A claude role's hook refuses an edit outside the worktree, and a shell
+  command that names the main checkout. claude is told why, and carries
+  on in the worktree, whatever the permission mode.
+- A command can still reach further in ways no hook sees, so after each
+  step mad looks at the main checkout, and the run's log says when it
+  changed.
 
 Hand-over is through files, not conversations, so each role reads only
 its part. A claude role whose context passes 150k tokens is compacted

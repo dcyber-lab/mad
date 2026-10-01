@@ -137,7 +137,7 @@ func (m *model) listHeight() int {
 	switch m.mode {
 	case modePickKind:
 		footer = len(m.kinds) + 2 // rule, title, one line per kind
-	case modeWorktree, modeRename:
+	case modeWorktree, modeRename, modeNote:
 		footer = 3 // rule, title, input
 	case modePickFinish:
 		footer = len(m.fin) + 2

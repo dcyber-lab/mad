@@ -112,6 +112,8 @@ round (both for `again`).
   for fresh eyes.
 - Only claude and codex play roles. A codex `read_only` role works in
   codex's read-only sandbox; a claude one loses its edit tools.
+- Every role works in the run's worktree alone: mad refuses its edits
+  elsewhere. A step can't write to the main checkout or another repo.
 - No per-step budgets or timeouts: those are the run's.
 
 When the user wants one of these, say so plainly, and offer the closest

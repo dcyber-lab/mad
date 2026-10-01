@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
 )
 
@@ -212,6 +214,24 @@ func (r Role) Args(p string) []string {
 		return args
 	}
 	return nil
+}
+
+// WorktreeArgs are the flags role r's agent needs to work in worktree dir:
+// codex's sandbox lets it write in dir alone, and a commit there writes
+// to the repository's git directory as well.
+func (r Role) WorktreeArgs(dir string) []string {
+	if r.Kind != "codex" || r.ReadOnly {
+		return nil
+	}
+	paths := git.CommitPaths(dir)
+	if paths == nil {
+		return nil
+	}
+	quoted := make([]string, len(paths))
+	for i, p := range paths {
+		quoted[i] = strconv.Quote(p)
+	}
+	return []string{"-c", "sandbox_workspace_write.writable_roots=[" + strings.Join(quoted, ",") + "]"}
 }
 
 // Permits says in a few words what role r's agent may do.
