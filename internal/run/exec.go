@@ -117,6 +117,13 @@ func Exec(id string, out io.Writer) error {
 	if kinds == nil {
 		kinds = agent.Builtin()
 	}
+	// The panel's pane takes no keys: raw, a stray Ctrl-S can't stop its
+	// output (and with it the runner), nor Ctrl-C or Ctrl-Z end it.
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		if old, err := term.MakeRaw(int(os.Stdin.Fd())); err == nil {
+			defer term.Restore(int(os.Stdin.Fd()), old)
+		}
+	}
 	cfg, _ := deck.LoadConfig()
 	x := &runner{id: id, proj: p.Path, pname: p.Name, run: r, dir: dir, f: f, flow: flow, kinds: kinds,
 		ncfg: cfg.Notify, out: out, reader: transcript.NewReader(), usage: map[string]transcript.Info{}}
