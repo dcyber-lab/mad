@@ -344,6 +344,27 @@ func TestCommands(t *testing.T) {
 	if got := takeCommand(Dir(r)); got != "" {
 		t.Errorf("taken twice: %q", got)
 	}
+	// Two left between looks: neither is lost, and cancel counts.
+	for _, cmds := range [][]string{{Cancel, Continue}, {Continue, Cancel}} {
+		for _, c := range cmds {
+			if err := Command(r, c); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := takeCommand(Dir(r)); got != Cancel {
+			t.Errorf("%v took %q", cmds, got)
+		}
+		if got := takeCommand(Dir(r)); got != "" {
+			t.Errorf("%v left %q", cmds, got)
+		}
+	}
+	// One left by a mad from before, which wrote cmd anew each time.
+	if err := paths.WriteFileAtomic(filepath.Join(Dir(r), "cmd"), []byte(Continue)); err != nil {
+		t.Fatal(err)
+	}
+	if got := takeCommand(Dir(r)); got != Continue {
+		t.Errorf("took %q from cmd", got)
+	}
 }
 
 func TestPrompt(t *testing.T) {
