@@ -469,12 +469,17 @@ func (m *model) renderFooter() string {
 	switch m.mode {
 	case modeConfirm:
 		l1 = " " + stWaiting.Render(m.confirmMsg)
-	case modeWorktree, modeRename:
+	case modeWorktree, modeRename, modeNote:
 		title := " name"
-		if m.mode == modeWorktree {
+		switch {
+		case m.mode == modeWorktree:
 			title = " new worktree · " + m.wt.Name
-		} else if p, a := m.st.FindAgent(m.renameID); a != nil {
-			title += " · " + p.DisplayName(a)
+		case m.mode == modeNote:
+			title = " note to every role · run " + m.noteRun.Name
+		default:
+			if p, a := m.st.FindAgent(m.renameID); a != nil {
+				title += " · " + p.DisplayName(a)
+			}
 		}
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			title = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))

@@ -131,6 +131,7 @@ func Exec(id string, out io.Writer) error {
 	go func() {
 		defer close(painted)
 		for {
+			x.takeNotes()
 			x.paint()
 			select {
 			case <-stop:
@@ -259,6 +260,7 @@ func (x *runner) step(s Step) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("flow %s: step %s has no role %s", x.flow.Name, s.Name, s.Role)
 	}
+	x.takeNotes() // before this step counts as under way: they were said before it
 	pr := &x.f.Progress
 	x.mu.Lock()
 	x.limitOK = false
@@ -280,6 +282,7 @@ func (x *runner) step(s Step) (string, error) {
 	x.readUsage(true)
 	before := x.usageOf(a.ID)
 	text := x.prompt(s, role)
+	main := x.checkout()
 	if !sent {
 		x.logf("%s starts the %s (round %d)", role.Label, s.Label, round)
 		if err := x.compactIfBig(a, role); err != nil {
@@ -293,6 +296,10 @@ func (x *runner) step(s Step) (string, error) {
 	reply, err := x.converse(a, role, text)
 	if err != nil {
 		return "", err
+	}
+	if moved := changes(main, x.checkout()); len(moved) > 0 {
+		x.logf("the main checkout changed during the %s (%s): a run works in its worktree alone, so if this was not you, look at what the %s did",
+			s.Label, strings.Join(moved, ", "), role.Label)
 	}
 	x.readUsage(true)
 	after := x.usageOf(a.ID)
@@ -353,8 +360,14 @@ func (x *runner) prompt(s Step, role Role) string {
 			tpl = defaultFix
 		}
 	}
-	head := fmt.Sprintf("[mad run %s · %s] You are the %s of this run: agents take the task in turns, and hand it on through the files in %s/. Write in the language the task is written in.\n\n",
+	head := fmt.Sprintf("[mad run %s · %s] You are the %s of this run: agents take the task in turns, and hand it on through the files in %s/.",
 		x.run.Name, s.Name, role.Label, RelDir(x.run))
+	if x.run.Dir != x.proj {
+		head += fmt.Sprintf(" The run works in the worktree %s: change nothing outside it.", x.run.Dir)
+	}
+	head += " Write in the language the task is written in.\n\n"
+	x.takeNotes()
+	head += x.newNotes(role.Name)
 	return head + render(string(tpl), map[string]string{
 		"task": x.f.Spec.Task, "run": RelDir(x.run), "base": x.f.Spec.Base,
 		"review": review, "round": strconv.Itoa(round - 1),
@@ -426,7 +439,7 @@ func (x *runner) converse(a *state.Agent, role Role, text string) (string, error
 			return "", err
 		}
 		x.logf("%s answers: %s", other.Label, summary(answer))
-		text = fmt.Sprintf("The %s answers:\n%s\n\nGo on with your task, and end it as asked before.", other.Label, body(answer))
+		text = fmt.Sprintf("[mad run %s · answer] The %s answers:\n%s\n\nGo on with your task, and end it as asked before.", x.run.Name, other.Label, body(answer))
 		if err := x.send(a, role, text); err != nil {
 			return "", err
 		}
@@ -465,12 +478,15 @@ func (x *runner) ready(role Role) error {
 		}
 		err = drive.Ready(st, a, x.kinds)
 		var ask *drive.AskingError
+		var draft *drive.DraftError
 		switch {
 		case err == nil, errors.Is(err, drive.ErrBusy):
 			x.clearWait()
 			return nil
 		case errors.As(err, &ask):
 			x.waitFor(fmt.Sprintf("the %s asks you something at its start%s: select it in the sidebar, press enter", role.Label, paren(ask.Question)), waitAgent)
+		case errors.As(err, &draft):
+			x.waitFor(x.draftReason(role), waitAgent)
 		default:
 			return err
 		}
@@ -516,12 +532,15 @@ func (x *runner) send(a *state.Agent, role Role, text string) error {
 		}
 		err = drive.Send(st, cur, text, x.kinds)
 		var ask *drive.AskingError
+		var draft *drive.DraftError
 		switch {
 		case err == nil:
 			x.clearWait()
 			return nil
 		case errors.As(err, &ask):
 			x.waitFor(fmt.Sprintf("the %s asks you something%s: select it in the sidebar, press enter", role.Label, paren(ask.Question)), waitAgent)
+		case errors.As(err, &draft):
+			x.waitFor(x.draftReason(role), waitAgent)
 		case errors.Is(err, drive.ErrBusy):
 			// Running on its own (claude's Stop hooks, something you typed).
 		default:
@@ -529,6 +548,12 @@ func (x *runner) send(a *state.Agent, role Role, text string) error {
 		}
 		time.Sleep(retryEvery)
 	}
+}
+
+// draftReason: what you typed into role's prompt is in the way of the
+// run's next message, which waits for it to be sent or cleared.
+func (x *runner) draftReason(role Role) string {
+	return fmt.Sprintf("you have typed into the %s and not sent it: send it (the whole run will hear of it) or clear it, and the run goes on", role.Label)
 }
 
 // await waits for the end of a's turn and returns its reply. A turn that
@@ -706,7 +731,7 @@ func (x *runner) agent(role Role) (*state.Agent, error) {
 	}
 	x.logf("starting the %s (%s)", role.Label, roleAgent(x.kinds, role))
 	a, err := drive.Spawn(drive.Spec{Kind: role.Kind, Name: x.run.Name + "-" + role.Name, Dir: x.run.Dir,
-		Model: role.Model, Args: role.Args(x.f.Spec.Permission), Run: x.id, Role: role.Name}, x.kinds)
+		Model: role.Model, Args: append(role.Args(x.f.Spec.Permission), role.WorktreeArgs(x.run.Dir)...), Run: x.id, Role: role.Name}, x.kinds)
 	if a == nil {
 		return nil, err
 	}

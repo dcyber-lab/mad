@@ -118,6 +118,17 @@ func TestStatusAndWorktrees(t *testing.T) {
 	if ex, _ := os.ReadFile(filepath.Join(r, ".git", "info", "exclude")); !strings.Contains(string(ex), ".claude/worktrees/") {
 		t.Error("exclude not written")
 	}
+	// A commit in the worktree writes its own git directory and the
+	// repository's objects and refs; the main checkout has nothing to add.
+	common, _ := filepath.EvalSymlinks(filepath.Join(r, ".git"))
+	cp := CommitPaths(dir)
+	if len(cp) != 6 || !strings.HasPrefix(cp[0], filepath.Join(common, "worktrees")+"/") ||
+		cp[1] != filepath.Join(common, "objects") || cp[5] != filepath.Join(common, "packed-refs.lock") {
+		t.Errorf("commit paths: %q", cp)
+	}
+	if cp := CommitPaths(r); cp != nil {
+		t.Errorf("main checkout's commit paths: %q", cp)
+	}
 	// Adding again is a no-op; a second worktree for the same branch is
 	// what git refuses, so an existing dir must be reused.
 	if err := AddWorktree(r, "feat/x", dir); err != nil {

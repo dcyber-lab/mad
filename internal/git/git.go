@@ -153,6 +153,28 @@ func RemoveWorktree(repo, dir string) error {
 	return err
 }
 
+// CommitPaths are what a commit in worktree dir writes outside it: the
+// repository's objects, refs, reflogs and packed refs, and dir's own git
+// directory. A sandbox that lets an agent write in dir alone needs to let
+// it write these too, or it cannot commit. None for a checkout that is no
+// linked worktree, whose git directory is inside it.
+func CommitPaths(dir string) []string {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir", "--git-dir").Output()
+	if err != nil {
+		return nil
+	}
+	f := strings.Fields(string(out))
+	if len(f) != 2 || f[0] == f[1] {
+		return nil
+	}
+	common, own := f[0], f[1]
+	paths := []string{own}
+	for _, sub := range []string{"objects", "refs", "logs", "packed-refs", "packed-refs.lock"} {
+		paths = append(paths, filepath.Join(common, sub))
+	}
+	return paths
+}
+
 // excludeWorktrees keeps the worktrees directory out of git status without
 // touching the project's .gitignore: it goes in .git/info/exclude unless
 // something ignores it already.

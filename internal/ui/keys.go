@@ -65,6 +65,11 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return m.runCommand(run, madrun.Continue)
 		}
 		m.setFlash("select a run to continue")
+	case "m":
+		if run := runOf(r); ok && run != nil {
+			return m.openNote(run)
+		}
+		m.setFlash("select a run to leave a note for")
 	case "h", "left":
 		if run := runOf(r); ok && run != nil && !run.Collapsed {
 			run.Collapsed = true

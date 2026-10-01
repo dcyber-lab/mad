@@ -82,39 +82,75 @@ func (claude) Hook(args []string, stdin io.Reader, stdout io.Writer, now time.Ti
 	if len(args) > 0 && args[0] == "statusline" {
 		return Report{Quota: claudeStatusLine(stdin, stdout, now)}
 	}
-	h, turn := parseClaudeHook(stdin)
-	return Report{Hook: h, Turn: turn}
+	r := parseClaudeHook(stdin)
+	if r.Tool != nil {
+		r.Tool.Deny = func(reason string) { claudeDeny(stdout, reason) }
+	}
+	return r
 }
 
-// parseClaudeHook maps a hook event to a status; nil means the event
-// doesn't change it. Stop also ends a turn, with claude's last message.
-func parseClaudeHook(r io.Reader) (*status.Hook, *status.Turn) {
+// claudeEditTools are claude's tools that write a file.
+var claudeEditTools = map[string]bool{"Edit": true, "MultiEdit": true, "Write": true, "NotebookEdit": true}
+
+// parseClaudeHook maps a hook event to a status; no Hook means the event
+// doesn't change it. Stop also ends a turn, with claude's last message;
+// UserPromptSubmit says what was submitted; PreToolUse what file a tool
+// is to write or what command it is to run.
+func parseClaudeHook(r io.Reader) Report {
 	var ev struct {
-		Event            string `json:"hook_event_name"`
-		SessionID        string `json:"session_id"`
-		ToolName         string `json:"tool_name"`
+		Event     string `json:"hook_event_name"`
+		SessionID string `json:"session_id"`
+		Cwd       string `json:"cwd"`
+		ToolName  string `json:"tool_name"`
+		ToolInput struct {
+			FilePath     string `json:"file_path"`
+			NotebookPath string `json:"notebook_path"`
+			Command      string `json:"command"`
+		} `json:"tool_input"`
 		Message          string `json:"message"`
 		NotificationType string `json:"notification_type"`
 		LastMessage      string `json:"last_assistant_message"`
+		Prompt           string `json:"prompt"`
 	}
 	data, _ := io.ReadAll(r)
 	if json.Unmarshal(data, &ev) != nil {
-		return nil, nil
+		return Report{}
 	}
 	h := &status.Hook{Event: ev.Event, SessionID: ev.SessionID}
 	switch ev.Event {
 	case "Stop":
 		h.State = status.Idle
-		return h, &status.Turn{Reply: ev.LastMessage, SessionID: ev.SessionID}
+		return Report{Hook: h, Turn: &status.Turn{Reply: ev.LastMessage, SessionID: ev.SessionID}}
 	case "SessionStart":
 		h.State = status.Idle
-	case "UserPromptSubmit", "PostToolUse":
+	case "UserPromptSubmit":
+		h.State = status.Running
+		r := Report{Hook: h}
+		if ev.Prompt != "" {
+			r.Prompts = []string{ev.Prompt}
+		}
+		return r
+	case "PostToolUse":
 		h.State = status.Running
 	case "PreToolUse":
 		h.State = status.Running
 		if ev.ToolName == "AskUserQuestion" || ev.ToolName == "ExitPlanMode" {
 			h.State = status.Waiting
 		}
+		t := &Tool{Name: ev.ToolName}
+		switch {
+		case claudeEditTools[ev.ToolName]:
+			t.Path = ev.ToolInput.FilePath
+			if t.Path == "" {
+				t.Path = ev.ToolInput.NotebookPath
+			}
+			if t.Path != "" && !filepath.IsAbs(t.Path) && ev.Cwd != "" {
+				t.Path = filepath.Join(ev.Cwd, t.Path)
+			}
+		case ev.ToolName == "Bash":
+			t.Command = ev.ToolInput.Command
+		}
+		return Report{Hook: h, Tool: t}
 	case "Notification":
 		msg := strings.ToLower(ev.Message)
 		switch {
@@ -123,12 +159,23 @@ func parseClaudeHook(r io.Reader) (*status.Hook, *status.Turn) {
 		case ev.NotificationType == "idle_prompt", strings.Contains(msg, "waiting for your input"):
 			h.State = status.Idle
 		default:
-			return nil, nil
+			return Report{}
 		}
 	default:
-		return nil, nil
+		return Report{}
 	}
-	return h, nil
+	return Report{Hook: h}
+}
+
+// claudeDeny answers a PreToolUse hook with a refusal: claude does not
+// make the call, and reads the reason.
+func claudeDeny(w io.Writer, reason string) {
+	data, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName":            "PreToolUse",
+		"permissionDecision":       "deny",
+		"permissionDecisionReason": reason,
+	}})
+	fmt.Fprintln(w, string(data))
 }
 
 // claudeStatusLine reads the usage limits off the status line JSON, then

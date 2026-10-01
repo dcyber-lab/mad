@@ -91,8 +91,13 @@ type Progress struct {
 	Cost     float64           `json:"cost"`
 	Tokens   int64             `json:"tokens"`
 	Context  map[string]int64  `json:"context,omitempty"` // role → tokens in its context
-	Started  time.Time         `json:"started,omitzero"`
-	Ended    time.Time         `json:"ended,omitzero"`
+	// Notes are what you said in the run; NotesRead how far the inbox
+	// was read, Heard how many notes each role has been told.
+	Notes     []Note         `json:"notes,omitempty"`
+	NotesRead int64          `json:"notes_read,omitempty"`
+	Heard     map[string]int `json:"heard,omitempty"`
+	Started   time.Time      `json:"started,omitzero"`
+	Ended     time.Time      `json:"ended,omitzero"`
 }
 
 // roundOf is the round of review step name, from 1.

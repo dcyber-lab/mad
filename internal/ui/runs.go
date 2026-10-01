@@ -170,6 +170,38 @@ func (m *model) openRunForm(p *state.Project) tea.Cmd {
 	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
 
+// openNote asks for a note to every role of run.
+func (m *model) openNote(run *state.Run) tea.Cmd {
+	m.mode, m.noteRun, m.flash = modeNote, run, ""
+	m.input.Prompt = "note › "
+	m.input.Placeholder = "every role hears it from its next step"
+	m.input.SetValue("")
+	return m.input.Focus()
+}
+
+func (m *model) keyNote(k tea.KeyMsg) tea.Cmd {
+	switch k.String() {
+	case "esc", "ctrl+c":
+		m.mode = modeNormal
+		m.input.Blur()
+		return nil
+	case "enter":
+		if text := strings.TrimSpace(m.input.Value()); text != "" {
+			if err := madrun.AddNote(m.noteRun, "", text); err != nil {
+				m.setFlash(err.Error())
+			} else {
+				m.setFlash("noted for run " + m.noteRun.Name)
+			}
+		}
+		m.mode = modeNormal
+		m.input.Blur()
+		return nil
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(k)
+	return cmd
+}
+
 func (m *model) runCommand(run *state.Run, cmd string) tea.Cmd {
 	if err := madrun.Command(run, cmd); err != nil {
 		m.setFlash(err.Error())

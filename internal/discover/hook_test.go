@@ -3,6 +3,7 @@ package discover
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/status"
 )
@@ -28,7 +29,7 @@ func TestClaudeHook(t *testing.T) {
 		{`not json`, ""},
 	}
 	for _, c := range cases {
-		h, _ := parseClaudeHook(strings.NewReader(c.in))
+		h := parseClaudeHook(strings.NewReader(c.in)).Hook
 		switch {
 		case c.state == "" && h != nil:
 			t.Errorf("%s: want ignored, got %+v", c.in, h)
@@ -36,21 +37,42 @@ func TestClaudeHook(t *testing.T) {
 			t.Errorf("%s: got %+v, want state %s", c.in, h, c.state)
 		}
 	}
-	if h, _ := parseClaudeHook(strings.NewReader(`{"hook_event_name":"SessionStart","session_id":"s1"}`)); h.SessionID != "s1" {
+	if h := parseClaudeHook(strings.NewReader(`{"hook_event_name":"SessionStart","session_id":"s1"}`)).Hook; h.SessionID != "s1" {
 		t.Errorf("session id not kept: %+v", h)
 	}
 	// Only Stop ends a turn, with what claude said last.
-	if _, turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"PostToolUse"}`)); turn != nil {
+	if turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"PostToolUse"}`)).Turn; turn != nil {
 		t.Errorf("PostToolUse ended a turn: %+v", turn)
 	}
-	_, turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"Stop","session_id":"s1","last_assistant_message":"pong"}`))
+	turn := parseClaudeHook(strings.NewReader(`{"hook_event_name":"Stop","session_id":"s1","last_assistant_message":"pong"}`)).Turn
 	if turn == nil || turn.Reply != "pong" || turn.SessionID != "s1" {
 		t.Errorf("Stop: turn = %+v", turn)
+	}
+	if p := parseClaudeHook(strings.NewReader(`{"hook_event_name":"UserPromptSubmit","prompt":"F2 is fine"}`)).Prompts; len(p) != 1 || p[0] != "F2 is fine" {
+		t.Errorf("prompt = %q", p)
+	}
+	// What a tool is about to write or run, and how claude is told no.
+	tool := parseClaudeHook(strings.NewReader(`{"hook_event_name":"PreToolUse","cwd":"/w","tool_name":"Write","tool_input":{"file_path":"a/b.go"}}`)).Tool
+	if tool == nil || tool.Name != "Write" || tool.Path != "/w/a/b.go" {
+		t.Errorf("Write: %+v", tool)
+	}
+	tool = parseClaudeHook(strings.NewReader(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"go test ./..."}}`)).Tool
+	if tool == nil || tool.Command != "go test ./..." || tool.Path != "" {
+		t.Errorf("Bash: %+v", tool)
+	}
+	var out strings.Builder
+	r := claude{}.Hook(nil, strings.NewReader(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"/x"}}`), &out, time.Now())
+	r.Tool.Deny("not here")
+	if want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"not here"}}`; strings.TrimSpace(out.String()) != want {
+		t.Errorf("deny = %s", out.String())
 	}
 }
 
 func TestCodexHook(t *testing.T) {
-	h, turn := parseCodexHook(`{"type":"agent-turn-complete","thread-id":"t-1","last-assistant-message":"done"}`)
+	h, turn, inputs := parseCodexHook(`{"type":"agent-turn-complete","thread-id":"t-1","last-assistant-message":"done","input-messages":["[mad run x · review] …","also check y"]}`)
+	if len(inputs) != 2 || inputs[1] != "also check y" {
+		t.Errorf("inputs = %q", inputs)
+	}
 	if h == nil || h.State != status.Idle || h.SessionID != "t-1" {
 		t.Errorf("got %+v", h)
 	}
@@ -58,7 +80,7 @@ func TestCodexHook(t *testing.T) {
 		t.Errorf("turn = %+v", turn)
 	}
 	for _, in := range []string{`{"type":"other"}`, `nope`} {
-		if h, turn := parseCodexHook(in); h != nil || turn != nil {
+		if h, turn, _ := parseCodexHook(in); h != nil || turn != nil {
 			t.Errorf("%s: want nil, got %+v %+v", in, h, turn)
 		}
 	}

@@ -181,11 +181,11 @@ func (codex) Hook(args []string, _ io.Reader, _ io.Writer, _ time.Time) Report {
 	if argv, _ := codexUserNotify(); argv != nil {
 		runNotify(argv, payload)
 	}
-	h, turn := parseCodexHook(payload)
+	h, turn, prompts := parseCodexHook(payload)
 	if h != nil && !codexThread(h.SessionID) {
 		return Report{}
 	}
-	return Report{Hook: h, Turn: turn}
+	return Report{Hook: h, Turn: turn, Prompts: prompts}
 }
 
 // codexThread reports whether thread id is a conversation of its own:
@@ -210,19 +210,20 @@ var runNotify = func(argv []string, payload string) {
 	}
 }
 
-// parseCodexHook maps a notify payload to a status, and the turn it ended
-// with codex's last message.
-func parseCodexHook(payload string) (*status.Hook, *status.Turn) {
+// parseCodexHook maps a notify payload to a status, the turn it ended
+// with codex's last message, and the messages the turn was given.
+func parseCodexHook(payload string) (*status.Hook, *status.Turn, []string) {
 	var ev struct {
-		Type        string `json:"type"`
-		ThreadID    string `json:"thread-id"`
-		LastMessage string `json:"last-assistant-message"`
+		Type        string   `json:"type"`
+		ThreadID    string   `json:"thread-id"`
+		LastMessage string   `json:"last-assistant-message"`
+		Inputs      []string `json:"input-messages"`
 	}
 	if json.Unmarshal([]byte(payload), &ev) != nil || ev.Type != "agent-turn-complete" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	return &status.Hook{State: status.Idle, Event: ev.Type, SessionID: ev.ThreadID},
-		&status.Turn{Reply: ev.LastMessage, SessionID: ev.ThreadID}
+		&status.Turn{Reply: ev.LastMessage, SessionID: ev.ThreadID}, ev.Inputs
 }
 
 type codexHead struct {

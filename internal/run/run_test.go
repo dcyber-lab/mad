@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -48,6 +50,10 @@ func fakeRole() {
 			return
 		}
 		report(status.Running, "UserPromptSubmit")
+		if f, err := os.OpenFile(filepath.Join(os.Getenv("XDG_STATE_HOME"), "fake-messages"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			fmt.Fprintf(f, "=== %s\n%s\n", id, msg)
+			f.Close()
+		}
 		var reply string
 		switch {
 		case strings.Contains(msg, "· question]"):
@@ -176,6 +182,14 @@ func TestRunEndToEnd(t *testing.T) {
 			t.Fatalf("never stopped at the gate: %+v", f.Progress)
 		}
 	}
+	// A note for every role, and something typed into the designer:
+	// the implementer hears of both, the designer of neither again.
+	if err := AddNote(r, "", "keep the change small"); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddNote(r, "designer", "the old format stays"); err != nil {
+		t.Fatal(err)
+	}
 	if err := Command(r, Continue); err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +226,32 @@ func TestRunEndToEnd(t *testing.T) {
 	if err != nil || !strings.Contains(string(reply), "VERDICT: APPROVE") {
 		t.Errorf("last reply kept as %q: %v", reply, err)
 	}
+	sent, _ := os.ReadFile(filepath.Join(os.Getenv("XDG_STATE_HOME"), "fake-messages"))
+	msgs := strings.Split(string(sent), "=== ")
+	var implement, question string
+	for _, m := range msgs {
+		switch {
+		case strings.Contains(m, "· implement]") && implement == "":
+			implement = m
+		case strings.Contains(m, "· question]"):
+			question = m
+		}
+	}
+	if !strings.Contains(implement, "- keep the change small") || !strings.Contains(implement, "- (told the designer, at the design) the old format stays") {
+		t.Errorf("the implementer was not told the notes:\n%s", implement)
+	}
+	if n := strings.Count(string(sent), "keep the change small"); n != 2 { // to the implementer and the reviewer, once each
+		t.Errorf("the note went out %d times", n)
+	}
+	if strings.Contains(question, "the old format stays") {
+		t.Errorf("the designer was told what was typed into it:\n%s", question)
+	}
+	if notes, _ := os.ReadFile(filepath.Join(Dir(r), "notes.md")); !strings.Contains(string(notes), "keep the change small") {
+		t.Errorf("notes.md = %q", notes)
+	}
 	log, _ := os.ReadFile(logPath(Dir(r)))
-	for _, want := range []string{"implementer asks the designer: keep the old format?", "designer answers: Yes, keep the old format.", "run done"} {
+	for _, want := range []string{"implementer asks the designer: keep the old format?", "designer answers: Yes, keep the old format.",
+		"your note: keep the change small", "you told the designer: the old format stays", "run done"} {
 		if !strings.Contains(string(log), want) {
 			t.Errorf("log lacks %q:\n%s", want, log)
 		}
@@ -585,5 +623,82 @@ func TestReviewRoundsAreOwn(t *testing.T) {
 	}
 	if r, _ := x.roundOf(f.Steps[2]); r != 1 {
 		t.Errorf("audit round = %d, want 1", r)
+	}
+}
+
+func TestOutside(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".claude", "worktrees", "run-x")
+	os.MkdirAll(dir, 0o755)
+	t.Setenv("HOME", filepath.Dir(root))
+	home := "~/" + filepath.Base(root)
+	cases := []struct {
+		tool discover.Tool
+		out  bool
+	}{
+		{discover.Tool{Name: "Write", Path: filepath.Join(dir, "a/b.go")}, false},
+		{discover.Tool{Name: "Edit", Path: filepath.Join(root, "b.go")}, true},
+		{discover.Tool{Name: "Edit", Path: filepath.Join(root, ".claude", "worktrees", "run-y", "b.go")}, true},
+		{discover.Tool{Name: "Write", Path: filepath.Join(dir, "..", "run-y", "b.go")}, true},
+		{discover.Tool{Name: "Write", Path: "/tmp/scratch.txt"}, false},
+		{discover.Tool{Name: "Write", Path: filepath.Join(os.TempDir(), "x", "y")}, false},
+		{discover.Tool{Name: "Bash", Command: "go test ./..."}, false},
+		{discover.Tool{Name: "Bash", Command: "cd " + dir + " && go test ./..."}, false},
+		{discover.Tool{Name: "Bash", Command: "cat '" + dir + "/go.mod'"}, false},
+		{discover.Tool{Name: "Bash", Command: "ls " + root + "-other"}, false},
+		{discover.Tool{Name: "Bash", Command: "cd " + root + " && git commit -am x"}, true},
+		{discover.Tool{Name: "Bash", Command: "git -C " + root + "/ status"}, true},
+		{discover.Tool{Name: "Bash", Command: "sed -i '' s/a/b/ " + root + "/main.go"}, true},
+		{discover.Tool{Name: "Bash", Command: "cp x " + dir + "-old/"}, true},
+		{discover.Tool{Name: "Bash", Command: "cd " + home + "/.claude/worktrees/run-x"}, false},
+		{discover.Tool{Name: "Bash", Command: "cd " + home}, true},
+	}
+	for _, c := range cases {
+		why := Outside(dir, root, &c.tool)
+		if (why != "") != c.out {
+			t.Errorf("%s %s%s: %q", c.tool.Name, c.tool.Path, c.tool.Command, why)
+		}
+	}
+	if why := Outside(root, root, &discover.Tool{Name: "Bash", Command: "ls " + root}); why != "" {
+		t.Errorf("a run in the main checkout: %q", why)
+	}
+}
+
+func TestCheckoutChanges(t *testing.T) {
+	before := "# branch.oid aaa\n# branch.head main\n1 .M N... 100644 100644 100644 h1 h1 a.go\n? notes.txt\n"
+	if got := changes(before, before); got != nil {
+		t.Errorf("no change: %q", got)
+	}
+	after := "# branch.oid bbb\n# branch.head main\n1 .M N... 100644 100644 100644 h1 h1 a.go\n1 .M N... 100644 100644 100644 h2 h2 b dir/c.go\n"
+	if got := strings.Join(changes(before, after), ", "); got != "HEAD, b dir/c.go, notes.txt" {
+		t.Errorf("changes = %q", got)
+	}
+	if got := changes("", after); got != nil {
+		t.Errorf("unknown before: %q", got)
+	}
+}
+
+func TestWorktreeArgs(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	dir := filepath.Join(root, ".claude", "worktrees", "run-x")
+	if err := git.AddWorktree(root, "run/x", dir); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(Role{Kind: "codex"}.WorktreeArgs(dir), " ")
+	if !strings.HasPrefix(got, "-c sandbox_workspace_write.writable_roots=[") || !strings.Contains(got, `/.git/objects"`) {
+		t.Errorf("codex builder: %s", got)
+	}
+	for _, r := range []Role{{Kind: "codex", ReadOnly: true}, {Kind: "claude"}} {
+		if args := r.WorktreeArgs(dir); args != nil {
+			t.Errorf("%+v: %q", r, args)
+		}
+	}
+	if args := (Role{Kind: "codex"}).WorktreeArgs(root); args != nil {
+		t.Errorf("main checkout: %q", args)
 	}
 }

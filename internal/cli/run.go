@@ -22,6 +22,8 @@ const runUsage = `usage:
                            start a run without the form; prints its id
   mad run ls               list runs
   mad run flow ...         list, show and check flows ("mad run flow" for more)
+  mad run note RUN TEXT    a note every role of the run hears from its next
+                           step on (m); what you type into its agents is one
   mad run continue RUN     go on where the run waits for you (c)
   mad run cancel RUN       stop the run; its branch and files stay (x)
   mad run exec RUN         the runner (runs in its own pane)
@@ -65,6 +67,20 @@ func runCmd(args []string, stdio IO) error {
 		return runList(stdio)
 	case "flow":
 		return flowCmd(args, stdio)
+	case "note":
+		if len(args) < 2 {
+			fmt.Fprint(stdio.Err, runUsage)
+			return errUsage
+		}
+		st, err := state.Load()
+		if err != nil {
+			return err
+		}
+		r := findRun(st, args[0])
+		if r == nil {
+			return fmt.Errorf("no run %q (mad run ls)", args[0])
+		}
+		return madrun.AddNote(r, "", strings.Join(args[1:], " "))
 	case "continue", "cancel", "exec":
 		if len(args) != 1 {
 			fmt.Fprint(stdio.Err, runUsage)

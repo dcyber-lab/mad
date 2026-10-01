@@ -343,6 +343,66 @@ func TestStatusLineHook(t *testing.T) {
 	}
 }
 
+// What you type into an agent of a run is a note to the run; what its
+// runner sends is not.
+func TestHookNotesTyped(t *testing.T) {
+	home := isolate(t)
+	st := &state.State{}
+	p, _ := st.AddProject(home)
+	p.Runs = []*state.Run{{ID: "r1", Name: "audit", Dir: home}}
+	p.Agents = []*state.Agent{{ID: "a1", Kind: "claude", Run: "r1", Role: "judge"}, {ID: "a2", Kind: "claude"}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Join(home, ".mad", "runs", "audit"), 0o755)
+	t.Setenv("MAD_AGENT_ID", "a1")
+	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"[mad run audit · triage] You are the judge"}`, "hook", "claude")
+	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"F2 is not a real issue"}`, "hook", "claude")
+	t.Setenv("MAD_AGENT_ID", "a2") // in no run
+	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"unrelated"}`, "hook", "claude")
+	data, _ := os.ReadFile(filepath.Join(home, ".mad", "runs", "audit", "inbox.jsonl"))
+	if got := string(data); strings.Count(got, "\n") != 1 || !strings.Contains(got, `"role":"judge"`) || !strings.Contains(got, "F2 is not a real issue") {
+		t.Errorf("inbox = %q", got)
+	}
+	if code, _, _ := run(t, "", "run", "note", "audit", "keep", "it", "small"); code != 0 {
+		t.Fatal("run note failed")
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, ".mad", "runs", "audit", "inbox.jsonl")); !strings.Contains(string(data), `"text":"keep it small"`) {
+		t.Errorf("inbox after mad run note = %q", data)
+	}
+}
+
+func TestHookKeepsRunsInWorktrees(t *testing.T) {
+	home := isolate(t)
+	wt := filepath.Join(home, ".claude", "worktrees", "run-audit")
+	os.MkdirAll(wt, 0o755)
+	st := &state.State{}
+	p, _ := st.AddProject(home)
+	p.Runs = []*state.Run{{ID: "r1", Name: "audit", Dir: wt}}
+	p.Agents = []*state.Agent{{ID: "a1", Kind: "claude", Dir: wt, Run: "r1", Role: "builder"}, {ID: "a2", Kind: "claude", Dir: home}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path string) string {
+		_, out, _ := run(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+path+`"}}`, "hook", "claude")
+		return out
+	}
+	t.Setenv("MAD_AGENT_ID", "a1")
+	if out := write(filepath.Join(home, "main.go")); !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, wt) {
+		t.Errorf("write to the main checkout: %q", out)
+	}
+	if out := write(filepath.Join(wt, "main.go")); out != "" {
+		t.Errorf("write in the worktree: %q", out)
+	}
+	if _, out, _ := run(t, `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"cd `+home+` && git commit -am x"}}`, "hook", "claude"); !strings.Contains(out, "deny") {
+		t.Errorf("command in the main checkout: %q", out)
+	}
+	t.Setenv("MAD_AGENT_ID", "a2") // in no run
+	if out := write(filepath.Join(home, "main.go")); out != "" {
+		t.Errorf("an agent in no run was refused: %q", out)
+	}
+}
+
 func TestFlowAndSkillCommands(t *testing.T) {
 	home := isolate(t)
 	if code, out, _ := run(t, "", "run", "flow", "show", "design-impl-review"); code != 0 || !strings.Contains(out, `"name": "design-impl-review"`) {
