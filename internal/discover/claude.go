@@ -33,9 +33,9 @@ func (claude) Kind() string { return "claude" }
 
 const claudeSettingsName = "claude-settings.json"
 
-// claudeSettingsPath is mad's settings file for claude, next to mad's
-// config.
-func claudeSettingsPath() string { return filepath.Join(paths.ConfigDir(), claudeSettingsName) }
+// claudeSettingsPath is mad's settings file for claude, with the other
+// files mad generates.
+func claudeSettingsPath() string { return filepath.Join(paths.GenDir(), claudeSettingsName) }
 
 // claudeSettings holds hooks that report status to `mad hook claude`, and
 // with quota set a status line command that records the plan's usage
@@ -70,10 +70,10 @@ func (claude) Placeholders() map[string]string {
 	return map[string]string{"{claude_settings}": paths.ShellQuote(claudeSettingsPath())}
 }
 
-// Launched: mad's settings file is on the command line (whichever config
-// dir the deck that started it uses).
+// Launched: mad's settings file is on the command line (wherever the deck
+// that started it keeps it).
 func (claude) Launched(cmdline string) bool {
-	return strings.Contains(cmdline, "/mad/"+claudeSettingsName)
+	return strings.Contains(cmdline, "/"+claudeSettingsName)
 }
 
 // Hook takes a hook event on stdin, or with "statusline" the JSON claude

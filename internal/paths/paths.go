@@ -28,19 +28,46 @@ func ConfigDir() string {
 	return filepath.Join(Home(), ".config", "mad")
 }
 
-// StateDir is $XDG_STATE_HOME/mad, defaulting to ~/.local/state/mad.
+// StateDir is $XDG_STATE_HOME/mad, defaulting to ~/.local/state/mad. A
+// deck of its own (MAD_SOCKET, see OtherDeck) keeps its state in
+// decks/<socket> under it.
 func StateDir() string {
+	dir := filepath.Join(Home(), ".local", "state", "mad")
 	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
-		return filepath.Join(d, "mad")
+		dir = filepath.Join(d, "mad")
 	}
-	return filepath.Join(Home(), ".local", "state", "mad")
+	if d := OtherDeck(); d != "" {
+		dir = filepath.Join(dir, "decks", d)
+	}
+	return dir
+}
+
+// OtherDeck names a deck run next to the usual one, such as a build being
+// tried next to the mad you use: MAD_SOCKET puts it on a tmux server of
+// its own (see tmux.Socket), and it keeps its state and generated files
+// apart, sharing only config.json and agents.json. "" is the usual deck.
+func OtherDeck() string {
+	if s := os.Getenv("MAD_SOCKET"); s != "mad" {
+		return s
+	}
+	return ""
+}
+
+// GenDir holds the files mad generates for tmux and the agents to read
+// (tmux.conf, claude's settings). They name the mad binary to call back,
+// so another deck has its own in its state directory.
+func GenDir() string {
+	if OtherDeck() != "" {
+		return StateDir()
+	}
+	return ConfigDir()
 }
 
 func StateFile() string        { return filepath.Join(StateDir(), "state.json") }
 func StatusDir() string        { return filepath.Join(StateDir(), "status") }
 func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width") }
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
-func TmuxConf() string         { return filepath.Join(ConfigDir(), "tmux.conf") }
+func TmuxConf() string         { return filepath.Join(GenDir(), "tmux.conf") }
 func AgentsConfig() string     { return filepath.Join(ConfigDir(), "agents.json") }
 func ConfigFile() string       { return filepath.Join(ConfigDir(), "config.json") }
 

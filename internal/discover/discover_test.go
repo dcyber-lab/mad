@@ -216,8 +216,9 @@ func TestParsePS(t *testing.T) {
 	out := strings.Join([]string{
 		"  101 ttys001  claude",
 		"  102 ttys002  /usr/local/bin/codex resume t-9",
-		"  103 ttys003  claude --settings /u/.config/mad/claude-settings.json --session-id x", // mad's own
-		"  111 ttys006  codex -c notify=[\"/u/bin/mad\",\"hook\",\"codex\"]",                  // mad's own
+		"  103 ttys003  claude --settings /u/.config/mad/claude-settings.json --session-id x",     // mad's own
+		"  112 ttys007  claude --settings /u/.local/state/mad/decks/mad-pre/claude-settings.json", // another deck's
+		"  111 ttys006  codex -c notify=[\"/u/bin/mad\",\"hook\",\"codex\"]",                      // mad's own
 		"  104 ttys004  claude",       // a deck pane
 		"  105 pts/1    codex",        // linux terminal
 		"  106 ttys005  vim notes.md", // not an agent

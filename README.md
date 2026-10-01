@@ -452,7 +452,11 @@ picker, sessions open elsewhere) is Go code, one file per agent in
 | `~/.local/state/mad/sidebar.log`      | Sidebar crash log (the sidebar auto-restarts)     |
 | `~/.local/state/mad/sidebar-mad.sock` | How `mad hook`, `switch`, `jump` and `diff` reach the sidebar |
 
-`XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected.
+`XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected. `MAD_SOCKET=name`
+runs a deck of its own on that tmux server, such as a build tried next to
+the mad you use: its state and the generated files go in
+`~/.local/state/mad/decks/<name>/`, and only `config.json` and
+`agents.json` are shared.
 
 ## Known limitations
 
