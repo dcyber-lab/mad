@@ -33,11 +33,12 @@ import (
 
 // Timing, replaceable in tests.
 var (
-	retryEvery = 2 * time.Second // a role that can't take a message yet is tried again
-	paintEvery = time.Second     // the panel is redrawn
-	usageEvery = 3 * time.Second // what the roles cost is read again
-	compactFor = 5 * time.Minute // a compaction has this long to finish
-	maxAsks    = 5               // questions a step may ask
+	retryEvery = 2 * time.Second        // a role that can't take a message yet is tried again
+	paintEvery = time.Second            // the panel is redrawn
+	frameEvery = 125 * time.Millisecond // and while a step it shows is at work, this often
+	usageEvery = 3 * time.Second        // what the roles cost is read again
+	compactFor = 5 * time.Minute        // a compaction has this long to finish
+	maxAsks    = 5                      // questions a step may ask
 	now        = time.Now
 )
 
@@ -138,14 +139,22 @@ func Exec(id string, out io.Writer) error {
 	painted := make(chan struct{})
 	go func() {
 		defer close(painted)
+		var noted time.Time
 		for {
-			x.takeNotes()
+			if time.Since(noted) >= paintEvery {
+				x.takeNotes()
+				noted = time.Now()
+			}
 			x.paint()
+			every := paintEvery
+			if x.moving() {
+				every = frameEvery
+			}
 			select {
 			case <-stop:
 				return
 			case <-resized:
-			case <-time.After(paintEvery):
+			case <-time.After(every):
 			}
 		}
 	}()
@@ -171,6 +180,19 @@ func Exec(id string, out io.Writer) error {
 		}
 	}
 	return err
+}
+
+// moving: the panel shows a step at work, so what is at work on it
+// moves. Only while the panel is on stage: off it, nothing is to be seen.
+func (x *runner) moving() bool {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	pr := &x.f.Progress
+	if pr.Status != Running || len(pr.Entries) == 0 || pr.Entries[len(pr.Entries)-1].Status != "running" {
+		return false
+	}
+	pane, ok := tmux.FindPane(x.panes, deck.RunnerID(x.id))
+	return ok && tmux.OnStage(pane)
 }
 
 func (x *runner) work() error {

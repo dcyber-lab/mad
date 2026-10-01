@@ -69,15 +69,20 @@ func gauge(frac float64, width int, style lipgloss.Style) string {
 }
 
 // span is a bar width cells long, filled from frac from to frac to: a
-// step's place in the whole run.
-func span(from, to float64, width int, style lipgloss.Style) string {
+// step's place in the whole run. With frame ≥ 0 a light runs along the
+// filled part, frame by frame: the step is at work.
+func span(from, to float64, width int, style lipgloss.Style, frame int) string {
 	a := min(max(int(from*float64(width)), 0), width-1)
 	n := min(int((to-from)*float64(width)+0.5), width-a)
-	fill := strings.Repeat("█", n)
-	if n == 0 {
-		fill, n = "▏", 1
+	fill := style.Render(strings.Repeat("█", n))
+	switch {
+	case n == 0:
+		fill, n = style.Render("▏"), 1
+	case frame >= 0 && n > 1:
+		at := frame % n
+		fill = style.Render(strings.Repeat("█", at)) + pLit.Render("█") + style.Render(strings.Repeat("█", n-at-1))
 	}
-	return strings.Repeat(" ", a) + style.Render(fill) + strings.Repeat(" ", width-a-n)
+	return strings.Repeat(" ", a) + fill + strings.Repeat(" ", width-a-n)
 }
 
 // share is frac of w, at most most cells, or 0 when that is under least:

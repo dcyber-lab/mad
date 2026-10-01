@@ -798,3 +798,41 @@ func BenchmarkPanel(b *testing.B) {
 		p.render(190, 55)
 	}
 }
+
+// What is at work moves from frame to frame; a role whose agent has no
+// session to read yet is there all the same.
+func TestPanelMoves(t *testing.T) {
+	f, _ := FlowByName("", "")
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	x := &runner{run: &state.Run{Name: "audit"}, flow: f, f: &File{Spec: Spec{Budget: 10, Compact: 150_000}, Progress: Progress{
+		Status: Running, Step: 1, Round: 1, Started: at,
+		Entries: []Entry{{Step: "design", Role: "designer", Round: 1, Status: "done", Start: at, End: at.Add(time.Minute)},
+			{Step: "implement", Role: "builder", Round: 1, Status: "running", Start: at.Add(time.Minute)}}}},
+		usage: map[string]transcript.Info{}, roleOf: map[string]string{"a1": "designer", "a2": "builder"}}
+	now = func() time.Time { return at.Add(90 * time.Second) }
+	defer func() { now = time.Now }()
+	p := x.panel(nil)
+	draw := func(frame int) string {
+		p.frame = frame
+		return strings.Join(p.render(120, 40), "\n")
+	}
+	one, two := draw(0), draw(1)
+	if one == two {
+		t.Error("the panel stood still between frames")
+	}
+	plain := ansi.Strip(two)
+	for _, want := range []string{"⠙ implementation", "⠙ working", "─•▶"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("frame 1 lacks %q:\n%s", want, plain)
+		}
+	}
+	if strings.Count(plain, "not started") != 1 {
+		t.Errorf("only the reviewer is yet to start:\n%s", plain)
+	}
+	// Waiting for you, nothing turns.
+	x.f.Progress.Status = Waiting
+	p = x.panel(nil)
+	if a, b := draw(0), draw(1); a != b {
+		t.Error("a waiting run's panel moves")
+	}
+}
