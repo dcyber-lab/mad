@@ -67,6 +67,7 @@ type Entry struct {
 	Round  int       `json:"round"`
 	Status string    `json:"status"` // running, done, approve, changes
 	Sent   bool      `json:"sent,omitempty"`
+	Digest string    `json:"digest,omitempty"` // of the message sent, see drive.Took
 	Result string    `json:"result,omitempty"` // what it came to, one line
 	Reply  string    `json:"reply,omitempty"`  // the file with the whole reply
 	Start  time.Time `json:"start"`

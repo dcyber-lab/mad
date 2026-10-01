@@ -10,6 +10,8 @@
 package drive
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -270,7 +272,7 @@ func Send(st *state.State, a *state.Agent, text string, kinds []agent.Kind) erro
 		return err
 	}
 	sent := now()
-	if err := status.MarkSent(a.ID, sent); err != nil {
+	if err := status.MarkSent(a.ID, sent, Digest(text)); err != nil {
 		return err
 	}
 	if err := tmux.Paste(pane.ID, text); err != nil {
@@ -290,6 +292,32 @@ func Send(st *state.State, a *state.Agent, text string, kinds []agent.Kind) erro
 		}
 	}
 	return nil
+}
+
+// Digest stands for a message as Send marks it sent (see Took).
+func Digest(text string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(text)))
+	return hex.EncodeToString(sum[:8])
+}
+
+// Took reports whether agent a took the message with digest d, typed in
+// at or after since. It has to be the last message typed into a, and for
+// an agent that reports what it does, one it went to work on: it ended a
+// turn since, or reported working or asking since. A message typed in but
+// never taken (the agent restarted under it) is not taken.
+func Took(a *state.Agent, kinds []agent.Kind, d string, since time.Time) bool {
+	sent := status.SentAt(a.ID)
+	if d == "" || status.SentDigest(a.ID) != d || sent.Before(since) {
+		return false
+	}
+	if !agent.ByName(kinds, a.Kind).Hooks {
+		return true // typed in, and nothing will say more
+	}
+	if t := status.ReadTurn(a.ID); t != nil && !t.At.Before(sent) {
+		return true
+	}
+	h := status.ReadHook(a.ID)
+	return h != nil && !h.At.Before(sent) && (h.State == status.Running || h.State == status.Waiting)
 }
 
 // Ready returns nil when agent a can take a message: resumed off stage if

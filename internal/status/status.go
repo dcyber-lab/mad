@@ -81,6 +81,7 @@ func RemoveHook(id string) {
 	os.Remove(HookPath(id))
 	os.Remove(turnPath(id))
 	os.Remove(sentPath(id))
+	os.Remove(digestPath(id))
 }
 
 // Turn is how the agent's last turn ended, stored as StatusDir/<agent
@@ -120,12 +121,28 @@ func ReadTurn(id string) *Turn {
 	return &t
 }
 
-func sentPath(id string) string { return filepath.Join(paths.StatusDir(), id+".sent") }
+func sentPath(id string) string   { return filepath.Join(paths.StatusDir(), id+".sent") }
+func digestPath(id string) string { return filepath.Join(paths.StatusDir(), id+".sent-digest") }
 
 // MarkSent notes that mad typed a message into agent id at now, so a
-// turn that ended before then is not its answer.
-func MarkSent(id string, now time.Time) error {
+// turn that ended before then is not its answer. digest stands for the
+// message, to tell later whether it was the one that went in; it is kept
+// apart from the time, which a mad from before reads alone.
+func MarkSent(id string, now time.Time, digest string) error {
+	if err := paths.WriteFileAtomic(digestPath(id), []byte(digest)); err != nil {
+		return err
+	}
 	return paths.WriteFileAtomic(sentPath(id), []byte(now.Format(time.RFC3339Nano)))
+}
+
+// SentDigest is the digest of the message mad last typed into agent id;
+// "" if none is known.
+func SentDigest(id string) string {
+	data, err := os.ReadFile(digestPath(id))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // SentAt is when mad last typed a message into agent id; zero if never.

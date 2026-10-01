@@ -316,10 +316,23 @@ func (x *runner) step(s Step) (string, error) {
 	text := x.prompt(s, role)
 	main := x.checkout()
 	if !sent {
+		// Stopped between sending the step and noting it: the agent is
+		// not to get it twice.
+		x.mu.Lock()
+		e := pr.Entries[idx]
+		x.mu.Unlock()
+		if drive.Took(a, x.kinds, e.Digest, e.Start) {
+			x.logf("%s had the %s already", role.Label, s.Label)
+			x.update(func() { pr.Entries[idx].Sent = true })
+			sent = true
+		}
+	}
+	if !sent {
 		x.logf("%s starts the %s (round %d)", role.Label, s.Label, round)
 		if err := x.compactIfBig(a, role); err != nil {
 			return "", err
 		}
+		x.update(func() { pr.Entries[idx].Digest = drive.Digest(text) })
 		if err := x.send(a, role, text); err != nil {
 			return "", err
 		}

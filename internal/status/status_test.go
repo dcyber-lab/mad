@@ -41,7 +41,7 @@ func TestTurnAndSentFiles(t *testing.T) {
 	if err := WriteTurn("a", &Turn{Reply: "done\nfor now", SessionID: "s1"}, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := MarkSent("a", now.Add(time.Second)); err != nil {
+	if err := MarkSent("a", now.Add(time.Second), "d1"); err != nil {
 		t.Fatal(err)
 	}
 	if tr := ReadTurn("a"); tr == nil || tr.Reply != "done\nfor now" || tr.SessionID != "s1" || !tr.At.Equal(now) {
@@ -50,8 +50,11 @@ func TestTurnAndSentFiles(t *testing.T) {
 	if got := SentAt("a"); !got.Equal(now.Add(time.Second)) {
 		t.Errorf("sent at %v", got)
 	}
+	if got := SentDigest("a"); got != "d1" {
+		t.Errorf("sent digest %q", got)
+	}
 	RemoveHook("a")
-	if ReadTurn("a") != nil || !SentAt("a").IsZero() {
+	if ReadTurn("a") != nil || !SentAt("a").IsZero() || SentDigest("a") != "" {
 		t.Error("RemoveHook left the turn or the sent mark")
 	}
 }
