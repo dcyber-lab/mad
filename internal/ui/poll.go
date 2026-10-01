@@ -208,7 +208,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 			m.stErr = err
 			m.configError(fmt.Errorf("%w; changes aren't saved until it's fixed", err))
 		} else {
-			m.st, m.stErr = st, nil
+			m.st, m.stErr, m.base = st, nil, st.Clone()
 			m.rebuildRows()
 		}
 	}

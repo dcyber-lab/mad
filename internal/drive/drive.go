@@ -163,18 +163,6 @@ func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 			return nil, err
 		}
 	}
-	st, err := state.Load()
-	if err != nil {
-		return nil, err
-	}
-	p, _ := st.AddProject(root)
-	if s.Name != "" {
-		for _, b := range p.Agents {
-			if b.Name == s.Name {
-				return nil, fmt.Errorf("%s already has an agent named %q", p.Name, s.Name)
-			}
-		}
-	}
 	a := &state.Agent{ID: state.NewUUID(), Kind: s.Kind, Name: s.Name, Args: s.Args, Run: s.Run, Role: s.Role, CreatedAt: now()}
 	if s.Model != "" {
 		a.Args = append([]string{"--model", s.Model}, a.Args...)
@@ -185,14 +173,25 @@ func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 	if err := EnsureDeck(root); err != nil {
 		return nil, err
 	}
-	p.Agents = append(p.Agents, a)
-	if err := st.Save(); err != nil {
+	var p *state.Project
+	err := state.Update(func(st *state.State) error {
+		p, _ = st.AddProject(root)
+		if s.Name != "" {
+			for _, b := range p.Agents {
+				if b.Name == s.Name {
+					return fmt.Errorf("%s already has an agent named %q", p.Name, s.Name)
+				}
+			}
+		}
+		p.Agents = append(p.Agents, a)
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 	started := now()
 	if err := deck.StartAgent(p, a, false, kinds); err != nil {
-		st.RemoveAgent(a.ID)
-		_ = st.Save()
+		_ = state.Update(func(st *state.State) error { st.RemoveAgent(a.ID); return nil })
 		return nil, err
 	}
 	_ = poke.Send(poke.Poll) // the sidebar lists it now

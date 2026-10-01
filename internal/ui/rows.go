@@ -189,10 +189,11 @@ func (m *model) save() {
 		m.configError(fmt.Errorf("%w; changes aren't saved until it's fixed", m.stErr))
 		return
 	}
-	if err := m.st.Save(); err != nil {
+	if err := m.st.SaveMerged(m.base, m.stMod); err != nil {
 		m.setFlash(err.Error())
 	}
 	m.stMod = state.ModTime()
+	m.base = m.st.Clone()
 }
 
 func (m *model) setFlash(s string) {

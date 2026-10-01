@@ -316,6 +316,9 @@ func TestPrompt(t *testing.T) {
 		}
 	}
 	x.f.Progress.Round, x.f.Progress.Review = 2, "- a.go has no tests"
+	x.f.Progress.Rounds = map[string]int{"review": 2}
+	x.f.Progress.Reviews = map[string]string{"review": "- a.go has no tests"}
+	x.f.Progress.BackFrom = "review"
 	fix := x.prompt(f.Steps[1], role("builder"))
 	if !strings.Contains(fix, "Review findings (round 1)") || !strings.Contains(fix, "- a.go has no tests") ||
 		!strings.Contains(fix, "you may ask the designer (@designer)") {
@@ -364,13 +367,23 @@ func TestRoleArgs(t *testing.T) {
 		{designer, PermAuto, "--permission-mode auto"},
 		{builder, PermAllowlist, "--permission-mode acceptEdits --allowedTools " + builderTools},
 		{builder, PermBypass, "--permission-mode bypassPermissions"},
-		{Role{Kind: "claude", ReadOnly: true}, PermAuto, "--permission-mode auto --disallowedTools Edit,Write,NotebookEdit"},
 		{reviewer, PermBypass, "-s read-only -a never -c check_for_update_on_startup=false"},
 		{Role{Kind: "codex"}, PermAuto, "-s workspace-write -a never -c check_for_update_on_startup=false"},
 	}
 	for _, c := range cases {
 		if got := join(c.role, c.perm); got != c.want {
 			t.Errorf("%s/%s %s: %q, want %q", c.role.Kind, c.role.Name, c.perm, got, c.want)
+		}
+	}
+	for _, perm := range []string{PermAuto, PermAllowlist, PermBypass} {
+		got := join(Role{Kind: "claude", ReadOnly: true}, perm)
+		for _, bad := range []string{"bypassPermissions", "git commit", "acceptEdits"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("read only claude under %s has %q: %s", perm, bad, got)
+			}
+		}
+		if !strings.Contains(got, "--disallowedTools Edit,Write,NotebookEdit") || !strings.Contains(got, "Bash(git diff:*)") {
+			t.Errorf("read only claude under %s: %s", perm, got)
 		}
 	}
 	g := f.WithAgents(map[string]string{"reviewer": "claude:opus"})
@@ -550,5 +563,27 @@ func TestSkillExamples(t *testing.T) {
 		if _, err := Parse([]byte(b[1])); err != nil {
 			t.Errorf("example does not check: %v\n%s", err, b[1])
 		}
+	}
+}
+
+// Two reviews each count their own rounds and quote their own findings.
+func TestReviewRoundsAreOwn(t *testing.T) {
+	f := Flow{Name: "two", Roles: []Role{{Name: "a", Kind: "claude"}, {Name: "r", Kind: "claude", ReadOnly: true}},
+		Steps: []Step{
+			{Name: "impl", Role: "a", Prompt: "do it"},
+			{Name: "review", Role: "r", Review: true, Back: "impl", Prompt: "first look"},
+			{Name: "audit", Role: "r", Review: true, Back: "impl", MaxRounds: 2, Prompt: "audit only"},
+		}}
+	x := &runner{run: &state.Run{Name: "t"}, flow: f,
+		f: &File{Spec: Spec{Task: "t", Base: "b"}, Progress: Progress{Round: 2,
+			Rounds: map[string]int{"review": 2}, Reviews: map[string]string{"review": "- from review"}, BackFrom: "review"}}}
+	if p := x.prompt(f.Steps[2], f.Roles[1]); !strings.Contains(p, "audit only") {
+		t.Errorf("audit's first run lost its prompt:\n%s", p)
+	}
+	if p := x.prompt(f.Steps[0], f.Roles[0]); !strings.Contains(p, "- from review") {
+		t.Errorf("fix lacks the review that sent it back:\n%s", p)
+	}
+	if r, _ := x.roundOf(f.Steps[2]); r != 1 {
+		t.Errorf("audit round = %d, want 1", r)
 	}
 }
