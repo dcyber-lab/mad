@@ -67,7 +67,9 @@ var listMark = regexp.MustCompile(`^([-*+]\s+|\d+[.)]\s+|#+\s*|>\s*)`)
 // summary is one line saying what a reply came to.
 func summary(reply string) string {
 	for _, l := range strings.Split(body(reply), "\n") {
-		if l = strings.TrimSpace(listMark.ReplaceAllString(strings.TrimSpace(l), "")); l != "" {
+		l = strings.TrimSpace(listMark.ReplaceAllString(strings.TrimSpace(l), ""))
+		// Not a verdict said at the top as well: it is shown anyway.
+		if l = strings.TrimLeft(plain(verdictRe.ReplaceAllString(plain(l), "")), " 。.:：,，-—"); l != "" {
 			return l
 		}
 	}
