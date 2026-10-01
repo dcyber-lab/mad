@@ -2,6 +2,7 @@ package run
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
@@ -305,7 +308,7 @@ func TestControlLines(t *testing.T) {
 			t.Errorf("body(%q) = %q", c.reply, b)
 		}
 	}
-	if s := summary("- **first** finding\nmore\nVERDICT: CHANGES"); s != "**first** finding" {
+	if s := summary("- **first** finding\nmore\nVERDICT: CHANGES"); s != "first finding" {
 		t.Errorf("summary = %q", s)
 	}
 }
@@ -450,11 +453,31 @@ func TestPanel(t *testing.T) {
 			}}},
 		diff: []string{" a.go | 2 +-", " 1 file changed"}}
 	x.dir = filepath.Join(t.TempDir(), "run")
+	listPanes = func() ([]tmux.Pane, error) { return nil, errors.New("no deck") }
+	defer func() { listPanes = tmux.ListPanes }()
 	x.paint()
-	for _, want := range []string{"run audit", "✓ approved after 1 round of changes · 23m", "implementation", "↺", "CHANGES: no tests", "40k tok", "changes", "f pull request or merge"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("panel lacks %q:\n%s", want, out.String())
+	got := ansi.Strip(out.String())
+	for _, want := range []string{"run audit", "✓ approved after 1 round of changes · 23m", "implementation", "↺", "CHANGES: no tests", "40k", "changes", "f pull request or merge",
+		"╭", "──▶", "▲", "CHANGES ×1", "$1.25 of $10.00", "not started"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("panel lacks %q:\n%s", want, got)
 		}
+	}
+	// Narrow, the flow is one line.
+	p := x.panel(nil)
+	if lines := p.flowLines(30); len(lines) != 1 || !strings.Contains(ansi.Strip(lines[0]), "↺ review → implementation ×1") {
+		t.Errorf("narrow flow: %q", lines)
+	}
+	// What a step came to, without markdown or its verdict twice.
+	if got := ansi.Strip(result("CHANGES: **VERDICT: CHANGES。** F1 still has a gap")); got != "CHANGES: F1 still has a gap" {
+		t.Errorf("result = %q", got)
+	}
+	if got := summary("**VERDICT: CHANGES。**\n- F1 is open\nVERDICT: CHANGES"); got != "F1 is open" {
+		t.Errorf("summary = %q", got)
+	}
+	rf := &File{Spec: Spec{Flow: f.Name, Definition: &f}, Progress: x.f.Progress}
+	if got := RoleLine(rf, "reviewer"); got != "review · CHANGES: no tests" {
+		t.Errorf("role line = %q", got)
 	}
 }
 

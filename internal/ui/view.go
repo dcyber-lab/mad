@@ -340,8 +340,8 @@ func (m *model) agentTitle(p *state.Project, a *state.Agent) string {
 }
 
 // detailSegs is the line under an agent: the tool it is calling while it
-// runs or waits, else the prompt it is on or was last given. Under a
-// run, where the run stands.
+// runs or waits, else the prompt it is on or was last given, or for a
+// role of a run its last step. Under a run, where the run stands.
 func (m *model) detailSegs(r row) []seg {
 	if r.run != nil {
 		return m.runDetailSegs(r.run)
@@ -354,6 +354,12 @@ func (m *model) detailSegs(r row) []seg {
 	}
 	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) && info.Tool != "" {
 		return []seg{indent, {stDim, info.Tool}}
+	}
+	// A role's prompts are mad's: what it last came to says more.
+	if f := m.runs[a.Run]; f != nil && inRun(r.proj, a) {
+		if line := madrun.RoleLine(f, a.Role); line != "" {
+			return []seg{indent, {stFaint, line}}
+		}
 	}
 	return []seg{indent, {stFaint, info.Prompt}}
 }
