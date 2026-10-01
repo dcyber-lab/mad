@@ -29,6 +29,8 @@ func (m *model) openCmd(a *state.Agent) tea.Cmd {
 
 func (m *model) activate(r row) tea.Cmd {
 	switch {
+	case r.run != nil:
+		return m.openRun(r.run)
 	case r.agent != nil:
 		return m.openCmd(r.agent)
 	case r.ext != nil:
@@ -153,6 +155,9 @@ func (m *model) diffFromStage() tea.Cmd {
 }
 
 func (m *model) diffRow(r row) tea.Cmd {
+	if r.run != nil {
+		return m.toggleDiff("", r.run.Dir, false)
+	}
 	if r.agent != nil {
 		return m.toggleDiff(r.agent.ID, r.proj.Dir(r.agent), false)
 	}
@@ -184,7 +189,10 @@ func (m *model) taskCleanup(panes []tmux.Pane) tea.Cmd {
 func (m *model) openFinish(r row) {
 	c := deck.Checkout{Dir: r.proj.Path, Repo: r.proj.Path}
 	m.finID = ""
-	if r.agent != nil {
+	switch {
+	case r.run != nil:
+		c.Dir = r.run.Dir
+	case r.agent != nil:
 		c.Dir, m.finID = r.proj.Dir(r.agent), r.agent.ID
 	}
 	info, ok := m.gitInfo[c.Dir]

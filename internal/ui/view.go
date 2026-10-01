@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
@@ -84,7 +85,8 @@ func (m *model) sidebarView() string {
 			lines++
 		}
 		if rh > 1 && lines < h {
-			b.WriteString(layout(m.width, bg, m.detailSegs(m.rows[i].agent), nil) + "\n")
+			detail := m.detailSegs(m.rows[i])
+			b.WriteString(layout(m.width, bg, detail, nil) + "\n")
 			next++
 			lines++
 		}
@@ -117,6 +119,11 @@ func (m *model) renderHeader() string {
 	add := func(n int, st lipgloss.Style, icon string) {
 		if n > 0 {
 			right = append(right, seg{st, fmt.Sprintf("%s%d", icon, n)}, seg{stPlain, "  "})
+		}
+	}
+	for _, f := range m.runs {
+		if f.Progress.Status == madrun.Waiting {
+			waiting++
 		}
 	}
 	add(waiting, stWaiting, "?")
@@ -230,6 +237,8 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 			[]seg{{stFaint, r.ext.TTY + " "}}
 	case r.desktop > 0:
 		return []seg{{stPlain, "     "}, {stDim, "◇ "}, {stDim, fmt.Sprintf("%d in desktop", r.desktop)}}, nil
+	case r.run != nil:
+		return m.runRowSegs(r)
 	case r.agent == nil:
 		arrow := "▾ "
 		right = []seg{{stFaint, fmt.Sprintf("%d ", len(r.proj.Agents))}}
@@ -259,6 +268,9 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 	if r.num <= 9 {
 		num = fmt.Sprint(r.num)
 	}
+	if inRun(r.proj, a) {
+		attention = false // its run says when it is done
+	}
 	icon, label := m.statusGlyph(st, attention)
 	k := agent.ByName(m.kinds, a.Kind)
 	kind := seg{stName.Bold(true), textutil.PadRight(k.Glyph(), m.iconWidth())}
@@ -266,7 +278,13 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		kind.st = kind.st.Foreground(lipgloss.Color(k.Color))
 	}
 	left = []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, kind, {stPlain, " "}, name}
-	if a.Dir != "" && a.Dir != r.proj.Path {
+	if inRun(r.proj, a) {
+		// A role: indented under its run, with the model it was given.
+		left = append(left[:2], append([]seg{{stPlain, "  "}}, left[2:]...)...)
+		if model := modelOf(a); model != "" {
+			left = append(left, seg{stFaint, " " + model})
+		}
+	} else if a.Dir != "" && a.Dir != r.proj.Path {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
@@ -301,6 +319,17 @@ func (m *model) iconWidth() int {
 // agentTitle is what an agent's row is called: the name the user gave it,
 // else its conversation's title, else claude / claude#2.
 func (m *model) agentTitle(p *state.Project, a *state.Agent) string {
+	if inRun(p, a) {
+		if f := m.runs[a.Run]; f != nil {
+			return f.Flow().RoleLabel(a.Role)
+		}
+		for _, f := range madrun.Builtin() { // until its run is read
+			if r, ok := f.Role(a.Role); ok {
+				return r.Label
+			}
+		}
+		return a.Role
+	}
 	if a.Name != "" {
 		return a.Name
 	}
@@ -311,10 +340,18 @@ func (m *model) agentTitle(p *state.Project, a *state.Agent) string {
 }
 
 // detailSegs is the line under an agent: the tool it is calling while it
-// runs or waits, else the prompt it is on or was last given.
-func (m *model) detailSegs(a *state.Agent) []seg {
+// runs or waits, else the prompt it is on or was last given. Under a
+// run, where the run stands.
+func (m *model) detailSegs(r row) []seg {
+	if r.run != nil {
+		return m.runDetailSegs(r.run)
+	}
+	a := r.agent
 	info := m.transcripts[a.ID]
 	indent := seg{stPlain, "         "}
+	if inRun(r.proj, a) {
+		indent.s += "  "
+	}
 	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) && info.Tool != "" {
 		return []seg{indent, {stDim, info.Tool}}
 	}
@@ -470,7 +507,7 @@ func (m *model) renderFooter() string {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}
 		l2 = hints("w", "worktree", "v", "diff", "f", "finish")
-		l3 = hints("t", "name", "x", "kill", "q", "detach")
+		l3 = hints("o", "run", "t", "name", "x", "kill", "q", "detach")
 	}
 	return rule(m.width) + "\n" + l1 + "\n" + l2 + "\n" + l3
 }
@@ -489,4 +526,25 @@ func (m *model) menu(title string, items []string, cursor int) string {
 		b.WriteString(layout(m.width, bg, []seg{{stPlain, "  "}, {stKey, fmt.Sprint(i + 1)}, {stPlain, " "}, {stName, it}}, nil) + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// modelOf is the model an agent was started with (--model) and its
+// effort (claude's --effort, codex's model_reasoning_effort), if given.
+func modelOf(a *state.Agent) string {
+	var model, effort string
+	for i, arg := range a.Args {
+		next := ""
+		if i+1 < len(a.Args) {
+			next = a.Args[i+1]
+		}
+		switch {
+		case arg == "--model":
+			model = next
+		case arg == "--effort":
+			effort = next
+		case arg == "-c" && strings.HasPrefix(next, "model_reasoning_effort="):
+			effort = strings.TrimPrefix(next, "model_reasoning_effort=")
+		}
+	}
+	return strings.TrimSpace(model + " " + effort)
 }

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,10 +43,11 @@ func (codex) Setup(bool) error { return nil }
 const codexNotify = `"hook","codex"]`
 
 // Placeholders: {codex_notify} points codex's notify at `mad hook codex`,
-// unless the user set a notify command of their own.
+// which runs the user's own notify command afterwards. One mad can't run
+// in their stead (see codexUserNotify) is left alone instead.
 func (codex) Placeholders() map[string]string {
 	notify := ""
-	if !codexHasOwnNotify() {
+	if argv, set := codexUserNotify(); !set || argv != nil {
 		notify = `-c ` + paths.ShellQuote(`notify=["`+paths.Self()+`",`+codexNotify)
 	}
 	return map[string]string{"{codex_notify}": notify}
@@ -54,43 +57,172 @@ func (codex) Placeholders() map[string]string {
 // level or in a profile.
 var notifyKey = regexp.MustCompile(`^\s*notify\s*=`)
 
-// codexHasOwnNotify reports whether the user set codex's notify command
-// themselves. codex takes a single notify command, so mad's -c notify=...
-// would replace theirs; mad leaves it alone then, and codex resumes fall
-// back to the most recent session because mad never learns the thread id.
-func codexHasOwnNotify() bool {
+// codexUserNotify is the notify command the user set in codex's
+// config.toml. codex takes a single notify command, so mad's -c notify=...
+// replaces theirs, and `mad hook codex` runs it in its stead. set says a
+// notify is there at all; argv is nil when it is one mad can't run for
+// them: set in a profile (which one applies is up to codex), written in a
+// way this reader doesn't follow, or mad's own.
+func codexUserNotify() (argv []string, set bool) {
 	data, err := os.ReadFile(filepath.Join(codexHome(), "config.toml"))
 	if err != nil {
-		return false
+		return nil, false
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if notifyKey.MatchString(line) {
-			return true
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "[") {
+			// A table: no top-level keys follow.
+			for _, l := range lines[i:] {
+				if notifyKey.MatchString(l) {
+					return nil, true
+				}
+			}
+			return nil, false
+		}
+		if !notifyKey.MatchString(line) {
+			continue
+		}
+		value := line[strings.Index(line, "=")+1:] + "\n" + strings.Join(lines[i+1:], "\n")
+		argv, ok := tomlStrings(value)
+		if !ok || len(argv) == 0 || isMadNotify(argv) {
+			return nil, true
+		}
+		return argv, true
+	}
+	return nil, false
+}
+
+// isMadNotify: the user pointed codex at mad themselves.
+func isMadNotify(argv []string) bool {
+	return len(argv) >= 3 && argv[1] == "hook" && argv[2] == "codex"
+}
+
+// tomlStrings reads the TOML array of strings s starts with (a notify
+// command): basic and literal strings, commas, comments, newlines. ok is
+// false for anything else.
+func tomlStrings(s string) (out []string, ok bool) {
+	i := 0
+	skip := func() {
+		for i < len(s) {
+			switch c := s[i]; {
+			case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+				i++
+			case c == '#':
+				for i < len(s) && s[i] != '\n' {
+					i++
+				}
+			default:
+				return
+			}
 		}
 	}
-	return false
+	skip()
+	if i >= len(s) || s[i] != '[' {
+		return nil, false
+	}
+	i++
+	for {
+		skip()
+		if i >= len(s) {
+			return nil, false
+		}
+		if s[i] == ']' {
+			return out, true
+		}
+		switch {
+		case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], "'''"):
+			return nil, false // multi-line strings
+		case s[i] == '"':
+			j := i + 1
+			for j < len(s) && s[j] != '"' && s[j] != '\n' {
+				if s[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			if j >= len(s) || s[j] != '"' {
+				return nil, false
+			}
+			v, err := strconv.Unquote(s[i : j+1])
+			if err != nil {
+				return nil, false
+			}
+			out, i = append(out, v), j+1
+		case s[i] == '\'':
+			j := strings.IndexAny(s[i+1:], "'\n")
+			if j < 0 || s[i+1+j] != '\'' {
+				return nil, false
+			}
+			out, i = append(out, s[i+1:i+1+j]), i+j+2
+		default:
+			return nil, false
+		}
+		skip()
+		switch {
+		case i < len(s) && s[i] == ',':
+			i++
+		case i < len(s) && s[i] == ']':
+			return out, true
+		default:
+			return nil, false
+		}
+	}
 }
 
 func (codex) Launched(cmdline string) bool { return strings.Contains(cmdline, codexNotify) }
 
-// Hook takes the notify payload, codex's last argument.
+// Hook takes the notify payload, codex's last argument, and hands it on
+// to the user's own notify command.
 func (codex) Hook(args []string, _ io.Reader, _ io.Writer, _ time.Time) Report {
 	if len(args) == 0 {
 		return Report{}
 	}
-	return Report{Hook: parseCodexHook(args[len(args)-1])}
+	payload := args[len(args)-1]
+	if argv, _ := codexUserNotify(); argv != nil {
+		runNotify(argv, payload)
+	}
+	h, turn := parseCodexHook(payload)
+	if h != nil && !codexThread(h.SessionID) {
+		return Report{}
+	}
+	return Report{Hook: h, Turn: turn}
 }
 
-// parseCodexHook maps a notify payload to a status.
-func parseCodexHook(payload string) *status.Hook {
+// codexThread reports whether thread id is a conversation of its own:
+// codex also notifies the end of the threads it runs on the side, such as
+// the one naming the conversation (it keeps no rollout) and subagents',
+// which are neither the agent's session nor its answer.
+var codexThread = func(id string) bool {
+	files := (codex{}).Transcripts("", id)
+	if len(files) == 0 {
+		return false
+	}
+	info, err := os.Stat(files[0])
+	return err == nil && cachedSession(fileEntry{files[0], info.ModTime()}, parseCodexSession) != nil
+}
+
+// runNotify starts the user's notify command with the payload as codex
+// would, and leaves it running: codex doesn't wait for it either.
+var runNotify = func(argv []string, payload string) {
+	cmd := exec.Command(argv[0], append(argv[1:], payload)...)
+	if cmd.Start() == nil {
+		_ = cmd.Process.Release()
+	}
+}
+
+// parseCodexHook maps a notify payload to a status, and the turn it ended
+// with codex's last message.
+func parseCodexHook(payload string) (*status.Hook, *status.Turn) {
 	var ev struct {
-		Type     string `json:"type"`
-		ThreadID string `json:"thread-id"`
+		Type        string `json:"type"`
+		ThreadID    string `json:"thread-id"`
+		LastMessage string `json:"last-assistant-message"`
 	}
 	if json.Unmarshal([]byte(payload), &ev) != nil || ev.Type != "agent-turn-complete" {
-		return nil
+		return nil, nil
 	}
-	return &status.Hook{State: status.Idle, Event: ev.Type, SessionID: ev.ThreadID}
+	return &status.Hook{State: status.Idle, Event: ev.Type, SessionID: ev.ThreadID},
+		&status.Turn{Reply: ev.LastMessage, SessionID: ev.ThreadID}
 }
 
 type codexHead struct {

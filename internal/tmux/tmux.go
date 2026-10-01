@@ -163,6 +163,27 @@ func Capture(paneID string) string {
 	return out
 }
 
+// PasteSettle is how long Paste waits between the text and enter: an agent
+// that gets enter in the same read as a paste can take it for part of it.
+var PasteSettle = 300 * time.Millisecond
+
+// Paste types text into a pane as one message: a bracketed paste (agents
+// that ask for one take newlines in it as text, not as enter), then enter.
+func Paste(paneID, text string) error {
+	buf := "mad-paste-" + strings.TrimPrefix(paneID, "%")
+	cmd := exec.Command("tmux", Args("load-buffer", "-b", buf, "-")...)
+	cmd.Stdin = strings.NewReader(text)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux load-buffer: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	// -r keeps newlines as they are; tmux would turn them into returns.
+	if err := Run("paste-buffer", "-p", "-r", "-d", "-b", buf, "-t", paneID); err != nil {
+		return err
+	}
+	time.Sleep(PasteSettle)
+	return Run("send-keys", "-t", paneID, "Enter")
+}
+
 // Watched reports whether someone is looking at the deck: a client is
 // attached to the main session and its terminal has focus. tmux tracks focus
 // from 3.3 on; with an older tmux any attached client counts as looking.

@@ -162,3 +162,35 @@ func TestNewUUID(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+// A run's agents are numbered and ordered among themselves, ahead of the
+// project's own.
+func TestRunGroups(t *testing.T) {
+	st := &State{}
+	p, _ := st.AddProject("/p")
+	a, b, c, d := &Agent{ID: "a"}, &Agent{ID: "b", Run: "r1"}, &Agent{ID: "c"}, &Agent{ID: "d", Run: "r1"}
+	gone := &Agent{ID: "e", Run: "removed"}
+	p.Agents = []*Agent{a, b, c, d, gone}
+	p.Runs = []*Run{{ID: "r1", Name: "x"}}
+	ids := func(as []*Agent) string {
+		var s []string
+		for _, x := range as {
+			s = append(s, x.ID)
+		}
+		return strings.Join(s, " ")
+	}
+	for got, want := range map[string]string{
+		ids(p.RunAgents("r1")):  "b d",
+		ids(p.TopAgents()):      "a c e", // e's run is gone: it is the project's again
+		ids(p.Group(d)):         "b d",
+		ids(p.Group(c)):         "a c e",
+		ids(st.OrderedAgents()): "b d a c e",
+	} {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+	if p.InRun(gone) || !p.InRun(b) {
+		t.Error("InRun")
+	}
+}

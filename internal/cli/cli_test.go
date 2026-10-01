@@ -13,6 +13,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
 func run(t *testing.T, in string, args ...string) (code int, stdout, stderr string) {
@@ -216,13 +217,71 @@ func TestHook(t *testing.T) {
 		t.Errorf("bad input: code=%d err=%q", code, errOut)
 	}
 
+	// Stop ends a turn, with what claude said last.
+	run(t, `{"hook_event_name":"Stop","session_id":"s-1","last_assistant_message":"all done"}`, "hook", "claude")
+	if tr := status.ReadTurn("agent-1"); tr == nil || tr.Reply != "all done" || tr.SessionID != "s-1" {
+		t.Errorf("claude turn = %+v", tr)
+	}
+	if h := status.ReadHook("agent-1"); h == nil || h.State != status.Idle || !h.At.Equal(status.ReadTurn("agent-1").At) {
+		t.Errorf("claude hook after Stop = %+v", h)
+	}
+
 	t.Setenv("MAD_AGENT_ID", "agent-2")
-	run(t, "", "hook", "codex", `{"type":"agent-turn-complete","thread-id":"t-9"}`)
+	day := filepath.Join(os.Getenv("HOME"), ".codex", "sessions", "2026", "01", "01")
+	os.MkdirAll(day, 0o755)
+	os.WriteFile(filepath.Join(day, "rollout-2026-01-01T00-00-00-t-9.jsonl"),
+		[]byte(`{"type":"session_meta","payload":{"id":"t-9","cwd":"/p","originator":"codex-tui"}}`+"\n"), 0o644)
+	run(t, "", "hook", "codex", `{"type":"agent-turn-complete","thread-id":"t-9","last-assistant-message":"ok"}`)
 	if h := status.ReadHook("agent-2"); h == nil || h.State != status.Idle || h.SessionID != "t-9" {
 		t.Errorf("codex hook = %+v", h)
 	}
+	if tr := status.ReadTurn("agent-2"); tr == nil || tr.Reply != "ok" {
+		t.Errorf("codex turn = %+v", tr)
+	}
+	// The thread codex names the conversation in keeps no rollout: not
+	// the agent's turn.
+	run(t, "", "hook", "codex", `{"type":"agent-turn-complete","thread-id":"t-title","last-assistant-message":"{}"}`)
+	if h := status.ReadHook("agent-2"); h.SessionID != "t-9" || status.ReadTurn("agent-2").Reply != "ok" {
+		t.Errorf("a side thread was taken for the agent's: %+v", h)
+	}
 	if code, _, _ := run(t, "", "hook"); code != 0 {
 		t.Error("bare hook should be a no-op")
+	}
+}
+
+func TestDriveUsage(t *testing.T) {
+	isolate(t)
+	for _, args := range [][]string{{"send"}, {"wait"}, {"wait", "a", "b"}, {"spawn", "-x"}, {"send", "-t", "soon", "a"}} {
+		if code, _, errOut := run(t, "", args...); code != 2 || !strings.Contains(errOut, "usage: mad "+args[0]) {
+			t.Errorf("%q: code=%d err=%q", args, code, errOut)
+		}
+	}
+	if code, _, errOut := run(t, "", "wait", "nobody"); code != 1 || !strings.Contains(errOut, `no agent "nobody"`) {
+		t.Errorf("unknown agent: code=%d err=%q", code, errOut)
+	}
+}
+
+// With nothing pending, wait prints the last reply without asking tmux.
+func TestWaitPrintsLastReply(t *testing.T) {
+	isolate(t)
+	defer func(s string) { tmux.Socket = s }(tmux.Socket)
+	tmux.Socket = fmt.Sprintf("mad-cli-test-%d", time.Now().UnixNano()) // no server: not the deck you run
+	st := &state.State{}
+	p, _ := st.AddProject("/p")
+	p.Agents = []*state.Agent{{ID: "0123456789ab", Kind: "claude", Name: "impl"}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, _ := run(t, "", "wait", "impl"); code != 0 || out != "" {
+		t.Errorf("before any turn: code=%d out=%q", code, out)
+	}
+	status.WriteTurn("0123456789ab", &status.Turn{Reply: "line 1\nline 2\n"}, time.Now())
+	if code, out, _ := run(t, "", "wait", "0123"); code != 0 || out != "line 1\nline 2\n" {
+		t.Errorf("code=%d out=%q", code, out)
+	}
+	code, out, _ := run(t, "", "ls")
+	if code != 0 || !strings.Contains(out, "01234567  impl  claude  stopped  /p") {
+		t.Errorf("ls: code=%d out=%q", code, out)
 	}
 }
 
@@ -281,5 +340,32 @@ func TestStatusLineHook(t *testing.T) {
 	}
 	if _, ok := status.ReadQuota("claude"); ok {
 		t.Error("quota written without rate limits")
+	}
+}
+
+func TestFlowAndSkillCommands(t *testing.T) {
+	home := isolate(t)
+	if code, out, _ := run(t, "", "run", "flow", "show", "design-impl-review"); code != 0 || !strings.Contains(out, `"name": "design-impl-review"`) {
+		t.Errorf("show: code=%d out=%q", code, out)
+	}
+	good := filepath.Join(home, "good.json")
+	os.WriteFile(good, []byte(`{"name": "solo", "roles": [{"name": "a", "agent": "claude"}], "steps": [{"name": "do", "role": "a", "prompt": "{{task}}"}]}`), 0o644)
+	bad := filepath.Join(home, "bad.json")
+	os.WriteFile(bad, []byte(`{"name": "x", "roles": [{"name": "a", "agent": "claude"}], "steps": [{"name": "do", "role": "b", "prompt": "p"}]}`), 0o644)
+	if code, out, _ := run(t, "", "run", "flow", "check", good); code != 0 || !strings.Contains(out, "flow solo is good") {
+		t.Errorf("check good: code=%d out=%q", code, out)
+	}
+	if code, _, errOut := run(t, "", "run", "flow", "check", good, bad); code != 1 || !strings.Contains(errOut, `no role "b"`) {
+		t.Errorf("check bad: code=%d err=%q", code, errOut)
+	}
+	if code, out, _ := run(t, "", "skill", "install"); code != 0 || !strings.Contains(out, "installed mad-flow") {
+		t.Fatalf("install: code=%d out=%q", code, out)
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".claude", "skills", "mad-flow", "SKILL.md"))
+	if err != nil || !strings.Contains(string(data), "name: mad-flow") {
+		t.Errorf("installed skill: %v", err)
+	}
+	if code, _, _ := run(t, "", "skill", "install", "nope"); code != 1 {
+		t.Error("installed a skill that isn't")
 	}
 }

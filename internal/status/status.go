@@ -76,7 +76,67 @@ func WriteHook(id string, h *Hook, now time.Time) error {
 	return paths.WriteFileAtomic(HookPath(id), data)
 }
 
-func RemoveHook(id string) { os.Remove(HookPath(id)) }
+// RemoveHook forgets everything the agent reported and was sent.
+func RemoveHook(id string) {
+	os.Remove(HookPath(id))
+	os.Remove(turnPath(id))
+	os.Remove(sentPath(id))
+}
+
+// Turn is how the agent's last turn ended, stored as StatusDir/<agent
+// id>.turn.json apart from the hook report, which the next event
+// overwrites.
+type Turn struct {
+	// Reply is the agent's last message of the turn, as the agent itself
+	// reports it when the turn ends.
+	Reply     string    `json:"reply"`
+	SessionID string    `json:"session_id,omitempty"`
+	At        time.Time `json:"at"`
+}
+
+func turnPath(id string) string { return filepath.Join(paths.StatusDir(), id+".turn.json") }
+
+// WriteTurn records the end of agent id's turn.
+func WriteTurn(id string, t *Turn, now time.Time) error {
+	t.At = now
+	data, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	return paths.WriteFileAtomic(turnPath(id), data)
+}
+
+// ReadTurn returns how agent id's last turn ended, or nil before its
+// first one did.
+func ReadTurn(id string) *Turn {
+	data, err := os.ReadFile(turnPath(id))
+	if err != nil {
+		return nil
+	}
+	var t Turn
+	if json.Unmarshal(data, &t) != nil {
+		return nil
+	}
+	return &t
+}
+
+func sentPath(id string) string { return filepath.Join(paths.StatusDir(), id+".sent") }
+
+// MarkSent notes that mad typed a message into agent id at now, so a
+// turn that ended before then is not its answer.
+func MarkSent(id string, now time.Time) error {
+	return paths.WriteFileAtomic(sentPath(id), []byte(now.Format(time.RFC3339Nano)))
+}
+
+// SentAt is when mad last typed a message into agent id; zero if never.
+func SentAt(id string) time.Time {
+	data, err := os.ReadFile(sentPath(id))
+	if err != nil {
+		return time.Time{}
+	}
+	t, _ := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data)))
+	return t
+}
 
 // Tracker follows one agent across polls.
 type Tracker struct {

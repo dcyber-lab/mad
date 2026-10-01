@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -35,6 +37,19 @@ usage:
   mad diff            toggle the diff view for the agent on stage
   mad scan [path]     show what sync sees: history, open sessions, and
                       the sessions of one project
+  mad ls              list the agents: id, name, kind, status, directory
+  mad spawn [-k kind] [-n name] [-m model] [-C dir] [-w branch] [-- flags]
+                      start an agent off stage and print its id
+  mad send [-f file] [-w] [-t duration] AGENT [TEXT...|-]
+                      type a message into an agent (by id or name);
+                      -w waits for its reply and prints it
+  mad wait [-t duration] AGENT
+                      wait until the agent's turn ends; print its reply
+  mad run new|start|ls|continue|cancel
+                      runs: a task handed through agents in roles
+                      (design, implement, review); "mad run" for more
+  mad skill install   put the skill that designs flows with you
+                      (mad-flow) where claude finds it
   mad kill-server     stop the deck and every agent in it
   mad version         print the version
 
@@ -97,6 +112,18 @@ func Run(args []string, stdio IO) int {
 		err = poke.Send(strings.Join(args, " "))
 	case "scan":
 		scan(args, stdio.Out)
+	case "ls":
+		err = ls(stdio.Out)
+	case "spawn":
+		err = spawn(args, stdio)
+	case "send":
+		err = send(args, stdio)
+	case "wait":
+		err = wait(args, stdio)
+	case "run":
+		err = runCmd(args, stdio)
+	case "skill":
+		err = skillCmd(args, stdio)
 	case "fit":
 		err = deck.FitSidebar()
 	case "kill-server":
@@ -115,11 +142,17 @@ func Run(args []string, stdio IO) int {
 		fmt.Fprintf(stdio.Err, "mad: unknown command %q\n\n%s", cmd, Usage)
 		return 2
 	}
-	if err != nil {
-		fmt.Fprintln(stdio.Err, "mad:", err)
-		return 1
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, errUsage):
+		return 2
 	}
-	return 0
+	fmt.Fprintln(stdio.Err, "mad:", err)
+	if errors.Is(err, drive.ErrTimeout) {
+		return 124 // as timeout(1)
+	}
+	return 1
 }
 
 // versionNote is what to say before attaching when tmux was upgraded under
@@ -228,7 +261,13 @@ func hook(args []string, in io.Reader, out io.Writer, now time.Time) {
 	}
 	r := p.Hook(args[1:], in, out, now)
 	// Only an agent mad started has a status to keep.
-	if id := os.Getenv("MAD_AGENT_ID"); id != "" && r.Hook != nil && status.WriteHook(id, r.Hook, now) == nil {
+	id := os.Getenv("MAD_AGENT_ID")
+	if id != "" && r.Turn != nil {
+		// Before the status: `mad wait` takes the idle report as the
+		// turn's end and reads its reply then.
+		_ = status.WriteTurn(id, r.Turn, now)
+	}
+	if id != "" && r.Hook != nil && status.WriteHook(id, r.Hook, now) == nil {
 		_ = poke.Send(poke.Hook + " " + id) // the sidebar shows it now
 	}
 	if r.Quota != nil && status.WriteQuota(p.Kind(), *r.Quota, now) == nil {

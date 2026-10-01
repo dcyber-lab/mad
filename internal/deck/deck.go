@@ -382,6 +382,20 @@ func OpenAgent(st *state.State, id string, kinds []agent.Kind) error {
 	return ShowPane(id, true)
 }
 
+// RunnerID tags the pane of run id's runner, which draws the run's panel.
+func RunnerID(id string) string { return "_run-" + id }
+
+// StartRunner starts run id's runner in a new pool window. A runner picks
+// its run up where it stopped, so starting one again is safe.
+func StartRunner(id string) error {
+	pane, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", "run",
+		"-P", "-F", "#{pane_id}", SelfCommand("run exec "+id))
+	if err != nil {
+		return err
+	}
+	return tmux.Tag(pane, RunnerID(id))
+}
+
 // KillAgent stops an agent's process and closes its pane, putting the
 // placeholder back first if the agent was on stage.
 func KillAgent(id string) error {
@@ -451,16 +465,19 @@ func Switch(arg string) error {
 }
 
 // switchTarget is the agent `mad switch arg` shows while stageID is on
-// stage: next and prev step through all agents, N counts within a project
-// as the sidebar numbers them, the project on stage or else the first.
+// stage: next and prev step through all agents, N counts as the sidebar
+// numbers them, within the run or project on stage (a run's panel counts
+// as its run), or else the first project.
 func switchTarget(st *state.State, arg, stageID string) (*state.Agent, bool) {
 	agents := st.OrderedAgents()
 	if _, err := strconv.Atoi(arg); err == nil {
 		agents = nil
-		if p, _ := st.FindAgent(stageID); p != nil {
-			agents = p.Agents
+		if p, a := st.FindAgent(stageID); a != nil {
+			agents = p.Group(a)
+		} else if p, r := st.FindRun(strings.TrimPrefix(stageID, RunnerID(""))); r != nil {
+			agents = p.RunAgents(r.ID)
 		} else if len(st.Projects) > 0 {
-			agents = st.Projects[0].Agents
+			agents = st.Projects[0].TopAgents()
 		}
 	}
 	cur := -1

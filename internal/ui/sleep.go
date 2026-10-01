@@ -41,7 +41,8 @@ func (m *model) sleepers(now time.Time) []string {
 	for _, a := range m.st.OrderedAgents() {
 		tr := m.trackers[a.ID]
 		shown := a.ID == m.stageID || m.stageID == tmux.IDTask && a.ID == m.taskFor
-		if tr == nil || tr.Status != status.Idle || shown || !m.canSleep(a) {
+		// A working run comes back to its agents; it would only wake them.
+		if tr == nil || tr.Status != status.Idle || shown || !m.canSleep(a) || a.Run != "" && m.runActive(a.Run) {
 			continue
 		}
 		if now.Sub(tr.QuietSince()) >= m.cfg.SleepAfter {

@@ -231,6 +231,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 		m.selectAgent(m.stageID)
 	}
 	m.screens, m.hooks = msg.screens, msg.hooks
+	m.readRuns()
 	for k, q := range msg.quota {
 		m.noteQuota(k, q)
 	}
@@ -304,6 +305,9 @@ const (
 func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *status.Hook, now time.Time) (notify.Event, bool) {
 	if cur == status.Running && prev != status.Running {
 		m.runSince[a.ID] = now
+	}
+	if inRun(p, a) && m.runActive(a.Run) {
+		return notify.Event{}, false // its run tells you when it needs you
 	}
 	var kind string
 	switch {
