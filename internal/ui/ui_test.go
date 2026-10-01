@@ -1505,7 +1505,7 @@ func TestSleepIdleAgents(t *testing.T) {
 	sleepAgent = func(id string, away bool) (bool, error) {
 		calls = append(calls, fmt.Sprintf("%s away=%v", id, away))
 		if id == "busy" {
-			return false, &deck.BusyError{Shell: "zsh"}
+			return false, &deck.BusyError{Command: "node"}
 		}
 		return true, nil
 	}
@@ -1583,7 +1583,7 @@ func TestSleepKey(t *testing.T) {
 	sleepAgent = func(id string, away bool) (bool, error) {
 		calls = append(calls, fmt.Sprintf("%s away=%v", id, away))
 		if busy {
-			return false, &deck.BusyError{Shell: "zsh"}
+			return false, &deck.BusyError{Command: "node"}
 		}
 		return true, nil
 	}
@@ -1610,7 +1610,7 @@ func TestSleepKey(t *testing.T) {
 	}
 	busy = true
 	m.Update(z()())
-	if !strings.Contains(m.flash, "zsh runs under it") {
+	if !strings.Contains(m.flash, "node runs under it") {
 		t.Errorf("busy: flash %q", m.flash)
 	}
 

@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	Poll = "poll" // panes changed (switch, an agent exited): refresh now
-	Jump = "jump" // open the next agent that is waiting or done
-	Hook = "hook" // "hook <agent id>": that agent wrote a new status report
-	Diff = "diff" // toggle the diff view for the agent on stage
+	Poll   = "poll"   // panes changed (switch, an agent exited): refresh now
+	Jump   = "jump"   // open the next agent that is waiting or done
+	Hook   = "hook"   // "hook <agent id>": that agent wrote a new status report
+	Diff   = "diff"   // toggle the diff view for the agent on stage
+	Detach = "detach" // leave the deck, telling what keeps running in it
 )
 
 // Path is the sidebar's socket; one per tmux server, like the sidebar.

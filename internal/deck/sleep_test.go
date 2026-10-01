@@ -3,36 +3,43 @@ package deck
 import (
 	"errors"
 	"os"
+	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
-func TestShellUnder(t *testing.T) {
+func TestWorkUnder(t *testing.T) {
 	ps := strings.Join([]string{
-		"    1     0 /sbin/launchd",
-		"  100     1 tmux",
-		"  200   100 claude", // an idle agent: only its MCP server
-		"  201   200 node",
-		"  300   100 claude", // running a command
-		"  301   300 node",
-		"  302   300 /bin/zsh",
-		"  303   302 go",
-		"  400   100 node", // npm's codex, the real one under it
-		"  401   400 codex",
-		"  402   401 -bash",
-		"  500   100 /bin/sh", // the pane's own shell doesn't count
-		"  501   500 sleep",
-		"  600     1 /Applications/Some App.app/Contents/MacOS/Some App",
+		"    1     0     1 /sbin/launchd",
+		"  100     1   100 tmux",
+		"  200   100   200 claude", // an idle agent: only its MCP server
+		"  201   200   200 node",
+		"  300   100   300 claude", // running a command
+		"  301   300   300 node",
+		"  302   300   302 /bin/zsh",
+		"  303   302   302 go",
+		"  400   100   400 node", // npm's codex, the real one under it
+		"  401   400   400 codex",
+		"  402   401   402 -bash",
+		"  500   100   500 /bin/sh", // the pane's own shell doesn't count
+		"  501   500   500 sleep",
+		"  600     1   600 /Applications/Some App.app/Contents/MacOS/Some App",
 		"garbage",
 	}, "\n")
-	for pid, want := range map[int]string{200: "", 300: "zsh", 400: "bash", 500: "", 600: "", 999: ""} {
-		if got := shellUnder(ps, pid); got != want {
-			t.Errorf("shellUnder(%d) = %q, want %q", pid, got, want)
+	for pid, want := range map[int]string{200: "", 300: "go", 400: "bash", 500: "", 600: "", 999: ""} {
+		if got := workUnder(procTable(ps), pid); got != want {
+			t.Errorf("workUnder(%d) = %q, want %q", pid, got, want)
 		}
+	}
+	if got := procTable(ps)[600].name(); got != "Some App" {
+		t.Errorf("name with a space = %q", got)
 	}
 }
 
@@ -56,11 +63,11 @@ func TestSleepAgent(t *testing.T) {
 	waitFor(t, func() bool {
 		out, _ := processes()
 		pb, _ := tmux.FindPane(panes(t), busy.ID)
-		return shellUnder(string(out), pb.PID) != ""
+		return workUnder(procTable(string(out)), pb.PID) != ""
 	}, "busy agent's command starts")
 
 	var be *BusyError
-	if ok, err := SleepAgent(busy.ID, true); ok || !errors.As(err, &be) || be.Shell != "sh" {
+	if ok, err := SleepAgent(busy.ID, true); ok || !errors.As(err, &be) || be.Command != "sleep" {
 		t.Errorf("busy agent: %v %v", ok, err)
 	}
 
@@ -97,5 +104,57 @@ func TestSleepAgent(t *testing.T) {
 	}
 	if pb, _ := tmux.FindPane(panes(t), busy.ID); pb.Dead || pb.Asleep {
 		t.Errorf("busy agent = %+v", pb)
+	}
+}
+
+func TestStop(t *testing.T) {
+	if _, err := exec.LookPath("perl"); err != nil {
+		t.Skip("perl not installed")
+	}
+	useDeck(t)
+	old := stopGrace
+	stopGrace = 500 * time.Millisecond
+	t.Cleanup(func() { stopGrace = old })
+	// tmux's hangup reaches the pane's process group: 619 and the agent.
+	// 617 runs in a group of its own and 618 ignores the hangup.
+	kind := []agent.Kind{{Name: "fake", Start: `sh -c 'perl -e "setpgrp(0,0); exec q(sleep), 617" & nohup sleep 618 >/dev/null 2>&1 & sleep 619'`}}
+	st := &state.State{}
+	p, _ := st.AddProject(os.TempDir())
+	a := &state.Agent{ID: "a", Kind: "fake"}
+	p.Agents = []*state.Agent{a}
+	if err := StartAgent(p, a, false, kind); err != nil {
+		t.Fatal(err)
+	}
+	sleeps := func() []string {
+		out, _ := processes()
+		var found []string
+		for _, pr := range procTable(string(out)) {
+			if pr.name() != "sleep" {
+				continue
+			}
+			args, _ := exec.Command("ps", "-o", "args=", "-p", strconv.Itoa(pr.pid)).Output()
+			for _, n := range []string{"617", "618", "619"} {
+				if strings.TrimSpace(string(args)) == "sleep "+n {
+					found = append(found, n)
+				}
+			}
+		}
+		sort.Strings(found)
+		return found
+	}
+	waitFor(t, func() bool { return len(sleeps()) == 3 }, "the agent's sleeps start")
+
+	names, err := Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 2 || !strings.HasPrefix(names[0], "sleep ") || !strings.HasPrefix(names[1], "sleep ") {
+		t.Errorf("Stop named %q, want the two sleeps that outlived the deck", names)
+	}
+	if left := sleeps(); len(left) > 0 {
+		t.Errorf("still running after Stop: sleep %v", left)
+	}
+	if tmux.Run("list-sessions") == nil {
+		t.Error("the deck still runs")
 	}
 }

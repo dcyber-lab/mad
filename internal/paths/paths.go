@@ -67,6 +67,7 @@ func StateFile() string        { return filepath.Join(StateDir(), "state.json") 
 func StatusDir() string        { return filepath.Join(StateDir(), "status") }
 func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width") }
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
+func LeaveNote() string        { return filepath.Join(StateDir(), "leave_note") }
 func TmuxConf() string         { return filepath.Join(GenDir(), "tmux.conf") }
 func AgentsConfig() string     { return filepath.Join(ConfigDir(), "agents.json") }
 func ConfigFile() string       { return filepath.Join(ConfigDir(), "config.json") }

@@ -539,6 +539,9 @@ set -g pane-active-border-style "fg=colour75"
 	toggle := fmt.Sprintf(`if -F "#{==:#{pane_index},0}" %s "select-pane -t %s"`,
 		tmuxQuote("run-shell -b "+tmuxQuote(SelfCommand("focus"))), tmux.SidebarPane)
 	fmt.Fprintf(&b, "bind -n M-s %s\nbind s %s\n", toggle, toggle)
+	// Detach through the sidebar, which says what keeps running; tmux's
+	// own detach when it doesn't answer.
+	fmt.Fprintf(&b, "bind d if-shell %s detach-client\n", tmuxQuote("! "+SelfCommand("poke detach")))
 	// The sidebar knows which agents need you; let it pick the next one.
 	fmt.Fprintf(&b, "bind -n M-n run-shell -b %s\n", tmuxQuote(SelfCommand("jump")))
 	// The diff view of the agent on stage, and back.

@@ -106,7 +106,7 @@ func (m *model) applySlept(msg sleptMsg) tea.Cmd {
 	var busy *deck.BusyError
 	switch {
 	case errors.As(msg.err, &busy):
-		m.setFlash(fmt.Sprintf("%s: %s runs under it, left awake", msg.manual, busy.Shell))
+		m.setFlash(fmt.Sprintf("%s: %s runs under it, left awake", msg.manual, busy.Command))
 	case msg.err != nil:
 		m.setFlash(msg.err.Error())
 	}

@@ -51,7 +51,8 @@ usage:
                       (design, implement, review); "mad run" for more
   mad skill install   put the skill that designs flows with you
                       (mad-flow) where claude finds it
-  mad kill-server     stop the deck and every agent in it
+  mad kill-server     stop the deck, every agent in it and what they
+                      left running
   mad version         print the version
 
 internal:
@@ -130,7 +131,7 @@ func Run(args []string, stdio IO) int {
 	case "focus":
 		err = deck.FocusStage("")
 	case "kill-server":
-		err = tmux.Run("kill-server")
+		err = killServer(stdio.Out)
 	case "sidebar":
 		err = ui.Run()
 	case "placeholder":
@@ -170,6 +171,20 @@ func versionNote(server, client string) string {
      If the deck does not open, run "mad kill-server" and then "mad".
      That stops every agent; press enter on each one to resume it.
 `, server, client)
+}
+
+// killServer stops the deck, and names what its agents had started that
+// outlived the tmux server.
+func killServer(out io.Writer) error {
+	stray, err := deck.Stop()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "mad: deck stopped")
+	if len(stray) > 0 {
+		fmt.Fprintf(out, "mad: also stopped what its agents left running: %s\n", strings.Join(stray, ", "))
+	}
+	return nil
 }
 
 // open builds the deck if needed and attaches this terminal to it.

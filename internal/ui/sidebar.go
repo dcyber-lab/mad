@@ -363,6 +363,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.pollNow()
 		case poke.Diff: // Alt-v: the agent on stage, or back from its diff
 			return m, m.diffFromStage()
+		case poke.Detach: // the prefix's d
+			return m, m.detach()
 		}
 		return m, nil
 	case doneMsg:

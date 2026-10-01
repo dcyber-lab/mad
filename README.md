@@ -164,7 +164,8 @@ is done.
 | `s`            | Show the agent beside the others on stage, or close its view; on a run, its panel with its agents |
 | `tab`          | Focus the view in use on stage                 |
 | `<` / `>`      | Narrow / widen the sidebar                     |
-| `q`            | Detach (agents keep running)                   |
+| `q`            | Detach (agents keep running); the terminal says what still runs |
+| `Q`            | Stop the deck, its agents and what they started |
 
 The mouse works too: click rows, or drag the divider to resize. The sidebar
 width is remembered.
@@ -200,7 +201,8 @@ mad spawn [flags] [-- agent flags]
 mad send [-w] AGENT TEXT
                         type a message into an agent; -w prints its reply
 mad wait AGENT          wait for the agent's turn to end, print its reply
-mad kill-server         stop the deck and every agent in it
+mad kill-server         stop the deck, every agent in it and what they
+                        left running
 mad version             print the version
 ```
 
@@ -396,6 +398,26 @@ The command gets `MAD_EVENT`, `MAD_PROJECT`, `MAD_AGENT`, `MAD_TITLE` and
 Changes to the file apply right away. A mistake in it (a stray comma) is
 shown at the bottom of the sidebar with its line, and the last good
 settings stay in effect until it's fixed.
+
+## Leaving the deck
+
+`q` (or `Ctrl-]` `d`) detaches: the deck and its agents keep running in
+the background, and the terminal says what is left there:
+
+```
+mad: the deck keeps running in the background
+  working          mad/fix the sidebar
+  kept awake by    mad/claude#3 (node)
+  idle             2, asleep after 1h idle
+  asleep           6
+"mad" takes you back, "mad kill-server" stops it all
+```
+
+`Q` stops the deck after asking, as `mad kill-server` does from a shell.
+Stopping tmux alone would leave running what an agent started in a
+process group of its own (claude runs every command in one) or with
+`nohup`, such as a dev server; mad ends those too, hanging up, then
+terminating, then killing what is left, and names them.
 
 ## Sleeping idle agents
 

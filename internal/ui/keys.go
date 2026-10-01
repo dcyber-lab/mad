@@ -157,7 +157,22 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return cmd
 		})
 	case "q", "ctrl+c":
-		return m.action("", func() error { return tmux.Run("detach-client") })
+		return m.detach()
+	case "Q":
+		msg, n := "stop the deck? (y/n)", 0
+		for _, tr := range m.trackers {
+			if tr.Status == status.Running || tr.Status == status.Waiting || tr.Status == status.Idle {
+				n++
+			}
+		}
+		if n > 0 {
+			msg = fmt.Sprintf("stop deck + kill %d? (y/n)", n)
+		}
+		m.confirm(msg, func() tea.Cmd {
+			// Run in the terminal in place of this client, where it can
+			// say what it stopped.
+			return m.action("", func() error { return tmux.Run("detach-client", "-E", deck.StopCommand()) })
+		})
 	}
 	return nil
 }

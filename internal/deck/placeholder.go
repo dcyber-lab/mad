@@ -23,6 +23,7 @@ const PlaceholderText = `
      o         new run         c       continue a waiting run
      1-9       open agent N of the project the cursor is in
      q         detach (agents keep running)
+     Q         stop the deck and every agent in it
      < / >     narrower / wider sidebar (or drag the border)
 
    anywhere  (Option must act as Alt in Ghostty)
