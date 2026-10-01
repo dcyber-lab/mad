@@ -124,14 +124,14 @@ func useDeck(t *testing.T) (dir string, kinds []agent.Kind) {
 	t.Setenv("MAD_AGENT_ID", "")
 
 	oldSocket, oldSelf, oldSettle := tmux.Socket, deck.SelfCommand, tmux.PasteSettle
-	oldTick, oldQuiet, oldStart, oldStale := tick, quietFor, startFor, stale
+	oldTick, oldLook, oldQuiet, oldStart, oldStale := tick, look, quietFor, startFor, stale
 	tmux.Socket = fmt.Sprintf("mad-drive-test-%d", time.Now().UnixNano())
 	deck.SelfCommand = func(sub string) string { return "sleep 600 # mad " + sub }
-	tmux.PasteSettle, tick, quietFor, startFor, stale = 50*time.Millisecond, 20*time.Millisecond, 400*time.Millisecond, 20*time.Second, time.Second
+	tmux.PasteSettle, tick, look, quietFor, startFor, stale = 50*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 400*time.Millisecond, 20*time.Second, time.Second
 	t.Cleanup(func() {
 		_ = tmux.Run("kill-server")
 		tmux.Socket, deck.SelfCommand, tmux.PasteSettle = oldSocket, oldSelf, oldSettle
-		tick, quietFor, startFor, stale = oldTick, oldQuiet, oldStart, oldStale
+		tick, look, quietFor, startFor, stale = oldTick, oldLook, oldQuiet, oldStart, oldStale
 	})
 
 	self, err := os.Executable()

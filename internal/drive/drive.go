@@ -33,6 +33,10 @@ import (
 var (
 	// tick is how often screens and reports are looked at.
 	tick = 200 * time.Millisecond
+	// look is how often Wait looks at an agent's pane while it waits for
+	// the turn's report: each look is two tmux commands, a report is a
+	// file read every tick.
+	look = time.Second
 	// quietFor: a screen unchanged this long belongs to an agent that is
 	// not working. Agents redraw at least every second while they are:
 	// claude's spinner, codex's elapsed time.
@@ -522,7 +526,8 @@ func Wait(a *state.Agent, kinds []agent.Kind, o WaitOptions) (*status.Turn, erro
 	sent, asked := status.SentAt(a.ID), false
 	var shown string
 	still := now()
-	for {
+	var looked time.Time
+	for ; ; time.Sleep(tick) {
 		turn, hook := status.ReadTurn(a.ID), status.ReadHook(a.ID)
 		if !pending(turn, hook, sent) {
 			return turn, nil
@@ -532,25 +537,28 @@ func Wait(a *state.Agent, kinds []agent.Kind, o WaitOptions) (*status.Turn, erro
 			// through a mad from before replies were (WriteTurn comes first).
 			return nil, fmt.Errorf("%s is done, but its hooks run a mad that keeps no replies; open the deck with this mad (and restart the agent) first", Label(a))
 		}
-		panes, err := tmux.ListPanes()
-		if err != nil {
-			return nil, err
-		}
-		pane, ok := tmux.FindPane(panes, a.ID)
-		if !ok || pane.Dead {
-			return nil, fmt.Errorf("%s exited before it was done", Label(a))
-		}
-		screen := tmux.Capture(pane.ID)
-		if screen != shown {
-			shown, still = screen, now()
-		}
-		waiting, msg := asking(k, a.ID, screen)
-		if waiting != asked && o.Note != nil {
-			o.Note(waiting, msg)
-		}
-		asked = waiting
-		if !waiting && now().Sub(still) >= stale {
-			return nil, fmt.Errorf("%s %w", Label(a), ErrNoReply)
+		if now().Sub(looked) >= look {
+			looked = now()
+			panes, err := tmux.ListPanes()
+			if err != nil {
+				return nil, err
+			}
+			pane, ok := tmux.FindPane(panes, a.ID)
+			if !ok || pane.Dead {
+				return nil, fmt.Errorf("%s exited before it was done", Label(a))
+			}
+			screen := tmux.Capture(pane.ID)
+			if screen != shown {
+				shown, still = screen, now()
+			}
+			waiting, msg := asking(k, a.ID, screen)
+			if waiting != asked && o.Note != nil {
+				o.Note(waiting, msg)
+			}
+			asked = waiting
+			if !waiting && now().Sub(still) >= stale {
+				return nil, fmt.Errorf("%s %w", Label(a), ErrNoReply)
+			}
 		}
 		if !end.IsZero() && now().After(end) {
 			return nil, fmt.Errorf("%s: %w", Label(a), ErrTimeout)
@@ -560,7 +568,6 @@ func Wait(a *state.Agent, kinds []agent.Kind, o WaitOptions) (*status.Turn, erro
 				return nil, err
 			}
 		}
-		time.Sleep(tick)
 	}
 }
 
