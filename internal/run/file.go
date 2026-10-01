@@ -3,9 +3,11 @@ package run
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -159,18 +161,50 @@ const (
 func cmdPath(dir string) string { return filepath.Join(dir, "cmd") }
 
 // Command leaves cmd for run r's runner, which takes it within a second.
+// Commands are lines added to cmd under a lock the runner takes them
+// under, so two left between its looks (cancel, then continue) are both
+// taken, and none is lost to the runner emptying the file.
 func Command(r *state.Run, cmd string) error {
-	return paths.WriteFileAtomic(cmdPath(Dir(r)), []byte(cmd))
+	if err := os.MkdirAll(Dir(r), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(cmdPath(Dir(r)), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	_, err = f.WriteString(cmd + "\n")
+	return err
 }
 
-// takeCommand returns the command left for the runner, and removes it.
+// takeCommand takes the commands left for the runner and returns the
+// one that counts: cancel over continue, which taken twice is once.
 func takeCommand(dir string) string {
-	data, err := os.ReadFile(cmdPath(dir))
+	f, err := os.OpenFile(cmdPath(dir), os.O_RDWR, 0)
 	if err != nil {
 		return ""
 	}
-	os.Remove(cmdPath(dir))
-	return strings.TrimSpace(string(data))
+	defer f.Close()
+	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX) != nil {
+		return ""
+	}
+	data, err := io.ReadAll(f)
+	if err != nil || len(data) == 0 || f.Truncate(0) != nil {
+		return ""
+	}
+	got := ""
+	for _, c := range strings.Fields(string(data)) {
+		if c == Cancel {
+			return Cancel
+		}
+		if c == Continue {
+			got = Continue
+		}
+	}
+	return got
 }
 
 func logPath(dir string) string { return filepath.Join(dir, "log") }
