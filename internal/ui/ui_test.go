@@ -500,6 +500,47 @@ func TestSidebarGapsAndMouse(t *testing.T) {
 	}
 }
 
+func TestCloseButton(t *testing.T) {
+	m, st := setup(t, "/code/a")
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "a2", Kind: "codex"}, {ID: "a3", Kind: "shell"}}
+	m.rebuildRows()
+	m.trackers["a2"] = &status.Tracker{Status: status.Running}
+	click := func(x, y int) {
+		m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	}
+	lines := strings.Split(m.View(), "\n")
+	if l := lines[headerLines+1]; !strings.HasSuffix(strings.TrimRight(ansi.Strip(l), " "), "stopped ×") {
+		t.Fatalf("no × on the row: %q", ansi.Strip(l))
+	}
+
+	click(m.width-1, headerLines+2) // the line under a1 has no ×
+	if m.mode != modeNormal || len(st.Projects[0].Agents) != 3 || m.cursor != 1 {
+		t.Fatalf("detail line: mode=%v agents=%d cursor=%d", m.mode, len(st.Projects[0].Agents), m.cursor)
+	}
+	click(m.width-2, headerLines+1) // a1's ×: stopped, goes at once
+	if m.mode != modeNormal || len(st.Projects[0].Agents) != 2 || st.Projects[0].Agents[0].ID != "a2" {
+		t.Fatalf("after × on a1: mode=%v agents=%+v", m.mode, st.Projects[0].Agents)
+	}
+	click(m.width-2, headerLines+1) // a2's ×: running, asks first
+	if m.mode != modeConfirm || !strings.Contains(m.confirmMsg, "kill codex") || m.cursor != 1 {
+		t.Fatalf("× on a running agent: mode=%v msg=%q cursor=%d", m.mode, m.confirmMsg, m.cursor)
+	}
+	press(m, "n")
+	if len(st.Projects[0].Agents) != 2 {
+		t.Fatal("declined kill removed the agent")
+	}
+
+	// Too narrow for the × beside the title: it goes, and the click opens.
+	m.Update(tea.WindowSizeMsg{Width: 20, Height: 30})
+	if l := strings.Split(m.View(), "\n")[headerLines+3]; strings.Contains(l, closeGlyph) {
+		t.Errorf("× cuts into the title: %q", ansi.Strip(l))
+	}
+	click(m.width-2, headerLines+3)
+	if len(st.Projects[0].Agents) != 2 || m.cursor != 2 {
+		t.Errorf("narrow click: agents=%d cursor=%d", len(st.Projects[0].Agents), m.cursor)
+	}
+}
+
 func TestAgentNumbersPerProject(t *testing.T) {
 	m, st := setup(t, "/code/a", "/code/b")
 	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "a2", Kind: "claude"}}

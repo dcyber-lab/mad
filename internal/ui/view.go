@@ -287,7 +287,29 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
-	return left, m.withUsage(left, []seg{label, {stPlain, " "}}, usageText(m.transcripts[a.ID].Tokens))
+	right = []seg{label, {stPlain, " "}}
+	// The × goes before the title would be cut (the usage before it); a
+	// role goes with its run.
+	with := []seg{label, {stPlain, " "}, {stFaint, closeGlyph}, {stPlain, " "}}
+	if !inRun(r.proj, a) && m.width-segWidth(with)-1 >= segWidth(left) {
+		right = with
+	}
+	return left, m.withUsage(left, right, usageText(m.transcripts[a.ID].Tokens))
+}
+
+// closeGlyph ends an agent's row: clicking it kills the agent.
+const closeGlyph = "×"
+
+// onClose is whether a click at column x of screen line line (counted
+// from the top of the list, scrolled lines included) is on row i's ×,
+// give or take a column.
+func (m *model) onClose(i, x, line int) bool {
+	if line != m.lineOf[i] || x < m.width-3 {
+		return false
+	}
+	left, right := m.rowSegs(m.rows[i])
+	n := len(right)
+	return n >= 2 && right[n-2].s == closeGlyph && fitsRight(m.width, left, right)
 }
 
 // withUsage puts what was consumed before the right side of a row, unless

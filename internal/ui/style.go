@@ -70,10 +70,10 @@ func layout(width int, bg lipgloss.TerminalColor, left, right []seg) string {
 		}
 		return st.Render(s)
 	}
-	rw := segWidth(right)
-	if rw > 0 && width-rw-1 < minLeft && width-rw-1 < segWidth(left) {
-		right, rw = nil, 0
+	if !fitsRight(width, left, right) {
+		right = nil
 	}
+	rw := segWidth(right)
 	room := width
 	if rw > 0 {
 		room = width - rw - 1
@@ -98,6 +98,12 @@ func layout(width int, bg lipgloss.TerminalColor, left, right []seg) string {
 		b.WriteString(paint(s.st, s.s))
 	}
 	return b.String()
+}
+
+// fitsRight is whether layout keeps the right side of a row.
+func fitsRight(width int, left, right []seg) bool {
+	rw := segWidth(right)
+	return rw == 0 || width-rw-1 >= minLeft || width-rw-1 >= segWidth(left)
 }
 
 // hints renders "key label" pairs with the keys highlighted.

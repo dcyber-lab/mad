@@ -125,19 +125,7 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if r.agent != nil {
-			p, a := r.proj, r.agent
-			m.confirm(fmt.Sprintf("kill %s? (y/n)", p.DisplayName(a)), func() tea.Cmd {
-				cmd := m.removeAgents(a.ID)
-				// Its worktree was made for it: offer to clean up too. git
-				// refuses when there are uncommitted changes.
-				if dir := a.Dir; dir != "" && git.IsWorktree(p.Path, dir) && !dirInUse(p, dir) {
-					repo := p.Path
-					m.confirm(fmt.Sprintf("remove worktree %s? (y/n)", filepath.Base(dir)), func() tea.Cmd {
-						return m.action("", func() error { return git.RemoveWorktree(repo, dir) })
-					})
-				}
-				return cmd
-			})
+			m.askKill(r.proj, r.agent)
 			return nil
 		}
 		p := r.proj
@@ -175,6 +163,36 @@ func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 		})
 	}
 	return nil
+}
+
+func (m *model) askKill(p *state.Project, a *state.Agent) {
+	m.confirm(fmt.Sprintf("kill %s? (y/n)", p.DisplayName(a)), func() tea.Cmd { return m.killAgent(p, a) })
+}
+
+// killAgent takes a off the deck; its session stays on disk to resume.
+func (m *model) killAgent(p *state.Project, a *state.Agent) tea.Cmd {
+	cmd := m.removeAgents(a.ID)
+	// Its worktree was made for it: offer to clean up too. git refuses
+	// when there are uncommitted changes.
+	if dir := a.Dir; dir != "" && git.IsWorktree(p.Path, dir) && !dirInUse(p, dir) {
+		repo := p.Path
+		m.confirm(fmt.Sprintf("remove worktree %s? (y/n)", filepath.Base(dir)), func() tea.Cmd {
+			return m.action("", func() error { return git.RemoveWorktree(repo, dir) })
+		})
+	}
+	return cmd
+}
+
+// closeAgent is a click on row i's ×: the agent goes at once, unless it
+// is busy, when it asks as x does.
+func (m *model) closeAgent(i int) tea.Cmd {
+	p, a := m.rows[i].proj, m.rows[i].agent
+	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) {
+		m.cursor = i
+		m.askKill(p, a)
+		return nil
+	}
+	return m.killAgent(p, a)
 }
 
 // needsYou: waiting for input, or finished while you were elsewhere.
@@ -274,7 +292,11 @@ func (m *model) handleMouse(ev tea.MouseMsg) tea.Cmd {
 	case ev.Button == tea.MouseButtonWheelDown:
 		m.move(1)
 	case ev.Button == tea.MouseButtonLeft && ev.Action == tea.MouseActionPress:
-		if i, ok := m.rowAt(ev.Y - m.headerH()); ok && ev.Y >= m.headerH() {
+		y := ev.Y - m.headerH()
+		if i, ok := m.rowAt(y); ok && y >= 0 {
+			if m.onClose(i, ev.X, y+m.offset) {
+				return m.closeAgent(i)
+			}
 			m.cursor = i
 			return m.activate(m.rows[i])
 		}

@@ -167,8 +167,9 @@ is done.
 | `q`            | Detach (agents keep running); the terminal says what still runs |
 | `Q`            | Stop the deck, its agents and what they started |
 
-The mouse works too: click rows, or drag the divider to resize. The sidebar
-width is remembered.
+The mouse works too: click rows, click an agent's `×` to remove it (it asks
+first only while the agent is running or waiting), or drag the divider to
+resize. The sidebar width is remembered.
 
 ### Global
 
