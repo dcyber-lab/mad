@@ -240,7 +240,13 @@ function connect(id, o) {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/term?${q}`);
   ws.binaryType = "arraybuffer";
   o.ws = ws;
-  ws.onopen = () => { if (id === current && document.hasFocus()) sendCtl(o, { type: "focus" }); };
+  ws.onopen = () => {
+    // The size in the URL can be from before the tab was shown (xterm's
+    // 80x24), and a fit while it connected was sent nowhere.
+    safeFit(o);
+    sendCtl(o, { type: "resize", cols: o.term.cols, rows: o.term.rows });
+    if (id === current && document.hasFocus()) sendCtl(o, { type: "focus" });
+  };
   ws.onmessage = (ev) => {
     if (typeof ev.data === "string") {
       const m = JSON.parse(ev.data);
