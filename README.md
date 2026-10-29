@@ -280,7 +280,7 @@ terminal deck can be open at the same time.
   next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-w` closes the tab.
 - An agent is in one place at a time: opening it in the window takes it
   off the terminal deck's stage, and the deck showing it again takes it
-  back.
+  back, closing its terminal in the window.
 - Notifications still come from the deck, which counts an agent shown in
   the window as one you are looking at.
 

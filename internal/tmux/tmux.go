@@ -154,6 +154,34 @@ func parsePanes(out string) []Pane {
 	return panes
 }
 
+// CloseDesks ends the desktop windows' sessions that show window id. The
+// deck calls it before it takes a pane out of its pool window or closes
+// it: a session left on the window would show, and type into, the pane
+// swapped in in its place, or another agent's window once it is gone.
+func CloseDesks(windowID string) error {
+	out, err := Out("list-sessions", "-F", "#{session_name}\t#{window_id}")
+	if err != nil {
+		return err
+	}
+	for _, s := range desksShowing(out, windowID) {
+		_ = Run("kill-session", "-t", "="+s) // one gone meanwhile is closed
+	}
+	return nil
+}
+
+// desksShowing picks the desktop sessions whose current window is
+// windowID out of "session<TAB>window" lines.
+func desksShowing(out, windowID string) []string {
+	var names []string
+	for _, line := range strings.Split(out, "\n") {
+		name, win, ok := strings.Cut(line, "\t")
+		if ok && win == windowID && strings.HasPrefix(name, DeskPrefix) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 func FindPane(panes []Pane, madID string) (Pane, bool) {
 	for _, p := range panes {
 		if p.MadID == madID {

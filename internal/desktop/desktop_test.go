@@ -233,6 +233,58 @@ func TestTermTakesAgentOffStage(t *testing.T) {
 	}
 }
 
+// The terminal deck taking the agent back, in place of what is on stage
+// or beside it, or closing it, closes the window's terminal on it: left
+// open, it would show, and type into, the pane swapped into the agent's
+// window, or another agent's window once that one is gone.
+func TestDeckTakesAgentBack(t *testing.T) {
+	for name, take := range map[string]func(st *state.State, id string) error{
+		"open": func(st *state.State, id string) error { return deck.OpenAgent(st, id, fakeKind) },
+		"view": func(st *state.State, id string) error { return deck.OpenAgentView(st, id, fakeKind, false) },
+		"kill": func(_ *state.State, id string) error { return deck.KillAgent(id) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, a := useDeck(t)
+			b := &state.Agent{ID: "5d0f3a51-2b8e-4c1d-9e47-0b6f3c2a8d19", Kind: "fake"}
+			p.Agents = append(p.Agents, b)
+			st := &state.State{Projects: []*state.Project{p}}
+			if err := st.Save(); err != nil {
+				t.Fatal(err)
+			}
+			if err := drive.EnsureDeck(t.TempDir()); err != nil {
+				t.Fatal(err)
+			}
+			// b on stage: taking a in its place puts b in a's window.
+			if err := deck.OpenAgent(st, b.ID, fakeKind); err != nil {
+				t.Fatal(err)
+			}
+
+			c, ctx := dial(t, New(fakeKind), a.ID)
+			readUntil(t, ctx, c, "agent up "+a.ID)
+			if err := take(st, a.ID); err != nil {
+				t.Fatal(err)
+			}
+			rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			for {
+				if _, _, err := c.Read(rctx); err != nil {
+					if rctx.Err() != nil {
+						t.Fatal("the window's terminal stayed open")
+					}
+					break
+				}
+			}
+			waitFor(t, "the desk session to go", func() bool { return len(deskSessions(t)) == 0 })
+			panes, _ := tmux.ListPanes()
+			for _, p := range panes {
+				if p.Viewed {
+					t.Errorf("%s viewed with no window on it", p.MadID)
+				}
+			}
+		})
+	}
+}
+
 func TestUnknownAgent(t *testing.T) {
 	useDeck(t)
 	c, ctx := dial(t, New(fakeKind), "nope")
