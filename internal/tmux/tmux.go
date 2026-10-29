@@ -94,7 +94,9 @@ type Pane struct {
 	Asleep bool
 	Active bool
 	// Last: the pane was active before the active one, in its window.
-	Last   bool
+	Last bool
+	// Viewed: a desktop window shows the pane (see DeskPrefix).
+	Viewed bool
 	TTY    string
 	PID    int // the pane's process
 	Width  int
@@ -102,7 +104,13 @@ type Pane struct {
 }
 
 const paneFormat = "#{pane_id}\t#{@mad_id}\t#{session_name}\t#{window_id}\t#{window_index}.#{pane_index}\t" +
-	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}\t#{pane_last}"
+	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}\t#{pane_last}\t" +
+	"#{window_active}\t#{session_attached}"
+
+// DeskPrefix starts the names of the sessions a desktop window attaches
+// through: each is grouped with the pool, sharing its windows, and has
+// the window of the agent it shows as its current one.
+const DeskPrefix = "_desk-"
 
 func ListPanes() ([]Pane, error) {
 	out, err := Out("list-panes", "-a", "-F", paneFormat)
@@ -112,11 +120,21 @@ func ListPanes() ([]Pane, error) {
 	return parsePanes(out), nil
 }
 
+// parsePanes lists each pane once. A session grouped with the pool lists
+// the pool's panes again; those entries only say which pane a desktop
+// window shows.
 func parsePanes(out string) []Pane {
 	var panes []Pane
+	viewed := map[string]bool{}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 13 {
+		if len(f) != 15 {
+			continue
+		}
+		if strings.HasPrefix(f[2], DeskPrefix) {
+			if f[13] == "1" && f[14] != "0" {
+				viewed[f[0]] = true
+			}
 			continue
 		}
 		p := Pane{ID: f[0], MadID: f[1], Session: f[2], WindowID: f[3], Dead: f[5] == "1", Active: f[8] == "1", TTY: f[9],
@@ -129,6 +147,9 @@ func parsePanes(out string) []Pane {
 			p.Index, _ = strconv.Atoi(i)
 		}
 		panes = append(panes, p)
+	}
+	for i := range panes {
+		panes[i].Viewed = viewed[panes[i].ID]
 	}
 	return panes
 }
@@ -216,14 +237,28 @@ func Paste(paneID, text string) error {
 }
 
 // Watched reports whether someone is looking at the deck: a client is
-// attached to the main session and its terminal has focus. tmux tracks focus
-// from 3.3 on; with an older tmux any attached client counts as looking.
+// attached to the main session, or a desktop window's, and its terminal
+// has focus. tmux tracks focus from 3.3 on; with an older tmux any
+// attached client counts as looking.
 func Watched() bool {
-	out, err := Out("list-clients", "-t", MainSession, "-F", "x#{client_flags}")
+	out, err := Out("list-clients", "-F", "#{session_name}\tx#{client_flags}")
 	if err != nil {
 		return false
 	}
-	return watched(out, tracksFocus())
+	return watched(deckClients(out), tracksFocus())
+}
+
+// deckClients keeps the flags of the clients that show the deck, out of
+// "session<TAB>xflags" lines.
+func deckClients(out string) string {
+	var keep []string
+	for _, line := range strings.Split(out, "\n") {
+		sess, flags, ok := strings.Cut(line, "\t")
+		if ok && (sess == MainSession || strings.HasPrefix(sess, DeskPrefix)) {
+			keep = append(keep, flags)
+		}
+	}
+	return strings.Join(keep, "\n")
 }
 
 func watched(clients string, focusKnown bool) bool {

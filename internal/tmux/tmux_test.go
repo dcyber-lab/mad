@@ -12,10 +12,10 @@ import (
 
 func TestParsePanes(t *testing.T) {
 	out := strings.Join([]string{
-		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0",
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t\t0",
-		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1\t0",
+		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t0\t1",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t0\t1",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t\t0\t0\t1",
+		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1\t0\t0\t1",
 		"garbage line",
 		"",
 	}, "\n")
@@ -55,9 +55,9 @@ func TestParsePanes(t *testing.T) {
 	// Several views: the one in use is the focused one, else the one
 	// focused last.
 	views := parsePanes(strings.Join([]string{
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0",
-		"%5\tagent-c\tmain\t@1\t0.2\t0\t84\t50\t0\t/dev/ttys005\t105\t\t1",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t84\t50\t0\t/dev/ttys003\t102\t\t0",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t0\t1",
+		"%5\tagent-c\tmain\t@1\t0.2\t0\t84\t50\t0\t/dev/ttys005\t105\t\t1\t0\t1",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t84\t50\t0\t/dev/ttys003\t102\t\t0\t0\t1",
 	}, "\n"))
 	if v := Views(views); len(v) != 2 || v[0].MadID != "agent-a" || v[1].Index != 2 {
 		t.Errorf("Views = %+v", v)
@@ -68,6 +68,31 @@ func TestParsePanes(t *testing.T) {
 	views[2].Active = true
 	if stage, _ := Stage(views); stage.MadID != "agent-a" {
 		t.Errorf("Stage of the focused view = %s", stage.MadID)
+	}
+}
+
+// A desktop window's session lists the pool's panes again: once each is
+// all ListPanes gives, the shown one marked as viewed.
+func TestParsePanesDesk(t *testing.T) {
+	panes := parsePanes(strings.Join([]string{
+		"%0\t_keep\t_desk-1\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t0\t1",
+		"%3\tagent-b\t_desk-1\t@2\t1.0\t0\t169\t50\t1\t/dev/ttys004\t103\t\t0\t1\t1",
+		"%4\tagent-c\t_desk-2\t@3\t2.0\t0\t169\t50\t1\t/dev/ttys005\t104\t\t0\t1\t0",
+		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t1\t0",
+		"%3\tagent-b\t_pool\t@2\t1.0\t0\t169\t50\t1\t/dev/ttys004\t103\t\t0\t0\t0",
+		"%4\tagent-c\t_pool\t@3\t2.0\t0\t169\t50\t1\t/dev/ttys005\t104\t\t0\t0\t0",
+	}, "\n"))
+	if len(panes) != 3 {
+		t.Fatalf("got %d panes, want 3: %+v", len(panes), panes)
+	}
+	for _, p := range panes {
+		if p.Session != PoolSession {
+			t.Errorf("%s listed in %s", p.MadID, p.Session)
+		}
+		// agent-c's session has no client: nobody looks at it.
+		if want := p.MadID == "agent-b"; p.Viewed != want {
+			t.Errorf("%s viewed = %v", p.MadID, p.Viewed)
+		}
 	}
 }
 
@@ -179,6 +204,16 @@ func TestWatched(t *testing.T) {
 		if got := watched(c.clients, c.focusKnown); got != c.want {
 			t.Errorf("watched(%q, %v) = %v", c.clients, c.focusKnown, got)
 		}
+	}
+}
+
+func TestDeckClients(t *testing.T) {
+	out := "main\txattached,UTF-8\nwork\txattached,focused\n_desk-1\txattached,focused\n"
+	if got := deckClients(out); got != "xattached,UTF-8\nxattached,focused" {
+		t.Errorf("deckClients = %q", got)
+	}
+	if watched(deckClients("work\txattached,focused"), true) {
+		t.Error("a client of another session counts as watching the deck")
 	}
 }
 
