@@ -51,6 +51,8 @@ usage:
                       (design, implement, review); "mad run" for more
   mad skill install   put the skill that designs flows with you
                       (mad-flow) where claude finds it
+  mad desktop [-no-window]
+                      open the deck in a window of its own (preview)
   mad kill-server     stop the deck, every agent in it and what they
                       left running
   mad version         print the version
@@ -130,6 +132,8 @@ func Run(args []string, stdio IO) int {
 		err = deck.FitSidebar()
 	case "focus":
 		err = deck.FocusStage("")
+	case "desktop":
+		err = desktopCmd(args, stdio)
 	case "kill-server":
 		err = killServer(stdio.Out)
 	case "sidebar":

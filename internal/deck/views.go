@@ -207,6 +207,12 @@ func layoutChecksum(s string) uint16 {
 
 // ensureAgent starts agent id, or resumes its session when its process
 // is gone.
+// EnsureAgent starts agent id off stage, resuming its session, unless its
+// process runs. The desktop window opens agents through it.
+func EnsureAgent(st *state.State, id string, kinds []agent.Kind) error {
+	return ensureAgent(st, id, kinds)
+}
+
 func ensureAgent(st *state.State, id string, kinds []agent.Kind) error {
 	p, a := st.FindAgent(id)
 	if a == nil {

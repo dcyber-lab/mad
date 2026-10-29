@@ -202,6 +202,7 @@ mad spawn [flags] [-- agent flags]
 mad send [-w] AGENT TEXT
                         type a message into an agent; -w prints its reply
 mad wait AGENT          wait for the agent's turn to end, print its reply
+mad desktop             open the deck in a window of its own (preview)
 mad kill-server         stop the deck, every agent in it and what they
                         left running
 mad version             print the version
@@ -238,6 +239,27 @@ again only the panel. The views are laid out in a grid right of the
 sidebar, as many to a row as the stage has room for at 70 columns each.
 `enter` puts an agent in the view in use (the one focused last) unless it
 is on stage already; click a view, or `tab`, to work in it.
+
+## Desktop window (preview)
+
+`mad desktop` opens the deck in a window of its own: the projects and
+agents in a sidebar on the left, and each agent you click in a tab on the
+right, with the agent's own TUI in it. The window is one more client of
+the same tmux server, so agents keep running when it closes, and the
+terminal deck can be open at the same time.
+
+- It opens in Chrome, Chromium, Edge or Brave in app mode (no tabs, no
+  address bar), with a browser profile of mad's own; without one of
+  those, in your default browser. `-no-window` only prints the URL.
+- The server listens on 127.0.0.1 only and wants the token in the URL it
+  printed: a terminal in the window is a shell on your machine.
+- `Alt-n` jumps to the next agent that needs you, `Alt-j` / `Alt-k` to the
+  next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-w` closes the tab.
+- An agent is in one place at a time: opening it in the window takes it
+  off the terminal deck's stage, and the deck showing it again takes it
+  back.
+- Notifications still come from the deck, which counts an agent shown in
+  the window as one you are looking at.
 
 ## Reading the sidebar
 

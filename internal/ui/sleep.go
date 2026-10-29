@@ -39,7 +39,7 @@ func (m *model) sleepers(now time.Time) []string {
 	var ids []string
 	for _, a := range m.st.OrderedAgents() {
 		tr := m.trackers[a.ID]
-		shown := m.onStage(a.ID)
+		shown := m.seen(a.ID)
 		// A working run comes back to its agents; it would only wake them.
 		if tr == nil || tr.Status != status.Idle || shown || !m.canSleep(a) || a.Run != "" && m.runActive(a.Run) {
 			continue

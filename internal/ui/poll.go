@@ -255,6 +255,12 @@ func (m *model) onStage(id string) bool {
 	return m.shown[id] || m.shown[tmux.IDTask] && id == m.taskFor
 }
 
+// seen reports whether agent id is in front of someone: on stage, or in
+// a desktop window (mad desktop).
+func (m *model) seen(id string) bool {
+	return m.onStage(id) || m.panes[id].Viewed
+}
+
 // alert is a notification to send; one about the agent on stage is
 // dropped if someone is looking at the deck when it goes out.
 type alert struct {
@@ -281,12 +287,12 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			hook := m.hooks[a.ID]
 			pane, ok := m.panes[a.ID]
 			prev := tr.Status
-			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], m.onStage(a.ID), now)
+			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], m.seen(a.ID), now)
 			if prev == status.Running && tr.Status != status.Running {
 				m.gitDue, m.readDue = true, true // a turn ended: its changes and cost are worth showing now
 			}
 			if e, ok := m.event(p, a, prev, tr.Status, hook, now); ok {
-				alerts = append(alerts, alert{e, m.onStage(a.ID)})
+				alerts = append(alerts, alert{e, m.seen(a.ID)})
 			}
 			if hook != nil && hook.SessionID != "" && hook.SessionID != a.SessionID {
 				// A forked resume reports its new id here; later resumes use it.
