@@ -188,6 +188,11 @@ type model struct {
 	sleeping       bool      // idle agents are being put to sleep
 	lastSleepCheck time.Time // when they were last looked for
 
+	dispatching  bool                 // a queued message is being sent
+	lastDispatch time.Time            // when the queues were last looked at
+	queued       map[string]int       // agent id → messages waiting (not paused)
+	queueAt      map[string]time.Time // agent id → not offered a message before
+
 	runs          map[string]*madrun.File // run id → its run.json as last read
 	runnerStarted map[string]time.Time    // run id → when its runner was last started here
 	runnerMissing map[string]int          // run id → polls in a row without its runner
@@ -264,6 +269,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		runnerStarted: map[string]time.Time{},
 		runnerMissing: map[string]int{},
 		notified:      map[string]time.Time{},
+		queued:        map[string]int{},
+		queueAt:       map[string]time.Time{},
 	}
 	m.rebuildRows()
 	return m
@@ -312,6 +319,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cfg.SleepAfter > 0 && !m.sleeping && time.Since(m.lastSleepCheck) >= sleepCheckEvery {
 			cmds = append(cmds, m.sleepCmd(time.Now()))
 		}
+		if !m.dispatching && time.Since(m.lastDispatch) >= dispatchEvery {
+			cmds = append(cmds, m.dispatchCmd(time.Now()))
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
@@ -324,6 +334,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case sleptMsg:
 		return m, m.applySlept(msg)
+	case dispatchedMsg:
+		return m, m.applyDispatched(msg)
 	case dayMsg:
 		m.dayReading, m.dayCost = false, float64(msg)
 	case gitMsg:

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
@@ -105,8 +107,20 @@ func useDeck(t *testing.T) (*state.Project, *state.Agent) {
 
 func dial(t *testing.T, s *Server, id string) (*websocket.Conn, context.Context) {
 	t.Helper()
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
+	// A websocket's handler outlives ts.Close (the connection is hijacked):
+	// the test waits for it, or it would still use the tmux socket the
+	// test is putting back.
+	var handlers sync.WaitGroup
+	h := s.Handler()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlers.Add(1)
+		defer handlers.Done()
+		h.ServeHTTP(w, r)
+	}))
+	t.Cleanup(func() {
+		ts.Close()
+		handlers.Wait()
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
 	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/term?cols=100&rows=30&id=" + id + "&token=" + s.Token
@@ -244,5 +258,41 @@ func TestWindowCommand(t *testing.T) {
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	if cmd := WindowCommand("u", "p"); !strings.HasSuffix(cmd.Path, "open") && !strings.HasSuffix(cmd.Args[0], "open") {
 		t.Errorf("fallback = %v", cmd.Args)
+	}
+}
+
+func TestQueueAPI(t *testing.T) {
+	dir := isolate(t)
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: dir, Agents: []*state.Agent{{ID: "a1", Kind: "claude"}}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	s := New(agent.Builtin())
+	h := s.Handler()
+	call := func(method, url, body string) (int, queue.Queue) {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(method, url+"&token="+s.Token, strings.NewReader(body)))
+		var q queue.Queue
+		_ = json.Unmarshal(w.Body.Bytes(), &q)
+		return w.Code, q
+	}
+	if code, _ := call("POST", "/api/queue?id=../etc", "x"); code != http.StatusNotFound {
+		t.Errorf("unknown agent: %d", code)
+	}
+	if code, q := call("POST", "/api/queue?id=a1", "fix the tests"); code != 200 || len(q.Items) != 1 {
+		t.Fatalf("add: %d %+v", code, q)
+	}
+	code, q := call("POST", "/api/queue?id=a1", "then push")
+	if code != 200 || len(q.Items) != 2 {
+		t.Fatalf("add: %d %+v", code, q)
+	}
+	if _, q := call("POST", "/api/queue/pause?id=a1&paused=1", ""); !q.Paused {
+		t.Errorf("pause: %+v", q)
+	}
+	if _, q := call("DELETE", "/api/queue?id=a1&item="+q.Items[0].ID, ""); len(q.Items) != 1 || q.Items[0].Text != "then push" {
+		t.Errorf("remove: %+v", q)
+	}
+	if _, q := call("DELETE", "/api/queue?id=a1", ""); len(q.Items) != 0 || q.Paused {
+		t.Errorf("clear: %+v", q)
 	}
 }

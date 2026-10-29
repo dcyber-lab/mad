@@ -79,7 +79,14 @@ function drawSidebar() {
       row.append(el("span", "dot"));
       const icon = el("span", "icon", a.icon || a.kind[0]);
       if (a.color) icon.style.color = /^#/.test(a.color) ? a.color : xtermColor(a.color);
-      row.append(icon, el("span", "name", label(a)));
+      const name = el("span", "name", label(a));
+      const q = a.queue;
+      if (q && q.items && q.items.length) {
+        const n = el("span", `qn${q.paused ? " paused" : ""}`, `⇢${q.items.length}`);
+        n.title = q.paused ? "queued messages, paused" : "queued messages";
+        name.append(n);
+      }
+      row.append(icon, name);
       row.append(el("span", "meta", st === "waiting" ? "needs you" : money(a.cost)));
       if (a.detail) row.append(el("span", "detail", a.detail));
       row.onclick = () => show(a.id);
@@ -87,6 +94,7 @@ function drawSidebar() {
     }
     nav.append(box);
   }
+  drawQueue();
   for (const [id, o] of opened) {
     const a = agents.get(id);
     if (!a) continue;
@@ -94,6 +102,69 @@ function drawSidebar() {
     o.tab.querySelector(".t").textContent = label(a);
   }
 }
+
+// ---- the queue of the agent shown: messages typed in when its turn ends ----
+
+function drawQueue(fresh) {
+  const box = $("#queue");
+  const a = current && agents.get(current);
+  box.hidden = !current;
+  if (!a) return;
+  const q = fresh || a.queue || { items: [] };
+  if (fresh) a.queue = fresh;
+  const items = q.items || [];
+  const list = $("#qitems");
+  const key = JSON.stringify([current, items.map((i) => i.id)]);
+  if (list.dataset.key !== key) {
+    list.dataset.key = key;
+    list.replaceChildren();
+    items.forEach((it, i) => {
+      const li = el("li");
+      li.title = it.text;
+      const x = el("span", "x", "×");
+      x.title = "drop it";
+      x.onclick = () => queueCall("DELETE", { item: it.id });
+      li.append(el("span", "n", String(i + 1)), el("span", "t", it.text.split("\n")[0]), x);
+      list.append(li);
+    });
+  }
+  $("#qerr").textContent = q.error && items.length ? `Not sent yet: ${q.error}` : "";
+  const pause = $("#qpause");
+  pause.textContent = q.paused ? "Resume" : "Pause";
+  pause.classList.toggle("on", !!q.paused);
+}
+
+async function queueCall(method, params, body, path = "/api/queue") {
+  const id = current;
+  const qs = new URLSearchParams({ token, id, ...params });
+  const r = await fetch(`${path}?${qs}`, { method, body });
+  if (!r.ok) { $("#qerr").textContent = await r.text(); return false; }
+  const q = await r.json();
+  if (id === current) drawQueue(q);
+  drawSidebar();
+  return true;
+}
+
+$("#qinput").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+  e.preventDefault();
+  const t = e.target;
+  const text = t.value;
+  if (!text.trim() || !current) return;
+  // Cleared at once, so what is typed next is a message of its own; put
+  // back if it was not queued.
+  t.value = "";
+  t.style.height = "";
+  if (!(await queueCall("POST", {}, text)) && !t.value) t.value = text;
+});
+$("#qinput").addEventListener("input", (e) => {
+  e.target.style.height = "";
+  e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`;
+});
+$("#qpause").onclick = () => {
+  const q = agents.get(current)?.queue;
+  queueCall("POST", { paused: q && q.paused ? "0" : "1" }, null, "/api/queue/pause");
+};
 
 // xterm-256 color number → css, for the kinds' icon colors.
 function xtermColor(n) {
