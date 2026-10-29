@@ -202,6 +202,9 @@ mad spawn [flags] [-- agent flags]
 mad send [-w] AGENT TEXT
                         type a message into an agent; -w prints its reply
 mad wait AGENT          wait for the agent's turn to end, print its reply
+mad queue add AGENT TEXT
+                        line a message up for when the agent's turn is
+                        over; also ls, rm, pause, resume
 mad desktop             open the deck in a window of its own (preview)
 mad kill-server         stop the deck, every agent in it and what they
                         left running
@@ -239,6 +242,26 @@ again only the panel. The views are laid out in a grid right of the
 sidebar, as many to a row as the stage has room for at 70 columns each.
 `enter` puts an agent in the view in use (the one focused last) unless it
 is on stage already; click a view, or `tab`, to work in it.
+
+## Queueing messages
+
+`mad queue add AGENT TEXT` lines a message up for an agent while it
+works: the deck types it in once the agent's turn is over, the way
+`mad send` would, and the next one after that. An agent asleep or
+stopped is resumed for it; one waiting for your answer, or with a draft
+of yours in its prompt, keeps its queue until that is dealt with. The
+sidebar shows `⇢N` after an agent with N messages waiting.
+
+```
+mad queue add impl "now add tests for it"
+mad queue ls                 # every queue, and why a message didn't go yet
+mad queue rm impl [ITEM]     # one message, or all of them
+mad queue pause impl         # hold them; resume lets them go
+```
+
+The deck sends them, so they go only while it runs. An agent in a run
+keeps its queue: the run gives its roles their work. The desktop window
+has the same queue under each agent's terminal.
 
 ## Desktop window (preview)
 

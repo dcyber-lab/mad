@@ -54,6 +54,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /", http.FileServerFS(web))
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
 	mux.Handle("GET /api/term", s.auth(http.HandlerFunc(s.term)))
+	mux.Handle("POST /api/queue", s.auth(http.HandlerFunc(s.queueAdd)))
+	mux.Handle("DELETE /api/queue", s.auth(http.HandlerFunc(s.queueRemove)))
+	mux.Handle("POST /api/queue/pause", s.auth(http.HandlerFunc(s.queuePause)))
 	return noCache(mux)
 }
 

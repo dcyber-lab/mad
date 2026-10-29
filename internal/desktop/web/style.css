@@ -100,3 +100,30 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 }
 #empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--text); }
 #empty .muted { color: var(--muted); max-width: 440px; text-align: center; line-height: 1.6; }
+
+#queue { border-top: 1px solid var(--line); background: var(--panel); padding: 6px 10px 8px; }
+#qitems { list-style: none; margin: 0 0 6px; padding: 0; max-height: 140px; overflow-y: auto; }
+#qitems:empty { display: none; }
+#qitems li {
+  display: flex; gap: 8px; align-items: baseline; padding: 3px 4px; border-radius: 4px; color: var(--text);
+}
+#qitems li:hover { background: var(--panel-2); }
+#qitems li .n { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; width: 14px; text-align: right; flex: none; }
+#qitems li .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#qitems li .x { color: var(--muted); cursor: pointer; padding: 0 4px; }
+#qitems li .x:hover { color: var(--stopped); }
+#qerr { color: var(--waiting); font-size: 11px; margin: 0 4px 4px; }
+#qerr:empty { display: none; }
+.qbar { display: flex; gap: 8px; align-items: flex-end; }
+#qinput {
+  flex: 1; resize: none; max-height: 120px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font: inherit; line-height: 1.4;
+}
+#qinput:focus { outline: none; border-color: var(--accent); }
+#qpause {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 5px;
+  padding: 5px 10px; font: inherit; cursor: pointer;
+}
+#qpause.on { border-color: var(--waiting); color: var(--waiting); }
+.agent .qn { color: var(--accent); font-size: 11px; margin-left: 4px; }
+.agent .qn.paused { color: var(--muted); }

@@ -10,6 +10,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -336,6 +337,7 @@ func (m *model) removeAgents(ids ...string) tea.Cmd {
 		m.st.RemoveAgent(id)
 		delete(m.trackers, id)
 		status.RemoveHook(id)
+		queue.Forget(id)
 	}
 	m.save()
 	m.rebuildRows()

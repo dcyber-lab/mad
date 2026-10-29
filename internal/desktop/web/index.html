@@ -27,6 +27,14 @@
           <kbd>Alt</kbd>+<kbd>n</kbd> jumps to the next agent that needs you.</p>
       </div>
     </div>
+    <section id="queue" hidden>
+      <div id="qerr"></div>
+      <ol id="qitems"></ol>
+      <div class="qbar">
+        <textarea id="qinput" rows="1" placeholder="Queue a message: it is typed in when the agent's turn is over. Enter adds, Shift-Enter starts a new line."></textarea>
+        <button id="qpause" type="button" title="hold the queued messages">Pause</button>
+      </div>
+    </section>
   </main>
 </div>
 <script src="vendor/xterm.js"></script>

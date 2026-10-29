@@ -7,6 +7,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -42,6 +43,8 @@ type Agent struct {
 	Done bool    `json:"done,omitempty"`
 	Cost float64 `json:"cost,omitempty"`
 	Role string  `json:"role,omitempty"`
+	// Queue is what waits for its turn to end (package queue).
+	Queue *queue.Queue `json:"queue,omitempty"`
 }
 
 // How often each part of the snapshot is brought up to date. Screens are
@@ -142,6 +145,7 @@ func (p *poller) Poll(now time.Time) {
 		p.gits = gits
 	}
 
+	queues, _ := queue.All()
 	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}}
 	seen := map[string]bool{}
 	for _, pr := range st.Projects {
@@ -164,11 +168,15 @@ func (p *poller) Poll(now time.Time) {
 			if detail == "" {
 				detail = info.Prompt
 			}
-			out.Agents = append(out.Agents, Agent{
+			ag := Agent{
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
 				Name: a.Name, Title: info.Title, Detail: detail,
 				Status: s, Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role,
-			})
+			}
+			if q, ok := queues[a.ID]; ok {
+				ag.Queue = &q
+			}
+			out.Agents = append(out.Agents, ag)
 		}
 		snap.Projects = append(snap.Projects, out)
 	}

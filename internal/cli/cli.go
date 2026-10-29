@@ -46,6 +46,8 @@ usage:
                       -w waits for its reply and prints it
   mad wait [-t duration] AGENT
                       wait until the agent's turn ends; print its reply
+  mad queue add|ls|rm|pause|resume
+                      messages typed in when an agent's turn is over
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles
                       (design, implement, review); "mad run" for more
@@ -132,6 +134,8 @@ func Run(args []string, stdio IO) int {
 		err = deck.FitSidebar()
 	case "focus":
 		err = deck.FocusStage("")
+	case "queue":
+		err = queueCmd(args, stdio)
 	case "desktop":
 		err = desktopCmd(args, stdio)
 	case "kill-server":
