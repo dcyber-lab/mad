@@ -252,7 +252,7 @@ function connect(id, o) {
   ws.onclose = () => {
     if (!opened.has(id) || o.ws !== ws) return;
     o.ws = null;
-    if (!o.box.querySelector(".msg")) message(o, "Disconnected. Click to reconnect.", () => connect(id, o));
+    if (!o.box.querySelector(".msg")) message(o, "Closed: the terminal deck took this agent, or mad stopped. Click to open it here again.", () => connect(id, o));
   };
 }
 

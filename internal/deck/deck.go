@@ -192,6 +192,11 @@ func ShowPane(madID string, focus bool) error {
 		return nil
 	}
 	if target.ID != stage.ID {
+		// The swap puts the stage's pane in the agent's window: a desktop
+		// window showing that window lets it go first.
+		if err := tmux.CloseDesks(target.WindowID); err != nil {
+			return err
+		}
 		// Pre-size the agent's window so the swap doesn't trigger a resize.
 		_ = tmux.Run("resize-window", "-t", target.WindowID,
 			"-x", strconv.Itoa(stage.Width), "-y", strconv.Itoa(stage.Height))
@@ -418,6 +423,11 @@ func KillAgent(id string) error {
 		} else {
 			defer Arrange()
 		}
+	}
+	// Its window goes with it; a desktop window showing it would move on
+	// to another agent's.
+	if err := tmux.CloseDesks(pane.WindowID); err != nil {
+		return err
 	}
 	return tmux.Run("kill-pane", "-t", pane.ID)
 }

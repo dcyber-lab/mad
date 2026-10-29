@@ -217,6 +217,16 @@ func TestDeckClients(t *testing.T) {
 	}
 }
 
+func TestDesksShowing(t *testing.T) {
+	out := "main\t@1\n_pool\t@2\n_desk-1\t@2\n_desk-2\t@3\n_desk-3\t@2\n"
+	if got := desksShowing(out, "@2"); strings.Join(got, " ") != "_desk-1 _desk-3" {
+		t.Errorf("desksShowing = %q", got)
+	}
+	if got := desksShowing(out, "@1"); len(got) != 0 {
+		t.Errorf("the deck's own session is closed: %q", got)
+	}
+}
+
 func TestVersionAtLeast(t *testing.T) {
 	cases := map[string]bool{
 		"tmux 3.4\n": true, "tmux 3.3a": true, "tmux 3.1c": false, "tmux 2.9": false,
