@@ -138,6 +138,7 @@ function openNew(project) {
   nc.open = true;
   closeChannel();
   closeSkills();
+  closeBoard();
   inMain(true);
   for (const [k] of KINDS) knownModels(k); // asked now: there by the time it is picked
   nc.project = project || was || nc.project || (deck.projects[0] && deck.projects[0].path) || "";
