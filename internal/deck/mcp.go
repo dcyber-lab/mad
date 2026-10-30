@@ -71,7 +71,10 @@ func CodexMCPArgs(id string) []string {
 	}
 	cmd, _ := json.Marshal(paths.Self())
 	args, _ := json.Marshal(mcpArgs(id))
-	out := []string{"-c", "mcp_servers.mad.command=" + string(cmd), "-c", "mcp_servers.mad.args=" + string(args)}
+	out := []string{"-c", "mcp_servers.mad.command=" + string(cmd), "-c", "mcp_servers.mad.args=" + string(args),
+		// Under -a never (a team's or run's codex) a tool that changes
+		// something is refused unless approved here.
+		"-c", `mcp_servers.mad.default_tools_approval_mode="approve"`}
 	// A TOML inline table: {KEY="value", ...}, in a steady order.
 	env := mcpEnv()
 	keys := make([]string, 0, len(env))
