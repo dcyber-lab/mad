@@ -275,9 +275,10 @@ A tab shows the agent's conversation (claude, codex and pi), read from its
 transcript: what you asked, its replies as formatted markdown, and its tool
 calls, each opening to its input and output. Reading it starts nothing; an
 agent asleep or stopped stays so. `Alt-t` (or Chat / Terminal at the top
-right) switches to the agent's own TUI, attached to its pane; the tab
-switches by itself when the agent asks you something. A shell opens in its
-TUI.
+right) switches to the agent's own TUI, attached to its pane. When the
+agent asks you something, its TUI opens under the conversation, to answer
+there, and goes away once answered; the keys you type stay in the message
+box until you click into it. A shell opens in its TUI.
 
 What an agent is writing streams in as it writes it, token by token, and
 gives way to the transcript's copy once that has it. For that the deck runs
@@ -300,12 +301,14 @@ its own API: those are not followed.
 - `Alt-n` jumps to the next agent that needs you, `Alt-j` / `Alt-k` to the
   next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-t` switches
   between conversation and terminal, `Alt-w` closes the tab.
+- `⌘K` searches the agents. The window is light or dark as the system is,
+  or as picked at the bottom of the sidebar; terminals stay dark.
 - `/` at the start of a message offers the agent's slash commands: its
   TUI's own and the skills, prompts and plugins' commands it finds in its
   directory (claude and pi say which, asked headless with nothing sent to
   a model). `Tab` completes one, `Enter` sends it. One that brings up a
-  picker or a report, such as `/model`, switches the tab to the terminal,
-  where that shows.
+  picker or a report, such as `/model`, opens the TUI under the
+  conversation, where that shows, until its result is in.
 - An agent is in one place at a time: opening its terminal in the window
   takes it off the terminal deck's stage, and the deck showing it again
   takes it back, closing its terminal in the window.
