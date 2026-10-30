@@ -56,10 +56,14 @@ func board(out io.Writer) error {
 		fmt.Fprintln(out, "Nothing on the board.")
 		return nil
 	}
-	if r := bus.Report(st, statuses, at); r != "" {
-		fmt.Fprintln(out, r)
-		fmt.Fprintln(out)
+	// The report's channel lines, under totals that count what waits for
+	// you as the column below lists it.
+	_, lines, _ := strings.Cut(bus.Report(st, statuses, at), "\n")
+	fmt.Fprintln(out, boardTotals(v))
+	if lines != "" {
+		fmt.Fprintln(out, lines)
 	}
+	fmt.Fprintln(out)
 	if needs := v.Inbox.NeedsYou(); len(needs) > 0 {
 		fmt.Fprintln(out, columnNames[bus.ColWaitingYou])
 		for _, it := range needs {
@@ -80,6 +84,24 @@ func board(out io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// boardTotals is the board's first line: "4 open · 2 waiting for you ·
+// 1 review", what waits for you being the inbox.
+func boardTotals(v attention.View) string {
+	n := map[string]int{bus.ColWaitingYou: v.Inbox.Needs}
+	for _, c := range v.Board {
+		n[c.Column]++
+	}
+	open := 0
+	var parts []string
+	for _, col := range bus.Columns[:len(bus.Columns)-1] { // done is not open
+		if n[col] > 0 {
+			open += n[col]
+			parts = append(parts, fmt.Sprintf("%d %s", n[col], strings.ToLower(columnNames[col])))
+		}
+	}
+	return strings.Join(append([]string{fmt.Sprintf("%d open", open)}, parts...), " · ")
 }
 
 // itemLine is one thing waiting for the person: who or what, its
