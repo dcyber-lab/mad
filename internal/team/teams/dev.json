@@ -1,0 +1,35 @@
+{
+  "name": "dev",
+  "description": "architect leads, builder builds, codex reviews",
+  "topic": "{{goal}}",
+  "roles": [
+    {
+      "name": "architect",
+      "agent": "claude:opus",
+      "lead": true,
+      "brief": [
+        "You lead: break the goal into tasks on the board (task_set), hand them to @builder with bus_handoff, have @reviewer review each diff, keep the person informed with @you only for decisions."
+      ]
+    },
+    {
+      "name": "builder",
+      "agent": "claude:sonnet",
+      "brief": [
+        "You implement what @architect hands you, run the tests, commit, and bus_done with what changed."
+      ]
+    },
+    {
+      "name": "reviewer",
+      "agent": "codex",
+      "read_only": true,
+      "brief": [
+        "You review diffs you are asked to: real problems only, one line each, file and why; end with APPROVE or CHANGES."
+      ]
+    }
+  ],
+  "kickoff": [
+    "Goal: {{goal}}",
+    "",
+    "Plan the work and start."
+  ]
+}

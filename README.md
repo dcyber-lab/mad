@@ -198,6 +198,8 @@ mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)
 mad ls                  list the agents: id, name, kind, status, directory
 mad board               the task board: who owns what, what waits for you
+mad team ls|start|show|sleep|rm|check
+                        teams: agents in roles started together in a channel
 mad spawn [flags] [-- agent flags]
                         start an agent off stage and print its id
 mad send [-w] AGENT TEXT
@@ -936,6 +938,51 @@ approve it. `bus_who` lists the skills available to an agent's project.
   project's skills as chips: a click puts `/name` in the message box.
   An agent's menu has **Save as skill**, which asks that agent to
   distill what worked in its conversation.
+
+## Teams
+
+A team is agents in roles that start together in a channel, one of them
+the lead, and stay: they talk on the bus and hand work to each other with
+`bus_handoff` (a run, above, pushes one task through steps instead). A
+template names the roles; the built-in `dev` has an architect (claude
+opus, the lead), a builder (claude sonnet) and a reviewer (codex, read
+only).
+
+```sh
+mad team ls                         # templates and where each is from; running teams
+mad team start -C ~/code/api "add a --version flag, with a test"
+mad team start -t dev -n api --agent builder=claude:haiku -w team/api "..."
+mad team show api                   # roles, agents, briefs
+mad team sleep api                  # every agent of it to sleep
+mad team rm api                     # agents removed, channel archived
+mad team check FILE                 # check a template file
+```
+
+- `start` makes the channel (named by `-n`, else by the goal's first
+  words), starts the agents (named by their role, `builder-api` when the
+  project has a `builder` already), sets the lead, and posts the goal as
+  you, `@`mentioning only the lead: the others are woken when the lead
+  hands them work. They work in the project's directory, or all in one
+  worktree with `-w BRANCH`. `--perm` and `--agent role=agent` are the
+  run's (`auto|allowlist|bypass`; `claude:opus@high`, `codex`); a role
+  that is `read_only` gets the read-only flags whatever the permission.
+  At most 6 roles and 3 teams at a time.
+- Templates are JSON files, in `~/.config/mad/teams/` and a project's
+  `.mad/teams/`, a later one replacing an earlier one of its name:
+  `{"name", "description", "topic", "roles": [{"name", "agent", "lead",
+  "read_only", "brief"}], "kickoff"}`; `{{goal}}` fills the topic and
+  the kickoff. Exactly one role leads.
+- A role's `brief` reaches the agent in its `mad mcp` instructions,
+  with its team, channel, lead and its teammates' first lines, at every
+  start and resume: it holds across sleep, restarts and mad rebuilds.
+  The running teams are in `bus/teams.json`; removing an agent by hand
+  takes it out of its team, and the last one out ends the team.
+- In the window, + by Channels is a menu with **New team**, and a
+  project's menu has **New team…**: a form with the template's roles,
+  each with an agent and effort to change, the project, name, goal,
+  permission and an optional shared worktree. A team's channel header
+  shows its roles with their live status; its menu has **Sleep team**
+  and **Remove team**.
 
 ## Custom agents
 

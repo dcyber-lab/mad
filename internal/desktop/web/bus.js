@@ -19,17 +19,20 @@ function channelsGroup() {
   head.append(icon("chat"), el("b", "", "Channels"));
   const plus = el("button", "icon-btn");
   plus.type = "button";
-  plus.title = "a new channel";
+  plus.title = "a new channel or team";
   plus.append(icon("plus"));
   plus.onclick = (e) => {
     e.stopPropagation();
-    createChannel();
+    popup(plus, [
+      { label: "New channel", desc: "agents and you talk in it", icon: "chat", onclick: () => createChannel() },
+      { label: "New team", desc: "agents in roles start together, with a lead", icon: "agent", onclick: () => newTeam() },
+    ], { right: true });
   };
   head.append(el("span", "grow"), plus);
   g.append(head);
   const list = deck.bus || [];
   if (!list.length) {
-    const hint = el("div", "chan none", "Talk with your agents: + makes a channel.");
+    const hint = el("div", "chan none", "Talk with your agents: + makes a channel or a team.");
     hint.onclick = () => createChannel();
     g.append(hint);
   }
@@ -146,7 +149,8 @@ function drawChanHead() {
   what.append(el("b", "", chanTitle(id)));
   if (c && c.topic) what.append(el("span", "muted", c.topic));
   const lead = c && c.lead && agents.get(c.lead);
-  if (lead) what.append(el("span", "muted", "lead " + label(lead)));
+  if (c && c.team) what.append(teamLine(c.team));
+  else if (lead) what.append(el("span", "muted", "lead " + label(lead)));
   const who = el("div", "cwho");
   for (const m of (c && c.members) || []) {
     const a = agents.get(m.id) || { kind: m.kind, id: m.id };
@@ -228,6 +232,7 @@ function chanMenu(c, anchor) {
       })), {}), 0),
     });
   }
+  if (c.team) items.push(...teamItems(c));
   popup(anchor, items, {});
 }
 
@@ -395,7 +400,7 @@ function drawAgentMenu(w) {
   const c = busChannel(cv.open);
   const members = new Set(((c && c.members) || []).map((m) => m.id));
   const q = w.query.toLowerCase();
-  const all = [...agents.values()].filter((a) => a.chat && !a.role)
+  const all = [...agents.values()].filter((a) => a.chat && (!a.role || a.team))
     .filter((a) => !q || label(a).toLowerCase().includes(q) || a.id.startsWith(q))
     .sort((x, y) => (members.has(y.id) - members.has(x.id)) || label(x).localeCompare(label(y)));
   if (!all.length) return closeMenu();
@@ -428,7 +433,7 @@ async function createChannel() {
   topic.placeholder = "what it is for (optional)";
   const pick = el("div", "suggest");
   const chosen = new Set();
-  for (const a of [...agents.values()].filter((x) => x.chat && !x.role)) {
+  for (const a of [...agents.values()].filter((x) => x.chat && (!x.role || x.team))) {
     const row = el("label", "srow pickrow");
     const box = el("input");
     box.type = "checkbox";

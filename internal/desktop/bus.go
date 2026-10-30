@@ -34,6 +34,7 @@ type BusChannel struct {
 	Unread  int         `json:"unread,omitempty"`
 	Paused  bool        `json:"paused,omitempty"`
 	Lead    string      `json:"lead,omitempty"` // the agent that answers for its work
+	Team    *BusTeam    `json:"team,omitempty"` // the team it is the channel of (team.go)
 }
 
 // busChannels lists the channels, then the DMs, for the snapshot.
@@ -44,9 +45,10 @@ func busChannels(st *state.State) []BusChannel {
 		return out
 	}
 	yours, _ := bus.YourChannels()
+	teams := busTeams(st)
 	for _, c := range chans {
 		bc := BusChannel{ID: c.ID, Title: "#" + c.ID, Topic: c.Topic, DM: strings.HasPrefix(c.ID, "dm."),
-			Last: yours[c.ID].Last, Unread: yours[c.ID].Unread, Paused: c.Paused, Lead: c.Lead, Members: []BusMember{}}
+			Last: yours[c.ID].Last, Unread: yours[c.ID].Unread, Paused: c.Paused, Lead: c.Lead, Members: []BusMember{}, Team: teams[c.ID]}
 		var names []string
 		for _, m := range c.Members {
 			if m == bus.You {

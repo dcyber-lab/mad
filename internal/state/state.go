@@ -69,8 +69,11 @@ type Agent struct {
 	// under `mad host`, for the desktop window to draw (ModeWindow).
 	Mode string `json:"mode,omitempty"`
 	// Run is the id of the run the agent works in, Role its part there.
-	Run       string    `json:"run,omitempty"`
-	Role      string    `json:"role,omitempty"`
+	Run  string `json:"run,omitempty"`
+	Role string `json:"role,omitempty"`
+	// Team is the team the agent is a member of (package team), where
+	// Role is its part; Run stays empty, a teammate is an ordinary agent.
+	Team      string    `json:"team,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
