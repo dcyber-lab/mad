@@ -66,7 +66,7 @@ function drawBoard() {
   if (!bd.open) return;
   const cards = deck.board || [];
   const key = JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
-    + JSON.stringify([...agents.values()].map((a) => a.status)) + JSON.stringify(deck.spend || {})
+    + JSON.stringify([...agents.values()].map((a) => a.shown)) + JSON.stringify(deck.spend || {})
     + JSON.stringify((deck.timers || []).map((t) => [t.id, t.next_at, t.paused, t.held, t.why, t.fired, t.missed]));
   if (key === bd.key) return;
   bd.key = key;
@@ -78,12 +78,11 @@ function drawBoard() {
   const cols = el("div", "bcols");
   for (const [col, name] of boardColumns) {
     const list = cards.filter((c) => c.column === col);
-    if (!list.length && col !== "waiting-you") continue;
-    const box = el("section", `bcol c-${col}`);
+    const box = el("section", `bcol c-${col}${list.length ? "" : " empty"}`);
     const h = el("h2", "");
     h.append(name, el("span", "muted", list.length ? ` ${list.length}` : ""));
     box.append(h);
-    if (!list.length) box.append(el("p", "muted bnone", "Nothing waits for you."));
+    if (!list.length) box.append(el("p", "muted bnone", col === "waiting-you" ? "Nothing waits for you." : "Nothing here."));
     for (const c of list) box.append(boardCard(c));
     cols.append(box);
   }
@@ -91,13 +90,13 @@ function drawBoard() {
 }
 
 // spendLine is what mad's own work cost today against its budget, with a
-// thin bar; red once the budget is spent and agents wait.
+// thin bar; amber from 80% of it, red once it is spent and agents wait.
 function spendLine(s) {
   if (!s || !s.day || (!s.usd && !s.turns)) return null;
   const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? ` of $${+s.budget_usd.toFixed(2)}` : "");
   const turns = `${s.turns}` + (s.budget_turns ? ` of ${s.budget_turns}` : "") + (s.turns === 1 ? " turn" : " turns");
   const part = Math.max(s.budget_usd ? s.usd / s.budget_usd : 0, s.budget_turns ? s.turns / s.budget_turns : 0);
-  const box = el("div", `bspend${s.closed ? " closed" : ""}`);
+  const box = el("div", `bspend${s.closed ? " closed" : part >= 0.8 ? " hot" : ""}`);
   const bar = el("div", "bbar");
   const fill = el("div", "bfill");
   fill.style.width = `${Math.min(100, Math.round(part * 100))}%`;
@@ -125,7 +124,8 @@ function boardCard(c) {
   if (c.channel) meta.append(el("span", "muted", c.channel.startsWith("dm.") ? "DM" : "#" + c.channel));
   meta.append(el("span", "muted", ageText(c.age)));
   card.append(meta);
-  if (c.why) card.append(el("div", "bwhy", boardWhy[c.why] || c.why));
+  if (c.why) card.append(el("div", "bwhy", c.why === "waits" && c.waits && c.waits.length ? `waits on ${c.waits.join(", ")}` : boardWhy[c.why] || c.why));
+  // An ask's message is what its title does not already say (bus.Card).
   const text = (c.message && c.message.text) || c.note;
   if (text && text.trim() !== card.querySelector(".btitle").textContent.trim()) card.append(el("div", "bnote", text.length > 220 ? text.slice(0, 219) + "…" : text));
   if (c.task && c.task.nudges && c.task.nudges.length) {

@@ -755,6 +755,21 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
+// setOffline says, over the whole page, that what it draws is old: a
+// failed look leaves the last one on screen, and an agent that looks
+// working may not be. The banner names when it was last true.
+let lastGood = 0;
+function setOffline(off) {
+  const bar = $("#offline");
+  if (!off) lastGood = Date.now();
+  bar.hidden = !off;
+  document.body.classList.toggle("stale", off);
+  if (off) {
+    const at = new Date(lastGood).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    bar.textContent = lastGood ? `Offline · as of ${at} · reconnecting` : "Offline · reconnecting";
+  }
+}
+
 // refresh takes the deck's latest look and draws it.
 async function refresh() {
   try {
@@ -764,6 +779,7 @@ async function refresh() {
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");
     $("#conn").title = "connected";
+    setOffline(false);
     drawQuota(deck.quota);
     drawSidebar();
     openWanted();
@@ -781,6 +797,7 @@ async function refresh() {
   } catch (e) {
     $("#conn").classList.remove("ok");
     $("#conn").title = `no connection to mad (${e.message || e})`;
+    setOffline(true);
   }
 }
 
