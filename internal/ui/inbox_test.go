@@ -12,6 +12,36 @@ import (
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
+// A narrow sidebar cuts the end of an inbox row: it is the context that
+// goes, not the command the person is asked to allow.
+func TestInboxRowKeepsTheCommandWhenNarrow(t *testing.T) {
+	m, st := busDeck(t)
+	now := time.Now()
+	panes := []tmux.Pane{{ID: "%6", MadID: idBuild, Session: tmux.PoolSession, Index: -1}}
+	reports := map[string]status.Report{
+		idBuild: {Hook: &status.Hook{State: status.Waiting, At: now.Add(-time.Minute)},
+			Asks: []status.Ask{{ID: "r1", Kind: status.AskPermission, Tool: "shell", Command: "go test ./internal/attention/... && make clean install", At: now.Add(-time.Minute)}}},
+	}
+	m.applyPoll(pollMsg{panes: panes, screens: map[string]string{idBuild: "y"}, reports: reports}, now)
+	look(m, st)
+	rowAt := func(w int) string {
+		m.width = w
+		m.rebuildRows()
+		for _, l := range strings.Split(m.View(), "\n") {
+			if strings.Contains(l, "builder") && strings.Contains(l, "1m") {
+				return l
+			}
+		}
+		return ""
+	}
+	if l := rowAt(32); !strings.Contains(l, "builder · go test") {
+		t.Errorf("narrow row lost the command: %q", l)
+	}
+	if l := rowAt(60); !strings.Contains(l, "builder  shell · go test") {
+		t.Errorf("wide row changed: %q", l)
+	}
+}
+
 // The deck's block lists the inbox the window has for the same facts: a
 // waiting agent with no task, a host's request, an @you, a pending skill;
 // its count and rows in the window's order. d walks them in that order.

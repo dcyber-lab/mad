@@ -226,6 +226,10 @@ func (m *model) setBus(s busSnap) {
 	m.rebuildRows()
 }
 
+// narrowRow is the width under which an item's text comes before its
+// context in the block: what is cut is the context, not the command.
+const narrowRow = 44
+
 // busRowSegs lays out a row of the block.
 func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 	switch {
@@ -240,11 +244,15 @@ func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 	case b.item != nil:
 		it := b.item
 		left = []seg{{stPlain, "   "}, {stName, it.Title}}
-		if it.Context != "" {
+		if it.Context != "" && m.width >= narrowRow {
 			left = append(left, seg{stPlain, "  "}, seg{stDim, it.Context})
 		}
 		if it.Text != "" {
 			left = append(left, seg{stFaint, " · " + it.Text})
+		}
+		if it.Context != "" && m.width < narrowRow {
+			// narrow: the end is cut, and the command says more than its tool
+			left = append(left, seg{stPlain, "  "}, seg{stDim, it.Context})
 		}
 		if !it.Since.IsZero() {
 			right = []seg{{stFaint, textutil.AgeAt(it.Since, time.Now())}, {stPlain, " "}}

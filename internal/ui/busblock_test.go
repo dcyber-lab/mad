@@ -40,6 +40,7 @@ func busDeck(t *testing.T) (*model, *state.State) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
+	m.width = 60 // wide enough that a row keeps its context first (narrowRow)
 	m.rebuildRows()
 	return m, st
 }
