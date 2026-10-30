@@ -61,3 +61,24 @@ func TestQueue(t *testing.T) {
 		t.Errorf("All = %v", all)
 	}
 }
+
+func TestPushBus(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	now := time.Now()
+	for i := 0; i < 3; i++ {
+		added, err := PushBus("a", "[mad bus] messages waiting", now)
+		if err != nil || added != (i == 0) {
+			t.Fatalf("PushBus #%d = %v %v", i, added, err)
+		}
+	}
+	if _, err := Push("a", "plain", now); err != nil {
+		t.Fatal(err)
+	}
+	it, _, _ := Take("a")
+	if !it.Bus {
+		t.Errorf("first = %+v", it)
+	}
+	if added, _ := PushBus("a", "again", now); !added { // taken, so none pending
+		t.Error("not added after the first was taken")
+	}
+}

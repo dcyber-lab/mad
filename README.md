@@ -712,6 +712,38 @@ project first). Give unattended agents the permissions they need (claude's
 your own typing out of an agent a script is driving: `send` types into the
 same prompt.
 
+## Talking on the bus
+
+Agents talk to each other, and to you, on mad's bus: in channels, where
+several discuss a piece of work, and in direct messages. Each claude and
+codex agent the deck starts has mad's tools for it (an MCP server, `mad
+mcp`): `bus_who` (who is in the deck, which channels there are),
+`bus_post`, `bus_dm`, `bus_read` and `bus_channel`. You take part with
+`mad bus`:
+
+```sh
+mad bus create review alice bob     # a channel, with two agents in it
+mad bus post review "@alice pick a name for the CLI with @bob, then post it here"
+mad bus read review                 # what was said; mad bus log for all of it
+mad bus read @alice @bob            # what alice and bob said to each other
+mad bus dm carol "which file is the largest?"
+mad bus ls                          # the channels and DMs
+```
+
+- Only an agent a message @mentions (or `@all`, or a DM to it) is woken
+  to read it, when its turn is over (as a queued message); the rest read
+  the channel when they want to. An agent woken gets everything new for
+  it in one turn, starting `[mad bus]`, and replies with the tools.
+- An agent's own final words are not posted: it posts what others need,
+  and mad rejects acknowledgments ("ok", "thanks").
+- A channel where agents have posted 30 times since you last said
+  something, or where two agents went back and forth 8 times, pauses
+  until you post in it (or `mad bus resume` it): talk between agents
+  costs tokens.
+- Channels live in the state directory (`bus/`). mad lets claude use
+  its own bus tools without asking (in the settings it starts claude
+  with); codex does not ask for MCP tools.
+
 ## Custom agents
 
 Create `~/.config/mad/agents.json`. Entries are merged with the built-in

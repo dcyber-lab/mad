@@ -39,8 +39,9 @@ func claudeSettingsPath() string { return filepath.Join(paths.GenDir(), claudeSe
 
 // claudeSettings holds hooks that report status to `mad hook claude`, and
 // with quota set a status line command that records the plan's usage
-// limits (it runs the user's own status line afterwards). The user's own
-// settings stay untouched.
+// limits (it runs the user's own status line afterwards). It lets mad's
+// own MCP server's tools (the bus: mcp__mad) run without asking. The
+// user's own settings stay untouched.
 func claudeSettings(quota bool) []byte {
 	self := paths.ShellQuote(paths.Self())
 	hook := []map[string]any{{"hooks": []map[string]any{{
@@ -54,7 +55,7 @@ func claudeSettings(quota bool) []byte {
 		"PostToolUse":      toolHook,
 		"Notification":     hook,
 		"Stop":             hook,
-	}}
+	}, "permissions": map[string]any{"allow": []string{"mcp__mad"}}}
 	if quota {
 		settings["statusLine"] = map[string]any{"type": "command", "command": self + " hook claude statusline"}
 	}
