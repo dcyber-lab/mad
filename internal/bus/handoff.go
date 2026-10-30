@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
@@ -21,9 +22,12 @@ import (
 const (
 	// MaxDepth is how many handoffs deep a chain may go.
 	MaxDepth = 4
-	// MaxSpawns is how many agents a chain may start without a word from
-	// a person.
+	// MaxSpawns is how many agents a chain, or one agent, may start for
+	// handoffs without a word from a person.
 	MaxSpawns = 2
+	// MaxOpenSpawned is how many agents started for handoffs may have
+	// their handoff open at once, deck-wide.
+	MaxOpenSpawned = 4
 )
 
 // lapseSlack is how long after a handoff was delivered a turn must end to
@@ -181,11 +185,54 @@ func parentFor(hs []Handoff, id, parent string) (string, error) {
 	return best, nil
 }
 
+// validChannel tells whether id can be a channel's id: a slug, or a DM's
+// id, never a path.
+func validChannel(id string) bool {
+	return id != "" && !strings.ContainsAny(id, "/\\") && !strings.Contains(id, "..")
+}
+
+// lastYou is when a person last posted in channel, or, with "", in any
+// channel.
+func lastYou(channel string) (time.Time, error) {
+	ids := []string{channel}
+	if channel == "" {
+		cl, err := loadChannels()
+		if err != nil {
+			return time.Time{}, err
+		}
+		ids = nil
+		for _, c := range cl.Channels {
+			ids = append(ids, c.ID)
+		}
+	} else if !validChannel(channel) {
+		return time.Time{}, fmt.Errorf("%q is no channel", channel)
+	}
+	var since time.Time
+	for _, id := range ids {
+		msgs, err := readMsgs(id)
+		if err != nil {
+			return time.Time{}, err
+		}
+		for _, m := range msgs {
+			if m.From.ID == You && m.At.After(since) {
+				since = m.At
+			}
+		}
+	}
+	return since, nil
+}
+
 // ChainState tells, for a handoff agent from would give with parent (""
-// for the one it is working on, if any) in channel (the DM of the two, when
-// ""): the depth of the chain it would join, and how many agents the chain
-// has started since the last word from a person there.
+// for the one it is working on, if any) in channel (any channel, when ""):
+// the depth of the chain it would join, and how many agents have been
+// started for handoffs since the last word from a person there: the most
+// of those started by the chain, and those started by from itself, so an
+// agent with no chain is counted too.
 func ChainState(from, parent, channel string) (depth, spawns int, err error) {
+	since, err := lastYou(channel)
+	if err != nil {
+		return 0, 0, err
+	}
 	hs, err := loadHandoffs()
 	if err != nil {
 		return 0, 0, err
@@ -193,16 +240,10 @@ func ChainState(from, parent, channel string) (depth, spawns int, err error) {
 	if parent, err = parentFor(hs, from, parent); err != nil {
 		return 0, 0, err
 	}
-	var since time.Time
-	if channel != "" {
-		msgs, err := readMsgs(channel)
-		if err != nil {
-			return 0, 0, err
-		}
-		for _, m := range msgs {
-			if m.From.ID == You && m.At.After(since) {
-				since = m.At
-			}
+	own := 0
+	for _, h := range hs {
+		if h.From == from && h.Spawned && h.At.After(since) {
+			own++
 		}
 	}
 	h, ok := findHandoff(hs, parent)
@@ -213,7 +254,19 @@ func ChainState(from, parent, channel string) (depth, spawns int, err error) {
 		}
 		h, ok = findHandoff(hs, h.Parent)
 	}
-	return depth, spawns, nil
+	return depth, max(spawns, own), nil
+}
+
+// OpenSpawned counts the agents started for handoffs that are still open.
+func OpenSpawned() (int, error) {
+	hs, err := loadHandoffs()
+	n := 0
+	for _, h := range hs {
+		if h.Spawned && h.Status == "open" {
+			n++
+		}
+	}
+	return n, err
 }
 
 // MarkSpawned notes that the receiver of handoff id was started for it.
@@ -284,15 +337,26 @@ func HandOff(from From, to, task, context string, files []string, channel, paren
 	if dm {
 		sp.dm, sp.wake = []string{from.ID, to}, to
 	}
+	// The seq is recorded under the lock of the post, so a digest that
+	// carries the message finds it on the handoff.
+	sp.stored = func(seq int) error {
+		hs, err := loadHandoffs()
+		if err != nil {
+			return err
+		}
+		for i := range hs {
+			if hs[i].ID == h.ID {
+				hs[i].Seq = seq
+			}
+		}
+		return saveHandoffs(hs)
+	}
 	res, err := post(sp)
 	if err != nil {
 		_ = dropHandoff(h.ID)
 		return Handoff{}, PostResult{}, err
 	}
 	h.Seq = res.Seq
-	if _, err := changeHandoff(h.ID, func(x *Handoff) error { x.Seq = res.Seq; return nil }); err != nil {
-		return h, res, err
-	}
 	return h, res, nil
 }
 
@@ -314,7 +378,8 @@ func dropHandoff(id string) error {
 }
 
 // Done finishes handoff id as its receiver, from, with result; status is
-// done, or declined. It posts the result in the handoff's channel and wakes
+// done, or declined. A lapsed handoff may still be finished: the receiver
+// was only between turns. It posts the result in the handoff's channel and wakes
 // the agent that gave the work.
 func Done(from From, id, result, status string) (Handoff, PostResult, error) {
 	if status == "" {
@@ -327,13 +392,15 @@ func Done(from From, id, result, status string) (Handoff, PostResult, error) {
 	if result == "" {
 		return Handoff{}, PostResult{}, errors.New("no result given: say what you did, or why you decline")
 	}
+	prev := ""
 	h, err := changeHandoff(id, func(h *Handoff) error {
 		switch {
 		case h.To != from.ID:
 			return fmt.Errorf("handoff %s was not given to you", id)
-		case h.Status != "open":
+		case h.Status != "open" && h.Status != "lapsed":
 			return fmt.Errorf("handoff %s is already %s", id, h.Status)
 		}
+		prev = h.Status
 		h.Status, h.Result, h.DoneAt = status, result, now()
 		return nil
 	})
@@ -342,7 +409,7 @@ func Done(from From, id, result, status string) (Handoff, PostResult, error) {
 	}
 	res, err := post(resultSpec(h, from, result, "done"))
 	if err != nil {
-		_, _ = changeHandoff(id, func(h *Handoff) error { h.Status, h.Result, h.DoneAt = "open", "", time.Time{}; return nil })
+		_, _ = changeHandoff(id, func(h *Handoff) error { h.Status, h.Result, h.DoneAt = prev, "", time.Time{}; return nil })
 		return Handoff{}, PostResult{}, err
 	}
 	return h, res, nil
@@ -359,9 +426,29 @@ func resultSpec(h Handoff, from From, text, kind string) postSpec {
 	return sp
 }
 
+// asked tells whether the receiver of h has said something to its sender
+// since h was delivered: a post in their DM, or one in h's channel that
+// mentions the sender. Then its turn ended to wait for an answer.
+func asked(h Handoff) bool {
+	for _, ch := range []string{dmID(h.To, h.From), h.Channel} {
+		msgs, _ := readMsgs(ch)
+		for _, m := range msgs {
+			if m.From.ID != h.To || m.At.Before(h.DeliveredAt) || m.Kind != "text" {
+				continue
+			}
+			if isDM(ch) || has(m.Mentions, h.From) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // CheckLapses marks lapsed the open handoffs whose receiver's turn ended
 // after it was delivered (lapseSlack later, so a turn ending as it came
-// does not count) with no bus_done. A line with the receiver's last words
+// does not count) with no bus_done. Not lapsed: a handoff whose receiver
+// has handed on a part of it that is open, has more bus news waiting for
+// it, or has asked its sender something. A line with the receiver's last words
 // goes in the handoff's channel and wakes the agent that gave the work.
 func CheckLapses(at time.Time) error {
 	hs, err := loadHandoffs()
@@ -376,6 +463,9 @@ func CheckLapses(at time.Time) error {
 		}
 		t := readTurn(h.To)
 		if t == nil || !t.At.After(h.DeliveredAt.Add(lapseSlack)) {
+			continue
+		}
+		if hasOpenChild(hs, h.ID) || hasBusItem(h.To) || asked(h) {
 			continue
 		}
 		if st == nil {
@@ -409,6 +499,27 @@ func CheckLapses(at time.Time) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// hasOpenChild tells whether an open handoff continues handoff id.
+func hasOpenChild(hs []Handoff, id string) bool {
+	for _, h := range hs {
+		if h.Parent == id && h.Status == "open" {
+			return true
+		}
+	}
+	return false
+}
+
+// pendingBus tells whether agent id has a bus item waiting in its queue.
+func hasBusItem(agentID string) bool {
+	q, _ := queue.Load(agentID)
+	for _, it := range q.Items {
+		if it.Bus {
+			return true
+		}
+	}
+	return false
 }
 
 // Tree arranges handoffs by parent: each with its depth, a chain's

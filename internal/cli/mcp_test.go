@@ -161,7 +161,7 @@ func TestMCPHandoff(t *testing.T) {
 		t.Fatalf("second spawn = %q", got)
 	}
 	third := "cccc3333-0000-0000-0000-000000000002"
-	if got := mcpCall(t, third, "bus_handoff", `{"to":"claude","task":"one agent too many"}`); !strings.HasPrefix(got, "ERROR ") || !strings.Contains(got, "started 2 agents") || len(specs) != 2 {
+	if got := mcpCall(t, third, "bus_handoff", `{"to":"claude","task":"one agent too many"}`); !strings.HasPrefix(got, "ERROR ") || !strings.Contains(got, "2 agents were started") || len(specs) != 2 {
 		t.Errorf("third spawn = %q (specs %d)", got, len(specs))
 	}
 	if got := mcpCall(t, arch, "bus_handoff", `{"to":"not-a-kind","task":"nothing to start"}`); !strings.HasPrefix(got, "ERROR ") || len(specs) != 2 {

@@ -34,7 +34,7 @@ func mentionsIn(st *state.State, text string) ([]string, error) {
 	}
 	var names []name
 	for _, a := range st.OrderedAgents() {
-		names = append(names, name{strings.ToLower(drive.Label(a)), a.ID})
+		names = append(names, name{asciiLower(drive.Label(a)), a.ID})
 	}
 	sort.SliceStable(names, func(i, j int) bool { return len(names[i].label) > len(names[j].label) })
 
@@ -48,14 +48,17 @@ func mentionsIn(st *state.State, text string) ([]string, error) {
 		r, _ := utf8.DecodeRuneInString(s)
 		return s == "" || !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-')
 	}
-	lower := strings.ToLower(text)
+	lower := asciiLower(text) // same byte offsets as text
+	code := codeMask(text)
 	for i := 0; i < len(text); i++ {
-		if text[i] != '@' {
+		if text[i] != '@' || code[i] {
 			continue
 		}
 		if i > 0 {
-			if r, _ := utf8.DecodeLastRuneInString(text[:i]); unicode.IsLetter(r) || unicode.IsDigit(r) {
-				continue // an address, not a mention
+			// An address or a URL is not a mention: an @ follows a space,
+			// the start, or an opening mark.
+			if r, _ := utf8.DecodeLastRuneInString(text[:i]); !unicode.IsSpace(r) && !strings.ContainsRune("([{<\"'*,;", r) {
+				continue
 			}
 		}
 		rest := lower[i+1:]
@@ -108,6 +111,73 @@ func mentionsIn(st *state.State, text string) ([]string, error) {
 	return out, nil
 }
 
+// asciiLower lowers A-Z only, so that byte offsets in the result are those
+// of s (Unicode case mapping changes the length of some letters).
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// codeMask marks the bytes of text that are inline code, a fenced code
+// block or a URL: an @ there is not a mention.
+func codeMask(text string) []bool {
+	mask := make([]bool, len(text)+1)
+	set := func(from, to int) {
+		for i := from; i < to && i < len(text); i++ {
+			mask[i] = true
+		}
+	}
+	lineStart := func(i int) bool { return i == 0 || text[i-1] == '\n' }
+	for i := 0; i < len(text); {
+		switch {
+		case text[i] == '`' && lineStart(i) && strings.HasPrefix(text[i:], "```"):
+			end := len(text) // up to the closing fence line, or the end
+			for j := i + 3; j < len(text); j++ {
+				if text[j] == '\n' && strings.HasPrefix(strings.TrimLeft(text[j+1:], " "), "```") {
+					end = len(text) // past the closing fence line
+					if k := strings.IndexByte(text[j+1:], '\n'); k >= 0 {
+						end = j + 1 + k + 1
+					}
+					break
+				}
+			}
+			set(i, end)
+			i = max(end, i+3)
+		case text[i] == '`':
+			n := 0
+			for i+n < len(text) && text[i+n] == '`' {
+				n++
+			}
+			ticks := text[i : i+n]
+			if k := strings.Index(text[i+n:], ticks); k >= 0 {
+				set(i, i+n+k+n)
+				i += n + k + n
+			} else {
+				i += n
+			}
+		case strings.HasPrefix(text[i:], "://"):
+			from := i
+			for from > 0 && (text[from-1] >= 'a' && text[from-1] <= 'z' || text[from-1] >= 'A' && text[from-1] <= 'Z' || text[from-1] == '+') {
+				from--
+			}
+			end := i
+			for end < len(text) && text[end] != ' ' && text[end] != '\n' && text[end] != '\t' {
+				end++
+			}
+			set(from, end)
+			i = end
+		default:
+			i++
+		}
+	}
+	return mask
+}
+
 func findIn(st *state.State, id string) *state.Agent {
 	_, a := st.FindAgent(id)
 	return a
@@ -129,6 +199,20 @@ type postSpec struct {
 	kind     string
 	mentions []string
 	ref      *HandoffRef
+	// stored, when set, runs under the bus lock once the message has its
+	// seq, to record it elsewhere in the same step.
+	stored func(seq int) error
+}
+
+// relay tells whether the post carries a handoff: its start, its result or
+// a lapse. These always wake their target and are not counted by the
+// guards, so a pause cannot swallow the end of a relay.
+func (sp postSpec) relay() bool { return sp.kind == "handoff" || sp.kind == "done" || sp.ref != nil }
+
+// dmMember tells whether id is one of the two of DM channel ch.
+func dmMember(ch, id string) bool {
+	parts := strings.Split(ch, ".")
+	return len(parts) == 3 && (parts[1] == id || parts[2] == id)
 }
 
 // Post adds text from from to channel, and wakes the agents it mentions.
@@ -162,6 +246,9 @@ func post(sp postSpec) (PostResult, error) {
 	byAgent := sp.from.ID != You
 	if byAgent && sp.kind == "" && (utf8.RuneCountInString(text) < minPost || ackRe.MatchString(text)) {
 		return PostResult{}, errAck
+	}
+	if isDM(sp.channel) && sp.from.ID != system && !dmMember(sp.channel, sp.from.ID) {
+		return PostResult{}, fmt.Errorf("#%s is a private conversation of two others; you may not post in it", sp.channel)
 	}
 	st, err := state.Load()
 	if err != nil {
@@ -206,6 +293,12 @@ func post(sp postSpec) (PostResult, error) {
 		if err != nil {
 			return err
 		}
+		if parts := strings.Split(c.ID, "."); isDM(c.ID) && len(parts) == 3 {
+			// Both sides are members, whatever happened to the list.
+			if err := addMembers(c, msgs, parts[1], parts[2]); err != nil {
+				return err
+			}
+		}
 		if !isDM(c.ID) { // a mention brings the agent in
 			for _, id := range mentions {
 				if id != "*" {
@@ -223,7 +316,7 @@ func post(sp postSpec) (PostResult, error) {
 		m := Message{From: sp.from, Kind: kind, Text: text, Mentions: mentions, ReplyTo: sp.replyTo, Handoff: sp.ref}
 		pause := ""
 		switch {
-		case kind == "system": // mad's own line counts for nothing
+		case kind == "system" || sp.relay(): // mad's own line, and a relay, count for nothing
 		case !byAgent:
 			c.Paused = false
 		case c.Paused:
@@ -231,7 +324,7 @@ func post(sp postSpec) (PostResult, error) {
 		default:
 			quiet := 1
 			for i := len(msgs) - 1; i >= 0 && msgs[i].From.ID != You; i-- {
-				if msgs[i].Kind != "system" {
+				if msgs[i].Kind != "system" && msgs[i].Handoff == nil {
 					quiet++
 				}
 			}
@@ -249,6 +342,11 @@ func post(sp postSpec) (PostResult, error) {
 			return err
 		}
 		res.Seq = stored.Seq
+		if sp.stored != nil {
+			if err := sp.stored(stored.Seq); err != nil {
+				return err
+			}
+		}
 		if pause != "" {
 			c.Paused = true
 			paused = true
@@ -257,7 +355,7 @@ func post(sp postSpec) (PostResult, error) {
 				return err
 			}
 		}
-		if !c.Paused {
+		if !c.Paused || sp.relay() {
 			woken = wakeList(st, *c, sp, mentions)
 		}
 		return saveChannels(cl)
@@ -311,9 +409,12 @@ func pingPongAt(msgs []Message, m Message) bool {
 	if len(msgs) < pingPong-1 {
 		return false
 	}
+	if m.Handoff != nil {
+		return false
+	}
 	run := append(append([]Message(nil), msgs[len(msgs)-(pingPong-1):]...), m)
 	for i, x := range run {
-		if x.Kind == "system" || x.From.ID == You || x.From.ID == system {
+		if x.Kind == "system" || x.Handoff != nil || x.From.ID == You || x.From.ID == system {
 			return false
 		}
 		if i > 0 && x.From.ID == run[i-1].From.ID {

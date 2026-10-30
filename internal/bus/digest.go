@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,53 @@ const notifyText = "[mad bus] messages waiting"
 type cursor struct {
 	Delivered int `json:"delivered"`
 	Read      int `json:"read"`
+}
+
+// cursorOf is agent id's cursor for a channel; zero when unreadable.
+func cursorOf(agentID, channel string) cursor {
+	cs, _ := loadCursors(agentID)
+	return cs[channel]
+}
+
+// wakeEvery is the least time between two digests for one agent.
+const wakeEvery = time.Minute
+
+func wakeFile(agentID string) string {
+	return filepath.Join(dir(), "cursors", agentID+".wake")
+}
+
+// lastWake is when agent id was last delivered a digest; zero if never.
+func lastWake(agentID string) time.Time {
+	data, err := os.ReadFile(wakeFile(agentID))
+	if err != nil {
+		return time.Time{}
+	}
+	t, _ := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data)))
+	return t
+}
+
+// WaitFor is how much longer a digest for agent id should wait for its
+// minute: an agent is woken by the bus at most once a minute, and what
+// arrives meanwhile is in the next digest. It is 0 when the last digest
+// was a minute ago or more, and when what waits carries a handoff or its
+// result: a relay is not held back.
+func WaitFor(agentID string, at time.Time) time.Duration {
+	last := lastWake(agentID)
+	if last.IsZero() || at.Sub(last) >= wakeEvery {
+		return 0
+	}
+	var list []entry
+	_ = locked(func() error {
+		var err error
+		list, _, _, err = gather(agentID)
+		return err
+	})
+	for _, e := range list {
+		if e.m.Handoff != nil {
+			return 0
+		}
+	}
+	return wakeEvery - at.Sub(last)
 }
 
 func loadCursors(agentID string) (map[string]cursor, error) {
@@ -101,7 +149,7 @@ func gather(id string) (list []entry, rest []also, upto map[string]int, err erro
 	}
 	upto = map[string]int{}
 	for _, c := range cl.Channels {
-		if c.Archived || c.Paused || !has(c.Members, id) {
+		if c.Archived || !has(c.Members, id) {
 			continue
 		}
 		msgs, err := readMsgs(c.ID)
@@ -109,8 +157,25 @@ func gather(id string) (list []entry, rest []also, upto map[string]int, err erro
 			return nil, nil, nil, err
 		}
 		cu := cs[c.ID]
+		// A paused channel is left for when it is resumed, except up to
+		// the last handoff message for the agent: a relay is not held.
+		cut := lastSeq(msgs)
+		if c.Paused {
+			cut = 0
+			for _, m := range msgs {
+				if m.Seq > cu.Delivered && m.Handoff != nil && wakesAgent(c, m, id) {
+					cut = m.Seq
+				}
+			}
+			if cut == 0 {
+				continue
+			}
+		}
 		n := 0
 		for _, m := range msgs {
+			if m.Seq > cut {
+				break
+			}
 			switch {
 			case m.Seq <= cu.Delivered:
 			case wakesAgent(c, m, id):
@@ -122,8 +187,8 @@ func gather(id string) (list []entry, rest []also, upto map[string]int, err erro
 		if n > 0 {
 			rest = append(rest, also{c.ID, n})
 		}
-		if last := lastSeq(msgs); last > cu.Delivered {
-			upto[c.ID] = last
+		if cut > cu.Delivered {
+			upto[c.ID] = cut
 		}
 	}
 	sort.SliceStable(list, func(i, j int) bool { return list[i].m.At.Before(list[j].m.At) })
@@ -191,6 +256,10 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 		}
 		switch ref := e.m.Handoff; {
 		case ref != nil && e.m.Kind == "handoff":
+			if h, found := findHandoff(hs, ref.ID); found && h.Status != "open" {
+				fmt.Fprintf(&b, " — handoff %s, already %s\nTask: %s\nNothing to do for it: do not bus_done it.\n", ref.ID, h.Status, e.m.Text)
+				break
+			}
 			fmt.Fprintf(&b, " — handoff %s\n", ref.ID)
 			writeCard(&b, hs, ref.ID, e.m.Text)
 		case ref != nil && e.m.Kind == "done":
@@ -249,6 +318,7 @@ func Delivered(agentID string, upto map[string]int) error {
 		return nil
 	}
 	return locked(func() error {
+		_ = writeAtomic(wakeFile(agentID), []byte(now().Format(time.RFC3339Nano)))
 		for ch, seq := range upto {
 			err := setCursor(agentID, ch, func(cu *cursor) { cu.Delivered = max(cu.Delivered, seq) })
 			if err != nil {

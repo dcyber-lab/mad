@@ -178,6 +178,27 @@ func Take(agentID string) (Item, bool, error) {
 	return it, ok, err
 }
 
+// TakeWhere is Take for the first message that fn accepts; the ones before
+// it stay.
+func TakeWhere(agentID string, fn func(Item) bool) (Item, bool, error) {
+	var it Item
+	var ok bool
+	err := Update(agentID, func(q *Queue) error {
+		if q.Paused {
+			return nil
+		}
+		for i, x := range q.Items {
+			if fn(x) {
+				it, ok = x, true
+				q.Items = append(append([]Item(nil), q.Items[:i]...), q.Items[i+1:]...)
+				return nil
+			}
+		}
+		return nil
+	})
+	return it, ok, err
+}
+
 // PutBack returns a message that could not be sent to the front, with why.
 func PutBack(agentID string, it Item, why string) error {
 	return Update(agentID, func(q *Queue) error {
