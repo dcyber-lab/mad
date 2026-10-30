@@ -342,7 +342,7 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 		return notify.Event{}, false
 	}
 	m.notified[key] = now
-	e := notify.Event{Kind: kind, Project: p.Name, Agent: p.DisplayName(a), AgentID: a.ID}
+	e := notify.Event{Kind: kind, Project: p.Name, Agent: m.agentTitle(p, a), AgentID: a.ID} // its name in the sidebar, not claude#7
 	if kind == notify.Waiting && hook != nil && hook.State == status.Waiting {
 		e.Message = hook.Message
 	}
