@@ -241,6 +241,12 @@ func Paste(paneID, text string) error {
 	return Run("send-keys", "-t", paneID, "Enter")
 }
 
+// SendKey presses one key (a tmux key name: "1", "Enter", "Escape") in a
+// pane, as typing it there would.
+func SendKey(paneID, key string) error {
+	return Run("send-keys", "-t", paneID, key)
+}
+
 // Watched reports whether someone is looking at the deck: a client is
 // attached to the main session, or a desktop window's, and its terminal
 // has focus. tmux tracks focus from 3.3 on; with an older tmux any

@@ -197,8 +197,17 @@ func (b *builder) agent(a Agent) {
 	if hook != nil && hook.State == status.Waiting {
 		at = hook.At
 	}
-	it := Item{Key: keyWait(a.ID, at), Kind: KindPermission, Agent: a.ID, Title: a.Label, Where: a.Dir,
-		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: openRoute{label: "Open " + a.Label}}
+	// Its prompt answered by keys when its screen shows one that can be
+	// read; else Open, never a guess.
+	var route route = openRoute{label: "Open " + a.Label}
+	p, keys := parsePrompt(a.Screen)
+	if keys && a.PaneID != "" {
+		route = keysRoute{pane: a.PaneID, p: p}
+	} else {
+		p = prompt{}
+	}
+	it := Item{Key: keyWait(a.ID, at, p.ID), Kind: KindPermission, Agent: a.ID, Title: a.Label, Where: a.Dir,
+		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: route}
 	tool, target := splitCall(a.Info.Tool)
 	switch {
 	case tool == "AskUserQuestion" || tool == "request_user_input":
@@ -214,6 +223,10 @@ func (b *builder) agent(a Agent) {
 		} else {
 			it.Body = hook.Message
 		}
+	}
+	if p.Question != "" && (tool == "" || it.Kind == KindQuestion) {
+		// What the screen asks says more than a hook's "needs your permission".
+		it.Text, it.Body, it.Mono = p.Question, p.Detail, false
 	}
 	if it.Since.IsZero() {
 		it.Since, it.undated = b.f.Now, true

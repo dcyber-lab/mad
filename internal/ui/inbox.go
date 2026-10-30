@@ -21,7 +21,9 @@ func (m *model) look(now time.Time) {
 	var agents []attention.Agent
 	for _, p := range m.st.Projects {
 		for _, a := range p.Agents {
-			agents = append(agents, attention.AgentOf(p, a, m.trackers[a.ID], m.panes[a.ID].ID, m.reports[a.ID], m.transcripts[a.ID]))
+			ag := attention.AgentOf(p, a, m.trackers[a.ID], m.panes[a.ID].ID, m.reports[a.ID], m.transcripts[a.ID])
+			ag.Screen = m.screens[a.ID]
+			agents = append(agents, ag)
 		}
 	}
 	v := m.desk.Look(attention.Facts{Agents: agents, Cards: m.cards, Skills: m.skills, Spend: m.spend, Now: now})

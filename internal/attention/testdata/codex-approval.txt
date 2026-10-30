@@ -1,0 +1,50 @@
+╭─────────────────────────────────────────────────╮
+│ ✨ Update available! 0.157.1 -> 0.166.0         │
+│ Run npm install -g @openai/codex to update.     │
+│                                                 │
+│ See full release notes:                         │
+│ https://github.com/openai/codex/releases/latest │
+╰─────────────────────────────────────────────────╯
+
+╭────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.157.1)                     │
+│                                                │
+│ model:     GPT-5.6-Sol high   /model to change │
+│ directory: /private/tmp/b3k/repo               │
+╰────────────────────────────────────────────────╯
+
+
+› Run exactly this shell command and nothing else: touch codex-file2.txt
+
+
+• Running touch codex-file2.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Would you like to run the following command?
+
+  Environment: local
+
+  Reason: Do you want to allow creating codex-file2.txt in the workspace?
+
+  $ touch codex-file2.txt
+
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `touch codex-file2.txt` (p)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

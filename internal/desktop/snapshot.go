@@ -213,7 +213,9 @@ func (p *poller) Poll(now time.Time) {
 			// as it being seen: what finished there was.
 			s := tr.Observe(k, pn, ok, rep.Hook, screens[pn.ID], p.looks.Focused(a.ID) || ok && tmux.Seen(pn), now)
 			info := p.infos[a.ID]
-			facts = append(facts, attention.AgentOf(pr, a, tr, pn.ID, rep, info))
+			fa := attention.AgentOf(pr, a, tr, pn.ID, rep, info)
+			fa.Screen = screens[pn.ID]
+			facts = append(facts, fa)
 			ag := Agent{
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
 				Name: a.Name, Title: info.Title,

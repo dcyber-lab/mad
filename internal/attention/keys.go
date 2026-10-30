@@ -20,9 +20,17 @@ func keyRequest(agent, host, request string) Key {
 
 // keyWait: a TUI-run agent's wait. at is the hook's time: a new wait after
 // an answer writes a new hook, so it gets a new key; an agent waiting by
-// its screen alone (no hooks) has at zero.
-func keyWait(agent string, at time.Time) Key {
-	return Key("wait:" + agent + "/" + millis(at))
+// its screen alone (no hooks) has at zero. prompt is the ID of the prompt
+// its screen shows, when it can be read (prompt.go): the deck and the
+// window capture the same pane, and a prompt that changed under the person
+// is a new item, so an act on the old one is ErrGone, never keys to the
+// new one.
+func keyWait(agent string, at time.Time, prompt string) Key {
+	k := "wait:" + agent + "/" + millis(at)
+	if prompt != "" {
+		k += "/" + prompt
+	}
+	return Key(k)
 }
 
 // keyMessage: a message on the bus (an @you, a DM).

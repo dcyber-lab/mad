@@ -28,6 +28,9 @@ type Agent struct {
 	Since  time.Time // Tracker.Since
 	Report status.Report
 	Info   transcript.Info
+	// Screen is its pane's text as the caller's poll captured it, "" when
+	// it captured none: a prompt on it is answered by keys (keysRoute).
+	Screen string
 }
 
 // AgentOf is agent a of project p as tracker tr saw it on this poll, with
