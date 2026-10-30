@@ -77,7 +77,11 @@ func boardLine(c bus.Card) string {
 	}
 	parts = append(parts, mcpAge(c.Age))
 	if c.Why != "" {
-		parts = append(parts, c.Why)
+		why := c.Why
+		if len(c.Waits) > 0 {
+			why += " " + strings.Join(c.Waits, ", ")
+		}
+		parts = append(parts, why)
 	}
 	if c.Task != nil {
 		parts = append([]string{c.Task.ID}, parts...)

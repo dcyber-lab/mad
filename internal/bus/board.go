@@ -76,6 +76,8 @@ type Card struct {
 	Age        time.Duration `json:"age"` // in its state
 	Message    *CardMessage  `json:"message,omitempty"`
 	Note       string        `json:"note,omitempty"`
+	// Waits lists the tasks a card that waits on others still waits for.
+	Waits []string `json:"waits,omitempty"`
 	// Ref is the timer of a check-in card.
 	Ref string `json:"ref,omitempty"`
 }
@@ -239,6 +241,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 		if x, ok := findHandoff(hs, t.Handoff); ok {
 			h = &x
 		}
+		waits := awaited(t, byID)
 		switch {
 		case owner != nil && statuses[t.Owner] == status.Waiting:
 			c.Column, c.Why = ColWaitingYou, WhyPermission
@@ -252,8 +255,8 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 			c.Column, c.Why = ColWaitingYou, WhyUnowned
 		case h != nil && h.Status == "lapsed":
 			c.Column, c.Why = ColBlocked, WhyLapsed
-		case waitsOn(t, byID):
-			c.Column, c.Why = ColBlocked, WhyWaits
+		case len(waits) > 0:
+			c.Column, c.Why, c.Waits = ColBlocked, WhyWaits, waits
 		case t.Status == TaskDoing && stalled(d, t, h, statuses[t.Owner], at):
 			c.Column, c.Why = ColBlocked, WhyStalled
 		case t.Status == TaskDoing || h != nil && h.Status == "open" && !h.DeliveredAt.IsZero():
@@ -299,9 +302,10 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 			if a := findIn(st, id); a != nil {
 				label = drive.Label(a)
 			}
-			cards = append(cards, Card{Kind: CardAsk, Title: firstLine(m.Text, titleRunes), Column: ColWaitingYou, Why: WhyAsked,
+			title := firstLine(m.Text, titleRunes)
+			cards = append(cards, Card{Kind: CardAsk, Title: title, Column: ColWaitingYou, Why: WhyAsked,
 				Owner: id, OwnerLabel: label, Channel: ch.ID, Age: max(0, at.Sub(m.At)),
-				Message: &CardMessage{m.Seq, m.Text}})
+				Message: &CardMessage{m.Seq, afterTitle(m.Text, title)}})
 		}
 		if paused[ch.ID] {
 			var last time.Time
@@ -339,15 +343,27 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 	return cards, nil
 }
 
-// waitsOn tells whether a task t waits on is not done. A task that is gone
-// (archived) is done.
-func waitsOn(t Task, byID map[string]Task) bool {
+// awaited lists the tasks t waits on that are not done. A task that is
+// gone (archived) is done.
+func awaited(t Task, byID map[string]Task) []string {
+	var ids []string
 	for _, w := range t.WaitsOn {
 		if o, ok := byID[w]; ok && o.Status != TaskDone && o.Status != TaskDropped {
-			return true
+			ids = append(ids, w)
 		}
 	}
-	return false
+	return ids
+}
+
+// afterTitle is what of an ask's text its card's title, made by firstLine,
+// does not already say: the body must not repeat the title.
+func afterTitle(text, title string) string {
+	text = strings.TrimSpace(text)
+	if stem, cut := strings.CutSuffix(title, "…"); cut {
+		return strings.TrimSpace(strings.TrimPrefix(text, stem))
+	}
+	_, rest, _ := strings.Cut(text, "\n")
+	return strings.TrimSpace(rest)
 }
 
 // stalled tells whether t, written doing, has an owner that is not at work

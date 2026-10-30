@@ -201,7 +201,7 @@ func TestBoardAskCards(t *testing.T) {
 			t.Errorf("ask = %+v", c)
 		}
 	}
-	if c := byChan["dev"]; c.OwnerLabel != "architect" || c.Message.Text != "@you may I drop the old table?" || c.Message.Seq != 1 {
+	if c := byChan["dev"]; c.OwnerLabel != "architect" || c.Title != "@you may I drop the old table?" || c.Message.Text != "" || c.Message.Seq != 1 {
 		t.Errorf("channel ask = %+v", c)
 	}
 	if c := byChan[ch]; c.OwnerLabel != "builder" || c.Title != "which branch should I base this on?" {
@@ -241,7 +241,9 @@ func TestBoardBlocked(t *testing.T) {
 	first, _ := SetTask(arch, TaskChange{Title: sp("schema"), Owner: sp(idCodex)})
 	second, _ := SetTask(arch, TaskChange{Title: sp("handlers"), Owner: sp(idBuild), WaitsOn: &[]string{first.ID}})
 	idle := map[string]string{idBuild: status.Idle, idCodex: status.Idle}
-	wantCard(t, board(t, time.Minute, idle), second.ID, ColBlocked, WhyWaits)
+	if c := wantCard(t, board(t, time.Minute, idle), second.ID, ColBlocked, WhyWaits); len(c.Waits) != 1 || c.Waits[0] != first.ID {
+		t.Errorf("waits = %v, want [%s]", c.Waits, first.ID)
+	}
 	if _, err := SetTask(arch, TaskChange{ID: first.ID, Status: sp("done")}); err != nil {
 		t.Fatal(err)
 	}
