@@ -764,6 +764,35 @@ mad bus handoffs                    # work agents gave each other, as chains
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
 
+### Skills
+
+An agent that found a way of working worth keeping saves it with the
+bus tool `skill_save` (name, description saying when to use it, a
+markdown body, `scope` project or user, `replace` to overwrite a skill
+dir that mad did not install). Nothing is installed yet: the skill is
+**pending** in the state directory (`skills/pending/<name>/`) until you
+approve it. `bus_who` lists the skills available to an agent's project.
+
+- Approving puts it in mad's store, `<project>/.mad/skills/<name>/` or,
+  for user scope, `~/.config/mad/skills/<name>/` (the previous version
+  stays in `history/`), and copies it where agents look: user scope to
+  `~/.claude/skills`, `~/.codex/skills` and `~/.pi/agent/skills`;
+  project scope to `<project>/.claude/skills` and to codex's and pi's
+  user dirs, with "(for project NAME)" at the start of the description.
+  Copies carry a `.mad-skill.json`; a skill dir without one is never
+  overwritten unless it was saved with `replace`. The name `mad-flow`
+  is mad's own.
+- `mad skill pending` lists what waits, `mad skill approve NAME` and
+  `mad skill discard NAME` decide, `mad skill ls [PROJECT]` lists the
+  approved skills, `mad skill sync` copies them again (mad does this
+  whenever it opens the deck).
+- In the window, the Skills page (the sparkles button in the sidebar's
+  footer) shows pending skills rendered, with Approve, Edit and Discard,
+  then the approved ones per project. The new chat page shows the
+  project's skills as chips: a click puts `/name` in the message box.
+  An agent's menu has **Save as skill**, which asks that agent to
+  distill what worked in its conversation.
+
 ## Custom agents
 
 Create `~/.config/mad/agents.json`. Entries are merged with the built-in

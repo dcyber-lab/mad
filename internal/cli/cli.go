@@ -21,6 +21,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/phone"
 	"github.com/dcyber-lab/mad/internal/poke"
 	madrun "github.com/dcyber-lab/mad/internal/run"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -56,6 +57,8 @@ usage:
                       (design, implement, review); "mad run" for more
   mad skill install   put the skill that designs flows with you
                       (mad-flow) where claude finds it
+  mad skill pending|approve|discard|sync|ls
+                      skills agents save for you to approve
   mad desktop [-no-window]
                       open the deck in a window of its own (preview)
   mad phone [on|off]  the window on your phone, over Tailscale: on
@@ -247,6 +250,8 @@ func open(errOut io.Writer) error {
 	}
 	// The phone's server, if it runs, on this mad too.
 	_ = phone.Refresh()
+	// Approved skills, to the agents' dirs again.
+	_ = skill.Sync()
 
 	bin, err := exec.LookPath("tmux")
 	if err != nil {

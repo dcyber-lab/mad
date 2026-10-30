@@ -275,6 +275,10 @@ applyTheme();
 
 function drawQueue(fresh) {
   const box = $("#queue");
+  if (sk.open) {
+    box.hidden = true; // the Skills page has no message box
+    return;
+  }
   const a = current && agents.get(current);
   // Nothing to say here to a shell: it is the terminal deck's.
   const off = !nc.open && !cv.open && (!a || !a.chat);
@@ -819,6 +823,7 @@ function show(id) {
   current = id;
   closeNew();
   closeChannel();
+  closeSkills();
   closeMenu();
   closePopup();
   commandsOf(id);
@@ -935,7 +940,7 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    t.replaceChildren(el("span", "pt", cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
     t.className = "";
     return;
   }

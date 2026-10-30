@@ -137,6 +137,7 @@ function openNew(project) {
   }
   nc.open = true;
   closeChannel();
+  closeSkills();
   inMain(true);
   for (const [k] of KINDS) knownModels(k); // asked now: there by the time it is picked
   nc.project = project || was || nc.project || (deck.projects[0] && deck.projects[0].path) || "";
@@ -176,6 +177,7 @@ function drawNew() {
     past.replaceChildren(el("div", "muted pastnote", "Looking for past conversations…"));
     loadPast(p.path);
   }
+  drawNewSkills();
 }
 
 const pastCache = new Map(); // project → { at, list }
@@ -456,6 +458,7 @@ function agentMenu(a, anchor, opts) {
     { label: "Open in terminal", desc: "the terminal deck, in your terminal app", icon: "external", onclick: () => openTerminal(a) },
     { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
     { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || !!a.role, onclick: () => messageAgent(a) },
+    { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || !!a.role, onclick: () => saveAsSkill(a) },
     { label: "Stop", desc: off ? "it is not running" : "ends it for now: a message wakes it", icon: "sleep", disabled: off, onclick: () => stopAgent(a) },
     "-",
     { label: "Delete", desc: "out of mad; its conversation stays on disk", icon: "trash", danger: true, onclick: () => deleteAgent(a) },
