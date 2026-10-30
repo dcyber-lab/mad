@@ -110,6 +110,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/bus/channel", s.auth(http.HandlerFunc(s.busCreate)))
 	mux.Handle("POST /api/bus/read", s.auth(http.HandlerFunc(s.busRead)))
 	mux.Handle("POST /api/bus/resume", s.auth(http.HandlerFunc(s.busResume)))
+	mux.Handle("POST /api/bus/report", s.auth(http.HandlerFunc(s.busReport)))
+	mux.Handle("POST /api/bus/lead", s.auth(http.HandlerFunc(s.busLead)))
 	mux.Handle("POST /api/board/task", s.auth(http.HandlerFunc(s.boardTask)))
 	mux.Handle("POST /api/board/nudge", s.auth(http.HandlerFunc(s.boardNudge)))
 	mux.Handle("GET /api/skills", s.auth(http.HandlerFunc(s.skills)))
