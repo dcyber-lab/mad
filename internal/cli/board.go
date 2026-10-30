@@ -1,6 +1,9 @@
 package cli
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+
 	"fmt"
 	"io"
 	"strings"
@@ -80,4 +83,82 @@ func boardLine(c bus.Card) string {
 		parts = append([]string{c.Task.ID}, parts...)
 	}
 	return strings.Join(parts, " · ")
+}
+
+// boardCmd is `mad board [-w]`.
+func boardCmd(args []string, stdio IO) error {
+	switch {
+	case len(args) == 0:
+		return board(stdio.Out)
+	case len(args) == 1 && args[0] == "-w":
+		_, err := tea.NewProgram(boardWatch{}, tea.WithAltScreen()).Run()
+		return err
+	}
+	fmt.Fprintln(stdio.Err, "usage: mad board [-w]")
+	return errUsage
+}
+
+// boardEvery is how often `mad board -w` draws the board again.
+const boardEvery = 3 * time.Second
+
+type (
+	boardTick time.Time
+	boardText string
+)
+
+// boardWatch is the board kept on screen; q or esc closes it.
+type boardWatch struct {
+	text          string
+	width, height int
+	top           int
+}
+
+func (b boardWatch) Init() tea.Cmd { return tea.Batch(boardRead, boardWait()) }
+
+func boardWait() tea.Cmd {
+	return tea.Tick(boardEvery, func(t time.Time) tea.Msg { return boardTick(t) })
+}
+
+func boardRead() tea.Msg {
+	var buf strings.Builder
+	if err := board(&buf); err != nil {
+		return boardText(err.Error())
+	}
+	return boardText(buf.String())
+}
+
+func (b boardWatch) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		b.width, b.height = msg.Width, msg.Height
+	case boardTick:
+		return b, tea.Batch(boardRead, boardWait())
+	case boardText:
+		b.text = string(msg)
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "esc", "ctrl+c":
+			return b, tea.Quit
+		case "j", "down":
+			b.top = min(b.top+1, strings.Count(strings.TrimRight(b.text, "\n"), "\n"))
+		case "k", "up":
+			b.top = max(b.top-1, 0)
+		}
+	}
+	return b, nil
+}
+
+func (b boardWatch) View() string {
+	lines := strings.Split(strings.TrimRight(b.text, "\n"), "\n")
+	b.top = min(b.top, max(len(lines)-1, 0))
+	lines = lines[b.top:]
+	if b.height > 1 && len(lines) > b.height-1 {
+		lines = lines[:b.height-1]
+	}
+	for i, l := range lines {
+		if b.width > 0 {
+			lines[i] = ansi.Truncate(l, b.width, "…")
+		}
+	}
+	return strings.Join(lines, "\n") + "\n" + "q closes · updates every 3s"
 }

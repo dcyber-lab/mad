@@ -106,11 +106,12 @@ type row struct {
 	ext      *discover.External
 	desktop  int
 	deskKind string
-	num      int // 1-based agent number within its project
+	num      int     // 1-based agent number within its project
+	bus      *busRow // a row of the bus block (proj is nil)
 }
 
 func (r row) isProject() bool {
-	return r.agent == nil && r.ext == nil && r.desktop == 0 && r.run == nil
+	return r.agent == nil && r.ext == nil && r.desktop == 0 && r.run == nil && r.bus == nil
 }
 
 type model struct {
@@ -167,7 +168,13 @@ type model struct {
 	reading     bool
 	readDue     bool // read at the next tick: a turn ended
 	lastRead    time.Time
-	taskFor     string              // agent the diff view was opened for ("" for a project)
+	taskFor     string  // agent the diff view was opened for ("" for a project)
+	taskTag     string  // what the task pane shows when it is the bus block's (chat:name, board)
+	bus         busSnap // the bus block as last read
+	busSig      string  // the bus files as that read found them
+	busBusy     bool
+	lastBus     time.Time
+	busFull     time.Time           // when the board was last derived anew
 	wt          *state.Project      // project a worktree is being named for
 	wtBranch    string              // branch chosen; the kind menu comes next
 	renameID    string              // agent being named
@@ -329,6 +336,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.lapsing && time.Since(m.lastLapse) >= lapseEvery {
 			cmds = append(cmds, m.lapseCmd(time.Now()))
 		}
+		if !m.busBusy && time.Since(m.lastBus) >= busEvery {
+			cmds = append(cmds, m.busCmd(time.Now()))
+		}
 		if !m.following && time.Since(m.lastFollow) >= followEvery {
 			cmds = append(cmds, m.followCmd(time.Now()))
 		}
@@ -348,6 +358,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lapsing = false
 	case followedMsg:
 		m.following = false
+	case busMsg:
+		m.applyBus(msg)
 	case dispatchedMsg:
 		return m, m.applyDispatched(msg)
 	case dayMsg:

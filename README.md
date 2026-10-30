@@ -145,7 +145,7 @@ is done.
 | -------------- | ---------------------------------------------- |
 | `j` / `k`      | Move down / up                                 |
 | `g` / `G`      | Top / bottom                                   |
-| `enter`        | Open agent (or fold/unfold a project)          |
+| `enter`        | Open agent (or fold/unfold a project); on the bus block, the board or a channel's chat on stage |
 | `n`            | New agent in the current project               |
 | `w`            | New agent in a new worktree (asks for a branch) |
 | `o`            | New run: a task handed through agents in roles |
@@ -794,6 +794,7 @@ mad bus create review alice bob     # a channel, with two agents in it
 mad bus post review "@alice pick a name for the CLI with @bob, then post it here"
 mad bus read review                 # what was said; mad bus log for all of it
 mad bus read @alice @bob            # what alice and bob said to each other
+mad bus chat review                 # read and write in it, live (a TUI)
 mad bus dm carol "which file is the largest?"
 mad bus ls                          # the channels and DMs
 mad bus handoffs                    # work agents gave each other, as chains
@@ -817,6 +818,15 @@ mad bus handoffs                    # work agents gave each other, as chains
   is marked lapsed, and the sender gets its last words. A handoff made
   while holding one received joins its chain; chains are at most 4 deep,
   and start at most 2 new agents until you say something in the channel.
+- The deck's sidebar has a bus block above the projects whenever there
+  is something on the bus: Board (with how many cards wait for you) and
+  the channels and DMs with messages you have not read, or paused, at
+  most six and a "+N more". `enter` on one opens it on stage: a channel
+  as `mad bus chat` (the messages, following new ones; type and `enter`
+  to post as you, `tab` completes an `@agent`, `pgup`/`pgdn` scroll,
+  `esc` closes; a DM between two agents is read only), Board as `mad
+  board -w`. `enter` again closes it. The block is refreshed from the bus
+  files every two seconds, reading messages only when a file changed.
 - The desktop window (and the phone) lists the channels and DMs over the
   projects, with what you have not read: one opens in place of an
   agent's conversation, and what you type there is posted (`@` offers the
