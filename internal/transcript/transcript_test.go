@@ -130,3 +130,31 @@ func TestCodex(t *testing.T) {
 		t.Errorf("quota after null = %+v", got)
 	}
 }
+
+// The todo list counts what is done and names what is under way; a new
+// prompt clears it, as it clears the tool.
+func TestTodo(t *testing.T) {
+	dir := t.TempDir()
+	r := NewReader()
+	r.locate = func(a Agent) []string { return []string{filepath.Join(dir, a.ID+".jsonl")} }
+	r.titles = func(discover.Provider) map[string]string { return nil }
+	agents := []Agent{{ID: "a", Kind: "claude"}, {ID: "c", Kind: "codex"}}
+	write(t, filepath.Join(dir, "a.jsonl"), `{"type":"user","message":{"role":"user","content":"sort it out"}}
+{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read the code","status":"completed","activeForm":"Reading the code"},{"content":"Fix the sort","status":"in_progress","activeForm":"Fixing the sort"},{"content":"Test it","status":"pending","activeForm":"Testing it"}]}}]}}
+`)
+	write(t, filepath.Join(dir, "c.jsonl"), `{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"plan it"}]}}
+{"type":"response_item","payload":{"type":"function_call","name":"update_plan","arguments":"{\"plan\":[{\"step\":\"Look\",\"status\":\"completed\"},{\"step\":\"Do\",\"status\":\"completed\"}]}"}}
+`)
+	got := r.Read(agents)
+	if td := got["a"].Todo; td == nil || *td != (discover.Todo{Done: 1, Total: 3, Now: "Fixing the sort"}) {
+		t.Errorf("claude todo = %+v", td)
+	}
+	if td := got["c"].Todo; td == nil || *td != (discover.Todo{Done: 2, Total: 2}) {
+		t.Errorf("codex plan = %+v", td)
+	}
+	write(t, filepath.Join(dir, "a.jsonl"), `{"type":"user","message":{"role":"user","content":"something else"}}
+`)
+	if td := r.Read(agents)["a"].Todo; td != nil {
+		t.Errorf("after a new prompt: %+v", td)
+	}
+}

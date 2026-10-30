@@ -457,6 +457,9 @@ func (claude) Parse(line []byte) (Event, bool) {
 			for _, p := range parts {
 				if p.Type == "tool_use" && p.Name != "" {
 					e.Tool = toolLabel(p.Name, p.Input)
+					if p.Name == "TodoWrite" {
+						e.Todo = claudeTodo(p.Input["todos"])
+					}
 				}
 			}
 		}

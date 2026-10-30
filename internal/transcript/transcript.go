@@ -49,6 +49,9 @@ type Info struct {
 	// Tool is the tool call the agent made last, with a hint of its input
 	// ("Bash · go test ./..."). Cleared when the user asks something new.
 	Tool string
+	// Todo is the agent's own todo list as it last wrote it, nil without
+	// one. Cleared with Tool.
+	Todo *discover.Todo
 	// Quota is the account's usage limits as last reported in the
 	// transcript (codex writes them after every response).
 	Quota status.Quota
@@ -114,7 +117,7 @@ func (r *Reader) Read(agents []Agent) map[string]Info {
 			f.update(path, p)
 			info.Tokens = info.Tokens.add(f.totals)
 			if i == 0 {
-				info.Title, info.Prompt, info.Tool, info.Quota = f.title(), f.prompt, f.tool, f.quota
+				info.Title, info.Prompt, info.Tool, info.Todo, info.Quota = f.title(), f.prompt, f.tool, f.todo, f.quota
 			}
 		}
 		names, ok := titles[a.Kind]
@@ -145,6 +148,7 @@ type file struct {
 
 	custom, ai, first string // titles by source; first is the first prompt
 	prompt, tool      string
+	todo              *discover.Todo
 	quota             status.Quota
 }
 
@@ -196,10 +200,13 @@ func (f *file) apply(e discover.Event) {
 		if f.first == "" {
 			f.first = e.Prompt
 		}
-		f.prompt, f.tool = e.Prompt, ""
+		f.prompt, f.tool, f.todo = e.Prompt, "", nil
 	}
 	if e.Tool != "" {
 		f.tool = e.Tool
+	}
+	if e.Todo != nil {
+		f.todo = e.Todo
 	}
 	switch e.TitleSource {
 	case discover.TitleCustom:

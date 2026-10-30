@@ -106,6 +106,38 @@ func UserText(raw json.RawMessage) string {
 }
 
 // toolLabel names a call: the tool, then what it was pointed at.
+// claudeTodo reads TodoWrite's todos; nil when they don't parse.
+// TODO: claude's later TaskCreate/TaskUpdate carry one item a call and
+// are not counted.
+func claudeTodo(raw json.RawMessage) *Todo {
+	var items []struct{ Content, ActiveForm, Status string }
+	if json.Unmarshal(raw, &items) != nil {
+		return nil
+	}
+	var texts, statuses []string
+	for _, it := range items {
+		text := it.ActiveForm
+		if text == "" {
+			text = it.Content
+		}
+		texts, statuses = append(texts, text), append(statuses, it.Status)
+	}
+	return todoOf(texts, statuses)
+}
+
+// codexPlan reads update_plan's plan; nil when it doesn't parse.
+func codexPlan(raw json.RawMessage) *Todo {
+	var items []struct{ Step, Status string }
+	if json.Unmarshal(raw, &items) != nil {
+		return nil
+	}
+	var texts, statuses []string
+	for _, it := range items {
+		texts, statuses = append(texts, it.Step), append(statuses, it.Status)
+	}
+	return todoOf(texts, statuses)
+}
+
 func toolLabel(name string, input map[string]json.RawMessage) string {
 	for _, k := range []string{"description", "file_path", "command", "cmd", "pattern", "url", "query", "path"} {
 		raw, ok := input[k]
