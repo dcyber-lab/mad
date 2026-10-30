@@ -775,6 +775,12 @@ mad bus handoffs                    # work agents gave each other, as chains
   unanswered `@you` or DM to you is a card too. `mad board` prints it,
   Waiting for you first. Done tasks leave after a day, and the file after
   a week.
+- In the window, Board at the top of the sidebar shows it, with how many
+  cards wait for you: a column each on the desktop, one list on a phone.
+  A card's menu opens its agent or channel, answers what waits for you,
+  resumes a paused channel, asks the owner how it stands, gives the task
+  to another agent (who is told, which wakes it), or marks it in review,
+  done or dropped. A skill waiting for approval is a card too.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
