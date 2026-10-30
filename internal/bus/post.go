@@ -250,6 +250,32 @@ func DM(from From, to, text string) (string, PostResult, error) {
 	return ch, res, err
 }
 
+// ErrTheirDM: the person may read a DM between two agents, not post in it.
+var ErrTheirDM = errors.New("a DM between two agents is theirs: read it, or post in a channel")
+
+// Reply posts text as the person in ch, answering message seq (0 for
+// none): in a channel, a post; in a DM of theirs, a post in it, made with
+// the first one. The window's composer and its inbox both post this way.
+func Reply(ch, text string, seq int) (PostResult, error) {
+	me := From{ID: You, Label: You}
+	if !isDM(ch) {
+		return Post(ch, me, text, seq)
+	}
+	ids := DMSides(ch)
+	if len(ids) != 2 || (ids[0] != You && ids[1] != You) {
+		return PostResult{}, ErrTheirDM
+	}
+	to := ids[0]
+	if to == You {
+		to = ids[1]
+	}
+	if _, ok, _ := Find(ch); ok && seq > 0 {
+		return Post(ch, me, text, seq)
+	}
+	_, res, err := DM(me, to, text)
+	return res, err
+}
+
 func post(sp postSpec) (PostResult, error) {
 	text := strings.TrimSpace(sp.text)
 	if text == "" {

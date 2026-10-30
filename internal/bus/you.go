@@ -7,6 +7,13 @@ package bus
 type Yours struct {
 	Last   int `json:"last"`
 	Unread int `json:"unread"`
+	// Mention: an unread message in it asks the person: an @you, or any
+	// in their DM.
+	Mention bool `json:"mention,omitempty"`
+	// Listed: it is in the short list the window's sidebar and the deck's
+	// bus block show: something unread, or paused; never a DM between
+	// two agents, which is theirs.
+	Listed bool `json:"listed,omitempty"`
 }
 
 // YourChannels says how each channel stands for the person, by id.
@@ -34,8 +41,10 @@ func YourChannels() (map[string]Yours, error) {
 				y.Last = max(y.Last, m.Seq)
 				if m.Seq > cs[c.ID].Read && m.Kind != "system" && m.From.ID != You {
 					y.Unread++
+					y.Mention = y.Mention || isYourDM(c.ID) || youRe.MatchString(m.Text)
 				}
 			}
+			y.Listed = (y.Unread > 0 || c.Paused) && (!isDM(c.ID) || isYourDM(c.ID))
 			out[c.ID] = y
 		}
 		return nil

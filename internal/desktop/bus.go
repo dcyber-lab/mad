@@ -123,28 +123,12 @@ func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	me := bus.From{ID: bus.You, Label: bus.You}
-	var res bus.PostResult
-	var err error
-	if strings.HasPrefix(req.Channel, "dm.") {
-		ids := strings.Split(strings.TrimPrefix(req.Channel, "dm."), ".")
-		if len(ids) != 2 || (ids[0] != bus.You && ids[1] != bus.You) {
-			fail(w, http.StatusForbidden, errors.New("a DM between two agents is theirs: read it, or post in a channel"))
-			return
-		}
-		to := ids[0]
-		if to == bus.You {
-			to = ids[1]
-		}
-		if _, ok, _ := bus.Find(req.Channel); ok && req.ReplyTo > 0 {
-			res, err = bus.Post(req.Channel, me, req.Text, req.ReplyTo) // made: a reply in it
-		} else {
-			_, res, err = bus.DM(me, to, req.Text)
-		}
-	} else {
-		res, err = bus.Post(req.Channel, me, req.Text, req.ReplyTo)
-	}
-	if err != nil {
+	res, err := bus.Reply(req.Channel, req.Text, req.ReplyTo)
+	switch {
+	case errors.Is(err, bus.ErrTheirDM):
+		fail(w, http.StatusForbidden, err)
+		return
+	case err != nil:
 		fail(w, http.StatusBadRequest, err)
 		return
 	}

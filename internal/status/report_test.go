@@ -68,7 +68,7 @@ func TestTrackerSince(t *testing.T) {
 	}
 	// Looked at later: still idle since it finished.
 	tr.Observe(claude, alive, true, &Hook{State: Idle, At: at(3 * time.Minute)}, "y", true, at(8*time.Minute))
-	if got := tr.Since(); !got.Equal(at(3 * time.Minute)) || tr.Done() {
+	if got := tr.Since(); !got.Equal(at(3*time.Minute)) || tr.Done() {
 		t.Errorf("seen: since %v, done %v", got, tr.Done())
 	}
 	// A hook older than the last change does not date the next one.

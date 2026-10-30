@@ -77,7 +77,16 @@ type SpendState struct {
 	Opened      bool      `json:"open_today"`
 	Closed      bool      `json:"closed"`
 	ClosedAt    time.Time `json:"closed_at,omitzero"`
+	// Part is how much of the budget is spent, the larger of the dollars'
+	// and the turns' parts (1 = all); 0 with no bound. Hot: Part has
+	// reached SpendWarn.
+	Part float64 `json:"part"`
+	Hot  bool    `json:"hot,omitempty"`
 }
+
+// SpendWarn is the part of the budget spent from which it shows as near:
+// the spend bar turns amber, and it waits in the inbox.
+const SpendWarn = 0.8
 
 func spendFile() string { return filepath.Join(dir(), "spend.json") }
 
@@ -107,6 +116,13 @@ func (s Spend) state() SpendState {
 	}
 	over := st.BudgetUSD > 0 && s.USD >= st.BudgetUSD || st.BudgetTurns > 0 && s.Turns >= st.BudgetTurns
 	st.Closed = over && !s.OpenToday
+	if st.BudgetUSD > 0 {
+		st.Part = s.USD / st.BudgetUSD
+	}
+	if st.BudgetTurns > 0 {
+		st.Part = max(st.Part, float64(s.Turns)/float64(st.BudgetTurns))
+	}
+	st.Hot = st.Part >= SpendWarn
 	return st
 }
 
