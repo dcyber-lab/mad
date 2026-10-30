@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -327,6 +328,9 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 	var kind string
 	switch {
 	case prev == status.Running && cur == status.Idle && now.Sub(m.runSince[a.ID]) >= notifyMinRun:
+		if startedByMad(a.ID, m.runSince[a.ID]) {
+			return notify.Event{}, false // you did not start it: no news worth a push
+		}
 		kind = notify.Done
 	case prev != "" && prev != status.Waiting && cur == status.Waiting:
 		kind = notify.Waiting // prev "": already waiting when the sidebar started
@@ -342,7 +346,28 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 	if kind == notify.Waiting && hook != nil && hook.State == status.Waiting {
 		e.Message = hook.Message
 	}
+	if kind == notify.Done {
+		if t := status.ReadTurn(a.ID); t != nil && t.At.After(m.runSince[a.ID]) { // not an older turn's reply
+			e.Message = firstLine(t.Reply)
+		}
+	}
 	return e, true
+}
+
+// startedByMad is bus.StartedByMad, replaceable in tests.
+var startedByMad = bus.StartedByMad
+
+// firstLine is the first non-empty line of s, cut to 120 runes.
+func firstLine(s string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.Join(strings.Fields(l), " "); l != "" {
+			if r := []rune(l); len(r) > 120 {
+				l = string(r[:119]) + "…"
+			}
+			return l
+		}
+	}
+	return ""
 }
 
 // watched is replaceable in tests.

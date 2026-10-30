@@ -52,6 +52,8 @@ func (e Event) Body() string {
 		return e.Agent + ": " + e.Message
 	case e.Kind == Waiting:
 		return e.Agent + " " + word(status.Waiting)
+	case e.Kind == Done && e.Message != "":
+		return e.Agent + ": " + e.Message
 	default:
 		return e.Agent + " " + word(status.Finished)
 	}
