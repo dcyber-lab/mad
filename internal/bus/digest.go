@@ -227,6 +227,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 	}
 
 	hs, _ := Handoffs()
+	ts, _ := Tasks()
 	label := func(id string) string {
 		if a := findIn(st, id); a != nil {
 			return drive.Label(a)
@@ -261,7 +262,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 				break
 			}
 			fmt.Fprintf(&b, " — handoff %s\n", ref.ID)
-			writeCard(&b, hs, ref.ID, e.m.Text)
+			writeCard(&b, hs, ts, ref.ID, e.m.Text)
 		case ref != nil && e.m.Kind == "done":
 			fmt.Fprintf(&b, " — %s %s\n%s\n", ref.ID, ref.Status, e.m.Text)
 		default:
@@ -295,7 +296,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 
 // writeCard writes the body of a handoff's card: its task (text), context,
 // files and chain, and how to finish it.
-func writeCard(b *strings.Builder, hs []Handoff, id, text string) {
+func writeCard(b *strings.Builder, hs []Handoff, ts []Task, id, text string) {
 	fmt.Fprintf(b, "Task: %s\n", text)
 	if h, found := findHandoff(hs, id); found {
 		if h.Context != "" {
@@ -307,6 +308,9 @@ func writeCard(b *strings.Builder, hs []Handoff, id, text string) {
 		if h.Parent != "" {
 			fmt.Fprintf(b, "Chain: %s\n", strings.Join(chainIDs(hs, h), " → "))
 		}
+	}
+	if t := taskOf(ts, id); t != nil {
+		fmt.Fprintf(b, "Task: %s (board)\n", t.ID)
 	}
 	fmt.Fprintf(b, "Finish it with bus_done(%q, result) when done, or decline it with status \"declined\".\n", id)
 }
@@ -337,8 +341,25 @@ func Delivered(agentID string, upto map[string]int) error {
 				changed = true
 			}
 		}
-		if changed {
-			return saveHandoffs(hs)
+		if !changed {
+			return nil
+		}
+		if err := saveHandoffs(hs); err != nil {
+			return err
+		}
+		ts, err := loadTasks()
+		if err != nil {
+			return err
+		}
+		moved := false
+		for _, h := range hs {
+			if t := taskOf(ts, h.ID); t != nil && h.To == agentID && !h.DeliveredAt.IsZero() && t.Status == TaskTodo {
+				t.Status, t.UpdatedAt = TaskDoing, h.DeliveredAt
+				moved = true
+			}
+		}
+		if moved {
+			return saveTasks(ts)
 		}
 		return nil
 	})

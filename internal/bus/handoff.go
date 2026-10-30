@@ -287,6 +287,13 @@ func newHandoffID() string {
 // open one from agent from received, if any. Refused: a chain more than
 // MaxDepth deep, a handoff to oneself or to an agent in a run.
 func HandOff(from From, to, task, context string, files []string, channel, parent string) (Handoff, PostResult, error) {
+	return HandOffTask(from, to, task, context, files, channel, parent, "")
+}
+
+// HandOffTask is HandOff for the task taskID on the board: the handoff
+// attaches to it and its owner becomes the receiver. With "" the handoff
+// makes a task of its own.
+func HandOffTask(from From, to, task, context string, files []string, channel, parent, taskID string) (Handoff, PostResult, error) {
 	task = strings.TrimSpace(task)
 	if task == "" {
 		return Handoff{}, PostResult{}, errors.New("no task given")
@@ -314,6 +321,7 @@ func HandOff(from From, to, task, context string, files []string, channel, paren
 	}
 	h := Handoff{ID: newHandoffID(), From: from.ID, To: to, Task: task, Context: strings.TrimSpace(context),
 		Files: files, Channel: channel, Status: "open", At: now()}
+	var prev *Task
 	err = locked(func() error {
 		hs, err := loadHandoffs()
 		if err != nil {
@@ -327,7 +335,18 @@ func HandOff(from From, to, task, context string, files []string, channel, paren
 				return fmt.Errorf("a chain of handoffs is at most %d deep: %s; finish the work yourself, or bus_done it", MaxDepth, strings.Join(chainIDs(hs, p), " → "))
 			}
 		}
-		return saveHandoffs(append(hs, h))
+		ts, err := loadTasks()
+		if err != nil {
+			return err
+		}
+		var next []Task
+		if next, prev, err = attachTask(ts, h, taskID, projectOf(st, from.ID)); err != nil {
+			return err
+		}
+		if err := saveHandoffs(append(hs, h)); err != nil {
+			return err
+		}
+		return saveTasks(next)
 	})
 	if err != nil {
 		return Handoff{}, PostResult{}, err
@@ -354,6 +373,7 @@ func HandOff(from From, to, task, context string, files []string, channel, paren
 	res, err := post(sp)
 	if err != nil {
 		_ = dropHandoff(h.ID)
+		undoTask(h.ID, prev)
 		return Handoff{}, PostResult{}, err
 	}
 	h.Seq = res.Seq
@@ -412,6 +432,7 @@ func Done(from From, id, result, status string) (Handoff, PostResult, error) {
 		_, _ = changeHandoff(id, func(h *Handoff) error { h.Status, h.Result, h.DoneAt = prev, "", time.Time{}; return nil })
 		return Handoff{}, PostResult{}, err
 	}
+	finishTask(h)
 	return h, res, nil
 }
 

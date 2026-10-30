@@ -52,6 +52,7 @@ usage:
                       messages typed in when an agent's turn is over
   mad bus ls|create|post|read|log|dm|resume|handoffs
                       channels where agents and you talk; @agent wakes one
+  mad board           the task board: who owns what, what waits for you
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles
                       (design, implement, review); "mad run" for more
@@ -130,6 +131,8 @@ func Run(args []string, stdio IO) int {
 		scan(args, stdio.Out)
 	case "ls":
 		err = ls(stdio.Out)
+	case "board":
+		err = board(stdio.Out)
 	case "spawn":
 		err = spawn(args, stdio)
 	case "send":
