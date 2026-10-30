@@ -528,10 +528,11 @@ async function openTerminal(a) {
 function drawActs() {
   drawTitle();
   const a = current && agents.get(current);
-  $("#acts").hidden = !a;
-  if (!a) return;
-  $("#changes").hidden = !a.chat;
-  $("#changes").classList.toggle("on", side.id === current);
+  // a phone's channel has its menu here, not in a band of its own
+  const ch = cv.open && phone.matches ? busChannel(cv.open) : null;
+  $("#acts").hidden = !a && !(ch && !ch.dm);
+  $("#changes").hidden = !a || !a.chat;
+  $("#changes").classList.toggle("on", !!a && side.id === current);
 }
 $("#changes").onclick = () => {
   if (side.id === current) closeChanges();
@@ -539,7 +540,9 @@ $("#changes").onclick = () => {
 };
 $("#more").onclick = () => {
   const a = current && agents.get(current);
+  const ch = cv.open && busChannel(cv.open);
   if (a) agentMenu(a, $("#more"), { right: true });
+  else if (ch && !ch.dm) chanMenu(ch, $("#more"));
 };
 
 // ---- its changes: the diff of its directory, beside the conversation ----

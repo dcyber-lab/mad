@@ -170,7 +170,7 @@ function drawChanHead() {
   }
   const parts = [what, el("span", "grow"), who];
   if (c && !c.dm) {
-    const more = el("button", "icon-btn");
+    const more = el("button", "icon-btn chmore"); // on a phone the top bar has it
     more.type = "button";
     more.title = "the channel's work";
     more.append(icon("more"));
@@ -189,9 +189,9 @@ function drawChanHead() {
     parts.push(el("span", "pill needs", "paused: waiting for you"), r);
   }
   head.replaceChildren(...parts);
-  // On a phone the top bar names it: the head shows only what more there
-  // is (a topic, a pause, a channel's menu).
-  head.classList.toggle("bare", !(c && (c.topic || c.paused || !c.dm)));
+  // On a phone the top bar names it and holds the menu: the head shows
+  // only what more there is (a topic, a pause, a team or a lead).
+  head.classList.toggle("bare", !(c && (c.topic || c.paused || c.team || lead)));
 }
 
 // chanMenu offers what the person does about channel c's work: its
