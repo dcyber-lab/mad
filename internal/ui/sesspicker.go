@@ -155,7 +155,7 @@ func (m *model) sessionsView() string {
 			s := m.sp.items[i-1]
 			mark := seg{stPlain, " "}
 			if _, ok := live[s.ID]; ok {
-				mark = seg{stDone, "●"}
+				mark = seg{stWorking, "●"}
 			} else if s.Origin == "desktop" {
 				mark = seg{stDim, "◇"}
 			}
@@ -189,6 +189,6 @@ func (m *model) sessionsView() string {
 		info += " · " + paths.Short(s.Cwd)
 	}
 	b.WriteString(stDim.Render(" "+textutil.Truncate(info, m.width-2)) + "\n")
-	b.WriteString(" " + stDone.Render("●") + stDim.Render(" open now  ") + stDim.Render("◇ desktop"))
+	b.WriteString(" " + stWorking.Render("●") + stDim.Render(" open now  ") + stDim.Render("◇ desktop"))
 	return b.String()
 }

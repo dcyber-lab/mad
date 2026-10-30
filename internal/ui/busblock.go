@@ -227,7 +227,7 @@ func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 		left = []seg{{stPlain, " "}, {stDim, "▤ "}, {stProject, "Board"}}
 		switch {
 		case b.waiting > 0:
-			right = []seg{{stWaiting, fmt.Sprintf("%d for you", b.waiting)}, {stPlain, " "}}
+			right = []seg{{stNeeds, fmt.Sprintf("%d for you", b.waiting)}, {stPlain, " "}}
 		case b.open > 0:
 			right = []seg{{stDim, fmt.Sprintf("%d open", b.open)}, {stPlain, " "}}
 		}
@@ -236,7 +236,7 @@ func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 	default:
 		left = []seg{{stPlain, " "}, {stName, b.title}}
 		if b.paused {
-			right = append(right, seg{stRunning, "paused"}, seg{stPlain, " "})
+			right = append(right, seg{stNeeds, "paused"}, seg{stPlain, " "})
 		}
 		if b.unread > 0 {
 			right = append(right, seg{stKey, fmt.Sprint(b.unread)}, seg{stPlain, " "})

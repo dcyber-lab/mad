@@ -81,15 +81,15 @@ func (m *model) runRowSegs(r row) (left, right []seg) {
 	steps := max(len(f.Flow().Steps), 1)
 	switch pr.Status {
 	case madrun.Starting, madrun.Running:
-		right = []seg{{stRunning, fmt.Sprintf("%s %d/%d", m.spin(), min(pr.Step+1, steps), steps)}}
+		right = []seg{{stWorking, fmt.Sprintf("%s %d/%d", m.spin(), min(pr.Step+1, steps), steps)}}
 	case madrun.Waiting:
-		right = []seg{{stWaiting, "◆ waiting"}}
+		right = []seg{{stNeeds, "◆ waiting"}}
 	case madrun.Done:
-		right = []seg{{stDone, "✓ done"}}
+		right = []seg{{stFinished, "✓ done"}}
 	case madrun.Cancelled:
 		right = []seg{{stFaint, "✗ cancelled"}}
 	case madrun.Failed:
-		right = []seg{{stWaiting, "✗ failed"}}
+		right = []seg{{stError, "✗ failed"}}
 	}
 	right = append(right, seg{stPlain, " "})
 	spent := ""

@@ -325,7 +325,7 @@ func (m *model) pickerView() string {
 		}
 		mark := seg{stPlain, " "}
 		if it.running {
-			mark = seg{stDone, "●"}
+			mark = seg{stWorking, "●"}
 		}
 		var bg lipgloss.TerminalColor
 		if i == m.pk.cursor {
@@ -352,6 +352,6 @@ func (m *model) pickerView() string {
 		}
 	}
 	b.WriteString(stDim.Render(" "+textutil.Truncate(sel, m.width-2)) + "\n")
-	b.WriteString(hints("⏎", "add", "tab", "browse") + "  " + stDone.Render("●") + stDim.Render(" running"))
+	b.WriteString(hints("⏎", "add", "tab", "browse") + "  " + stWorking.Render("●") + stDim.Render(" running"))
 	return b.String()
 }

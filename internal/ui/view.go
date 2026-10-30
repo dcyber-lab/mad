@@ -115,9 +115,10 @@ func (m *model) renderHeader() string {
 		}
 	}
 	var right []seg
-	add := func(n int, st lipgloss.Style, icon string) {
+	add := func(n int, state string) {
 		if n > 0 {
-			right = append(right, seg{st, fmt.Sprintf("%s%d", icon, n)}, seg{stPlain, "  "})
+			ic := m.shownSeg(state)
+			right = append(right, seg{ic.st, fmt.Sprintf("%s%d", ic.s, n)}, seg{stPlain, "  "})
 		}
 	}
 	for _, f := range m.runs {
@@ -125,9 +126,9 @@ func (m *model) renderHeader() string {
 			waiting++
 		}
 	}
-	add(waiting, stWaiting, "?")
-	add(running, stRunning, m.spin())
-	add(done, stDone, "●")
+	add(waiting, status.Waiting)
+	add(running, status.Running)
+	add(done, status.Finished)
 	if len(right) > 0 {
 		right[len(right)-1].s = " "
 	} else {
@@ -215,14 +216,14 @@ func (m *model) quotaLines(now time.Time) []string {
 	return out
 }
 
-// quotaStyle colors a used percentage: plain, then orange from 80%, red
+// quotaStyle colors a used percentage: plain, then amber from 80%, red
 // from 95%.
 func quotaStyle(used float64) lipgloss.Style {
 	switch {
 	case used >= 95:
-		return stWaiting
+		return stError
 	case used >= 80:
-		return stRunning
+		return stNeeds
 	}
 	return stName
 }
@@ -450,25 +451,24 @@ func (m *model) gitSegs(dir, fallback string) []seg {
 	return segs
 }
 
-func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
-	switch s {
-	case status.Running:
-		return seg{stRunning, m.spin()}, seg{stRunning, "running"}
-	case status.Waiting:
-		return seg{stWaiting, "?"}, seg{stWaiting, "waiting"}
-	case status.Idle, status.Asleep:
-		switch {
-		case attention: // what it did outweighs where it is
-			return seg{stDone, "●"}, seg{stDone, "done"}
-		case s == status.Asleep:
-			return seg{stDim, "◌"}, seg{stFaint, "asleep"}
-		}
-		return seg{stDim, "○"}, seg{stFaint, "idle"}
-	case status.Exited:
-		return seg{stDim, "✗"}, seg{stFaint, "exited"}
-	default:
-		return seg{stFaint, "·"}, seg{stFaint, "stopped"}
+// glyph is the icon of a shown state: its table glyph, a spinner frame
+// while it works.
+func (m *model) glyph(l status.Look) string {
+	if l.State == status.Running {
+		return m.spin()
 	}
+	return l.Glyph
+}
+
+// statusGlyph is the icon and the word of an agent's tracked status s,
+// as status.Shown reads it with attention.
+func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
+	l := status.LookOf(status.Shown(s, attention))
+	st, ist := toneStyle(l.Tone), toneStyle(l.Tone)
+	if l.Tone == status.ToneQuiet {
+		ist = stDim
+	}
+	return seg{ist, m.glyph(l)}, seg{st, l.Word}
 }
 
 // projectSummary is the most urgent status inside a collapsed project.
@@ -488,20 +488,26 @@ func (m *model) projectSummary(p *state.Project) seg {
 	}
 	switch {
 	case waiting > 0:
-		return seg{stWaiting, "?"}
+		return m.shownSeg(status.Waiting)
 	case running > 0:
-		return seg{stRunning, m.spin()}
+		return m.shownSeg(status.Running)
 	case done > 0:
-		return seg{stDone, "●"}
+		return m.shownSeg(status.Finished)
 	}
 	return seg{}
+}
+
+// shownSeg is the colored icon of a shown state.
+func (m *model) shownSeg(state string) seg {
+	l := status.LookOf(state)
+	return seg{toneStyle(l.Tone), m.glyph(l)}
 }
 
 func (m *model) renderFooter() string {
 	var l1, l2, l3 string
 	switch m.mode {
 	case modeConfirm:
-		l1 = " " + stWaiting.Render(m.confirmMsg)
+		l1 = " " + stNeeds.Render(m.confirmMsg)
 	case modeWorktree, modeRename, modeNote:
 		title := " name"
 		switch {
@@ -542,7 +548,7 @@ func (m *model) renderFooter() string {
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
 		} else if m.spend.Closed {
-			l1 = " " + stWaiting.Render(spendFooter(m.spend))
+			l1 = " " + stNeeds.Render(spendFooter(m.spend))
 		} else {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}

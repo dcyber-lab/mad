@@ -509,7 +509,7 @@ func TestCloseButton(t *testing.T) {
 		m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	}
 	lines := strings.Split(m.View(), "\n")
-	if l := lines[headerLines+1]; !strings.HasSuffix(strings.TrimRight(ansi.Strip(l), " "), "stopped ×") {
+	if l := lines[headerLines+1]; !strings.HasSuffix(strings.TrimRight(ansi.Strip(l), " "), "Stopped ×") {
 		t.Fatalf("no × on the row: %q", ansi.Strip(l))
 	}
 
@@ -1139,7 +1139,7 @@ func TestUsageInRows(t *testing.T) {
 		t.Error("scan still marked in flight")
 	}
 	v := m.View()
-	for _, want := range []string{"$1.23  stopped", "34k  stopped", "$1.23 + 34k  3 "} {
+	for _, want := range []string{"$1.23  Stopped", "34k  Stopped", "$1.23 + 34k  3 "} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
 		}
@@ -1157,7 +1157,7 @@ func TestUsageInRows(t *testing.T) {
 	// Too narrow for both: the count goes, the status stays.
 	m.Update(tea.WindowSizeMsg{Width: 25, Height: 30})
 	v = m.View()
-	if strings.Contains(v, "$1.23  stopped") || !strings.Contains(v, "claude") || strings.Count(v, "stopped") != 3 {
+	if strings.Contains(v, "$1.23  Stopped") || !strings.Contains(v, "claude") || strings.Count(v, "Stopped") != 3 {
 		t.Errorf("at width 25:\n%s", v)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 48, Height: 30})
@@ -1666,13 +1666,13 @@ func TestAsleepInSidebar(t *testing.T) {
 	m, st := setup(t, "/code/a")
 	st.Projects[0].Agents = []*state.Agent{{ID: "c1", Kind: "claude"}}
 	m.rebuildRows()
-	if _, label := m.statusGlyph(status.Asleep, false); label.s != "asleep" {
+	if _, label := m.statusGlyph(status.Asleep, false); label.s != "Asleep" {
 		t.Errorf("asleep reads %q", label.s)
 	}
 	// Finished while you were away, then put to sleep: still done, and d
 	// still finds it.
 	m.trackers["c1"] = &status.Tracker{Status: status.Asleep, Attention: true}
-	if _, label := m.statusGlyph(status.Asleep, true); label.s != "done" {
+	if _, label := m.statusGlyph(status.Asleep, true); label.s != "Finished" {
 		t.Errorf("asleep and done reads %q", label.s)
 	}
 	if !m.needsYou(st.Projects[0].Agents[0]) || !strings.Contains(ansi.Strip(m.renderHeader()), "●1") {

@@ -5,36 +5,56 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
 // Palette (xterm-256 so it looks the same under tmux-256color everywhere).
 var (
-	cAccent  = lipgloss.Color("75")  // brand, stage, keys
-	cText    = lipgloss.Color("252") // names
-	cDim     = lipgloss.Color("243") // secondary text
-	cFaint   = lipgloss.Color("239") // rules, counts
-	cRunning = lipgloss.Color("214")
-	cWaiting = lipgloss.Color("203")
-	cDone    = lipgloss.Color("78")
-	cSelOn   = lipgloss.Color("24")  // cursor bar, sidebar focused
-	cSelOff  = lipgloss.Color("236") // cursor bar, sidebar not focused
+	cAccent = lipgloss.Color("75")  // brand, stage, keys
+	cText   = lipgloss.Color("252") // names
+	cDim    = lipgloss.Color("243") // secondary text
+	cFaint  = lipgloss.Color("239") // rules, counts
+	// The tones of status.Looks: mid-strength codes that read on a dark
+	// and on a light terminal alike.
+	cWorking  = lipgloss.Color("34")  // green
+	cNeeds    = lipgloss.Color("172") // amber
+	cFinished = lipgloss.Color("33")  // blue
+	cError    = lipgloss.Color("160") // red: only for what broke
+	cSelOn    = lipgloss.Color("24")  // cursor bar, sidebar focused
+	cSelOff   = lipgloss.Color("236") // cursor bar, sidebar not focused
 )
 
 var (
-	stPlain   = lipgloss.NewStyle()
-	stHeader  = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	stProject = lipgloss.NewStyle().Bold(true).Foreground(cText)
-	stName    = lipgloss.NewStyle().Foreground(cText)
-	stDim     = lipgloss.NewStyle().Foreground(cDim)
-	stFaint   = lipgloss.NewStyle().Foreground(cFaint)
-	stKey     = lipgloss.NewStyle().Foreground(cAccent)
-	stRunning = lipgloss.NewStyle().Foreground(cRunning)
-	stWaiting = lipgloss.NewStyle().Foreground(cWaiting).Bold(true)
-	stDone    = lipgloss.NewStyle().Foreground(cDone)
-	stStage   = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	stFlash   = lipgloss.NewStyle().Foreground(cWaiting)
+	stPlain    = lipgloss.NewStyle()
+	stHeader   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	stProject  = lipgloss.NewStyle().Bold(true).Foreground(cText)
+	stName     = lipgloss.NewStyle().Foreground(cText)
+	stDim      = lipgloss.NewStyle().Foreground(cDim)
+	stFaint    = lipgloss.NewStyle().Foreground(cFaint)
+	stKey      = lipgloss.NewStyle().Foreground(cAccent)
+	stWorking  = lipgloss.NewStyle().Foreground(cWorking)
+	stNeeds    = lipgloss.NewStyle().Foreground(cNeeds).Bold(true)
+	stFinished = lipgloss.NewStyle().Foreground(cFinished)
+	stError    = lipgloss.NewStyle().Foreground(cError)
+	stStage    = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	stFlash    = lipgloss.NewStyle().Foreground(cError)
 )
+
+// toneStyle is the style a status.Tone is drawn in.
+func toneStyle(t status.Tone) lipgloss.Style {
+	switch t {
+	case status.ToneWorking:
+		return stWorking
+	case status.ToneNeeds:
+		return stNeeds
+	case status.ToneFinished:
+		return stFinished
+	case status.ToneError:
+		return stError
+	}
+	return stFaint
+}
 
 // seg is one styled run of text within a line.
 type seg struct {
