@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -21,6 +22,7 @@ type Snapshot struct {
 	Projects []Project      `json:"projects"`
 	Quota    map[string]any `json:"quota,omitempty"` // by kind: claude, codex
 	Bus      []BusChannel   `json:"bus"`             // the channels and DMs (bus.go)
+	Board    []bus.Card     `json:"board"`           // the task board (board.go)
 	At       time.Time      `json:"at"`
 }
 
@@ -206,6 +208,7 @@ func (p *poller) Poll(now time.Time) {
 		}
 	}
 	snap.Bus = busChannels(st)
+	snap.Board = boardCards(st, snap)
 
 	p.mu.Lock()
 	p.snap = snap

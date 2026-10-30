@@ -59,6 +59,7 @@ function openChannel(id) {
   }
   closeNew();
   closeSkills();
+  closeBoard();
   closeChanges();
   closeMenu();
   closePopup();

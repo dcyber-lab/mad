@@ -85,7 +85,7 @@ const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.
 
 function drawSidebar() {
   const nav = $("#projects");
-  nav.replaceChildren(channelsGroup());
+  nav.replaceChildren(boardRow(), channelsGroup());
   agents.clear();
   if (!deck.projects.length) {
     const p = el("div", "none");
@@ -275,8 +275,8 @@ applyTheme();
 
 function drawQueue(fresh) {
   const box = $("#queue");
-  if (sk.open) {
-    box.hidden = true; // the Skills page has no message box
+  if (sk.open || bd.open) {
+    box.hidden = true; // the Skills page and the board have no message box
     return;
   }
   const a = current && agents.get(current);
@@ -742,6 +742,7 @@ async function refresh() {
     drawSidebar();
     openWanted();
     if (cv.open) drawChanHead();
+    drawBoard();
     const o = opened.get(current);
     if (o && agents.get(current)?.chat) {
       loadChat(current, o);
@@ -824,6 +825,7 @@ function show(id) {
   closeNew();
   closeChannel();
   closeSkills();
+  closeBoard();
   closeMenu();
   closePopup();
   commandsOf(id);
@@ -940,7 +942,7 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    t.replaceChildren(el("span", "pt", sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", bd.open ? "Board" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
     t.className = "";
     return;
   }

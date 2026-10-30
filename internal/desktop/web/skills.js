@@ -40,6 +40,7 @@ function openSkills() {
   }
   closeNew();
   closeChannel();
+  closeBoard();
   closeChanges();
   closeMenu();
   closePopup();
