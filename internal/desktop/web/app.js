@@ -721,6 +721,7 @@ async function refresh() {
     $("#conn").title = "connected";
     drawQuota(deck.quota);
     drawSidebar();
+    openWanted();
     const o = opened.get(current);
     if (o && agents.get(current)?.chat) {
       loadChat(current, o);
@@ -862,6 +863,30 @@ function close(id) {
     }
   }
   drawSidebar();
+}
+
+// ---- what a notification opens (sw.js) ----
+
+// The service worker shows notifications pushed here; one clicked opens
+// its agent, in this page (a message) or a new one (?agent=).
+let toOpen = new URLSearchParams(location.search).get("agent");
+if (toOpen) history.replaceState(null, "", location.pathname);
+if ("serviceWorker" in navigator && isSecureContext) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    if (e.data && e.data.open) {
+      toOpen = e.data.open;
+      openWanted();
+    }
+  });
+}
+
+// openWanted shows the agent a notification is about, once the deck has it.
+function openWanted() {
+  if (toOpen && agents.has(toOpen)) {
+    show(toOpen);
+    toOpen = null;
+  }
 }
 
 // ---- on a phone: the list, or what is open, a screen each ----

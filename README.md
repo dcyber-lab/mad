@@ -356,6 +356,14 @@ Home Screen keeps it at hand as an app.
   mad it was opened with.
 - `mad phone off` closes the way in and stops the server; `mad phone`
   shows how it stands, with the QR code again.
+- The bell at the foot of the sidebar turns on notifications for that
+  device: what the deck notifies about (an agent done, or needing you) is
+  pushed to it too, mad open or not, and a tap opens that agent. On an
+  iPhone this works for mad added to the Home Screen and opened from
+  there (iOS 16.4 or later). They go through the browser's push service
+  (Apple's, Google's), encrypted for that browser alone (Web Push,
+  RFC 8291) and signed with a key of mad's (`push_vapid.json` in its
+  state directory).
 
 ## Reading the sidebar
 
