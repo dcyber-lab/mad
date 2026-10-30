@@ -121,3 +121,37 @@ func TestBusReply(t *testing.T) {
 		}
 	}
 }
+
+// Agents removed: a DM between them leaves the list, and the person's own
+// DM with one keeps a name to go by.
+func TestBusRemovedAgents(t *testing.T) {
+	isolate(t)
+	const a1, a2 = "aaaa1111-0000-0000-0000-000000000001", "bbbb2222-0000-0000-0000-000000000002"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: t.TempDir(), Agents: []*state.Agent{
+		{ID: a1, Kind: "claude", Name: "alice"}, {ID: a2, Kind: "codex", Name: "bob"},
+	}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	alice := bus.From{ID: a1, Label: "alice", Kind: "claude"}
+	if _, _, err := bus.DM(alice, a2, "between the two of us"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := bus.DM(alice, bus.You, "and a word for you"); err != nil {
+		t.Fatal(err)
+	}
+	st.Projects[0].Agents = nil
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, c := range busChannels(st) {
+		got[c.ID] = c.Title
+	}
+	if _, ok := got[bus.DMChannel(a1, a2)]; ok {
+		t.Errorf("a DM of two removed agents is listed: %v", got)
+	}
+	if title := got[bus.DMChannel(a1, bus.You)]; title != "@aaaa1111" {
+		t.Errorf("your DM with a removed agent: %q (all %v)", title, got)
+	}
+}

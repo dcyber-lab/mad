@@ -50,6 +50,7 @@ func busChannels(st *state.State) []BusChannel {
 		bc := BusChannel{ID: c.ID, Title: "#" + c.ID, Topic: c.Topic, DM: strings.HasPrefix(c.ID, "dm."),
 			Last: yours[c.ID].Last, Unread: yours[c.ID].Unread, Paused: c.Paused, Lead: c.Lead, Members: []BusMember{}, Team: teams[c.ID]}
 		var names []string
+		gone := 0 // members no longer in the deck
 		for _, m := range c.Members {
 			if m == bus.You {
 				bc.Yours = true
@@ -58,10 +59,16 @@ func busChannels(st *state.State) []BusChannel {
 			if _, a := st.FindAgent(m); a != nil {
 				bc.Members = append(bc.Members, BusMember{a.ID, drive.Label(a), a.Kind})
 				names = append(names, drive.Label(a))
+			} else {
+				gone++
+				names = append(names, m[:min(len(m), 8)])
 			}
 		}
 		if bc.DM {
 			bc.Yours = bc.Yours || strings.HasSuffix(c.ID, "."+bus.You) || strings.Contains(c.ID, "."+bus.You+".")
+			if !bc.Yours && len(bc.Members) == 0 && gone > 0 {
+				continue // between agents both removed: nobody's any more
+			}
 			if bc.Yours {
 				bc.Title = "@" + strings.Join(names, ", ")
 			} else {
