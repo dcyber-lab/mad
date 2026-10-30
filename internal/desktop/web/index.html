@@ -11,36 +11,61 @@
 <div id="app">
   <aside id="sidebar">
     <header>
-      <span class="logo">mad</span>
+      <span class="brand"><span class="mark">m</span>mad</span>
       <span id="conn" class="conn" title="connection to mad"></span>
     </header>
-    <div id="quota"></div>
+    <label class="search">
+      <span class="ico" data-icon="search"></span>
+      <input id="filter" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false">
+      <kbd id="filterKey">⌘K</kbd>
+    </label>
     <nav id="projects"></nav>
+    <footer>
+      <div id="quota"></div>
+      <div class="foot">
+        <span class="muted" id="summary"></span>
+        <button id="theme" type="button" class="icon-btn" title="theme"></button>
+      </div>
+    </footer>
   </aside>
   <div id="resizer" title="drag to resize"></div>
-  <main>
+  <main id="main">
     <div id="bar" hidden>
       <div id="tabs"></div>
       <div id="views" hidden>
-        <button type="button" data-view="chat" title="its conversation, from its transcript (Alt-t)">Chat</button>
-        <button type="button" data-view="term" title="its own TUI, attached to its pane (Alt-t)">Terminal</button>
+        <button type="button" data-view="chat" title="its conversation, from its transcript (Alt-t)"><span data-icon="chat"></span>Chat</button>
+        <button type="button" data-view="term" title="its own TUI, attached to its pane (Alt-t)"><span data-icon="terminal"></span>Terminal</button>
       </div>
     </div>
     <div id="terms">
       <div id="empty">
-        <p>Pick an agent on the left.</p>
-        <p class="muted">Its conversation opens here, read from its transcript; <kbd>Alt</kbd>+<kbd>t</kbd>
-          switches to its own TUI, attached to the same tmux pane the terminal deck shows.
-          <kbd>Alt</kbd>+<kbd>n</kbd> jumps to the next agent that needs you.</p>
+        <div class="hero">
+          <div class="mark big">m</div>
+          <h1>Your agents, in one place</h1>
+          <p class="muted">Pick one on the left to read its conversation and send it messages.
+            <kbd>Alt</kbd> <kbd>T</kbd> switches to its own terminal.</p>
+        </div>
+        <div id="spotlight"></div>
+        <div class="keys muted">
+          <span><kbd>Alt</kbd> <kbd>N</kbd> next that needs you</span>
+          <span><kbd>Alt</kbd> <kbd>J</kbd> <kbd>K</kbd> next / previous</span>
+          <span><kbd>⌘</kbd> <kbd>K</kbd> search</span>
+        </div>
       </div>
     </div>
     <section id="queue" hidden>
-      <div id="qerr"></div>
-      <ol id="qitems"></ol>
-      <div class="qbar">
+      <div class="composer">
         <ul id="qmenu" hidden></ul>
-        <textarea id="qinput" rows="1" placeholder="Queue a message, or / for the agent's commands: it is typed in when the agent's turn is over. Enter adds, Shift-Enter starts a new line."></textarea>
-        <button id="qpause" type="button" title="hold the queued messages">Pause</button>
+        <div id="qerr"></div>
+        <ol id="qitems"></ol>
+        <textarea id="qinput" rows="1" placeholder="Message the agent, or / for commands"></textarea>
+        <div class="cbar">
+          <span id="who"></span>
+          <span class="grow"></span>
+          <span class="hintline muted">Sent when its turn is over · <kbd>⇧</kbd><kbd>↵</kbd> new line</span>
+          <button id="qpause" type="button" class="icon-btn" title="hold the queued messages"></button>
+          <button id="qsend" type="button" class="send" title="send (Enter)" disabled></button>
+        </div>
       </div>
     </section>
   </main>
@@ -49,6 +74,7 @@
 <script src="vendor/addon-fit.js"></script>
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
+<script src="icons.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

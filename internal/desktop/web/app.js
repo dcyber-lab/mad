@@ -52,6 +52,28 @@ function drawQuota(q) {
   }
 }
 
+// avatar is agent a's kind as a tile in its color, with its status as a
+// dot on the corner.
+function avatar(a, small) {
+  const glyph = a.icon || (a.kind || "?")[0];
+  const v = el("span", `avatar${small ? " small" : ""}${[...glyph].length > 1 ? " wide" : ""}`, glyph);
+  if (a.color) v.style.setProperty("--kc", /^#/.test(a.color) ? a.color : xtermColor(a.color));
+  v.append(el("span", "dot"));
+  return v;
+}
+
+const statusWords = {
+  running: ["working", "Working"], waiting: ["needs", "Needs you"], done: ["done", "Done"],
+  idle: ["quiet", "Idle"], asleep: ["quiet", "Asleep"], stopped: ["quiet", "Stopped"], exited: ["quiet", "Exited"],
+};
+function statusPill(a) {
+  const [cls, text] = statusWords[shownStatus(a)] || ["quiet", shownStatus(a)];
+  return el("span", `pill ${cls}`, text);
+}
+
+// Projects folded away, by path.
+const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.collapsed") || "[]"); } catch (_) { return []; } })());
+
 function drawSidebar() {
   const nav = $("#projects");
   nav.replaceChildren();
@@ -61,55 +83,136 @@ function drawSidebar() {
     p.innerHTML = "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.";
     nav.append(p);
   }
+  const q = $("#filter").value.trim().toLowerCase();
+  const matches = (p, a) => !q || [label(a), a.title, a.detail, a.kind, p.name].some((s) => (s || "").toLowerCase().includes(q));
+  let count = 0, working = 0, needs = 0;
   for (const p of deck.projects) {
-    const box = el("div", "project");
+    for (const a of p.agents) {
+      a.project = p;
+      agents.set(a.id, a);
+      count++;
+      if (a.status === "running") working++;
+      if (a.status === "waiting") needs++;
+    }
+    const shown = p.agents.filter((a) => matches(p, a));
+    if (q && !shown.length) continue;
+    const folded = !q && collapsed.has(p.path);
+    const box = el("div", `project${folded ? " collapsed" : ""}`);
     const head = el("div", "head");
-    head.append(el("b", "", p.name));
-    if (p.branch) head.append(el("span", "", p.branch));
+    head.append(icon("down", "chev"), el("b", "", p.name));
+    if (p.branch) {
+      const b = el("span", "branch");
+      b.append(icon("branch"), p.branch);
+      head.append(b);
+    }
     const cost = p.agents.reduce((s, a) => s + (a.cost || 0), 0);
     const git = [p.changed ? `±${p.changed}` : "", p.ahead ? `↑${p.ahead}` : ""].filter(Boolean).join(" ");
     head.append(el("span", "git", git), el("span", "cost", money(cost)));
     head.title = p.path;
+    head.onclick = () => {
+      if (collapsed.has(p.path)) collapsed.delete(p.path); else collapsed.add(p.path);
+      localStorageSet("mad.collapsed", JSON.stringify([...collapsed]));
+      drawSidebar();
+    };
     box.append(head);
-    for (const a of p.agents) {
-      a.project = p;
-      agents.set(a.id, a);
+    for (const a of shown) {
       const st = shownStatus(a);
       const row = el("div", `agent s-${st}${a.id === current ? " sel" : ""}`);
       row.title = `${a.kind} · ${st}${a.role ? " · " + a.role : ""}\n${a.id}`;
-      row.append(el("span", "dot"));
-      const icon = el("span", "icon", a.icon || a.kind[0]);
-      if (a.color) icon.style.color = /^#/.test(a.color) ? a.color : xtermColor(a.color);
       const name = el("span", "name", label(a));
-      const q = a.queue;
-      if (q && q.items && q.items.length) {
-        const n = el("span", `qn${q.paused ? " paused" : ""}`, `⇢${q.items.length}`);
-        n.title = q.paused ? "queued messages, paused" : "queued messages";
+      const qu = a.queue;
+      if (qu && qu.items && qu.items.length) {
+        const n = el("span", `qn${qu.paused ? " paused" : ""}`, String(qu.items.length));
+        n.title = qu.paused ? "queued messages, paused" : "queued messages";
         name.append(n);
       }
-      row.append(icon, name);
-      row.append(el("span", "meta", st === "waiting" ? "needs you" : money(a.cost)));
-      if (a.detail) row.append(el("span", "detail", a.detail));
+      row.append(avatar(a), name);
+      row.append(st === "waiting" ? statusPill(a) : el("span", "meta", money(a.cost)));
+      // What it does, or else what it is: rows of one height.
+      row.append(el("span", "detail", a.detail || `${a.kind} · ${(statusWords[st] || ["", st])[1].toLowerCase()}`));
       row.onclick = () => show(a.id);
       box.append(row);
     }
     nav.append(box);
   }
+  $("#summary").textContent = [`${count} agent${count === 1 ? "" : "s"}`, working && `${working} working`, needs && `${needs} need${needs === 1 ? "s" : ""} you`]
+    .filter(Boolean).join(" · ");
+  drawSpotlight();
   drawQueue();
   for (const [id, o] of opened) {
     const a = agents.get(id);
     if (!a) continue;
     o.tab.className = `tab s-${shownStatus(a)}${id === current ? " on" : ""}`;
     o.tab.querySelector(".t").textContent = label(a);
-    o.wait.hidden = a.status !== "waiting";
+    o.wait.hidden = a.status !== "waiting" || !!o.dock;
     // Asking you something: what it asks, and the keys to answer, are in
-    // its own TUI.
-    if (a.status === "waiting" && o.status !== "waiting" && id === current && o.view === "chat") setView(id, "term");
+    // its own TUI, docked under the conversation until it is answered.
+    if (a.status === "waiting" && o.status !== "waiting" && !o.dock) dock(id, "waiting");
+    if (o.dock === "waiting" && a.status !== "waiting") dock(id, null);
+    // What a command brought up is done with once its result is in.
+    if (o.dock === "command" && o.results > o.dockAt && a.status !== "waiting") dock(id, null);
     o.status = a.status;
   }
   $("#bar").hidden = opened.size === 0;
   drawViews();
 }
+
+// drawSpotlight puts the agents that want a look on the page shown with
+// no tab open: asking something first, then done, then working.
+function drawSpotlight() {
+  const box = $("#spotlight");
+  if ($("#empty").style.display === "none") return;
+  const prio = { waiting: 0, done: 1, running: 2 };
+  const picked = [...agents.values()].filter((a) => shownStatus(a) in prio)
+    .sort((x, y) => prio[shownStatus(x)] - prio[shownStatus(y)]).slice(0, 6);
+  box.replaceChildren(...picked.map((a) => {
+    const c = el("div", `card s-${shownStatus(a)}`);
+    const top = el("div", "top");
+    top.append(avatar(a), el("span", "name", label(a)), statusPill(a));
+    c.append(top, el("div", "detail", a.detail || a.title || ""));
+    c.append(el("div", "foot", [a.project.name, a.kind, money(a.cost)].filter(Boolean).join(" · ")));
+    c.onclick = () => show(a.id);
+    return c;
+  }));
+}
+
+// ---- search, theme ----
+
+$("#filter").addEventListener("input", () => drawSidebar());
+$("#filter").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.target.value = "";
+    drawSidebar();
+    e.target.blur();
+  } else if (e.key === "Enter") {
+    const first = $("#projects .agent");
+    if (first) first.click();
+  }
+});
+window.addEventListener("keydown", (e) => {
+  if (e.metaKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    $("#filter").focus();
+    $("#filter").select();
+  }
+}, true);
+if (!/Mac/.test(navigator.platform)) $("#filterKey").hidden = true;
+
+const themes = ["auto", "light", "dark"];
+let theme = themes.includes(localStorageGet("mad.theme")) ? localStorageGet("mad.theme") : "auto";
+function applyTheme() {
+  if (theme === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  const b = $("#theme");
+  b.replaceChildren(icon({ auto: "auto", light: "sun", dark: "moon" }[theme]));
+  b.title = `Theme: ${theme === "auto" ? "as the system's" : theme} (click to change)`;
+}
+$("#theme").onclick = () => {
+  theme = themes[(themes.indexOf(theme) + 1) % themes.length];
+  localStorageSet("mad.theme", theme);
+  applyTheme();
+};
+applyTheme();
 
 // ---- the queue of the agent shown: messages typed in when its turn ends ----
 
@@ -129,8 +232,10 @@ function drawQueue(fresh) {
     items.forEach((it, i) => {
       const li = el("li");
       li.title = it.text;
-      const x = el("span", "x", "×");
+      const x = el("button", "x icon-btn");
+      x.type = "button";
       x.title = "drop it";
+      x.append(icon("x"));
       x.onclick = () => queueCall("DELETE", { item: it.id });
       li.append(el("span", "n", String(i + 1)), el("span", "t", it.text.split("\n")[0]), x);
       list.append(li);
@@ -138,8 +243,21 @@ function drawQueue(fresh) {
   }
   $("#qerr").textContent = q.error && items.length ? `Not sent yet: ${q.error}` : "";
   const pause = $("#qpause");
-  pause.textContent = q.paused ? "Resume" : "Pause";
+  pause.hidden = !items.length && !q.paused;
+  pause.replaceChildren(icon(q.paused ? "play" : "pause"));
+  pause.title = q.paused ? "the queue is held: let it go" : "hold the queued messages";
   pause.classList.toggle("on", !!q.paused);
+  drawWho(a);
+}
+
+// drawWho says, under the message box, which agent it goes to and what
+// it is doing.
+function drawWho(a) {
+  const who = $("#who");
+  const what = el("span", "what");
+  what.append(el("b", "", a.kind), ` · ${a.project.name}${a.project.branch ? " / " + a.project.branch : ""}`);
+  who.replaceChildren(avatar(a, true), what, statusPill(a));
+  who.className = `s-${shownStatus(a)}`;
 }
 
 async function queueCall(method, params, body, path = "/api/queue") {
@@ -162,14 +280,15 @@ async function submit() {
   // Cleared at once, so what is typed next is a message of its own; put
   // back if it was not queued.
   t.value = "";
-  t.style.height = "";
+  fitInput();
   if (!(await queueCall("POST", {}, text))) {
     if (!t.value) t.value = text;
+    fitInput();
     return;
   }
   // What one of the TUI's own commands brings up is on its screen only.
   const name = /^\/(\S+)/.exec(text.trim())?.[1];
-  if (name && findCommand(id, name)?.tui && id === current) setView(id, "term");
+  if (name && findCommand(id, name)?.tui) dock(id, "command");
 }
 
 $("#qinput").addEventListener("keydown", (e) => {
@@ -182,10 +301,27 @@ $("#qinput").addEventListener("keydown", (e) => {
   e.preventDefault();
   submit();
 });
-$("#qinput").addEventListener("input", (e) => {
-  e.target.style.height = "";
-  e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`;
+// fitInput grows the message box with what is in it, and offers to send
+// it if there is something.
+function fitInput() {
+  const t = $("#qinput");
+  t.style.height = "";
+  t.style.height = `${Math.min(220, t.scrollHeight)}px`;
+  t.style.overflowY = t.scrollHeight > 220 ? "auto" : "hidden";
+  $("#qsend").disabled = !t.value.trim();
+}
+$("#qinput").addEventListener("input", () => {
+  fitInput();
   drawMenu();
+});
+$("#qsend").append(icon("send"));
+$("#qsend").onclick = () => submit();
+$(".composer").addEventListener("mousedown", (e) => {
+  // A click anywhere in the box but its buttons is a click in the text.
+  if (!e.target.closest("button, textarea, #qmenu, #qitems")) {
+    e.preventDefault();
+    $("#qinput").focus();
+  }
 });
 $("#qinput").addEventListener("keyup", (e) => {
   if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) drawMenu();
@@ -325,6 +461,7 @@ function pick(run) {
   const sep = rest.startsWith(" ") ? "" : " ";
   t.value = `/${c.name}${sep}${rest}`;
   t.setSelectionRange(c.name.length + 2, c.name.length + 2);
+  fitInput();
 }
 $("#qpause").onclick = () => {
   const q = agents.get(current)?.queue;
@@ -380,7 +517,8 @@ function open(id) {
     scrollback: 0, // tmux keeps the history; the wheel scrolls it
     allowProposedApi: false,
     macOptionIsMeta: true,
-    theme: { background: "#0f1115", foreground: "#d7dae0", cursor: "#d7dae0", selectionBackground: "#264f78" },
+    // Dark in either theme: the agents' TUIs draw for a dark terminal.
+    theme: { background: "#121214", foreground: "#ececf1", cursor: "#ececf1", selectionBackground: "#2f4a77" },
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -388,7 +526,8 @@ function open(id) {
 
   const tab = el("div", "tab");
   tab.append(el("span", "dot"), el("span", "t", label(agents.get(id) || { id, kind: "" })));
-  const x = el("span", "x", "×");
+  const x = el("span", "x");
+  x.append(icon("x"));
   x.title = "close (the agent keeps running)";
   x.onclick = (e) => { e.stopPropagation(); close(id); };
   tab.append(x);
@@ -403,14 +542,31 @@ function open(id) {
   log.append(live);
   const wait = el("div", "wait");
   wait.hidden = true;
-  wait.append(el("span", "", "Waiting for you: answer in its terminal "), el("kbd", "", "Alt"), "+", el("kbd", "", "t"));
-  wait.onclick = () => setView(id, "term");
+  wait.append(icon("alert"), el("span", "", "It needs you: answer in its terminal"), el("kbd", "", "Alt"), el("kbd", "", "T"));
+  wait.onclick = () => dock(id, "user");
   chat.append(log, wait);
   $("#terms").append(chat);
 
+  // The bar over the terminal docked under the conversation (dock).
+  const dockbar = el("div", "dockbar");
+  const dockWhat = el("span", "what");
+  const expand = el("button", "icon-btn");
+  expand.type = "button";
+  expand.title = "the whole tab (Alt-t)";
+  expand.append(icon("expand"));
+  expand.onclick = () => setView(id, "term");
+  const shut = el("button", "icon-btn");
+  shut.type = "button";
+  shut.title = "put it away (it keeps running)";
+  shut.append(icon("x"));
+  shut.onclick = () => dock(id, null);
+  dockbar.append(icon("terminal"), dockWhat, el("span", "grow"), expand, shut);
+  $("#terms").append(dockbar);
+
   const a = agents.get(id);
   const o = {
-    id, term, fit, box, tab, ws: null, chat, log, live, wait,
+    id, term, fit, box, tab, ws: null, chat, log, live, wait, dockbar, dockWhat,
+    dock: null, dockAt: 0, results: 0, // the terminal docked under the conversation, and why
     view: a && a.chat ? "chat" : "term",
     status: a && a.status,
     file: "", offset: 0, loaded: false, loading: false, entries: 0,
@@ -480,6 +636,7 @@ function show(id) {
     const prev = opened.get(current);
     if (prev) {
       prev.box.classList.remove("on"); prev.chat.classList.remove("on"); prev.tab.classList.remove("on");
+      prev.dockbar.classList.remove("on");
       sendCtl(prev, { type: "blur" });
       unfollow(prev);
     }
@@ -498,17 +655,48 @@ function show(id) {
 // terminal, connected the first time it is shown.
 function present(id, o) {
   const term = o.view === "term";
-  o.box.classList.toggle("on", term);
+  const docked = !term && !!o.dock;
+  $("#main").classList.toggle("term-view", term || docked);
+  fitInput();
+  o.box.classList.toggle("on", term || docked);
+  o.box.classList.toggle("dock", docked);
+  o.box.classList.toggle("asks", o.dock === "waiting");
+  o.dockbar.classList.toggle("on", docked);
+  o.dockbar.classList.toggle("asks", o.dock === "waiting");
   o.chat.classList.toggle("on", !term);
-  if (term) {
-    unfollow(o);
+  o.chat.classList.toggle("docked", docked);
+  if (term || docked) {
     if (!o.ws && !o.box.querySelector(".msg")) connect(id, o);
-    requestAnimationFrame(() => { safeFit(o); o.term.focus(); });
+    // Keys go to it at once, but not when it asked on its own: what is
+    // being typed in the message box would answer it.
+    requestAnimationFrame(() => {
+      safeFit(o);
+      if (term || o.dock !== "waiting") o.term.focus();
+      if (docked) o.chat.scrollTop = o.chat.scrollHeight;
+    });
   } else {
     sendCtl(o, { type: "blur" });
+    if (o.box.contains(document.activeElement)) $("#qinput").focus();
+  }
+  if (term) {
+    unfollow(o);
+  } else {
     loadChat(id, o);
     follow(id, o);
   }
+}
+
+// dock shows agent id's terminal under its conversation, for reason:
+// "waiting" (it asks something), "command" (what a command brought up is
+// on its screen) or "user"; null puts it away.
+function dock(id, reason) {
+  const o = opened.get(id);
+  if (!o || o.dock === reason) return;
+  o.dock = reason;
+  o.dockAt = o.results;
+  o.dockWhat.textContent = reason === "waiting" ? "It needs you: answer here" : "On its screen";
+  o.wait.hidden = true;
+  if (id === current && o.view === "chat") present(id, o);
 }
 
 function setView(id, view) {
@@ -538,12 +726,17 @@ function close(id) {
   o.ws?.close();
   o.term.dispose();
   o.box.remove();
+  o.dockbar.remove();
   o.chat.remove();
   o.tab.remove();
   if (current === id) {
     current = null;
     const next = [...opened.keys()].pop();
-    if (next) show(next); else $("#empty").style.display = "";
+    if (next) show(next);
+    else {
+      $("#empty").style.display = "";
+      $("#main").classList.remove("term-view");
+    }
   }
   drawSidebar();
 }
@@ -560,7 +753,29 @@ DOMPurify.addHook("afterSanitizeAttributes", (n) => {
 function md(text) {
   const div = el("div", "md");
   div.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: true }));
+  for (const pre of div.querySelectorAll("pre")) codeBlock(pre);
   return div;
+}
+
+// codeBlock frames a block of code, with its language and a copy button.
+function codeBlock(pre) {
+  const code = pre.querySelector("code") || pre;
+  const box = el("div", "codeblock");
+  const head = el("div", "ch");
+  head.append(el("span", "", (/language-([\w+#.-]+)/.exec(code.className) || [])[1] || "text"));
+  const copy = el("button");
+  copy.type = "button";
+  copy.append(icon("copy"), el("span", "", "Copy"));
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      copy.lastChild.textContent = "Copied";
+      setTimeout(() => { copy.lastChild.textContent = "Copy"; }, 1500);
+    } catch (_) { /* no clipboard here */ }
+  };
+  head.append(copy);
+  pre.replaceWith(box);
+  box.append(head, pre);
 }
 
 async function loadChat(id, o) {
@@ -639,6 +854,7 @@ function addEntry(o, e) {
       break;
     }
     case "result": {
+      o.results++;
       const out = el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)");
       const call = e.id && o.calls.get(e.id);
       if (call) {
@@ -655,9 +871,24 @@ function addEntry(o, e) {
 function callNode(tool, label) {
   const d = el("details", "call");
   const s = el("summary");
-  s.append(el("span", "st"), el("span", "tool", tool), el("span", "label", label || ""));
+  const st = el("span", "st");
+  st.append(el("span", "ring"), el("span", "spin"), icon("check", "ok"), icon("x", "bad"));
+  s.append(icon(toolIcon(tool), "ti"), el("span", "tool", tool), el("span", "label", label || ""), st);
   d.append(s);
   return d;
+}
+
+// toolIcon picks an icon for a tool by its name, across the kinds' tools.
+function toolIcon(tool) {
+  const t = (tool || "").toLowerCase();
+  if (/bash|shell|exec|command|terminal/.test(t)) return "terminal";
+  if (/web|fetch|browser|url/.test(t)) return "web";
+  if (/edit|write|patch|notebook/.test(t)) return "edit";
+  if (/^(read|view|cat)/.test(t)) return "file";
+  if (/grep|glob|search|^find|^ls$|list/.test(t)) return "search";
+  if (/task|agent/.test(t)) return "agent";
+  if (/todo|plan/.test(t)) return "todo";
+  return "tool";
 }
 
 // ---- the message being written, as it is written (/api/live) ----
@@ -719,8 +950,8 @@ function drawLive(o) {
         shown = true;
       } else if (b.kind === "thinking" && !b.done) {
         const n = el("div", "thinking");
-        n.append(el("span", "what", "Thinking"));
-        if (b.text) n.append(el("span", "", b.text.slice(-240)));
+        n.append(el("span", "what shimmer", "Thinking"));
+        if (b.text) n.append(el("div", "gist", b.text.slice(-300)));
         box.append(n);
         shown = true;
       } else if (b.kind === "tool") {
@@ -741,8 +972,8 @@ function drawLive(o) {
   const last = o.live.previousElementSibling;
   const busy = m && m.id && !m.done || last && last.matches("details.call:not(.done):not(.failed)");
   if (!shown && a && a.status === "running" && busy) {
-    const n = el("div", "working");
-    n.append(el("span", "st"), el("span", "", a.detail || "Working"));
+    const n = el("div", "busy");
+    n.append(el("span", "spin"), el("span", "shimmer", a.detail || "Working"));
     box.append(n);
   }
   if (atEnd) o.chat.scrollTop = o.chat.scrollHeight;
