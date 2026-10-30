@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,8 +58,7 @@ func newClaude(h *Host, cmd, dir string) *claude {
 }
 
 func (c *claude) run(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", c.cmd+claudeHeadless)
-	cmd.Dir = c.dir
+	cmd := agentCmd(ctx, c.dir, "sh", "-c", c.cmd+claudeHeadless)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err

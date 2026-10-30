@@ -16,8 +16,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
@@ -404,4 +406,22 @@ func (h *Host) do(c Command) error {
 		return h.d.interrupt()
 	}
 	return fmt.Errorf("unknown command %q", c.Type)
+}
+
+// agentCmd runs the agent, name with args, in dir: in a session of its
+// own, so that it and whatever it starts are ended together when ctx is
+// done, though a shell need not exec what it runs; killed if they
+// have not ended a moment after. Without a terminal, a command of
+// its that asks for one fails instead of stopping for a key; the host
+// ends it on the signals that end the pane.
+func agentCmd(ctx context.Context, dir, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Cancel = func() error {
+		group := -cmd.Process.Pid
+		time.AfterFunc(3*time.Second, func() { _ = syscall.Kill(group, syscall.SIGKILL) })
+		return syscall.Kill(group, syscall.SIGTERM)
+	}
+	return cmd
 }

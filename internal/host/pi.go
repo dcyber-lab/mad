@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +40,7 @@ func newPi(h *Host, cmd, dir string) *pi {
 }
 
 func (p *pi) run(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", p.cmd+" --mode rpc")
-	cmd.Dir = p.dir
+	cmd := agentCmd(ctx, p.dir, "sh", "-c", p.cmd+" --mode rpc")
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
