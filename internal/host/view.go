@@ -14,6 +14,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 )
 
@@ -90,9 +91,11 @@ func render(s State, who, note string, w, ht int) string {
 	width := max(w-2*len(pad), 10)
 	dim, bold, warn, reset := "\x1b[2m", "\x1b[1m", "\x1b[33m", "\x1b[0m"
 
-	what := map[string]string{
-		Starting: "starting", Idle: "idle", Running: "working", Waiting: warn + "needs you" + reset, Exited: "ended",
-	}[s.Status]
+	look := status.LookOf(s.Status)
+	what := strings.ToLower(look.Word)
+	if look.Tone == status.ToneNeeds {
+		what = warn + what + reset
+	}
 	head := []string{
 		pad + bold + who + reset + dim + "  ·  in the mad window" + reset,
 		pad + what + dim + modelNote(s.Model) + reset,

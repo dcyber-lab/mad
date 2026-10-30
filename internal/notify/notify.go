@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/push"
+	"github.com/dcyber-lab/mad/internal/status"
 )
 
 // Event kinds.
@@ -50,11 +51,15 @@ func (e Event) Body() string {
 	case e.Kind == Waiting && e.Message != "":
 		return e.Agent + ": " + e.Message
 	case e.Kind == Waiting:
-		return e.Agent + " needs you"
+		return e.Agent + " " + word(status.Waiting)
 	default:
-		return e.Agent + " finished"
+		return e.Agent + " " + word(status.Finished)
 	}
 }
+
+// word is a state's word as the window and the deck show it, in running
+// text.
+func word(state string) string { return strings.ToLower(status.LookOf(state).Word) }
 
 // Config is the "notify" object of ~/.config/mad/config.json:
 //
