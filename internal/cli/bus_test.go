@@ -4,8 +4,38 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/state"
 )
+
+func TestBusHandoffs(t *testing.T) {
+	isolate(t)
+	const a, b, c = "aaaa1111-0000-0000-0000-000000000001", "bbbb2222-0000-0000-0000-000000000002", "cccc3333-0000-0000-0000-000000000003"
+	st := &state.State{}
+	p, _ := st.AddProject("/code/a")
+	p.Agents = []*state.Agent{{ID: a, Kind: "claude", Name: "architect"}, {ID: b, Kind: "claude", Name: "builder"}, {ID: c, Kind: "codex", Name: "tester"}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, _ := run(t, "", "bus", "handoffs"); code != 0 || out != "" {
+		t.Fatalf("no handoffs = %d %q", code, out)
+	}
+	h1, _, err := bus.HandOff(bus.From{ID: a, Label: "architect"}, b, "design the api\nin detail", "", nil, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2, _, err := bus.HandOff(bus.From{ID: b, Label: "builder"}, c, "test the api", "", nil, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := bus.Done(bus.From{ID: c, Label: "tester"}, h2.ID, "all green", "done"); err != nil {
+		t.Fatal(err)
+	}
+	want := h1.ID + " architect → builder [open] design the api\n  " + h2.ID + " builder → tester [done] test the api\n"
+	if code, out, errs := run(t, "", "bus", "handoffs"); code != 0 || out != want {
+		t.Errorf("handoffs = %d %q %q, want %q", code, out, errs, want)
+	}
+}
 
 func TestBusCommands(t *testing.T) {
 	isolate(t)

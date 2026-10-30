@@ -80,7 +80,7 @@ type also struct {
 // wakesAgent tells whether message m of channel c is one that wakes agent
 // id: it mentions it or all, or it is the other side of a DM.
 func wakesAgent(c Channel, m Message, id string) bool {
-	if m.Kind == "system" || m.From.ID == id {
+	if m.Kind == "system" && m.Handoff == nil || m.From.ID == id {
 		return false
 	}
 	return isDM(c.ID) || has(m.Mentions, id) || has(m.Mentions, "*")
@@ -161,6 +161,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 		return "", nil, false, err
 	}
 
+	hs, _ := Handoffs()
 	label := func(id string) string {
 		if a := findIn(st, id); a != nil {
 			return drive.Label(a)
@@ -188,7 +189,15 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 		if e.m.ReplyTo > 0 {
 			fmt.Fprintf(&b, " (reply to #%d)", e.m.ReplyTo)
 		}
-		b.WriteString("\n" + e.m.Text + "\n")
+		switch ref := e.m.Handoff; {
+		case ref != nil && e.m.Kind == "handoff":
+			fmt.Fprintf(&b, " — handoff %s\n", ref.ID)
+			writeCard(&b, hs, ref.ID, e.m.Text)
+		case ref != nil && e.m.Kind == "done":
+			fmt.Fprintf(&b, " — %s %s\n%s\n", ref.ID, ref.Status, e.m.Text)
+		default:
+			b.WriteString("\n" + e.m.Text + "\n")
+		}
 	}
 	if len(rest) > 0 {
 		var parts []string
@@ -215,7 +224,26 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 	return b.String(), upto, true, nil
 }
 
-// Delivered moves agent id's cursors to upto, the digest having been sent.
+// writeCard writes the body of a handoff's card: its task (text), context,
+// files and chain, and how to finish it.
+func writeCard(b *strings.Builder, hs []Handoff, id, text string) {
+	fmt.Fprintf(b, "Task: %s\n", text)
+	if h, found := findHandoff(hs, id); found {
+		if h.Context != "" {
+			fmt.Fprintf(b, "Context: %s\n", h.Context)
+		}
+		if len(h.Files) > 0 {
+			fmt.Fprintf(b, "Files: %s\n", strings.Join(h.Files, ", "))
+		}
+		if h.Parent != "" {
+			fmt.Fprintf(b, "Chain: %s\n", strings.Join(chainIDs(hs, h), " → "))
+		}
+	}
+	fmt.Fprintf(b, "Finish it with bus_done(%q, result) when done, or decline it with status \"declined\".\n", id)
+}
+
+// Delivered moves agent id's cursors to upto, the digest having been sent,
+// and stamps the open handoffs for id that the digest carried.
 func Delivered(agentID string, upto map[string]int) error {
 	if len(upto) == 0 {
 		return nil
@@ -226,6 +254,21 @@ func Delivered(agentID string, upto map[string]int) error {
 			if err != nil {
 				return err
 			}
+		}
+		hs, err := loadHandoffs()
+		if err != nil {
+			return err
+		}
+		changed := false
+		for i := range hs {
+			h := &hs[i]
+			if h.To == agentID && h.Status == "open" && h.DeliveredAt.IsZero() && h.Seq > 0 && h.Seq <= upto[h.Channel] {
+				h.DeliveredAt = now()
+				changed = true
+			}
+		}
+		if changed {
+			return saveHandoffs(hs)
 		}
 		return nil
 	})
