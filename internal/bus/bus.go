@@ -312,6 +312,15 @@ func dmID(a, b string) string {
 	return "dm." + ids[0] + "." + ids[1]
 }
 
+// DMSides are the two sides of DM channel ch, read from its id: forgetting
+// an agent empties the channel's members, but never the id.
+func DMSides(ch string) []string {
+	if !isDM(ch) {
+		return nil
+	}
+	return strings.Split(strings.TrimPrefix(ch, "dm."), ".")
+}
+
 // poked tells the sidebar, if one runs, that something is waiting.
 func poked() { _ = poke.Send(poke.Poll) }
 

@@ -142,12 +142,14 @@ func yourDM(ch string) bool {
 // dmName names the agent in a DM with you.
 func dmName(st *state.State, c bus.Channel) string {
 	var names []string
-	for _, id := range c.Members {
+	for _, id := range bus.DMSides(c.ID) { // the id keeps both sides when the members don't
 		if id == bus.You {
 			continue
 		}
 		if _, a := st.FindAgent(id); a != nil {
 			names = append(names, drive.Label(a))
+		} else {
+			names = append(names, drive.ShortID(id))
 		}
 	}
 	if len(names) == 0 {

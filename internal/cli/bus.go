@@ -409,7 +409,11 @@ func busList(out io.Writer) error {
 	fmt.Fprintln(tw, "CHANNEL\tMEMBERS\tLAST\tSTATE")
 	for _, c := range chans {
 		var names []string
-		for _, id := range c.Members {
+		members := c.Members
+		if len(members) == 0 { // a DM whose agent was forgotten
+			members = bus.DMSides(c.ID)
+		}
+		for _, id := range members {
 			if _, a := st.FindAgent(id); a != nil {
 				names = append(names, drive.Label(a))
 			} else {
