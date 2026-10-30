@@ -103,95 +103,15 @@ function statusPill(a) {
 // Projects folded away, by path.
 const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.collapsed") || "[]"); } catch (_) { return []; } })());
 
+// drawSidebar draws the list in attention order: what needs you (the
+// inbox), what works, what finished, the channels, then the projects with
+// the agents that are quiet. An agent is drawn once; a project's head
+// rolls up all of its agents.
 function drawSidebar() {
-  const nav = $("#projects");
-  nav.replaceChildren(boardRow(), channelsGroup());
-  agents.clear();
-  if (!deck.projects.length) {
-    const p = el("div", "none");
-    p.innerHTML = "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.";
-    nav.append(p);
-  }
-  const q = $("#filter").value.trim().toLowerCase();
-  const matches = (p, a) => !q || [label(a), a.title, a.detail, a.kind, p.name].some((s) => (s || "").toLowerCase().includes(q));
-  let count = 0, working = 0, needs = 0;
-  for (const p of deck.projects) {
-    for (const a of p.agents) {
-      a.project = p;
-      agents.set(a.id, a);
-      count++;
-      const shown = shownStatus(a);
-      if (shown === "running") working++;
-      if (shown === "waiting") needs++;
-    }
-    const shown = p.agents.filter((a) => matches(p, a));
-    if (q && !shown.length) continue;
-    const folded = !q && collapsed.has(p.path);
-    const box = el("div", `project${folded ? " collapsed" : ""}`);
-    const head = el("div", "head");
-    head.append(icon("down", "chev"), el("b", "", p.name));
-    if (p.branch) {
-      const b = el("span", "branch");
-      b.append(icon("branch"), p.branch);
-      head.append(b);
-    }
-    const cost = p.agents.reduce((s, a) => s + (a.cost || 0), 0);
-    const git = [p.changed ? `±${p.changed}` : "", p.ahead ? `↑${p.ahead}` : ""].filter(Boolean).join(" ");
-    head.append(el("span", "git", git), el("span", "cost", money(cost)));
-    head.title = p.path;
-    head.onclick = () => {
-      if (collapsed.has(p.path)) collapsed.delete(p.path); else collapsed.add(p.path);
-      localStorageSet("mad.collapsed", JSON.stringify([...collapsed]));
-      drawSidebar();
-    };
-    head.oncontextmenu = (e) => { e.preventDefault(); projectMenu(p, { x: e.clientX, y: e.clientY }); };
-    const hacts = el("span", "hacts");
-    const plus = el("button", "icon-btn");
-    plus.type = "button";
-    plus.title = `a new chat in ${p.name}`;
-    plus.append(icon("plus"));
-    plus.onclick = (e) => { e.stopPropagation(); openNew(p.path); };
-    const pmore = el("button", "icon-btn");
-    pmore.type = "button";
-    pmore.title = "more";
-    pmore.append(icon("more"));
-    pmore.onclick = (e) => { e.stopPropagation(); projectMenu(p, pmore); };
-    hacts.append(plus, pmore);
-    head.append(hacts);
-    box.append(head);
-    for (const a of shown) {
-      const st = shownStatus(a);
-      const row = el("div", `agent s-${st}${a.id === current ? " sel" : ""}`);
-      row.title = `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`;
-      const name = el("span", "name", label(a));
-      const qu = a.queue;
-      if (qu && qu.items && qu.items.length) {
-        const n = el("span", `qn${qu.paused ? " paused" : ""}`, String(qu.items.length));
-        n.title = qu.paused ? "queued messages, paused" : "queued messages";
-        name.append(n);
-      }
-      row.append(avatar(a), name);
-      const cost = money(a.cost);
-      const side = el("span", "side");
-      side.append(...(cost ? [el("span", "meta", cost)] : []), statusPill(a));
-      row.append(side);
-      // What it does, or else what it is: rows of one height.
-      row.append(el("span", "detail", a.detail || `${a.kind} · ${look(st).word.toLowerCase()}`));
-      row.onclick = () => show(a.id);
-      row.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
-      const amore = el("button", "icon-btn more");
-      amore.type = "button";
-      amore.title = "more";
-      amore.append(icon("more"));
-      amore.onclick = (e) => { e.stopPropagation(); agentMenu(a, amore, { right: true }); };
-      row.append(amore);
-      box.append(row);
-    }
-    nav.append(box);
-  }
-  $("#summary").textContent = [`${count} agent${count === 1 ? "" : "s"}`, working && `${working} working`, needs && `${needs} need${needs === 1 ? "s" : ""} you`]
-    .filter(Boolean).join(" · ");
-  drawSpotlight();
+  keepFocus(() => {
+    drawList();
+    drawHome();
+  });
   drawQueue();
   for (const [id, o] of opened) {
     const a = agents.get(id);
@@ -222,6 +142,245 @@ function drawSidebar() {
   }
 }
 
+// drawList is the list itself: groups in attention order (see drawSidebar).
+function drawList() {
+  const nav = $("#projects");
+  const keep = nav.scrollTop;
+  agents.clear();
+  let count = 0;
+  for (const p of deck.projects) {
+    for (const a of p.agents) {
+      a.project = p;
+      agents.set(a.id, a);
+      count++;
+    }
+  }
+  pruneGone();
+  const q = $("#filter").value.trim().toLowerCase();
+  const has = (...s) => !q || s.some((x) => (x || "").toLowerCase().includes(q));
+  const agentHas = (a) => a && has(label(a), a.title, a.kind, a.tool, a.target, a.project.name);
+  const needs = needsYou(), fin = finishedItems();
+  const work = (deck.working || []).map((id) => agents.get(id)).filter(Boolean);
+  // Drawn above, so not again in their projects: what works, what
+  // finished, and what is blocked on you (its row is its item).
+  const placed = new Set([...work.map((a) => a.id), ...fin.map((it) => it.agent)]);
+  for (const it of needs) if (it.blocks && it.agent) placed.add(it.agent);
+
+  const nodes = [];
+  drawChips(needs.length, work.length, fin.length, count);
+  if (!deck.projects.length) {
+    const p = el("div", "none");
+    p.innerHTML = "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.";
+    nodes.push(p);
+  }
+
+  const shownNeeds = needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
+  if (shownNeeds.length) {
+    const next = button("Next", "ghost ga nexthead", nextItem);
+    next.append(el("kbd", "", "⌥N"));
+    next.title = "open the next thing that needs you (Alt-N)";
+    nodes.push(group("inbox g-needs", ghead("Needs you", shownNeeds.length, "needs", next), capped("needs", shownNeeds, 8, 6, (it) => {
+      const r = itemRow(it);
+      return ib.reply?.key === it.key && ib.reply.where === "side" ? [r, replyBox(it, ib.reply)].filter(Boolean) : r;
+    }, "need you")));
+  }
+  const shownWork = work.filter(agentHas);
+  if (shownWork.length) {
+    nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", shownWork, 5, 5, agentRow, "working")));
+  }
+  const shownFin = fin.filter((it) => agentHas(agents.get(it.agent)));
+  if (shownFin.length) {
+    const all = seenActs().length ? button("Mark all seen", "ghost ga", markAllSeen) : null;
+    nodes.push(group("g-finished", ghead("Finished", shownFin.length, "finished", all),
+      capped("finished", shownFin, 5, 5, (it) => agentRow(agents.get(it.agent), it.key), "finished")));
+  }
+  nodes.push(channelsGroup(q));
+
+  for (const p of deck.projects) {
+    const rest = p.agents.filter((a) => !placed.has(a.id) && agentHas(a));
+    const teams = (deck.teams || []).filter((t) => t.project === p.name && (!q || t.members.some((id) => rest.some((a) => a.id === id))));
+    if (q && !rest.length) continue;
+    const folded = !q && collapsed.has(p.path);
+    const box = el("div", `project${folded ? " collapsed" : ""}`);
+    box.append(projectHead(p, rest.length));
+    if (!folded) {
+      const inTeam = new Set();
+      for (const t of teams) {
+        const mem = rest.filter((a) => t.members.includes(a.id));
+        mem.forEach((a) => inTeam.add(a.id));
+        box.append(teamHead(t));
+        box.append(...mem.map((a) => agentRow(a)));
+      }
+      box.append(...rest.filter((a) => !inTeam.has(a.id)).map((a) => agentRow(a)));
+    }
+    nodes.push(box);
+  }
+  nav.replaceChildren(...nodes);
+  nav.scrollTop = keep;
+  $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;
+}
+
+// drawChips: the counts of the three groups above, as they are there; a
+// click goes to its group. On a phone the footer's Next says them too.
+function drawChips(nNeeds, nWork, nFin, count) {
+  const box = $("#chips");
+  box.hidden = !count;
+  const jump = (k) => () => document.querySelector(`#projects .g-${k}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  const chip = (tone, n, text, k) => {
+    const b = el("button", `cchip ${tone}${n ? "" : " zero"}`);
+    b.type = "button";
+    b.onclick = jump(k);
+    b.append(glyph(tone), el("b", "", String(n)), ` ${text}`);
+    return b;
+  };
+  box.replaceChildren(chip("needs", nNeeds, "need you", "needs"), chip("working", nWork, "working", "working"), chip("finished", nFin, "finished", "finished"));
+  const next = $("#next");
+  const n = nNeeds || nFin;
+  next.hidden = !n;
+  next.replaceChildren(icon("right"), `Next · ${n} ${nNeeds ? "need you" : "finished"}`);
+  next.classList.toggle("needs", !!nNeeds);
+}
+
+function group(cls, head, rows) {
+  const g = el("section", `group ${cls}`);
+  g.append(head, ...rows.flat());
+  return g;
+}
+
+function ghead(text, n, tone, extra) {
+  const h = el("div", "ghead");
+  h.append(glyph(tone), el("span", "", text), el("span", "n", String(n)));
+  if (extra) h.append(extra);
+  return h;
+}
+
+// capped draws list, folded past limit to its first keep and a row that
+// unfolds the rest: what is long never pushes the groups below it away.
+function capped(name, list, limit, keep, draw, noun) {
+  const all = ib.more[name] || list.length <= limit || !!$("#filter").value.trim();
+  const out = (all ? list : list.slice(0, keep)).map((x) => draw(x));
+  if (list.length > limit && !$("#filter").value.trim()) {
+    const r = row({
+      cls: "one fold", lead: el("span", "chglyph", all ? "−" : "+"),
+      name: all ? "Show fewer" : `${list.length - keep} more ${noun}`,
+      onclick: () => { ib.more[name] = !all; drawSidebar(); },
+    });
+    out.push(r);
+  }
+  return out;
+}
+
+// agentRow is an agent as a row: its avatar with its live dot, its name,
+// and its activity line; its team or role, else its cost, on the right.
+function agentRow(a, key) {
+  const st = shownStatus(a);
+  const name = el("span", "");
+  const qu = a.queue;
+  if (qu && qu.items && qu.items.length) {
+    const n = el("span", `qn${qu.paused ? " paused" : ""}`, String(qu.items.length));
+    n.title = qu.paused ? "queued messages, paused" : "queued messages";
+    name.append(n);
+  }
+  const right = [];
+  if (a.role) right.push(el("span", "tag", a.role));
+  else if (st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
+  const r = row({
+    key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}`,
+    lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
+    line: activityLine(a), right, onclick: () => show(a.id),
+    title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
+  });
+  r.dataset.agent = a.id;
+  r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
+  const more = el("button", "icon-btn more");
+  more.type = "button";
+  more.title = "more";
+  more.append(icon("more"));
+  more.onclick = (e) => { e.stopPropagation(); agentMenu(a, more, { right: true }); };
+  r.append(more);
+  return r;
+}
+
+// projectHead: name, branch, how its agents stand; its + and ... on hover.
+function projectHead(p, quiet) {
+  const head = el("div", "head");
+  head.tabIndex = 0;
+  head.append(icon("down", "chev"), el("b", "", p.name));
+  if (p.branch) {
+    const b = el("span", "branch");
+    b.append(icon("branch"), p.branch);
+    head.append(b);
+  }
+  head.append(el("span", "grow"), rollupNode(p.rollup));
+  const cost = p.agents.reduce((s, a) => s + (a.cost || 0), 0);
+  const git = [p.changed ? `±${p.changed}` : "", p.ahead ? `↑${p.ahead}` : ""].filter(Boolean).join(" ");
+  head.title = [p.path, git, money(cost)].filter(Boolean).join(" · ");
+  const toggle = () => {
+    if (collapsed.has(p.path)) collapsed.delete(p.path); else collapsed.add(p.path);
+    localStorageSet("mad.collapsed", JSON.stringify([...collapsed]));
+    drawSidebar();
+  };
+  head.onclick = toggle;
+  head.onkeydown = (e) => { if (e.target === head && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } };
+  head.oncontextmenu = (e) => { e.preventDefault(); projectMenu(p, { x: e.clientX, y: e.clientY }); };
+  const hacts = el("span", "hacts");
+  const plus = el("button", "icon-btn");
+  plus.type = "button";
+  plus.title = `a new chat in ${p.name}`;
+  plus.append(icon("plus"));
+  plus.onclick = (e) => { e.stopPropagation(); openNew(p.path); };
+  const pmore = el("button", "icon-btn");
+  pmore.type = "button";
+  pmore.title = "more";
+  pmore.append(icon("more"));
+  pmore.onclick = (e) => { e.stopPropagation(); projectMenu(p, pmore); };
+  hacts.append(plus, pmore);
+  head.append(hacts);
+  return head;
+}
+
+// teamHead is a team in its project: its name and how its members stand.
+function teamHead(t) {
+  const ch = (deck.bus || []).find((c) => c.team && c.team.name === t.name);
+  const h = el("div", `teamhead${ch ? " link" : ""}`);
+  h.append(icon("users"), el("b", "", t.name), el("span", "grow"), rollupNode(t.rollup));
+  if (ch) {
+    h.title = `${ch.title}: its channel`;
+    h.onclick = () => openChannel(ch.id);
+  }
+  return h;
+}
+
+// goHome shows the overview: nothing open.
+function goHome() {
+  if (current) {
+    const o = opened.get(current);
+    if (o) {
+      o.chat.classList.remove("on");
+      o.tab.classList.remove("on");
+      unfollow(o);
+    }
+    current = null;
+  }
+  closeNew();
+  closeChannel();
+  closeSkills();
+  closeBoard();
+  closeChanges();
+  closeMenu();
+  closePopup();
+  $("#empty").style.display = "";
+  inMain(false);
+  drawSidebar();
+}
+$("#brand").onclick = goHome;
+$("#boardbtn").onclick = () => (bd.open ? goHome() : openBoard());
+$("#next").onclick = nextItem;
+$("#searchbtn").onclick = () => {
+  document.body.classList.toggle("searching");
+  $("#filter").focus();
+};
+
 // drawWait says, over an agent its TUI has in the terminal deck, why it
 // is not run here yet: it comes here once that is done.
 function drawWait(o, a) {
@@ -238,23 +397,93 @@ function drawWait(o, a) {
   }
 }
 
-// drawSpotlight puts the agents that want a look on the page shown with
-// no tab open: asking something first, then done, then working.
-function drawSpotlight() {
-  const box = $("#spotlight");
-  if ($("#empty").style.display === "none") return;
-  const prio = { waiting: 0, finished: 1, running: 2 };
-  const picked = [...agents.values()].filter((a) => shownStatus(a) in prio)
-    .sort((x, y) => prio[shownStatus(x)] - prio[shownStatus(y)]).slice(0, 6);
-  box.replaceChildren(...picked.map((a) => {
-    const c = el("div", `card s-${shownStatus(a)}`);
-    const top = el("div", "top");
-    top.append(avatar(a), el("span", "name", label(a)), statusPill(a));
-    c.append(top, el("div", "detail", a.detail || a.title || ""));
-    c.append(el("div", "foot", [a.project.name, a.kind, money(a.cost)].filter(Boolean).join(" · ")));
-    c.onclick = () => show(a.id);
-    return c;
-  }));
+// drawHome is the page shown with nothing open: an overview of what needs
+// you (cards, to act on in place), what works and what finished. With no
+// agents at all it is the hero.
+function drawHome() {
+  const root = $("#empty");
+  if (root.style.display === "none") return;
+  const none = !agents.size;
+  root.classList.toggle("overview", !none);
+  $("#empty .hero").hidden = !none;
+  $("#empty > .keys").hidden = !none;
+  const box = $("#home");
+  box.hidden = none;
+  if (none) return box.replaceChildren();
+  const needs = needsYou(), fin = finishedItems();
+  const work = (deck.working || []).map((id) => agents.get(id)).filter(Boolean);
+  const h = el("div", "home");
+  const head = el("div", "hhead");
+  head.append(el("h1", "", "Overview"));
+  const sub = el("span", "hsub");
+  sub.append(`${agents.size} agents in ${deck.projects.length} project${deck.projects.length === 1 ? "" : "s"} · `,
+    el("b", "tone-needs", `${needs.length} need you`), " · ", el("b", "tone-working", `${work.length} working`), " · ", el("b", "tone-finished", `${fin.length} finished`));
+  head.append(sub);
+  const spend = spendMeter(deck.spend);
+  if (spend) head.append(spend);
+  h.append(head);
+
+  const sect = (title, tone, n, extra, body) => {
+    const s = el("div", "sect");
+    const sh = el("div", `shead ${tone}`);
+    sh.append(glyph(tone), title, el("span", "n", String(n)));
+    if (extra) {
+      const sa = el("span", "sa");
+      sa.append(extra);
+      sh.append(sa);
+    }
+    s.append(sh, body);
+    return s;
+  };
+  const nothing = (t) => { const c = el("div", "icard idle"); c.append(el("div", "body muted", t)); return c; };
+  const grid = (cls, cards) => { const g = el("div", cls); g.append(...cards); return g; };
+  const next = button("Next", "sm", nextItem);
+  next.append(el("kbd", "", "⌥N"));
+  h.append(sect("Needs you", "needs", needs.length, needs.length ? next : null,
+    needs.length ? grid("cards", needs.map((it) => itemCard(it))) : nothing("Nothing needs you.")));
+  // the longest at work first; the sidebar has the rest
+  const moreBtn = (name, n, shown) => n > shown ? button(ib.more[name] ? "Fewer" : `${n - shown} more`, "sm ghost", () => { ib.more[name] = !ib.more[name]; drawSidebar(); }) : null;
+  h.append(sect("Working", "working", work.length, moreBtn("homeWork", work.length, 3),
+    work.length ? grid("cards", work.slice(0, ib.more.homeWork ? 99 : 3).map(workCard)) : nothing("No agent is working.")));
+  const all = seenActs().length ? button("Mark all seen", "sm ghost", markAllSeen) : null;
+  h.append(sect("Recently finished", "finished", fin.length, all || moreBtn("homeFin", fin.length, 4),
+    fin.length ? grid("cards four", fin.slice(0, ib.more.homeFin ? 99 : 4).map((it) => itemCard(it))) : nothing("Nothing finished since you looked.")));
+  const keys = el("div", "keys");
+  const k = (ks, t) => { const s = el("span", ""); s.append(...ks.map((x) => el("kbd", "", x)), ` ${t}`); return s; };
+  keys.append(k(["⌥", "N"], "next"), k(["⌘", "N"], "new chat"), k(["⌘", "K"], "search"), k(["⌥", "B"], "board"));
+  h.append(keys);
+  box.replaceChildren(h);
+}
+
+// workCard is a working agent: its line, and its todo list's progress.
+function workCard(a) {
+  const c = el("div", "icard");
+  const ch = el("div", "ch");
+  const who = el("div", "who");
+  who.append(el("span", "nm", label(a)), el("span", "sub", [a.project.name, a.team && `${a.team} ${a.role}`].filter(Boolean).join(" · ")));
+  ch.append(avatar(a), who, el("span", "age", a.cost ? money(a.cost) : ""));
+  const act = el("div", "act");
+  act.append(...activityLine(a));
+  c.append(ch, act);
+  if (a.todo && a.todo.total) {
+    const t = el("div", "todo");
+    t.append(meter(a.todo.done / a.todo.total, ""), el("span", "tn", a.todo.now || `${a.todo.done} of ${a.todo.total}`));
+    c.append(t);
+  }
+  c.onclick = () => show(a.id);
+  return c;
+}
+
+// spendMeter is what mad's own work cost today against its budget; amber
+// from 80% of it, red once spent and agents wait.
+function spendMeter(s) {
+  if (!s || !s.day || (!s.usd && !s.turns)) return null;
+  const part = s.part || 0;
+  const box = el("span", `spend${s.closed ? " closed" : part >= 0.8 ? " hot" : ""}`);
+  box.title = "what mad's own work cost today, against its budget";
+  const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? ` of $${+s.budget_usd.toFixed(2)}` : "");
+  box.append("mad today ", el("b", "", usd), meter(part), el("b", "pc", `${Math.round(part * 100)}%`));
+  return box;
 }
 
 // ---- search, theme ----
@@ -262,17 +491,19 @@ function drawSpotlight() {
 $("#filter").addEventListener("input", () => drawSidebar());
 $("#filter").addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    document.body.classList.remove("searching");
     e.target.value = "";
     drawSidebar();
     e.target.blur();
   } else if (e.key === "Enter") {
-    const first = $("#projects .agent");
+    const first = $("#projects .row:not(.fold)");
     if (first) first.click();
   }
 });
 window.addEventListener("keydown", (e) => {
   if (e.metaKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === "k") {
     e.preventDefault();
+    document.body.classList.add("searching");
     $("#filter").focus();
     $("#filter").select();
   }
@@ -1342,7 +1573,7 @@ function drawLive(o) {
   const running = windowed(a) && o.hs ? o.hs.status === "running" : a && a.status === "running";
   if (!shown && running && busy) {
     const n = el("div", "busy");
-    n.append(el("span", "spin"), el("span", "shimmer", a.detail || "Working"));
+    n.append(el("span", "spin"), el("span", "shimmer", a.tool ? [a.tool, a.target].filter(Boolean).join(" · ") : "Working"));
     box.append(n);
   }
   if (atEnd) o.chat.scrollTop = o.chat.scrollHeight;
@@ -1656,11 +1887,16 @@ window.addEventListener("keydown", (e) => {
   const ids = order();
   let target = null;
   if (e.code === "KeyN") {
-    // Next agent that needs you: waiting first, then finished.
-    const start = Math.max(0, ids.indexOf(current) + 1);
-    const ring = ids.slice(start).concat(ids.slice(0, start));
-    const shown = (id) => agents.get(id) && shownStatus(agents.get(id));
-    target = ring.find((id) => shown(id) === "waiting") || ring.find((id) => shown(id) === "finished");
+    // The next item of the inbox: what needs you, then what finished.
+    e.preventDefault();
+    e.stopPropagation();
+    nextItem();
+    return;
+  } else if (e.code === "KeyB") {
+    e.preventDefault();
+    e.stopPropagation();
+    openBoard();
+    return;
   } else if (e.code === "KeyJ" || e.code === "KeyK") {
     const i = ids.indexOf(current);
     target = ids[(i + (e.code === "KeyJ" ? 1 : ids.length - 1)) % ids.length];
