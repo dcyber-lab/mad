@@ -183,3 +183,43 @@ func TestToolArgs(t *testing.T) {
 		t.Errorf("no input: Args = %s", e.Args)
 	}
 }
+
+// Images in each kind's transcript: what the user sent, what a call gave
+// back; a type said or told by the data's start.
+func TestChatImages(t *testing.T) {
+	const png, jpg = "iVBORw0KGgo", "/9j/4AAQ"
+	cases := []struct {
+		name string
+		got  []Entry
+		want string // kind:text:mime... per entry
+	}{
+		{"claude", (claude{}).Chat([]byte(`{"type":"user","message":{"content":[{"type":"text","text":"look"},{"type":"image","source":{"type":"base64","data":"` + jpg + `"}}]}}`)),
+			"user:look:image/jpeg"},
+		{"claude alone", (claude{}).Chat([]byte(`{"type":"user","message":{"content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + png + `"}}]}}`)),
+			"user::image/png"},
+		{"claude result", (claude{}).Chat([]byte(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t","content":[{"type":"text","text":"shot"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + png + `"}}]}]}}`)),
+			"result:shot:image/png"},
+		{"codex", (codex{}).Chat([]byte(`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"see this\n"},{"type":"input_text","text":"<image name=[Image #1] path=\"/tmp/x.png\">"},{"type":"input_image","image_url":"data:image/png;base64,` + png + `"},{"type":"input_text","text":"</image>"}]}}`)),
+			"user:see this:image/png"},
+		{"pi", (piChat{}).Chat([]byte(`{"type":"message","timestamp":"2026-10-30T00:00:00Z","message":{"role":"user","content":[{"type":"text","text":"and this"},{"type":"image","data":"` + png + `","mimeType":"image/png"}]}}`)),
+			"user:and this:image/png"},
+		{"pi result", (piChat{}).Chat([]byte(`{"type":"message","timestamp":"2026-10-30T00:00:00Z","message":{"role":"toolResult","toolCallId":"c","content":[{"type":"image","data":"` + jpg + `","mimeType":"image/jpeg"}]}}`)),
+			"result::image/jpeg"},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, e := range c.got {
+			s := e.Kind + ":" + e.Text
+			for _, img := range e.Images {
+				s += ":" + img.Mime
+				if img.Data == "" {
+					s += "(no data)"
+				}
+			}
+			got = append(got, s)
+		}
+		if strings.Join(got, " ") != c.want {
+			t.Errorf("%s: %q, want %q", c.name, strings.Join(got, " "), c.want)
+		}
+	}
+}

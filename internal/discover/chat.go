@@ -30,6 +30,9 @@ type Entry struct {
 	// window draws each tool from, Input where it does not know the tool.
 	Input string          `json:"input,omitempty"`
 	Args  json.RawMessage `json:"args,omitempty"`
+	// Images are what the user sent (EntryUser) or a call gave back
+	// (EntryResult): a screenshot, a file read.
+	Images []Image `json:"images,omitempty"`
 	// ID pairs a call with its result.
 	ID    string `json:"id,omitempty"`
 	Error bool   `json:"error,omitempty"`
@@ -40,6 +43,84 @@ type Entry struct {
 	Msg  string    `json:"msg,omitempty"`
 	Part string    `json:"part,omitempty"`
 	At   time.Time `json:"at"`
+}
+
+// Image is one an entry shows. Its data stays here: who serves the
+// entries gives each a URL to fetch it by.
+type Image struct {
+	Mime string `json:"mime"`
+	URL  string `json:"url,omitempty"`
+	Data string `json:"-"` // base64
+}
+
+// contentImages are the images among a message's parts, in order:
+// claude's {type: image, source: {data, media_type}}, pi's {type: image,
+// data, mimeType}, codex's {type: input_image, image_url: a data URL}.
+func contentImages(raw json.RawMessage) []Image {
+	var parts []struct {
+		Type   string `json:"type"`
+		Source struct {
+			Data      string `json:"data"`
+			MediaType string `json:"media_type"`
+		} `json:"source"`
+		Data     string          `json:"data"`
+		MimeType string          `json:"mimeType"`
+		ImageURL json.RawMessage `json:"image_url"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return nil
+	}
+	var out []Image
+	for _, p := range parts {
+		var img Image
+		switch p.Type {
+		case "image":
+			img = Image{Mime: p.Source.MediaType, Data: p.Source.Data}
+			if img.Data == "" {
+				img = Image{Mime: p.MimeType, Data: p.Data}
+			}
+		case "input_image":
+			var url string
+			if json.Unmarshal(p.ImageURL, &url) != nil {
+				var o struct{ URL string }
+				_ = json.Unmarshal(p.ImageURL, &o)
+				url = o.URL
+			}
+			if m := dataURLRe.FindStringSubmatch(url); m != nil {
+				img = Image{Mime: m[1], Data: url[len(m[0]):]}
+			}
+		}
+		if img.Data == "" {
+			continue
+		}
+		if img.Mime == "" {
+			img.Mime = sniffImage(img.Data)
+		}
+		out = append(out, img)
+	}
+	return out
+}
+
+// partsShown is what a message's parts show: their text, and their
+// images, which then stand for themselves in it.
+func partsShown(raw json.RawMessage) (string, []Image) {
+	text, imgs := resultText(raw), contentImages(raw)
+	if len(imgs) > 0 {
+		text = strings.TrimSpace(strings.ReplaceAll(text, "(image)", ""))
+	}
+	return text, imgs
+}
+
+var dataURLRe = regexp.MustCompile(`^data:([\w/+.-]+);base64,`)
+
+// sniffImage tells an image's type by how its base64 starts.
+func sniffImage(data string) string {
+	for prefix, mime := range map[string]string{"iVBOR": "image/png", "/9j/": "image/jpeg", "R0lGOD": "image/gif", "UklGR": "image/webp"} {
+		if strings.HasPrefix(data, prefix) {
+			return mime
+		}
+	}
+	return ""
 }
 
 // Entry kinds.
@@ -134,7 +215,8 @@ func (claude) Chat(line []byte) []Entry {
 			case "text":
 				out = append(out, claudeUserChat(b.Text, at)...)
 			case "tool_result":
-				out = append(out, Entry{Kind: EntryResult, ID: b.ToolUseID, Text: shown(resultText(b.Content)), Error: b.IsError, At: at})
+				text, imgs := partsShown(b.Content)
+				out = append(out, Entry{Kind: EntryResult, ID: b.ToolUseID, Text: shown(text), Error: b.IsError, Images: imgs, At: at})
 			}
 			continue
 		}
@@ -149,7 +231,25 @@ func (claude) Chat(line []byte) []Entry {
 		}
 		out = append(out, e)
 	}
+	if ln.Type == "user" {
+		out = withSent(out, contentImages(ln.Message.Content), at)
+	}
 	return out
+}
+
+// withSent puts the images the user sent with a message (imgs) with its
+// words, the last of out's; alone if it had none.
+func withSent(out []Entry, imgs []Image, at time.Time) []Entry {
+	if len(imgs) == 0 {
+		return out
+	}
+	for i := len(out) - 1; i >= 0; i-- {
+		if out[i].Kind == EntryUser {
+			out[i].Images = append(out[i].Images, imgs...)
+			return out
+		}
+	}
+	return append(out, Entry{Kind: EntryUser, Images: imgs, At: at})
 }
 
 // claudeUserChat reads a user line's text. Claude logs the commands the
@@ -327,12 +427,14 @@ func (codex) Chat(line []byte) []Entry {
 	p, at := ln.Payload, ln.Timestamp
 	switch {
 	case p.Type == "message" && p.Role == "user":
-		// codex hands the model its context as user messages too.
-		text := strings.TrimSpace(resultText(p.Content))
-		if text == "" || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") {
+		// codex hands the model its context as user messages too. An image
+		// sent has a tag in the text naming it.
+		text, imgs := partsShown(p.Content)
+		text = strings.TrimSpace(codexImageTagRe.ReplaceAllString(text, ""))
+		if text == "" && len(imgs) == 0 || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") {
 			return nil
 		}
-		return []Entry{{Kind: EntryUser, Text: text, At: at}}
+		return []Entry{{Kind: EntryUser, Text: text, Images: imgs, At: at}}
 	case p.Type == "message" && p.Role == "assistant":
 		return []Entry{{Kind: EntryText, Text: resultText(p.Content), Part: p.ID, At: at}}
 	case p.Type == "reasoning":
@@ -348,7 +450,8 @@ func (codex) Chat(line []byte) []Entry {
 		args := toolArgs(map[string]json.RawMessage{"input": input})
 		return []Entry{{Kind: EntryTool, Tool: p.Name, Label: codexLabel(p.Input), Input: shown(p.Input), Args: args, ID: p.CallID, Part: p.ID, At: at}}
 	case strings.HasSuffix(p.Type, "_call_output"):
-		return []Entry{{Kind: EntryResult, ID: p.CallID, Text: shown(resultText(p.Output)), At: at}}
+		text, imgs := partsShown(p.Output)
+		return []Entry{{Kind: EntryResult, ID: p.CallID, Text: shown(text), Images: imgs, At: at}}
 	case strings.HasSuffix(p.Type, "_call"):
 		return []Entry{{Kind: EntryTool, Tool: p.Type, ID: p.CallID, Part: p.ID, At: at}}
 	}
@@ -358,6 +461,7 @@ func (codex) Chat(line []byte) []Entry {
 var (
 	responseItemKey = []byte(`"response_item"`)
 	codexCmdRe      = regexp.MustCompile(`"(?:cmd|command)"\s*:\s*("(?:[^"\\]|\\.)*")`)
+	codexImageTagRe = regexp.MustCompile(`</?image\b[^>]*>`)
 	patchFileRe     = regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$`)
 )
 
