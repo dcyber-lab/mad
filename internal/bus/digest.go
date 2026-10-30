@@ -246,6 +246,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 	fmt.Fprintf(&b, "[mad bus] %d message%s for you (%s). Act on what asks you something; reply with\n", n, plural, label(agentID))
 	b.WriteString("bus_post(channel, text) in the channel or bus_dm(agent, text) privately, @mentioning\n")
 	b.WriteString("who should read it. Say nothing on the bus if nothing is asked of you.\n")
+	fmt.Fprintf(&b, "Your name on the bus is %s (the deck's name for this session). Who wrote reads only the bus: an answer written here reaches no one.\n", label(agentID))
 	for _, e := range list {
 		name := "#" + e.ch.ID
 		if isDM(e.ch.ID) {

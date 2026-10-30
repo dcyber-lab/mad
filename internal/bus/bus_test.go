@@ -254,6 +254,7 @@ func TestCompose(t *testing.T) {
 	want := `[mad bus] 2 messages for you (builder). Act on what asks you something; reply with
 bus_post(channel, text) in the channel or bus_dm(agent, text) privately, @mentioning
 who should read it. Say nothing on the bus if nothing is asked of you.
+Your name on the bus is builder (the deck's name for this session). Who wrote reads only the bus: an answer written here reaches no one.
 
 #api · architect · #1 · 14:02
 @builder return 404 for an unknown id, not 500.
