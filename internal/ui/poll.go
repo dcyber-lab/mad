@@ -284,7 +284,7 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 			}
 			tr := m.trackers[a.ID]
 			if tr == nil {
-				tr = &status.Tracker{}
+				tr = &status.Tracker{ID: a.ID}
 				m.trackers[a.ID] = tr
 			}
 			hook := m.reports[a.ID].Hook

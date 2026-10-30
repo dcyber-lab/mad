@@ -75,6 +75,8 @@ type Item struct {
 	// Open is where it is settled at length: Next and a click go there.
 	Open Open `json:"open"`
 
+	// rank is its agent's place in the deck's order, for ties.
+	rank int
 	// route carries the acts out; only Desk.Act reaches it.
 	route route
 	// undated: Since is the first look's time, kept by the Desk.

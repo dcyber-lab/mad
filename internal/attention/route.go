@@ -72,7 +72,7 @@ func (r hostRoute) acts() []Act {
 }
 
 func (r hostRoute) do(a Answer, _ *Facts) error {
-	ans := host.Answer{ID: r.ask.ID}
+	ans := host.Answer{ID: r.ask.ID, Instance: r.ask.Host}
 	switch a.Verb {
 	case VerbAllow:
 		ans.Allow = true
@@ -88,7 +88,7 @@ func (r hostRoute) do(a Answer, _ *Facts) error {
 		ans.Allow, ans.Answers = true, map[string]string{r.ask.Question: text}
 	}
 	err := hostDo(r.agent, host.Command{Type: "answer", Answer: &ans})
-	if err != nil && strings.Contains(err.Error(), "answered already") {
+	if err != nil && strings.Contains(err.Error(), "answered already") { // host.staleAnswer
 		return ErrGone
 	}
 	return err
@@ -110,15 +110,35 @@ type busRoute struct {
 	seq     int
 }
 
+// theirs: a DM between two agents, which the person may read but not
+// post in (bus.Reply refuses).
+func (r busRoute) theirs() bool {
+	if !strings.HasPrefix(r.channel, "dm.") {
+		return false
+	}
+	for _, s := range bus.DMSides(r.channel) {
+		if s == bus.You {
+			return false
+		}
+	}
+	return true
+}
+
 func (r busRoute) acts() []Act {
 	open := "Open #" + r.channel
 	if strings.HasPrefix(r.channel, "dm.") {
 		open = "Open DM"
 	}
+	if r.theirs() {
+		return []Act{{Verb: VerbOpen, Label: open, Row: true, Primary: true}}
+	}
 	return []Act{{Verb: VerbReply, Label: "Reply", Input: true, Row: true, Primary: true}, {Verb: VerbOpen, Label: open}}
 }
 
 func (r busRoute) do(a Answer, _ *Facts) error {
+	if r.theirs() {
+		return ErrNotOffered
+	}
 	_, err := busReply(r.channel, a.Text, r.seq)
 	return err
 }

@@ -12,7 +12,7 @@ func TestAsksFile(t *testing.T) {
 	if r := ReadReport("a"); r.Hook != nil || r.Turn != nil || r.Asks != nil {
 		t.Fatalf("nothing written reads as %+v", r)
 	}
-	asks := []Ask{{ID: "r1", Kind: AskPermission, Tool: "Bash", Command: "go test ./...", At: t0}}
+	asks := []Ask{{Host: NewHostInstance(), ID: "r1", Kind: AskPermission, Tool: "Bash", Command: "go test ./...", At: t0}}
 	if err := WriteAsks("a", asks); err != nil {
 		t.Fatal(err)
 	}

@@ -287,7 +287,7 @@ func TestAsksOf(t *testing.T) {
 		{ID: "2", Kind: "tool", Tool: "shell", Label: "make build", Input: "make build"},
 		{ID: "3", Kind: "plan", Plan: "Do it\nthen more"},
 		{ID: "4", Kind: "question", Questions: []Question{{Question: "A?", Multi: true}, {Question: "B?"}}},
-	}, map[string]time.Time{"1": at})
+	}, map[string]time.Time{"1": at}, "h1")
 	if a := got[0]; a.Command != "go test ./..." || a.Target != "Run the tests" || a.Title != "Claude wants to run" || !a.At.Equal(at) {
 		t.Errorf("bash: %+v", a)
 	}

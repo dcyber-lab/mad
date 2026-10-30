@@ -32,12 +32,15 @@ type Desk struct {
 	facts Facts
 	view  View
 	acted map[Key]time.Time // when acted on
+	// gone are the acted-on items their route found answered already: they
+	// stay hidden for as long as they are listed, not for a settle.
+	gone  map[Key]bool
 	first map[Key]time.Time // when first seen, for items with no time of their own
 	now   func() time.Time
 }
 
 func NewDesk() *Desk {
-	return &Desk{acted: map[Key]time.Time{}, first: map[Key]time.Time{}, now: time.Now}
+	return &Desk{acted: map[Key]time.Time{}, gone: map[Key]bool{}, first: map[Key]time.Time{}, now: time.Now}
 }
 
 // Look builds the View from f, keeps it for Act, and returns it as the
@@ -48,7 +51,7 @@ func (d *Desk) Look(f Facts) View {
 	defer d.mu.Unlock()
 	now := d.now()
 	present := map[Key]bool{}
-	kept := v.Inbox.Items[:0]
+	kept := make([]Item, 0, len(v.Inbox.Items))
 	needs := 0
 	for i, it := range v.Inbox.Items {
 		present[it.Key] = true
@@ -59,7 +62,7 @@ func (d *Desk) Look(f Facts) View {
 				d.first[it.Key] = it.Since
 			}
 		}
-		if at, ok := d.acted[it.Key]; ok && now.Sub(at) < settle {
+		if at, ok := d.acted[it.Key]; ok && (now.Sub(at) < settle || d.gone[it.Key]) {
 			continue
 		}
 		delete(d.acted, it.Key)
@@ -74,6 +77,7 @@ func (d *Desk) Look(f Facts) View {
 	for k := range d.acted {
 		if !present[k] {
 			delete(d.acted, k) // settled
+			delete(d.gone, k)
 		}
 	}
 	for k := range d.first {
@@ -117,7 +121,11 @@ func (d *Desk) Act(k Key, a Answer) error {
 	err := it.route.do(a, &f)
 	if err != nil {
 		d.mu.Lock()
-		delete(d.acted, k)
+		if errors.Is(err, ErrGone) {
+			d.gone[k] = true // answered elsewhere: it must not come back
+		} else {
+			delete(d.acted, k)
+		}
 		d.mu.Unlock()
 	}
 	return err

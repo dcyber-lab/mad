@@ -74,41 +74,41 @@ func TestAgentWaits(t *testing.T) {
 			name: "host permission, from the asks file",
 			a: func() Agent {
 				a := agentAt("kim", status.Waiting, ago(2*time.Minute))
-				a.Report.Asks = []status.Ask{{ID: "r1", Kind: status.AskPermission, Tool: "Bash", Target: "Run the tests",
+				a.Report.Asks = []status.Ask{{Host: "h1", ID: "r1", Kind: status.AskPermission, Tool: "Bash", Target: "Run the tests",
 					Command: "go test ./...", Always: true, At: ago(time.Minute)}}
 				return a
 			}(),
-			key: "req:kim/r1", kind: KindPermission, words: "Bash|go test ./...|Run the tests",
+			key: "req:kim/h1/r1", kind: KindPermission, words: "Bash|go test ./...|Run the tests",
 			acts: "allow always deny deny…", mono: true,
 		},
 		{
 			name: "host question, one tap",
 			a: func() Agent {
 				a := agentAt("lee", status.Waiting, ago(5*time.Minute))
-				a.Report.Asks = []status.Ask{{ID: "7", Kind: status.AskQuestion, Question: "main or release?",
+				a.Report.Asks = []status.Ask{{Host: "h1", ID: "7", Kind: status.AskQuestion, Question: "main or release?",
 					Options: []string{"main", "release/1.4"}, OneTap: true, At: ago(5 * time.Minute)}}
 				return a
 			}(),
-			key: "req:lee/7", kind: KindQuestion, words: "asks|main or release?|",
+			key: "req:lee/h1/7", kind: KindQuestion, words: "asks|main or release?|",
 			acts: "answer=main answer=release/1.4 answer…",
 		},
 		{
 			name: "host questions, several: its page has the form",
 			a: func() Agent {
 				a := agentAt("lee", status.Waiting, ago(5*time.Minute))
-				a.Report.Asks = []status.Ask{{ID: "8", Kind: status.AskQuestion, Question: "first?", At: ago(5 * time.Minute)}}
+				a.Report.Asks = []status.Ask{{Host: "h1", ID: "8", Kind: status.AskQuestion, Question: "first?", At: ago(5 * time.Minute)}}
 				return a
 			}(),
-			key: "req:lee/8", kind: KindQuestion, words: "asks|first?|", acts: "",
+			key: "req:lee/h1/8", kind: KindQuestion, words: "asks|first?|", acts: "",
 		},
 		{
 			name: "host plan",
 			a: func() Agent {
 				a := agentAt("pat", status.Waiting, ago(time.Minute))
-				a.Report.Asks = []status.Ask{{ID: "p", Kind: status.AskPlan, Plan: "Split the parser", At: ago(time.Minute)}}
+				a.Report.Asks = []status.Ask{{Host: "h1", ID: "p", Kind: status.AskPlan, Plan: "Split the parser", At: ago(time.Minute)}}
 				return a
 			}(),
-			key: "req:pat/p", kind: KindPermission, words: "plan|Split the parser|", acts: "allow deny…",
+			key: "req:pat/h1/p", kind: KindPermission, words: "plan|Split the parser|", acts: "allow deny…",
 		},
 		{
 			name: "hook wait, no task: claim 2's agent",
@@ -141,7 +141,7 @@ func TestAgentWaits(t *testing.T) {
 			name: "an asks file left by a host that died is not a wait",
 			a: func() Agent {
 				a := agentAt("old", status.Stopped, ago(time.Hour))
-				a.Report.Asks = []status.Ask{{ID: "r9", Kind: status.AskPermission, Tool: "Bash"}}
+				a.Report.Asks = []status.Ask{{Host: "h1", ID: "r9", Kind: status.AskPermission, Tool: "Bash"}}
 				return a
 			}(),
 		},
@@ -374,7 +374,7 @@ func TestActivity(t *testing.T) {
 	} {
 		a := agentAt("a", c.raw, ago(6*time.Minute))
 		a.Shown, a.Info = c.shown, info
-		a.Report.Turn = &status.Turn{Reply: "Tests pass\nand more"}
+		a.Report.Turn = &status.Turn{Reply: "Tests pass\nand more", At: ago(6 * time.Minute)}
 		act := activityOf(a)
 		todo := ""
 		if act.Todo != nil {
@@ -413,9 +413,9 @@ func fakeHost(t *testing.T, err error) *[]host.Command {
 
 func permissionFacts() Facts {
 	a := agentAt("kim", status.Waiting, ago(time.Minute))
-	a.Report.Asks = []status.Ask{{ID: "r1", Kind: status.AskPermission, Tool: "Bash", Command: "ls", At: ago(time.Minute)}}
+	a.Report.Asks = []status.Ask{{Host: "h1", ID: "r1", Kind: status.AskPermission, Tool: "Bash", Command: "ls", At: ago(time.Minute)}}
 	q := agentAt("lee", status.Waiting, ago(time.Minute))
-	q.Report.Asks = []status.Ask{{ID: "q1", Kind: status.AskQuestion, Question: "Which?", Options: []string{"Blue", "Red"}, OneTap: true, At: ago(time.Minute)}}
+	q.Report.Asks = []status.Ask{{Host: "h1", ID: "q1", Kind: status.AskQuestion, Question: "Which?", Options: []string{"Blue", "Red"}, OneTap: true, At: ago(time.Minute)}}
 	return Facts{Agents: []Agent{a, q}, Now: t0}
 }
 
@@ -425,17 +425,17 @@ func TestDeskActOnce(t *testing.T) {
 	d.now = func() time.Time { return t0 }
 	f := permissionFacts()
 	d.Look(f)
-	if err := d.Act("req:kim/r1", Answer{Verb: VerbAllow}); err != nil {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); err != nil {
 		t.Fatal(err)
 	}
 	if len(*sent) != 1 || (*sent)[0].Answer.ID != "r1" || !(*sent)[0].Answer.Allow {
 		t.Errorf("sent %+v", *sent)
 	}
-	if err := d.Act("req:kim/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrGone) {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrGone) {
 		t.Errorf("second act: %v", err)
 	}
 	// Hidden while it settles, though the facts still have it.
-	if v := d.Look(f); len(v.Inbox.Items) != 1 || v.Inbox.Needs != 1 || v.Inbox.Items[0].Key != "req:lee/q1" {
+	if v := d.Look(f); len(v.Inbox.Items) != 1 || v.Inbox.Needs != 1 || v.Inbox.Items[0].Key != "req:lee/h1/q1" {
 		t.Errorf("after acting %v", keys(v.Inbox.Items))
 	}
 	// Still there past settle: the act did not take, it shows again.
@@ -444,7 +444,7 @@ func TestDeskActOnce(t *testing.T) {
 		t.Errorf("after settle %v", keys(v.Inbox.Items))
 	}
 	// An answer by option, and one of one's own.
-	if err := d.Act("req:lee/q1", Answer{Verb: VerbAnswer, Option: "Red"}); err != nil {
+	if err := d.Act("req:lee/h1/q1", Answer{Verb: VerbAnswer, Option: "Red"}); err != nil {
 		t.Fatal(err)
 	}
 	if a := (*sent)[1].Answer; !a.Allow || a.Answers["Which?"] != "Red" {
@@ -469,17 +469,17 @@ func TestDeskRefusesWhatIsNotOffered(t *testing.T) {
 		{Verb: VerbDeny, Text: "   "},     // words, but none
 		{Verb: VerbAllow, Text: "please"}, // allow takes no words
 	} {
-		if err := d.Act("req:kim/r1", a); !errors.Is(err, ErrNotOffered) {
+		if err := d.Act("req:kim/h1/r1", a); !errors.Is(err, ErrNotOffered) {
 			t.Errorf("%+v: %v", a, err)
 		}
 	}
-	if err := d.Act("req:lee/q1", Answer{Verb: VerbAnswer, Option: "Green"}); !errors.Is(err, ErrNotOffered) {
+	if err := d.Act("req:lee/h1/q1", Answer{Verb: VerbAnswer, Option: "Green"}); !errors.Is(err, ErrNotOffered) {
 		t.Errorf("an option not offered: %v", err)
 	}
 	if len(*sent) != 0 {
 		t.Errorf("sent %+v", *sent)
 	}
-	if err := d.Act("req:kim/r1", Answer{Verb: VerbDeny, Text: "use make test"}); err != nil {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbDeny, Text: "use make test"}); err != nil {
 		t.Errorf("deny with words: %v", err)
 	}
 	if a := (*sent)[0].Answer; a.Allow || a.Message != "use make test" {
@@ -492,7 +492,7 @@ func TestDeskRestoresOnFailure(t *testing.T) {
 	d := NewDesk()
 	f := permissionFacts()
 	d.Look(f)
-	if err := d.Act("req:kim/r1", Answer{Verb: VerbAllow}); err == nil || errors.Is(err, ErrGone) {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); err == nil || errors.Is(err, ErrGone) {
 		t.Fatalf("act: %v", err)
 	}
 	if v := d.Look(f); len(v.Inbox.Items) != 2 {
@@ -500,7 +500,7 @@ func TestDeskRestoresOnFailure(t *testing.T) {
 	}
 	// The host says it was answered (in its TUI, on another surface): gone.
 	fakeHost(t, errors.New("that was answered already"))
-	if err := d.Act("req:kim/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrGone) {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrGone) {
 		t.Errorf("answered elsewhere: %v", err)
 	}
 }

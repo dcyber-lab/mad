@@ -691,7 +691,7 @@ func Trackers(st *state.State, kinds []agent.Kind) map[string]*status.Tracker {
 		for _, a := range agents {
 			tr := trackers[a.ID]
 			if tr == nil {
-				tr = &status.Tracker{}
+				tr = &status.Tracker{ID: a.ID}
 				trackers[a.ID] = tr
 			}
 			p, ok := tmux.FindPane(panes, a.ID)
