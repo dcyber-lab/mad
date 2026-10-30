@@ -183,7 +183,17 @@ pre.output.err { color: var(--stopped); }
 #qitems li .x:hover { color: var(--stopped); }
 #qerr { color: var(--waiting); font-size: 11px; margin: 0 4px 4px; }
 #qerr:empty { display: none; }
-.qbar { display: flex; gap: 8px; align-items: flex-end; }
+.qbar { display: flex; gap: 8px; align-items: flex-end; position: relative; }
+#qmenu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 10; margin: 0; padding: 4px 0;
+  list-style: none; max-height: min(320px, 50vh); overflow-y: auto; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+#qmenu li { display: flex; gap: 10px; align-items: baseline; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+#qmenu li.on { background: var(--line); }
+#qmenu .n { flex: none; color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; }
+#qmenu .h { flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; }
+#qmenu .d { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 #qinput {
   flex: 1; resize: none; max-height: 120px; background: var(--bg); color: var(--text);
   border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font: inherit; line-height: 1.4;

@@ -33,6 +33,7 @@ type Server struct {
 	kinds []agent.Kind
 	poll  *poller
 	terms *terms
+	cmds  *commandCache
 }
 
 // New makes a server with a fresh random token.
@@ -42,7 +43,7 @@ func New(kinds []agent.Kind) *Server {
 		panic(err) // crypto/rand does not fail on supported systems
 	}
 	t := newTerms()
-	return &Server{Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, t), terms: t}
+	return &Server{Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, t), terms: t, cmds: newCommandCache()}
 }
 
 // Handler routes the page, its assets and the API.
@@ -55,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
 	mux.Handle("GET /api/chat", s.auth(http.HandlerFunc(s.chat)))
 	mux.Handle("GET /api/live", s.auth(http.HandlerFunc(s.live)))
+	mux.Handle("GET /api/commands", s.auth(http.HandlerFunc(s.commands)))
 	mux.Handle("GET /api/term", s.auth(http.HandlerFunc(s.term)))
 	mux.Handle("POST /api/queue", s.auth(http.HandlerFunc(s.queueAdd)))
 	mux.Handle("DELETE /api/queue", s.auth(http.HandlerFunc(s.queueRemove)))
