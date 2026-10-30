@@ -74,8 +74,11 @@ type Card struct {
 	OwnerLabel string        `json:"owner_label,omitempty"`
 	Channel    string        `json:"channel,omitempty"`
 	Age        time.Duration `json:"age"` // in its state
-	Message    *CardMessage  `json:"message,omitempty"`
-	Note       string        `json:"note,omitempty"`
+	// Since is the time Age counts from: a card kept from an earlier look
+	// still says when it began.
+	Since   time.Time    `json:"since"`
+	Message *CardMessage `json:"message,omitempty"`
+	Note    string       `json:"note,omitempty"`
 	// Waits lists the tasks a card that waits on others still waits for.
 	Waits []string `json:"waits,omitempty"`
 	// Ref is the timer of a check-in card.
@@ -215,7 +218,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 			continue
 		}
 		c := Card{Kind: CardTask, Task: &t, Title: t.Title, Owner: t.Owner, OwnerLabel: d.label(t.Owner),
-			Channel: t.Channel, Age: max(0, at.Sub(t.UpdatedAt)), Note: t.Note}
+			Channel: t.Channel, Age: max(0, at.Sub(t.UpdatedAt)), Since: t.UpdatedAt, Note: t.Note}
 		if !t.open() {
 			c.Column = ColDone
 			cards = append(cards, c)
@@ -304,7 +307,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 			}
 			title := firstLine(m.Text, titleRunes)
 			cards = append(cards, Card{Kind: CardAsk, Title: title, Column: ColWaitingYou, Why: WhyAsked,
-				Owner: id, OwnerLabel: label, Channel: ch.ID, Age: max(0, at.Sub(m.At)),
+				Owner: id, OwnerLabel: label, Channel: ch.ID, Age: max(0, at.Sub(m.At)), Since: m.At,
 				Message: &CardMessage{m.Seq, afterTitle(m.Text, title)}})
 		}
 		if paused[ch.ID] {
@@ -313,7 +316,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 				last = m.At
 			}
 			cards = append(cards, Card{Kind: CardPaused, Title: "#" + ch.ID + " is paused", Column: ColWaitingYou, Why: WhyPaused,
-				Channel: ch.ID, Age: max(0, at.Sub(last))})
+				Channel: ch.ID, Age: max(0, at.Sub(last)), Since: last})
 		}
 	}
 
@@ -326,7 +329,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 		}
 		who := d.label(t.By)
 		cards = append(cards, Card{Kind: CardCheckin, Title: who + "'s check-in: " + firstLine(t.Note, titleRunes), Column: ColWaitingYou,
-			Why: WhyCheckin, Owner: t.By, OwnerLabel: who, Channel: t.Channel, Age: max(0, at.Sub(t.NextAt)), Note: t.Why, Ref: t.ID})
+			Why: WhyCheckin, Owner: t.By, OwnerLabel: who, Channel: t.Channel, Age: max(0, at.Sub(t.NextAt)), Since: t.NextAt, Note: t.Why, Ref: t.ID})
 	}
 
 	rank := map[string]int{}
