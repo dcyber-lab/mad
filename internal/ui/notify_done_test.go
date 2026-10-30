@@ -23,7 +23,7 @@ func TestDoneNotificationSaysWhatWasSaid(t *testing.T) {
 		return m.applyPoll(pollMsg{
 			panes:   []tmux.Pane{{ID: "%1", MadID: "bg", Session: tmux.PoolSession, Index: -1}},
 			screens: map[string]string{},
-			hooks:   map[string]*status.Hook{"bg": {State: state, At: now}},
+			reports: map[string]status.Report{"bg": {Hook: &status.Hook{State: state, At: now}}},
 		}, now)
 	}
 	turn := func(reply string, startSec, endSec int) []alert {

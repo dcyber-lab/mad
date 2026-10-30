@@ -27,7 +27,7 @@ func turnDeck(t *testing.T) (m *model, t0 time.Time, poll func(sec int, st strin
 		return m.applyPoll(pollMsg{
 			panes:   []tmux.Pane{{ID: "%1", MadID: "bg", Session: tmux.PoolSession, Index: -1}},
 			screens: map[string]string{},
-			hooks:   map[string]*status.Hook{"bg": {State: s, At: now}},
+			reports: map[string]status.Report{"bg": {Hook: &status.Hook{State: s, At: now}}},
 		}, now)
 	}
 	end = func(reply string, sec int) []alert {
