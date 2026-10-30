@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"sync"
+	"time"
 )
 
 // Tool is one thing the client can call.
@@ -36,7 +38,26 @@ type Server struct {
 	// where one call needs what an earlier one did (a channel made, then
 	// posted in), which a client may send together.
 	Serial bool
+
+	// Stale reports that a newer server is installed. The server then asks
+	// to be replaced (Reexec) as soon as it can do so with no request lost:
+	// between requests, with nothing read and left unanswered.
+	Stale func() bool
+	// Reexec replaces this process with the newer server. It returns only
+	// when that failed, and serving goes on here. protocolVersion is what
+	// the client negotiated at initialize, to pass on as Resumed; "" if
+	// there was no initialize yet.
+	Reexec func(protocolVersion string) error
+	// Resumed is set when this process continues a session an earlier one
+	// began: the protocol version that session negotiated. It needs no
+	// initialize, and tells the client at once that the tools changed.
+	Resumed string
+
+	protocol string // negotiated at initialize, or Resumed
 }
+
+// How often an idle server looks for a newer one, when stdin allows it.
+const staleEvery = 10 * time.Second
 
 // The protocol versions we accept from a client, newest first.
 var versions = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
@@ -76,13 +97,7 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		mu   sync.Mutex
 		werr error
 	)
-	send := func(r response) {
-		r.JSONRPC = "2.0"
-		b, err := json.Marshal(r)
-		if err != nil {
-			b, _ = json.Marshal(response{JSONRPC: "2.0", ID: r.ID,
-				Error: &rpcError{-32603, err.Error()}})
-		}
+	write := func(b []byte) {
 		b = append(b, '\n')
 		mu.Lock()
 		defer mu.Unlock()
@@ -90,10 +105,50 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 			werr = err
 		}
 	}
+	send := func(r response) {
+		r.JSONRPC = "2.0"
+		b, err := json.Marshal(r)
+		if err != nil {
+			b, _ = json.Marshal(response{JSONRPC: "2.0", ID: r.ID,
+				Error: &rpcError{-32603, err.Error()}})
+		}
+		write(b)
+	}
 
+	if s.Resumed != "" {
+		s.protocol = s.Resumed
+		write([]byte(`{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}`))
+	}
+
+	// With a deadline on stdin an idle server wakes to look for a newer
+	// one; without (a file, a terminal, a test pipe) it looks between
+	// requests only.
+	dl, _ := in.(interface{ SetReadDeadline(time.Time) error })
+	if dl != nil && (s.Stale == nil || s.Reexec == nil || dl.SetReadDeadline(time.Time{}) != nil) {
+		dl = nil
+	}
 	br := bufio.NewReaderSize(in, 64*1024)
+	var part []byte // a line begun, not yet whole
+	failed := false // Reexec failed: stay on this process
 	for {
+		// Nothing read is unanswered or unprocessed here: safe to be replaced.
+		if len(part) == 0 && br.Buffered() == 0 && !failed && s.Stale != nil && s.Reexec != nil && s.Stale() {
+			wg.Wait()
+			failed = s.Reexec(s.protocol) != nil
+		}
+		if dl != nil {
+			_ = dl.SetReadDeadline(time.Now().Add(staleEvery))
+		}
 		line, err := br.ReadBytes('\n')
+		if dl != nil && errors.Is(err, os.ErrDeadlineExceeded) {
+			// Idle. Keep what came of a line, and look again.
+			part = append(part, line...)
+			continue
+		}
+		if len(part) > 0 {
+			line = append(part, line...)
+			part = nil
+		}
 		if line = bytes.TrimSpace(line); len(line) > 0 {
 			s.handle(ctx, line, send, &wg)
 		}
@@ -144,9 +199,10 @@ func (s *Server) handle(ctx context.Context, line []byte, send func(response), w
 				v = k
 			}
 		}
+		s.protocol = v
 		res := map[string]any{
 			"protocolVersion": v,
-			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": s.Stale != nil}},
 			"serverInfo":      map[string]any{"name": s.Name, "version": s.Version},
 		}
 		if s.Instructions != "" {
