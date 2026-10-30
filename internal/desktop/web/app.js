@@ -1237,7 +1237,11 @@ function drawTitle() {
     return;
   }
   const what = el("span", "pw");
-  what.append(el("span", "pt", label(a)), el("span", "ps", `${a.kind} · ${a.project.name}`));
+  // the row's own line under the name: the state word, then what it is on
+  const sub = el("span", "ps");
+  sub.append(...(a.tool ? [el("span", "word", look(shownStatus(a)).word), " · "] : []), ...activityLine(a).flat());
+  sub.title = `${a.kind} · ${a.project.name}`;
+  what.append(el("span", "pt", label(a)), sub);
   t.replaceChildren(avatar(a, true), what);
   t.className = `s-${shownStatus(a)}`;
 }
