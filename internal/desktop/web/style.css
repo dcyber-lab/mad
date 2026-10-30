@@ -126,6 +126,14 @@ kbd {
 }
 #sidebar header { display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 15.5px; letter-spacing: -0.01em; }
+/* The look the page draws is old: say so over everything, and dim it. */
+#offline {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200; padding: calc(5px + env(safe-area-inset-top)) 16px 5px;
+  text-align: center; font-size: 12.5px; font-weight: 600; color: #fff; background: var(--stopped);
+}
+#offline[hidden] { display: none; }
+body.stale #projects, body.stale main { opacity: 0.6; }
+
 .conn {
   width: 7px; height: 7px; border-radius: 50%; margin-left: auto; background: var(--stopped);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--stopped) 20%, transparent);
@@ -1010,6 +1018,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .bspend { padding: 6px 24px 0; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; max-width: 420px; }
 .bspend .bbar { height: 4px; border-radius: 2px; background: var(--border-2); overflow: hidden; }
 .bspend .bfill { height: 100%; background: var(--running); }
+.bspend.hot .bfill { background: var(--waiting); }
+.bspend.hot > span { color: var(--waiting); }
 .bspend.closed .bfill { background: var(--stopped); }
 .bspend.closed > span { color: var(--stopped); }
 .bcols { display: flex; align-items: flex-start; gap: 14px; padding: 16px 24px 48px; min-width: min-content; }
@@ -1017,6 +1027,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .bcol h2 { font-size: 13px; margin: 0 0 8px; color: var(--text-2); display: flex; gap: 2px; }
 .bcol.c-waiting-you h2 { color: var(--waiting); }
 .bnone { font-size: 12.5px; margin: 4px 0; }
+.bcol.empty { flex: 0 1 150px; min-width: 110px; opacity: 0.7; }
+.bcol.empty h2 { margin-bottom: 2px; }
 .bcard {
   border: 1px solid var(--border-2); border-radius: 11px; background: var(--card); padding: 10px 12px;
   margin-bottom: 8px; cursor: pointer; min-width: 0;
@@ -1070,6 +1082,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .bsched { padding: 12px 16px 0; }
   .bcols { display: block; padding: 12px 16px 40px; min-width: 0; }
   .bcol { margin-bottom: 18px; }
+  .bcol.empty { margin-bottom: 8px; opacity: 1; }
 }
 
 /* teams */
