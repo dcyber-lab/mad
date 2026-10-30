@@ -174,6 +174,10 @@ type Host struct {
 	clients map[chan []byte]bool
 	redraw  chan struct{}
 	replied string // id of the message whose turn was last written
+	// asked is when each open request came in; wrote names the ones
+	// <id>.asks.json was last written with.
+	asked map[string]time.Time
+	wrote string
 }
 
 func newHost(id string) *Host {
@@ -183,6 +187,7 @@ func newHost(id string) *Host {
 		st:      State{Status: Starting, Requests: []Request{}},
 		clients: map[chan []byte]bool{},
 		redraw:  make(chan struct{}, 1),
+		asked:   map[string]time.Time{},
 	}
 }
 
@@ -221,6 +226,7 @@ func Run(ctx context.Context, id string, kinds []agent.Kind) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer func() { _ = status.WriteAsks(id, nil) }() // nothing waits on a host that ended
 	go h.serve(ln)
 	go h.heartbeat(ctx)
 	go view(ctx, h, a, kinds)
@@ -241,6 +247,7 @@ func (h *Host) update(fn func(s *State)) {
 	fn(&h.st)
 	h.st.Version++
 	now := h.st.Status
+	h.writeAsks(time.Now())
 	data, _ := json.Marshal(Line{Type: "state", State: &h.st})
 	for c := range h.clients {
 		// Each holds the latest state only: one behind gets that.
@@ -258,6 +265,64 @@ func (h *Host) update(fn func(s *State)) {
 	case h.redraw <- struct{}{}:
 	default:
 	}
+}
+
+// writeAsks puts the open requests in <id>.asks.json when they changed,
+// for the deck, the window's sidebar and `mad board` to read with the
+// agent's hook. h.mu is held, so writes go in the order of the changes.
+func (h *Host) writeAsks(now time.Time) {
+	var ids strings.Builder
+	open := map[string]bool{}
+	for _, r := range h.st.Requests {
+		ids.WriteString(r.ID + "\x00")
+		open[r.ID] = true
+		if _, ok := h.asked[r.ID]; !ok {
+			h.asked[r.ID] = now
+		}
+	}
+	for id := range h.asked {
+		if !open[id] {
+			delete(h.asked, id)
+		}
+	}
+	if ids.String() == h.wrote {
+		return
+	}
+	h.wrote = ids.String()
+	_ = status.WriteAsks(h.agent, asksOf(h.st.Requests, h.asked))
+}
+
+// asksOf is what reqs say, in the deck's words.
+func asksOf(reqs []Request, asked map[string]time.Time) []status.Ask {
+	var out []status.Ask
+	for _, r := range reqs {
+		a := status.Ask{ID: r.ID, Title: r.Title, At: asked[r.ID]}
+		switch r.Kind {
+		case "question":
+			a.Kind = status.AskQuestion
+			if len(r.Questions) > 0 {
+				q := r.Questions[0]
+				a.Question, a.Header = q.Question, q.Header
+				for _, o := range q.Options {
+					a.Options = append(a.Options, o.Label)
+				}
+				a.OneTap = len(r.Questions) == 1 && !q.Multi
+			}
+		case "plan":
+			a.Kind, a.Plan = status.AskPlan, firstLine(r.Plan)
+		default:
+			a.Kind, a.Tool, a.Target, a.Always = status.AskPermission, r.Tool, r.Label, r.Always
+			// The conversation shows a command as "$ cmd" (discover.ToolText);
+			// codex's shell request has it as its label.
+			if cmd, ok := strings.CutPrefix(r.Input, "$ "); ok {
+				a.Command = firstLine(cmd)
+			} else if r.Tool == "shell" {
+				a.Command = r.Label
+			}
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // showMessage puts the message being written, as the hub has it, in the
