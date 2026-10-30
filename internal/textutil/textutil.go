@@ -30,10 +30,11 @@ func PadRight(s string, n int) string {
 
 // Age is a compact "how long ago": 5m, 3h, 12d.
 func Age(t time.Time) string {
-	return ageAt(t, time.Now())
+	return AgeAt(t, time.Now())
 }
 
-func ageAt(t, now time.Time) string {
+// AgeAt is Age as of now.
+func AgeAt(t, now time.Time) string {
 	d := now.Sub(t)
 	if d < 0 {
 		d = 0
