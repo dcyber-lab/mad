@@ -219,7 +219,10 @@ applyTheme();
 function drawQueue(fresh) {
   const box = $("#queue");
   const a = current && agents.get(current);
-  box.hidden = !current;
+  if (box.hidden === !!current) {
+    box.hidden = !current;
+    fitInput();
+  }
   if (!a) return;
   const q = fresh || a.queue || { items: [] };
   if (fresh) a.queue = fresh;
@@ -305,10 +308,12 @@ $("#qinput").addEventListener("keydown", (e) => {
 // it if there is something.
 function fitInput() {
   const t = $("#qinput");
+  $("#qsend").disabled = !t.value.trim();
   t.style.height = "";
+  // Not drawn yet (no tab shown): measured once it is.
+  if (!t.offsetParent) return;
   t.style.height = `${Math.min(220, t.scrollHeight)}px`;
   t.style.overflowY = t.scrollHeight > 220 ? "auto" : "hidden";
-  $("#qsend").disabled = !t.value.trim();
 }
 $("#qinput").addEventListener("input", () => {
   fitInput();
@@ -754,6 +759,12 @@ function md(text) {
   const div = el("div", "md");
   div.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: true }));
   for (const pre of div.querySelectorAll("pre")) codeBlock(pre);
+  // A table in a frame of its width, scrolled sideways when wider.
+  for (const t of div.querySelectorAll("table")) {
+    const frame = el("div", "table");
+    t.replaceWith(frame);
+    frame.append(t);
+  }
   return div;
 }
 
