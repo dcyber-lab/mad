@@ -11,9 +11,10 @@ function busChannel(id) {
   return (deck.bus || []).find((c) => c.id === id);
 }
 
-// channelsGroup is the sidebar's list of channels and DMs, over the
-// projects.
-function channelsGroup() {
+// channelsGroup is the sidebar's list of channels and DMs: the short list
+// (listed: unread, paused or yours) and the one open, the rest behind
+// "All N". A search looks in all of them.
+function channelsGroup(q) {
   const g = el("div", "busgroup");
   const head = el("div", "chead");
   head.append(icon("chat"), el("b", "", "Channels"));
@@ -28,10 +29,17 @@ function channelsGroup() {
       { label: "New team", desc: "agents in roles start together, with a lead", icon: "agent", onclick: () => newTeam() },
     ], { right: true });
   };
-  head.append(el("span", "grow"), plus);
+  const all = deck.bus || [];
+  head.append(el("span", "grow"));
+  if (all.length) {
+    const more = button(ib.allChans ? "Fewer" : `All ${all.length}`, "ghost ga", () => { ib.allChans = !ib.allChans; drawSidebar(); });
+    more.title = "every channel and DM";
+    head.append(more);
+  }
+  head.append(plus);
   g.append(head);
-  const list = deck.bus || [];
-  if (!list.length) {
+  const list = all.filter((c) => q ? `${c.title} ${c.topic || ""}`.toLowerCase().includes(q) : ib.allChans || c.listed || c.id === cv.open);
+  if (!all.length) {
     const hint = el("div", "chan none", "Talk with your agents: + makes a channel or a team.");
     hint.onclick = () => createChannel();
     g.append(hint);
@@ -42,7 +50,7 @@ function channelsGroup() {
     row.append(el("span", "ch", c.dm ? (c.yours ? "@" : "↔") : "#"),
       el("span", "cn", c.dm ? c.title.replace(/^@/, "") : c.id));
     if (c.paused) row.append(el("span", "pill needs", "paused"));
-    else if (c.unread) row.append(el("span", "cnt", String(c.unread)));
+    else if (c.unread) row.append(el("span", `cnt${c.mention ? " at" : ""}`, c.mention ? `@${c.unread}` : String(c.unread)));
     row.onclick = () => openChannel(c.id);
     g.append(row);
   }

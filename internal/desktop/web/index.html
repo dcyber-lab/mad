@@ -19,17 +19,21 @@
 <div id="app">
   <aside id="sidebar">
     <header>
-      <span class="brand"><span class="mark">m</span>mad</span>
+      <span class="brand" id="brand" title="the overview"><span class="mark">m</span>mad</span>
       <span id="conn" class="conn" title="connection to mad"></span>
+      <button id="boardbtn" type="button" class="icon-btn" title="the task board (Alt-B)"><span data-icon="todo"></span></button>
+      <button id="searchbtn" type="button" class="icon-btn" title="search agents"><span data-icon="search"></span></button>
+      <button id="newchat" type="button" class="icon-btn" title="a new conversation (⌘N)"><span data-icon="compose"></span></button>
     </header>
-    <button id="newchat" type="button" class="newchat" title="a new conversation (⌘N)"><span data-icon="compose"></span>New chat</button>
     <label class="search">
       <span class="ico" data-icon="search"></span>
       <input id="filter" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false">
       <kbd id="filterKey">⌘K</kbd>
     </label>
+    <div id="chips" hidden></div>
     <nav id="projects"></nav>
     <footer>
+      <button id="next" type="button" class="nextbtn" hidden></button>
       <div id="quota"></div>
       <div class="foot">
         <span class="muted" id="summary"></span>
@@ -63,7 +67,7 @@
                 what it writes drawn as it writes, what it asks answered in place.</p>
               <button id="emptynew" type="button" class="btn primary">New chat</button>
             </div>
-            <div id="spotlight"></div>
+            <div id="home" hidden></div>
             <div class="keys muted">
               <span><kbd>⌘</kbd> <kbd>N</kbd> new chat</span>
               <span><kbd>Alt</kbd> <kbd>N</kbd> next that needs you</span>
@@ -116,6 +120,7 @@
 <script src="vendor/purify.js"></script>
 <script src="icons.js"></script>
 <script src="tools.js"></script>
+<script src="inbox.js"></script>
 <script src="app.js"></script>
 <script src="actions.js"></script>
 <script src="bus.js"></script>
