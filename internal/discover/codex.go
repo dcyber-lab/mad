@@ -430,6 +430,9 @@ func (codex) Parse(line []byte) (Event, bool) {
 		var args map[string]json.RawMessage
 		json.Unmarshal([]byte(p.Arguments), &args)
 		e.Tool = toolLabel(p.Name, args)
+		if p.Name == "update_plan" {
+			e.Todo = codexPlan(args["plan"])
+		}
 	default:
 		return e, false
 	}

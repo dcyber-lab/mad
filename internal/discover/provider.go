@@ -145,6 +145,30 @@ const (
 	TitleAI     = "ai"     // the agent named it
 )
 
+// Todo is where an agent's todo list stands.
+type Todo struct {
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
+	Now   string `json:"now,omitempty"` // the item in progress
+}
+
+// todoOf counts a todo list's items, each its text and status
+// (pending, in_progress, completed).
+func todoOf(texts, statuses []string) *Todo {
+	t := &Todo{Total: len(statuses)}
+	for i, s := range statuses {
+		switch s {
+		case "completed":
+			t.Done++
+		case "in_progress":
+			if t.Now == "" {
+				t.Now = texts[i]
+			}
+		}
+	}
+	return t
+}
+
 // Event is what one transcript line says about its session. Fields left
 // zero say nothing.
 type Event struct {
@@ -166,6 +190,9 @@ type Event struct {
 	Prompt string
 	// Tool labels a tool call ("Bash · go test ./...").
 	Tool string
+	// Todo is where the agent's own todo list stands, when the call
+	// wrote it (claude's TodoWrite, codex's update_plan).
+	Todo *Todo
 
 	// Quota is the account's usage limits as of this line.
 	Quota *status.Quota
