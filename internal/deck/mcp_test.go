@@ -24,7 +24,7 @@ func TestMCPFlags(t *testing.T) {
 	if got, want := MCPFlags("claude", "a1b2"), `--mcp-config '{"mcpServers":{"mad":{"args":["mcp","--agent","a1b2"],"command":"`+self+`","env":{"HOME":"/h","MAD_SOCKET":"mw","XDG_STATE_HOME":"/tmp/s"}}}}'`; got != want {
 		t.Errorf("claude:\n%s\nwant\n%s", got, want)
 	}
-	if got, want := MCPFlags("codex", "a1b2"), `-c 'mcp_servers.mad.command="`+self+`"' -c 'mcp_servers.mad.args=["mcp","--agent","a1b2"]' -c 'mcp_servers.mad.env={HOME="/h",MAD_SOCKET="mw",XDG_STATE_HOME="/tmp/s"}'`; got != want {
+	if got, want := MCPFlags("codex", "a1b2"), `-c 'mcp_servers.mad.command="`+self+`"' -c 'mcp_servers.mad.args=["mcp","--agent","a1b2"]' -c 'mcp_servers.mad.default_tools_approval_mode="approve"' -c 'mcp_servers.mad.env={HOME="/h",MAD_SOCKET="mw",XDG_STATE_HOME="/tmp/s"}'`; got != want {
 		t.Errorf("codex:\n%s\nwant\n%s", got, want)
 	}
 	for _, c := range [][2]string{{"shell", "a1b2"}, {"claude", "x; rm -rf /"}} {
