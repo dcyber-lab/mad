@@ -1129,6 +1129,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 }
 .row.sel { --row: var(--raise-2); }
 .row.pending, .icard.pending { opacity: 0.8; }
+.btn[hidden] { display: none !important; }
 .row.flash { animation: flash 1.2s ease-out; }
 .row > .avatar { grid-row: 1 / span 2; }
 .row .t1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; font-size: 13.5px; line-height: 18px; }
@@ -1276,7 +1277,9 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 @media (pointer: coarse) {
   .row .btn.sm, .icard .btn.sm, .replybox .btn.sm, .sect .btn.sm { min-height: 44px; padding: 0 14px; font-size: 14px; border-radius: 10px; }
   /* A group head's button is a 44px target that takes no more room than the head. */
-  .ghead .ga, .chead .ga { min-height: 44px; margin-top: -14px; margin-bottom: -14px; padding: 0 10px; font-size: 13px; }
+  .ghead .ga, .chead .ga { min-height: 44px; padding: 0 10px; font-size: 13px; }
+  /* the head with such a button is as tall as the button: nothing overlaps the row under it */
+  .ghead:has(.ga), .chead:has(.ga) { padding-top: 0; padding-bottom: 0; }
   .ghead kbd { display: none; }
   .replybox textarea { font-size: 16px; }
   .cchip { min-height: 44px; }
@@ -1304,6 +1307,13 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .row .btn.sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
   .ghead { font-size: 12.5px; padding: 10px 8px 4px; }
   .ghead .nexthead { display: none; } /* the footer has Next */
+  .g-needs .ghead { padding: 10px 8px 4px; }
+  /* A row's buttons sit beside its two lines, not above its second: the row is as tall as the
+     44px button needs, not the button plus a line. */
+  .row { padding-top: 6px; padding-bottom: 6px; }
+  .row:has(.rt) { column-gap: 8px; }
+  .row .rt { grid-row: 1 / span 2; }
+  .row:has(.rt) .t2 { grid-column: 2; }
   .project > .head { padding-top: 11px; }
   .nextbtn:not([hidden]) {
     display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 14px;
