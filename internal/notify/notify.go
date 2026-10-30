@@ -112,6 +112,16 @@ func (c Config) Wants(kind string) bool {
 
 const timeout = 10 * time.Second
 
+// Tag names what a newer notification replaces: the agent's (or the bus
+// channel's) older one, whatever its kind, so a "needs you" that was
+// answered gives way to the "finished" that follows.
+func (e Event) Tag() string {
+	if e.AgentID == "" && e.Channel == "" {
+		return e.Project
+	}
+	return e.AgentID + "/" + e.Channel
+}
+
 // Send delivers e: the configured command, else the platform's desktop
 // notification (terminal-notifier or else osascript on macOS, notify-send
 // on Linux; nothing where neither exists); and to the phones subscribed,
@@ -121,7 +131,7 @@ var Send = func(c Config, e Event) error {
 	defer cancel()
 	pushed := make(chan error, 1)
 	go func() {
-		pushed <- push.Send(ctx, push.Message{Title: e.Title(), Body: e.Body(), Agent: e.AgentID, Channel: e.Channel, Tag: e.AgentID + e.Channel + "/" + e.Kind}, "")
+		pushed <- push.Send(ctx, push.Message{Title: e.Title(), Body: e.Body(), Agent: e.AgentID, Channel: e.Channel, Tag: e.Tag()}, "")
 	}()
 	var err error
 	if cmd := command(ctx, c, e, runtime.GOOS, exec.LookPath); cmd != nil {
@@ -145,7 +155,7 @@ func command(ctx context.Context, c Config, e Event, goos string, lookPath func(
 		// osascript's notifications belong to Script Editor, so clicking one
 		// opens it. terminal-notifier's bring back the terminal instead.
 		if p, err := lookPath("terminal-notifier"); err == nil {
-			args := []string{"-title", e.Title(), "-message", e.Body(), "-sound", "Glass", "-group", "mad." + e.Project}
+			args := []string{"-title", e.Title(), "-message", e.Body(), "-sound", "Glass", "-group", "mad." + e.Tag()}
 			if id := os.Getenv("__CFBundleIdentifier"); id != "" {
 				args = append(args, "-activate", id)
 			}

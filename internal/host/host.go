@@ -173,6 +173,7 @@ type Host struct {
 	st      State
 	clients map[chan []byte]bool
 	redraw  chan struct{}
+	replied string // id of the message whose turn was last written
 }
 
 func newHost(id string) *Host {
@@ -293,7 +294,32 @@ func (h *Host) report(s string) {
 	case Waiting:
 		hook = status.Waiting
 	}
+	if hook == status.Idle {
+		h.writeTurn() // before the Idle report: the deck reads the reply when it sees the turn end
+	}
 	_ = status.WriteHook(h.agent, &status.Hook{State: hook, Event: "host"}, time.Now())
+}
+
+// writeTurn records what the agent said last, as its hook would at the
+// end of a turn, for the deck's notification.
+func (h *Host) writeTurn() {
+	h.mu.Lock()
+	msg := h.st.Message
+	if msg == nil || msg.ID == h.replied {
+		h.mu.Unlock()
+		return // no new message since the last turn
+	}
+	h.replied = msg.ID
+	var parts []string
+	for _, b := range msg.Blocks {
+		if b.Kind == "text" && strings.TrimSpace(b.Text) != "" {
+			parts = append(parts, strings.TrimSpace(b.Text))
+		}
+	}
+	h.mu.Unlock()
+	if len(parts) > 0 {
+		_ = status.WriteTurn(h.agent, &status.Turn{Reply: strings.Join(parts, "\n\n")}, time.Now())
+	}
 }
 
 // heartbeat keeps a running report fresh: the deck takes one that is not

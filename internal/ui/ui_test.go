@@ -645,7 +645,8 @@ func TestNotifyEvents(t *testing.T) {
 		bg, st string
 		want   string
 	}{
-		{0, status.Running, status.Running, ""},                             // first sight: nothing to compare
+		{0, status.Running, status.Idle, ""},                                // first sight: nothing to compare
+		{1, status.Running, status.Running, ""},                             // st starts: seen from its start
 		{2, status.Idle, status.Running, ""},                                // bg ran 2s: too short
 		{3, status.Running, status.Running, ""},                             // bg starts again
 		{10, status.Idle, status.Idle, "claude done,claude#2 done (stage)"}, // bg ran 7s, st 10s

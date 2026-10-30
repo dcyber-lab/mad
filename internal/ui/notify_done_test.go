@@ -17,11 +17,6 @@ func TestDoneNotificationSaysWhatWasSaid(t *testing.T) {
 	m.cfg.Notify = notify.Default()
 	st.Projects[0].Agents = []*state.Agent{{ID: "bg", Kind: "claude"}}
 	m.rebuildRows()
-	byMad := false
-	old := startedByMad
-	startedByMad = func(string, time.Time) bool { return byMad }
-	t.Cleanup(func() { startedByMad = old })
-
 	t0 := time.Now()
 	poll := func(sec int, state string) []alert {
 		now := t0.Add(time.Duration(sec) * time.Second)
@@ -58,7 +53,7 @@ func TestDoneNotificationSaysWhatWasSaid(t *testing.T) {
 	}
 
 	// A turn mad started by itself pushes nothing; waiting still does.
-	byMad = true
+	m.madNext.mark("bg", t0.Add(70*time.Second))
 	if as := turn("busy", 80, 90); len(as) != 0 {
 		t.Errorf("bus-started turn pushed: %+v", as)
 	}
