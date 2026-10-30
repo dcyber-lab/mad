@@ -304,6 +304,9 @@ func HandOffTask(from From, to, task, context string, files []string, channel, p
 	if to == from.ID {
 		return Handoff{}, PostResult{}, errors.New("a handoff to yourself reaches no one")
 	}
+	if from.ID != You && from.ID != system && !SpendOK(now()) {
+		return Handoff{}, PostResult{}, ErrSpent
+	}
 	st, err := state.Load()
 	if err != nil {
 		return Handoff{}, PostResult{}, err

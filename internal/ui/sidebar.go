@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -200,6 +201,7 @@ type model struct {
 	lastLapse    time.Time            // when they were last checked
 	following    bool                 // follow-ups are being raised
 	lastFollow   time.Time            // when they were last
+	spend        bus.SpendState       // the day's budget for mad's own work
 	lastDispatch time.Time            // when the queues were last looked at
 	queued       map[string]int       // agent id → messages waiting (not paused)
 	queueAt      map[string]time.Time // agent id → not offered a message before
@@ -357,7 +359,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case lapsedMsg:
 		m.lapsing = false
 	case followedMsg:
-		m.following = false
+		m.following, m.spend = false, msg.spend
 	case busMsg:
 		m.applyBus(msg)
 	case dispatchedMsg:

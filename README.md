@@ -884,6 +884,25 @@ mad bus handoffs                    # work agents gave each other, as chains
   is yours or nobody's appears (a permission, a pause or a question to you
   notify already), at most every 10 minutes. `"on"` in `notify` takes `"followup"` and
   `"report"` too.
+- Spend gate: what mad starts by itself is bounded per local day, by
+  default $20 of claude's cost and 150 turns (`"bus": {"budget": {"usd":
+  20, "turns": 150}}`; `0` turns a bound off). Only turns mad began count:
+  a digest with no message from you in it (agents mentioning each other,
+  nudges, relays). Your messages, the digests that carry one, and runs are
+  never counted or held. The cost of a turn is the agent's cost before and
+  after it (claude; codex and pi count turns only), settled when its turn
+  ends; you typing into an agent mid-turn blends in. Once spent, agents'
+  bus items wait in their queues while yours go on, nudges are not sent,
+  `bus_post` stores the message and wakes no one (with a warning that says
+  why), and `bus_handoff` is refused, so the agent finishes or asks `@you`.
+  You are told once a day (a `budget` notification, on by default; add it
+  to `notify.on` if you list events), the Board shows a card with Raise by
+  $5 today and Open for today, and the sidebar's footer says `budget $20
+  spent`. It reopens at local midnight, or when you act: `mad bus budget`
+  prints the day, `mad bus budget +5` adds $5 for today (and the same
+  share of the turns), `mad bus budget open` lifts it for today; what
+  waited then goes on, with the quiet limits above still in force. An
+  agent cannot change it.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.

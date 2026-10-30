@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,14 +49,28 @@ func (m *model) lapseCmd(now time.Time) tea.Cmd {
 	}
 }
 
-// followedMsg ends one round of follow-ups.
-type followedMsg struct{}
+// followedMsg ends one round of follow-ups, with how the day's budget
+// for mad's own work stands.
+type followedMsg struct{ spend bus.SpendState }
+
+// costs are the agents' costs so far, as the sidebar has them (claude's;
+// the others cost nothing here and only count turns).
+func (m *model) costs() map[string]float64 {
+	out := map[string]float64{}
+	for id, info := range m.transcripts {
+		if c := info.Tokens.Cost; c > 0 {
+			out[id] = c
+		}
+	}
+	return out
+}
 
 // Replaceable in tests.
 var (
 	checkFollowUps = bus.CheckFollowUps
 	deckWatched    = tmux.Watched
 	checkReport    = bus.CheckReport
+	settleSpend    = bus.SpendSettle
 )
 
 // followCmd raises work that stands without a word (nudges, and the
@@ -81,15 +96,24 @@ func (m *model) followCmd(now time.Time) tea.Cmd {
 	for _, p := range m.panes {
 		viewed = viewed || p.Viewed
 	}
-	st, clock := m.st.Clone(), m.cfg.Bus.Report
+	st, clock, costs := m.st.Clone(), m.cfg.Bus.Report, m.costs()
 	return func() tea.Msg {
 		if viewed || deckWatched() {
 			bus.PersonAt = now // here: nudging is not wasted on an empty room
 		}
+		_ = settleSpend(now, costs) // before the nudges: they ask whether the day's budget is spent
 		_ = checkFollowUps(now, statuses)
 		_ = checkReport(st, statuses, now, clock)
-		return followedMsg{}
+		return followedMsg{spend: bus.SpendNow(now)}
 	}
+}
+
+// spendFooter is the footer's line once the day's budget is spent.
+func spendFooter(s bus.SpendState) string {
+	if s.BudgetUSD > 0 && s.USD >= s.BudgetUSD {
+		return fmt.Sprintf("budget $%.0f spent · agents wait", s.USD)
+	}
+	return fmt.Sprintf("budget %d turns spent · agents wait", s.Turns)
 }
 
 // dispatchedMsg ends one try at sending agent id its next queued message.
@@ -99,6 +123,8 @@ type dispatchedMsg struct {
 	// wait, when set, is how long the bus item must still wait for the
 	// agent's minute; nothing was sent and it is not a failure.
 	wait time.Duration
+	// spent: the bus item was held by the day's budget (the footer says so).
+	spent bool
 }
 
 // dispatchCmd sends the first message queued for an agent whose turn is
@@ -124,19 +150,26 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 		default:
 			continue
 		}
-		id, st, kinds := a.ID, m.st.Clone(), m.kinds
+		id, st, kinds, costs := a.ID, m.st.Clone(), m.kinds, m.costs()
 		m.dispatching = true
 		m.epoch++ // a woken agent changes the panes
 		return func() tea.Msg {
 			// The bus wakes an agent once a minute at most (a handoff
 			// and its result excepted): until then its bus item stays
 			// and the other queued messages go first.
+			// With the day's budget for mad's own work spent, a bus item
+			// waits too, unless a person's message is in it.
 			var it queue.Item
 			var ok bool
 			var err error
-			if wait := bus.WaitFor(id, now); wait > 0 {
+			wait := bus.WaitFor(id, now)
+			spent := !bus.SpendOK(now) && !bus.PersonWaits(id)
+			if spent && wait == 0 {
+				wait = bus.SpendWait
+			}
+			if wait > 0 || spent {
 				if it, ok, err = queue.TakeWhere(id, func(x queue.Item) bool { return !x.Bus }); err == nil && !ok {
-					return dispatchedMsg{id: id, wait: wait}
+					return dispatchedMsg{id: id, wait: wait, spent: spent}
 				}
 			} else {
 				it, ok, err = queue.Take(id)
@@ -150,8 +183,9 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 			}
 			text := it.Text
 			var upto map[string]int
-			if it.Bus { // a pointer: say what waits on the bus now
-				t, u, ok, err := bus.Compose(id, time.Now())
+			yours := true // the person's own message; only mad's is counted
+			if it.Bus {   // a pointer: say what waits on the bus now
+				t, u, y, ok, err := bus.ComposeCounted(id, time.Now())
 				if err != nil {
 					_ = queue.PutBack(id, it, err.Error())
 					return dispatchedMsg{id: id, err: err}
@@ -160,7 +194,7 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 					_ = queue.Sent(id)
 					return dispatchedMsg{id: id}
 				}
-				text, upto = t, u
+				text, upto, yours = t, u, y
 			}
 			if err := sendQueued(st, ag, text, kinds); err != nil {
 				_ = queue.PutBack(id, it, err.Error())
@@ -169,6 +203,9 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 			_ = queue.Sent(id)
 			if it.Bus {
 				_ = bus.Delivered(id, upto)
+				if !yours {
+					_ = bus.SpendSent(id, costs[id], now)
+				}
 			}
 			return dispatchedMsg{id: id}
 		}
@@ -178,6 +215,9 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 
 func (m *model) applyDispatched(msg dispatchedMsg) tea.Cmd {
 	m.dispatching = false
+	if msg.spent {
+		m.spend.Closed = true
+	}
 	if msg.wait > 0 {
 		m.queueAt[msg.id] = time.Now().Add(msg.wait)
 		return nil

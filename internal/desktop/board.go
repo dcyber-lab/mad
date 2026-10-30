@@ -45,7 +45,45 @@ func boardCards(st *state.State, snap Snapshot) []bus.Card {
 			OwnerLabel: p.By, Age: now.Sub(p.At), Note: p.Description,
 		})
 	}
+	// So does the day's budget for mad's own work, once spent.
+	if sp := snap.Spend; sp.Closed {
+		age := time.Duration(0)
+		if !sp.ClosedAt.IsZero() {
+			age = now.Sub(sp.ClosedAt)
+		}
+		cards = append(cards, bus.Card{
+			Kind: "budget", Title: "Agents wait: today's budget is spent", Column: "waiting-you", Why: "budget",
+			OwnerLabel: "mad", Age: age, Note: "mad's own work today: " + sp.Line(),
+		})
+	}
 	return cards
+}
+
+// budgetSet answers POST /api/budget {op, usd}: the person raises today's
+// budget for mad's own work by usd dollars (op raise), or lifts it for the
+// day (op open).
+func (s *Server) budgetSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Op  string
+		USD float64
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	var err error
+	switch req.Op {
+	case "raise":
+		err = bus.SpendRaise(req.USD, time.Now())
+	case "open":
+		err = bus.SpendOpenToday(time.Now())
+	default:
+		err = errors.New("op is raise or open")
+	}
+	if err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	reply(w, bus.SpendNow(time.Now()))
 }
 
 // boardTask answers POST /api/board/task {id, status, note, owner}: the

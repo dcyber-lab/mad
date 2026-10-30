@@ -211,9 +211,17 @@ func wakes(id string) bool {
 // (see Delivered); upto says how far to move the cursors once it is sent.
 // ok is false when there is nothing to say.
 func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok bool, err error) {
+	text, upto, _, ok, err = ComposeCounted(agentID, at)
+	return
+}
+
+// ComposeCounted is Compose that also says whether the digest carries a
+// message from the person: then the turn is theirs, and the spend gate
+// neither holds nor counts it.
+func ComposeCounted(agentID string, at time.Time) (text string, upto map[string]int, yours, ok bool, err error) {
 	st, err := state.Load()
 	if err != nil {
-		return "", nil, false, err
+		return "", nil, false, false, err
 	}
 	var list []entry
 	var rest []also
@@ -223,8 +231,9 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 		return err
 	})
 	if err != nil || len(list) == 0 {
-		return "", nil, false, err
+		return "", nil, false, false, err
 	}
+	yours = fromPerson(list)
 
 	hs, _ := Handoffs()
 	ts, _ := Tasks()
@@ -292,7 +301,7 @@ func Compose(agentID string, at time.Time) (text string, upto map[string]int, ok
 		}
 		fmt.Fprintf(&b, "\nAlso new, not addressed to you: %s (bus_read to see them).\n", strings.Join(parts, ", "))
 	}
-	return b.String(), upto, true, nil
+	return b.String(), upto, yours, true, nil
 }
 
 // writeCard writes the body of a handoff's card: its task (text), context,

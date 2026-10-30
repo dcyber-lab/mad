@@ -17,7 +17,7 @@ func TestFromFile(t *testing.T) {
 		want Config
 	}{
 		{"no notify key", nil, Default()},
-		{"no on list", &Config{Command: "say hi"}, Config{On: []string{Done, Waiting, Bus, FollowUp, Report}, Command: "say hi"}},
+		{"no on list", &Config{Command: "say hi"}, Config{On: []string{Done, Waiting, Bus, FollowUp, Report, Budget}, Command: "say hi"}},
 		{"off", &Config{On: []string{}}, Config{On: []string{}}},
 		{"done only", &Config{On: []string{Done}}, Config{On: []string{Done}}},
 	}

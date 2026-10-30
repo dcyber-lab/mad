@@ -208,6 +208,10 @@ type postSpec struct {
 // person, and mad does not add to it.
 var errNudgePaused = errors.New("channel is paused: no nudge")
 
+// errNudgeSpent is why a nudge is not posted: the day's budget for mad's
+// own work is spent.
+var errNudgeSpent = errors.New("today's budget is spent: no nudge")
+
 // relay tells whether the post carries a handoff: its start, its result or
 // a lapse. These always wake their target and are not counted by the
 // guards, so a pause cannot swallow the end of a relay.
@@ -274,6 +278,12 @@ func post(sp postSpec) (PostResult, error) {
 		}
 	}
 
+	// With the day's budget spent, mad starts no turn by itself: a nudge
+	// is not posted, and an agent's words wake no one.
+	spent := !SpendOK(now())
+	if spent && sp.kind == "nudge" {
+		return PostResult{}, errNudgeSpent
+	}
 	res := PostResult{Woke: []string{}}
 	var woken []string
 	paused := false
@@ -364,6 +374,13 @@ func post(sp postSpec) (PostResult, error) {
 		}
 		if !c.Paused || sp.relay() {
 			woken = wakeList(st, *c, sp, mentions)
+		}
+		if spent && byAgent && sp.kind == "" && len(woken) > 0 {
+			woken = nil
+			if res.Warning != "" {
+				res.Warning += "; "
+			}
+			res.Warning += spendWarning
 		}
 		return saveChannels(cl)
 	})
