@@ -9,9 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 // columnNames are how the board's columns are headed.
@@ -25,18 +29,30 @@ var columnNames = map[string]string{
 }
 
 // board prints the task board grouped by column, a line a card: title,
-// owner, channel, age in its state and why it waits.
+// owner, channel, age in its state and why it waits. "Waiting for you"
+// is the inbox, as the window and the deck have it: what waits on the
+// person, whether or not a task carries it.
 func board(out io.Writer) error {
 	st, err := state.Load()
 	if err != nil {
 		return err
 	}
-	statuses, at := drive.Statuses(st, kinds()), time.Now()
+	trackers, at := drive.Trackers(st, kinds()), time.Now()
+	facts := attention.Facts{Spend: bus.SpendNow(at), Now: at}
+	for _, p := range st.Projects {
+		for _, a := range p.Agents {
+			facts.Agents = append(facts.Agents, attention.AgentOf(p, a, trackers[a.ID], "", status.ReadReport(a.ID), transcript.Info{}))
+		}
+	}
+	statuses := facts.Statuses()
 	cards, err := bus.Board(st, statuses, at)
 	if err != nil {
 		return err
 	}
-	if len(cards) == 0 {
+	facts.Cards = cards
+	facts.Skills, _ = skill.PendingList()
+	v := attention.NewDesk().Look(facts)
+	if len(v.Board) == 0 && v.Inbox.Needs == 0 {
 		fmt.Fprintln(out, "Nothing on the board.")
 		return nil
 	}
@@ -44,9 +60,15 @@ func board(out io.Writer) error {
 		fmt.Fprintln(out, r)
 		fmt.Fprintln(out)
 	}
-	for _, col := range bus.Columns {
+	if needs := v.Inbox.NeedsYou(); len(needs) > 0 {
+		fmt.Fprintln(out, columnNames[bus.ColWaitingYou])
+		for _, it := range needs {
+			fmt.Fprintln(out, "  "+itemLine(it, at))
+		}
+	}
+	for _, col := range bus.Columns[1:] {
 		first := true
-		for _, c := range cards {
+		for _, c := range v.Board {
 			if c.Column != col {
 				continue
 			}
@@ -58,6 +80,22 @@ func board(out io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// itemLine is one thing waiting for the person: who or what, its
+// context and text, its age, and the tasks it holds up.
+func itemLine(it attention.Item, at time.Time) string {
+	var parts []string
+	for _, s := range []string{it.Title, it.Context, it.Text} {
+		if s != "" {
+			parts = append(parts, s)
+		}
+	}
+	parts = append(parts, mcpAge(at.Sub(it.Since)))
+	for _, t := range it.Tasks {
+		parts = append(parts, t.ID)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // boardLine is one card: title, owner, #channel, age, why.

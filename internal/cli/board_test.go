@@ -141,7 +141,8 @@ func TestBoardCommand(t *testing.T) {
 	if strings.Join(heads, ",") != "Waiting for you,Review,Todo" {
 		t.Errorf("columns = %v:\n%s", heads, out)
 	}
-	for _, want := range []string{"pick a name · you", "is the schema ok? · architect · DM · now · asked", "review the api · builder · #dev · now", "later · builder"} {
+	// Waiting for you is the inbox, as the window and the deck list it.
+	for _, want := range []string{"pick a name · yours · now · t-", "architect · in your DM · is the schema ok? · now", "review the api · builder · #dev · now", "later · builder"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("board lacks %q:\n%s", want, out)
 		}
