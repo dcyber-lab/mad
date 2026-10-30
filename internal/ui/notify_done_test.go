@@ -77,3 +77,16 @@ func TestReadmeSaysWhichFinishedPushesCome(t *testing.T) {
 		t.Error("README's Notifications section lost the finished-push rule")
 	}
 }
+
+// A notification names the agent as the sidebar does: its own name, not
+// "claude#2" counted among its kind.
+func TestNotificationNamesTheAgent(t *testing.T) {
+	m, st := setup(t, "/code/api")
+	m.cfg.Notify = notify.Default()
+	st.Projects[0].Agents = []*state.Agent{{ID: "a1", Kind: "claude"}, {ID: "a2", Kind: "claude", Name: "reviewer"}}
+	m.rebuildRows()
+	e, ok := m.event(st.Projects[0], st.Projects[0].Agents[1], status.Idle, status.Waiting, &status.Hook{State: status.Waiting, Message: "allow Bash?"}, time.Now())
+	if !ok || e.Agent != "reviewer" {
+		t.Errorf("event agent = %q (ok %v), want reviewer", e.Agent, ok)
+	}
+}
