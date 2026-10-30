@@ -272,13 +272,18 @@ pi run in it headless, and the terminal deck can be open at the same time.
 Agents keep running when it closes.
 
 A tab is the agent's conversation: what you asked, its replies as
-formatted markdown as it writes them, and its tool calls, each opening to
-its input and output. What it asks you is a card there to answer: whether
-it may use a tool or run a command (Allow, Always allow, Deny, or what to
-do instead), a question with its options, a plan to approve. Its model is
-a menu under the message box (also `/model`), the send button stops it
+formatted markdown as it writes them, and its tool calls, each drawn as
+what it does: an edit as its diff, a file written with its lines, a
+command with its output, a file read with its line numbers, a todo list
+or plan as a list, a subagent with its task and report. What it asks you
+is a card there to answer: whether it may use a tool or run a command
+(the change shown as a diff; Allow, Always allow, Deny, or what to do
+instead), a question with its options, a plan to approve. Its model is a
+menu under the message box (also `/model`), the send button stops it
 while it works (as does `Esc`), and a message goes to it at once, waking
-it if it is asleep. Opening an agent starts nothing.
+it if it is asleep. `@` in a message offers the files of its directory;
+while its todo list has items left, the one it is on is pinned over the
+message box. Opening an agent starts nothing.
 
 An agent run in the window is in **window mode**: its pane runs `mad host`
 in place of its TUI, driving it through the protocol its own apps use

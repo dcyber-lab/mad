@@ -71,11 +71,13 @@ type Request struct {
 	Tool  string `json:"tool,omitempty"`
 	Title string `json:"title,omitempty"`
 	// Label and Input say what the call would do, as the conversation
-	// shows calls (discover.ToolText).
-	Label     string     `json:"label,omitempty"`
-	Input     string     `json:"input,omitempty"`
-	Questions []Question `json:"questions,omitempty"`
-	Plan      string     `json:"plan,omitempty"`
+	// shows calls (discover.ToolText); Args is its input, as the
+	// conversation's entries have it (discover.ToolArgs).
+	Label     string          `json:"label,omitempty"`
+	Input     string          `json:"input,omitempty"`
+	Args      json.RawMessage `json:"args,omitempty"`
+	Questions []Question      `json:"questions,omitempty"`
+	Plan      string          `json:"plan,omitempty"`
 	// Always: it can be allowed from now on, not just this once.
 	Always bool `json:"always,omitempty"`
 }

@@ -35,6 +35,8 @@ type Server struct {
 	looks *looks
 	cmds  *commandCache
 	hist  historyCache
+	// fileList: what @ offers in a message.
+	fileList fileCache
 }
 
 // New makes a server with a fresh random token.
@@ -75,6 +77,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/terminal", s.auth(http.HandlerFunc(s.terminal)))
 	mux.Handle("GET /api/history", s.auth(http.HandlerFunc(s.history)))
 	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
+	mux.Handle("GET /api/files", s.auth(http.HandlerFunc(s.files)))
 	return headers(mux)
 }
 

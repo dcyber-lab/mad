@@ -281,6 +281,7 @@ function drawQueue(fresh) {
     $("#qitems").dataset.key = "";
     $("#qpause").hidden = true;
     drawNewWho();
+    drawTodo();
     drawSend();
     return;
   }
@@ -315,7 +316,40 @@ function drawQueue(fresh) {
   pause.title = q.paused ? "the queue is held: let it go" : "hold the queued messages";
   pause.classList.toggle("on", !!q.paused);
   drawWho(a);
+  drawTodo();
   drawSend();
+}
+
+// drawTodo pins the agent's todo list over the message box while some of
+// it is left to do: what it is on, how far along, the whole list to
+// unfold.
+function drawTodo() {
+  const box = $("#qtodo");
+  const o = !nc.open && opened.get(current);
+  const items = (o && o.todo && o.todo.view.todos) || [];
+  const left = items.filter((t) => t.status !== "completed");
+  if (!left.length) {
+    box.hidden = true;
+    box.dataset.key = "";
+    return;
+  }
+  const key = JSON.stringify([current, items, !!o.todoOpen]);
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  const now = items.find((t) => t.status === "in_progress") || left[0];
+  const head = el("button", "thead");
+  head.type = "button";
+  head.title = o.todoOpen ? "fold the list" : "the whole list";
+  head.append(icon("circledot"), el("span", "now", now.text || ""),
+    el("span", "count", `${items.length - left.length}/${items.length}`), icon(o.todoOpen ? "down" : "right", "chev"));
+  head.onclick = () => {
+    o.todoOpen = !o.todoOpen;
+    drawTodo();
+    fitInput();
+  };
+  box.replaceChildren(head);
+  if (o.todoOpen) box.append(todoView(items).body);
+  box.hidden = false;
 }
 
 // drawWho says, under the message box, which agent it goes to and what
@@ -415,6 +449,12 @@ function fitInput() {
   t.style.height = `${Math.min(220, t.scrollHeight)}px`;
   t.style.overflowY = t.scrollHeight > 220 ? "auto" : "hidden";
 }
+// The message box grown or shrunk (more lines, the todo list unfolded):
+// a conversation read at its end stays there.
+new ResizeObserver(() => {
+  const o = opened.get(current);
+  if (o && o.stick !== false) o.chat.scrollTop = o.chat.scrollHeight;
+}).observe($("#queue"));
 $("#qinput").addEventListener("input", () => {
   fitInput();
   drawMenu();
@@ -442,7 +482,7 @@ $("#qinput").addEventListener("blur", () => closeMenu());
 // The agent's commands (/api/commands): its TUI's own and what it found
 // where it runs, skills and the like. Asked for again after a minute.
 const commandLists = new Map(); // id → { at, list, pending }
-const menu = { items: [], sel: 0, query: null };
+const menu = { items: [], sel: 0, query: null, files: false };
 
 function commandsOf(id) {
   const c = commandLists.get(id);
@@ -487,6 +527,8 @@ function rank(c, q) {
 async function drawMenu() {
   const t = $("#qinput");
   const id = current;
+  const at = (id || nc.open) && mentionWord(t);
+  if (at) return drawFiles(at);
   const w = id && commandWord(t);
   if (!w) return closeMenu();
   const list = await commandsOf(id);
@@ -498,9 +540,10 @@ async function drawMenu() {
     .map((c) => [rank(c, w.query), c]).filter(([r]) => r >= 0)
     .sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).map(([, c]) => c);
   if (!items.length) return closeMenu();
-  if (menu.query !== w.query) menu.sel = 0;
+  if (menu.query !== w.query || menu.files) menu.sel = 0;
   menu.items = items;
   menu.query = w.query;
+  menu.files = false;
   menu.sel = Math.min(menu.sel, items.length - 1);
   const box = $("#qmenu");
   box.replaceChildren(...items.map((c, i) => {
@@ -530,6 +573,66 @@ function closeMenu() {
   $("#qmenu").hidden = true;
   menu.items = [];
   menu.query = null;
+  menu.files = false;
+}
+
+// ---- files, offered as @ starts a word (/api/files) ----
+
+// mentionWord is the @word being typed, the cursor at its end.
+function mentionWord(t) {
+  if (t.selectionStart !== t.selectionEnd) return null;
+  const m = /(^|\s)@([^\s@]*)$/.exec(t.value.slice(0, t.selectionEnd));
+  if (!m) return null;
+  return { query: m[2], start: t.selectionEnd - m[2].length - 1, end: t.selectionEnd };
+}
+
+let filesSeq = 0;
+
+async function drawFiles(w) {
+  const n = ++filesSeq;
+  const where = nc.open ? { project: nc.project || "" } : { id: current };
+  let list = [];
+  try {
+    const r = await fetch(`/api/files?${new URLSearchParams({ token, ...where, q: w.query })}`);
+    if (r.ok) list = await r.json();
+  } catch (_) { /* offered nothing */ }
+  const now = mentionWord($("#qinput"));
+  if (n !== filesSeq || !now || now.query !== w.query) return; // typed on
+  if (!list.length) return closeMenu();
+  if (menu.query !== w.query || !menu.files) menu.sel = 0;
+  menu.items = list;
+  menu.query = w.query;
+  menu.files = true;
+  menu.sel = Math.min(menu.sel, list.length - 1);
+  const box = $("#qmenu");
+  box.replaceChildren(...list.map((f, i) => {
+    const li = el("li", "file");
+    const cut = f.path.replace(/\/$/, "").lastIndexOf("/") + 1;
+    li.append(icon(f.dir ? "folder" : "file", "fi"), el("span", "n", f.path.slice(cut)), el("span", "d", f.path.slice(0, cut)));
+    li.title = f.path;
+    li.onmousedown = (e) => {
+      e.preventDefault();
+      menu.sel = i;
+      pick(false);
+    };
+    return li;
+  }));
+  box.hidden = false;
+  markSel();
+}
+
+// pickFile puts file f in place of the @word being typed: a directory
+// to go on into, a file and a space after it.
+function pickFile(f) {
+  const t = $("#qinput");
+  const w = mentionWord(t);
+  if (!f || !w) return;
+  const put = `@${f.path}${f.dir ? "" : " "}`;
+  t.value = t.value.slice(0, w.start) + put + t.value.slice(w.end);
+  const at = w.start + put.length;
+  t.setSelectionRange(at, at);
+  fitInput();
+  if (f.dir) drawMenu();
 }
 
 // menuKey moves through the menu, and picks: Tab completes the command,
@@ -557,6 +660,11 @@ function menuKey(e) {
 // pick puts the chosen command in place of the one being typed, and with
 // run sends the message.
 function pick(run) {
+  if (menu.files) {
+    const f = menu.items[menu.sel];
+    closeMenu();
+    return pickFile(f);
+  }
   const c = menu.items[menu.sel];
   const t = $("#qinput");
   const w = commandWord(t);
@@ -643,7 +751,19 @@ function open(id) {
   // here, what it asks answered there.
   const wait = el("div", "wait");
   wait.hidden = true;
-  chat.append(log, wait);
+  // Scrolled up: a way back to what is being written.
+  const down = el("button", "tobottom");
+  down.type = "button";
+  down.title = "to the latest";
+  down.append(icon("down"));
+  down.onclick = () => chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+  chat.append(log, wait, down);
+  chat.addEventListener("scroll", () => {
+    const o = opened.get(id);
+    if (!o) return;
+    o.stick = nearEnd(o);
+    down.classList.toggle("on", !o.stick);
+  }, { passive: true });
   $("#terms").append(chat);
 
   const a = agents.get(id);
@@ -796,6 +916,9 @@ async function loadChat(id, o) {
     if (c.reset) {
       o.log.replaceChildren(o.live, o.asks);
       o.calls.clear();
+      o.lastCall = null;
+      o.todo = null;
+      if (id === current) drawTodo();
       o.parts.clear();
       o.partIDs.clear();
       o.entries = 0;
@@ -846,7 +969,7 @@ function addEntry(o, e) {
     }
     case "text": {
       const m = el("div", "msg from-agent");
-      m.append(md(e.text));
+      m.append(md(e.text), copyButton(e.text));
       put(o, m);
       break;
     }
@@ -854,48 +977,48 @@ function addEntry(o, e) {
       put(o, el("div", "cmd", e.label));
       break;
     case "tool": {
-      const d = callNode(e.tool, e.label);
-      if (e.input) d.append(el("pre", "input", e.input));
+      const d = callCard(e.tool, parseArgs(e.args), ctxOf(o), e.label, e.input);
       put(o, d);
       if (e.id) o.calls.set(e.id, d);
+      o.lastCall = d;
+      // The last todo list is the one to read; the ones before it fold.
+      if (d.view.todos) {
+        if (o.todo) o.todo.open = false;
+        o.todo = d;
+        if (o.id === current) drawTodo();
+      }
       break;
     }
     case "result": {
       o.results++;
-      const out = el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)");
       const call = e.id && o.calls.get(e.id);
-      if (call) {
-        call.classList.add(e.error ? "failed" : "done");
-        call.append(out);
-      } else {
-        put(o, out);
-      }
+      if (call) callResult(call, e.text, e.error);
+      else put(o, el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)"));
       break;
     }
   }
 }
 
-function callNode(tool, label) {
-  const d = el("details", "call");
-  const s = el("summary");
-  const st = el("span", "st");
-  st.append(el("span", "ring"), el("span", "spin"), icon("check", "ok"), icon("x", "bad"));
-  s.append(icon(toolIcon(tool), "ti"), el("span", "tool", tool), el("span", "label", label || ""), st);
-  d.append(s);
-  return d;
+// copyButton copies an agent's message as it wrote it (markdown).
+function copyButton(text) {
+  const b = el("button", "mcopy");
+  b.type = "button";
+  b.title = "copy";
+  b.append(icon("copy"));
+  b.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      b.replaceChildren(icon("check"));
+      setTimeout(() => b.replaceChildren(icon("copy")), 1500);
+    } catch (_) { /* no clipboard here */ }
+  };
+  return b;
 }
 
-// toolIcon picks an icon for a tool by its name, across the kinds' tools.
-function toolIcon(tool) {
-  const t = (tool || "").toLowerCase();
-  if (/bash|shell|exec|command|terminal/.test(t)) return "terminal";
-  if (/web|fetch|browser|url/.test(t)) return "web";
-  if (/edit|write|patch|notebook/.test(t)) return "edit";
-  if (/^(read|view|cat)/.test(t)) return "file";
-  if (/grep|glob|search|^find|^ls$|list/.test(t)) return "search";
-  if (/task|agent/.test(t)) return "agent";
-  if (/todo|plan/.test(t)) return "todo";
-  return "tool";
+// ctxOf is what the tool views of agent o's calls go by: its project's
+// directory, to show paths from.
+function ctxOf(o) {
+  return { dir: agents.get(o.id)?.project?.path || "" };
 }
 
 // ---- the message being written, as it is written (/api/live) ----
@@ -943,6 +1066,7 @@ function drawLive(o) {
   box.replaceChildren();
   const m = o.msg;
   const fresh = m && m.id && !(m.done && Date.now() - o.msgAt > 5000);
+  const hostCodex = windowed(agents.get(o.id)) && agents.get(o.id)?.kind === "codex";
   let shown = false;
   if (fresh) {
     const had = o.parts.get(m.id) || 0;
@@ -962,8 +1086,17 @@ function drawLive(o) {
         box.append(n);
         shown = true;
       } else if (b.kind === "tool") {
-        const d = callNode(b.tool, hint(b.text));
-        d.classList.add("pending");
+        // codex run here: its host's items are not the transcript's, so a
+        // call done, or one the transcript has begun, is left to it.
+        if (hostCodex && (b.done || o.lastCall && !o.lastCall.matches(".done, .failed"))) continue;
+        // Its input is JSON as it comes (claude, pi), a script (codex's
+        // exec), or what the host made of the call (codex: its command).
+        const text = b.text || "";
+        const json = text.trimStart().startsWith("{");
+        const ctx = ctxOf(o);
+        const args = json ? (b.done ? parseArgs(text) : {}) : b.tool === "exec" ? { input: text } : {};
+        const d = callCard(b.tool, args, ctx, json ? hint(text) : shortPath(firstLine(text), ctx.dir));
+        d.classList.add(b.done ? "done" : "pending");
         box.append(d);
         shown = true;
       }
@@ -1069,8 +1202,10 @@ function hostState(id, o, s) {
   o.hs = s;
   const m = s.message;
   if (m && m.id && (!o.msg || o.msg.id !== m.id || o.msg.version !== m.version || o.msg.done !== m.done)) {
+    // One ended before it was first seen here is the transcript's.
+    const old = !o.msg && m.done && s.status !== "running";
     o.msg = { ...m, blocks: m.blocks || [] };
-    o.msgAt = Date.now();
+    o.msgAt = old ? 0 : Date.now();
   }
   try {
     drawLive(o);
@@ -1228,9 +1363,13 @@ function askCard(o, r) {
     acts.append(button("Approve", "primary", () => reply({ allow: true })),
       instead("Or say what to change, and press Enter", (msg) => reply({ allow: false, message: msg })));
   } else {
-    head.append(icon(toolIcon(r.tool), "ai"), el("span", "t", r.title || `Allow ${r.tool}?`));
-    if (r.label && !r.title) head.append(el("span", "al", r.label));
-    if (r.input) body.append(el("pre", "input", r.input));
+    // Drawn as the call will be: a change as its diff.
+    const v = r.args ? toolView(r.tool, parseArgs(r.args), ctxOf(o)) : r.tool === "apply_patch" && r.input ? patchView(r.input, ctxOf(o)) : null;
+    head.append(icon(v?.icon || toolIcon(r.tool), "ai"), el("span", "t", r.title || `Allow ${r.tool}?`));
+    const what = v?.sub || (!r.title && r.label);
+    if (what) head.append(el("span", "al", what));
+    if (v?.body) body.append(v.body);
+    else if (r.input) body.append(el("pre", "input", r.input));
     acts.append(button("Allow", "primary", () => reply({ allow: true })));
     if (r.always) acts.append(button("Always allow", "", () => reply({ allow: true, always: true })));
     acts.append(button("Deny", "", () => reply({ allow: false })),

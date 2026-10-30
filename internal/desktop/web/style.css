@@ -268,7 +268,24 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; background:
   border-radius: 20px; background: var(--raise);
 }
 .msg.from-user:first-child { margin-top: 0; }
-.msg.from-agent { margin: 6px 0; }
+.msg.from-agent { margin: 6px 0; position: relative; }
+.mcopy {
+  position: absolute; left: -34px; top: 2px; width: 26px; height: 26px; display: grid; place-items: center;
+  padding: 0; border: none; border-radius: 8px; background: none; color: var(--text-3); cursor: pointer;
+  opacity: 0; transition: opacity 0.12s;
+}
+.mcopy .i { width: 14px; height: 14px; }
+.msg.from-agent:hover .mcopy { opacity: 1; }
+.mcopy:hover { background: var(--raise); color: var(--text); }
+.tobottom {
+  position: sticky; bottom: 14px; left: 50%; display: none; width: 34px; height: 34px; margin: -34px auto 0;
+  place-items: center; padding: 0; border-radius: 50%; border: 1px solid var(--border-2);
+  background: var(--surface); color: var(--text-2); box-shadow: var(--shadow); cursor: pointer;
+}
+.tobottom.on { display: grid; }
+.wait:not([hidden]) ~ .tobottom { bottom: 66px; }
+.tobottom .i { width: 17px; height: 17px; }
+.tobottom:hover { color: var(--text); }
 .cmd {
   align-self: flex-end; margin: 22px 0 8px; padding: 4px 12px; border-radius: 999px;
   font: 12.5px var(--mono); color: var(--text-2); background: var(--raise);
@@ -345,6 +362,43 @@ pre.input, pre.output {
 }
 pre.output { color: var(--text-2); }
 pre.output.err { color: var(--stopped); }
+pre.input, pre.output, .diff { tab-size: 4; }
+pre.output.lines { white-space: pre; overflow-wrap: normal; padding-left: 0; }
+pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px; text-align: right; font-style: normal; color: var(--text-3); user-select: none; }
+.call .cbody.prompt { font-size: 13.5px; color: var(--text-2); }
+
+/* A call drawn as itself (tools.js): a diff, a todo list, a document. */
+.call .label.mono { font: 12px var(--mono); }
+.call .stat { flex: none; display: flex; gap: 6px; font: 12px var(--mono); }
+.call .cbody { padding: 10px 16px; max-height: 420px; overflow: auto; font-size: 14px; line-height: 1.65; }
+.call .cbody.result { border-top: 1px solid var(--border); color: var(--text-2); }
+.call > .diff:last-child, .call > .cbody:last-child, .call > .todos:last-child { border-radius: 0 0 11px 11px; }
+.diff { max-height: 420px; overflow: auto; font: 12px/1.6 var(--mono); background: var(--code-bg); }
+.diff .dl { display: block; padding: 0 14px 0 0; white-space: pre; min-width: max-content; }
+.diff .dl::before { content: attr(data-s); display: inline-block; width: 26px; text-align: center; color: var(--text-3); user-select: none; }
+.diff .dl.a::before { color: var(--running); }
+.diff .dl.d::before { color: var(--stopped); }
+.diff .dl.h { padding-left: 26px; }
+.diff .dl .x { border-radius: 3px; }
+.diff .dl.a .x { background: color-mix(in srgb, var(--running) 30%, transparent); }
+.diff .dl.d .x { background: color-mix(in srgb, var(--stopped) 28%, transparent); }
+.diff .fh {
+  position: sticky; left: 0; display: flex; gap: 10px; padding: 5px 14px; font: 12px var(--mono);
+  color: var(--text-2); background: var(--raise); border-top: 1px solid var(--border);
+}
+.diff .fh:first-child { border-top: none; }
+.todos { list-style: none; margin: 0; padding: 10px 14px; display: grid; gap: 5px; }
+.todos li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.todos li .i { width: 15px; height: 15px; margin-top: 2.5px; flex: none; color: var(--text-3); }
+.todos li.done { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 60%, transparent); }
+.todos li.done .i { color: var(--running); }
+.todos li.now { font-weight: 600; }
+.todos li.now .i { color: var(--accent); }
+.todonote { padding: 10px 14px 0; font-size: 13px; color: var(--text-2); }
+.quests { display: grid; gap: 8px; }
+.quests .qq { font-weight: 550; }
+.quests .qo { font-size: 13px; }
+.ask .abody .diff, .ask .abody .cbody, .ask .abody .todos { border: 1px solid var(--border); border-radius: 10px; max-height: 320px; }
 
 /* What is being written: the live parts, last in the log. */
 .live { display: contents; }
@@ -470,6 +524,20 @@ pre.output.err { color: var(--stopped); }
 #qitems .x { width: 24px; height: 24px; border-radius: 7px; }
 #qitems .x .i { width: 14px; height: 14px; }
 #qitems .x:hover { color: var(--stopped); }
+#qtodo { margin: -2px 0 6px; border-bottom: 1px solid var(--border); }
+#qtodo .thead {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 4px 7px 0; border: none; background: none;
+  font: 13px var(--font); color: var(--text-2); cursor: pointer; text-align: left;
+}
+#qtodo .thead > .i { width: 14px; height: 14px; flex: none; color: var(--accent); }
+#qtodo .thead .chev { color: var(--text-3); }
+#qtodo .now { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 550; color: var(--text); }
+#qtodo .count { flex: none; font: 12px var(--mono); color: var(--text-3); }
+#qtodo .todos { padding: 2px 0 8px; max-height: 180px; overflow-y: auto; }
+#qmenu li.file { align-items: center; gap: 8px; }
+#qmenu li.file .fi { width: 14px; height: 14px; flex: none; color: var(--text-3); }
+#qmenu li.file .n { font-weight: 500; }
+#qmenu li.file .d { font: 12px var(--mono); }
 #qerr { margin: 2px 0 6px; font-size: 12.5px; color: var(--waiting); }
 #qerr:empty { display: none; }
 #qmenu {

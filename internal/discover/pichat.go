@@ -111,6 +111,7 @@ func (piChat) Chat(line []byte) []Entry {
 			case "toolCall":
 				label := strings.TrimPrefix(strings.TrimPrefix(toolLabel(b.Name, b.Arguments), b.Name), " · ")
 				e.Kind, e.Tool, e.Label, e.Input, e.ID = EntryTool, b.Name, label, shown(toolInput(b.Arguments)), b.ID
+				e.Args = toolArgs(b.Arguments)
 			}
 			out = append(out, e)
 		}
