@@ -18,23 +18,26 @@ self.addEventListener("push", (e) => {
     renotify: !!m.tag,
     icon: "icon-192.png",
     badge: "icon-192.png",
-    data: { agent: m.agent || "" },
+    data: { agent: m.agent || "", channel: m.channel || "" },
   }));
 });
 
-// A click opens mad on the agent: the page open, else a new one.
+// A click opens mad on the agent, or the bus channel, it is about: in
+// the page open, else a new one.
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const agent = (e.notification.data && e.notification.data.agent) || "";
+  const d = e.notification.data || {};
+  const agent = d.agent || "", channel = d.channel || "";
   e.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const c of open) {
       if ("focus" in c) {
         await c.focus();
-        if (agent) c.postMessage({ open: agent });
+        if (agent || channel) c.postMessage({ open: agent, channel });
         return;
       }
     }
-    await self.clients.openWindow(agent ? `./?agent=${encodeURIComponent(agent)}` : "./");
+    const q = channel ? `?channel=${encodeURIComponent(channel)}` : agent ? `?agent=${encodeURIComponent(agent)}` : "";
+    await self.clients.openWindow("./" + q);
   })());
 });

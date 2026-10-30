@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/push"
@@ -17,6 +18,7 @@ import (
 const (
 	Done    = "done"    // was running, now idle
 	Waiting = "waiting" // needs input: permission prompt, question
+	Bus     = "bus"     // a message on the bus for the person (package bus)
 )
 
 type Event struct {
@@ -25,12 +27,15 @@ type Event struct {
 	Agent   string // display name, e.g. claude#2
 	AgentID string // the agent's id, for the phone to open it
 	Message string // the agent's own words, when its hook gave any
+	Channel string // a bus message's channel, for the phone to open it
 }
 
 func (e Event) Title() string { return "mad · " + e.Project }
 
 func (e Event) Body() string {
 	switch {
+	case e.Kind == Bus:
+		return e.Agent + ": " + shorten(e.Message, 200)
 	case e.Kind == Waiting && e.Message != "":
 		return e.Agent + ": " + e.Message
 	case e.Kind == Waiting:
@@ -53,8 +58,17 @@ type Config struct {
 	Command string   `json:"command,omitempty"`
 }
 
-// Default notifies about both events with the desktop notification.
-func Default() Config { return Config{On: []string{Done, Waiting}} }
+// Default notifies about every event with the desktop notification.
+func Default() Config { return Config{On: []string{Done, Waiting, Bus}} }
+
+// shorten cuts s to n runes at most, on one line.
+func shorten(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
+}
 
 // FromFile completes the "notify" object as config.json gave it: without
 // one it is Default, without an "on" list it notifies about both events.
@@ -89,7 +103,7 @@ var Send = func(c Config, e Event) error {
 	defer cancel()
 	pushed := make(chan error, 1)
 	go func() {
-		pushed <- push.Send(ctx, push.Message{Title: e.Title(), Body: e.Body(), Agent: e.AgentID, Tag: e.AgentID + "/" + e.Kind}, "")
+		pushed <- push.Send(ctx, push.Message{Title: e.Title(), Body: e.Body(), Agent: e.AgentID, Channel: e.Channel, Tag: e.AgentID + e.Channel + "/" + e.Kind}, "")
 	}()
 	var err error
 	if cmd := command(ctx, c, e, runtime.GOOS, exec.LookPath); cmd != nil {

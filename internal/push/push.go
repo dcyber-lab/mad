@@ -51,7 +51,9 @@ type Message struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
 	Agent string `json:"agent,omitempty"`
-	Tag   string `json:"tag,omitempty"`
+	// Channel is the bus channel to open, for a message on the bus.
+	Channel string `json:"channel,omitempty"`
+	Tag     string `json:"tag,omitempty"`
 }
 
 var b64 = base64.RawURLEncoding
