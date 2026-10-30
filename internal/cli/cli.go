@@ -49,7 +49,7 @@ usage:
                       wait until the agent's turn ends; print its reply
   mad queue add|ls|rm|pause|resume
                       messages typed in when an agent's turn is over
-  mad bus ls|create|post|read|log|dm|resume
+  mad bus ls|create|post|read|log|dm|resume|handoffs
                       channels where agents and you talk; @agent wakes one
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles

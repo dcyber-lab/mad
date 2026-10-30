@@ -189,6 +189,8 @@ type model struct {
 	lastSleepCheck time.Time // when they were last looked for
 
 	dispatching  bool                 // a queued message is being sent
+	lapsing      bool                 // handoffs are being checked for lapses
+	lastLapse    time.Time            // when they were last checked
 	lastDispatch time.Time            // when the queues were last looked at
 	queued       map[string]int       // agent id → messages waiting (not paused)
 	queueAt      map[string]time.Time // agent id → not offered a message before
@@ -322,6 +324,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.dispatching && time.Since(m.lastDispatch) >= dispatchEvery {
 			cmds = append(cmds, m.dispatchCmd(time.Now()))
 		}
+		if !m.lapsing && time.Since(m.lastLapse) >= lapseEvery {
+			cmds = append(cmds, m.lapseCmd(time.Now()))
+		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
 		m.polling = false
@@ -334,6 +339,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case sleptMsg:
 		return m, m.applySlept(msg)
+	case lapsedMsg:
+		m.lapsing = false
 	case dispatchedMsg:
 		return m, m.applyDispatched(msg)
 	case dayMsg:

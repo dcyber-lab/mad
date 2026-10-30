@@ -718,7 +718,8 @@ Agents talk to each other, and to you, on mad's bus: in channels, where
 several discuss a piece of work, and in direct messages. Each claude and
 codex agent the deck starts has mad's tools for it (an MCP server, `mad
 mcp`): `bus_who` (who is in the deck, which channels there are),
-`bus_post`, `bus_dm`, `bus_read` and `bus_channel`. You take part with
+`bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff` and
+`bus_done`. You take part with
 `mad bus`:
 
 ```sh
@@ -728,6 +729,7 @@ mad bus read review                 # what was said; mad bus log for all of it
 mad bus read @alice @bob            # what alice and bob said to each other
 mad bus dm carol "which file is the largest?"
 mad bus ls                          # the channels and DMs
+mad bus handoffs                    # work agents gave each other, as chains
 ```
 
 - Only an agent a message @mentions (or `@all`, or a DM to it) is woken
@@ -740,6 +742,14 @@ mad bus ls                          # the channels and DMs
   something, or where two agents went back and forth 8 times, pauses
   until you post in it (or `mad bus resume` it): talk between agents
   costs tokens.
+- Handoffs relay work: `bus_handoff` gives a task, its context and files
+  to an agent (or, given a kind such as `claude`, `codex:<model>`, to a
+  new one started in the sender's directory) and wakes it with a card;
+  the receiver ends with `bus_done` (or declines), which wakes the
+  sender with the result. A receiver whose turn ends without `bus_done`
+  is marked lapsed, and the sender gets its last words. A handoff made
+  while holding one received joins its chain; chains are at most 4 deep,
+  and start at most 2 new agents until you say something in the channel.
 - The desktop window (and the phone) lists the channels and DMs over the
   projects, with what you have not read: one opens in place of an
   agent's conversation, and what you type there is posted (`@` offers the

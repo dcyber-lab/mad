@@ -14,6 +14,9 @@ import (
 const (
 	// dispatchEvery: how often the queues are looked at.
 	dispatchEvery = time.Second
+	// lapseEvery: how often handoffs are checked for a receiver that
+	// ended its turn without finishing.
+	lapseEvery = 10 * time.Second
 	// queueRetry: after an agent refused a queued message (it was busy,
 	// asking you something, or had a draft of yours), how long until it
 	// is offered again.
@@ -27,6 +30,19 @@ const (
 
 // sendQueued is drive.Send, replaceable in tests.
 var sendQueued = drive.Send
+
+// lapsedMsg ends one check of the handoffs for lapses.
+type lapsedMsg struct{}
+
+// lapseCmd marks the handoffs lapsed whose receiver's turn ended without
+// bus_done (the bus wakes the agent that gave the work). Errors are ignored.
+func (m *model) lapseCmd(now time.Time) tea.Cmd {
+	m.lapsing, m.lastLapse = true, now
+	return func() tea.Msg {
+		_ = bus.CheckLapses(now)
+		return lapsedMsg{}
+	}
+}
 
 // dispatchedMsg ends one try at sending agent id its next queued message.
 type dispatchedMsg struct {

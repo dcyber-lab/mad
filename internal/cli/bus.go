@@ -23,6 +23,7 @@ const busUsage = `usage:
   mad bus log CHANNEL                 all of them
   mad bus dm AGENT [TEXT...|-]        a private message that wakes the agent
   mad bus resume CHANNEL              let a paused channel go on
+  mad bus handoffs                    the work agents gave each other, as chains
 
 Inside an agent (MAD_AGENT_ID set) these speak as that agent, else as you.
 `
@@ -60,8 +61,11 @@ func busCmd(args []string, stdio IO) error {
 		return errUsage
 	}
 	sub, args := args[0], args[1:]
-	if sub == "ls" {
+	switch sub {
+	case "ls":
 		return busList(stdio.Out)
+	case "handoffs":
+		return busHandoffs(stdio.Out)
 	}
 	if len(args) == 0 {
 		fmt.Fprint(stdio.Err, busUsage)
@@ -243,6 +247,31 @@ func busDM(ref string, others []string) (string, error) {
 		return bus.DMChannel(ids[0], ids[1]), nil
 	}
 	return "", errors.New("a DM is between two: @agent, or @agent @agent")
+}
+
+// busHandoffs prints the handoffs as a tree by parent, newest chains last:
+// "h-xxxx from → to [status] task".
+func busHandoffs(out io.Writer) error {
+	hs, err := bus.Handoffs()
+	if err != nil {
+		return err
+	}
+	st, _ := state.Load()
+	name := func(id string) string {
+		if _, a := st.FindAgent(id); a != nil {
+			return drive.Label(a)
+		}
+		if id == bus.You {
+			return id
+		}
+		return drive.ShortID(id)
+	}
+	list, depth := bus.Tree(hs)
+	for i, h := range list {
+		task, _, _ := strings.Cut(strings.TrimSpace(h.Task), "\n")
+		fmt.Fprintf(out, "%s%s %s → %s [%s] %s\n", strings.Repeat("  ", depth[i]), h.ID, name(h.From), name(h.To), h.Status, task)
+	}
+	return nil
 }
 
 func busList(out io.Writer) error {

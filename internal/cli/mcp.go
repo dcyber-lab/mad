@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +32,8 @@ func mcpCmd(args []string, stdio IO) error {
 
 const mcpInstructions = `mad's bus: talk with the other agents in this deck, and with the person, in channels and direct messages.
 Messages for you arrive as a turn that starts with [mad bus]. Only agents you @mention are interrupted; the rest read when they look.
-Post results, questions and decisions; never acknowledgments or progress chatter. If you ask something, end your turn: the answer arrives as a new message.`
+Post results, questions and decisions; never acknowledgments or progress chatter. If you ask something, end your turn: the answer arrives as a new message.
+To give work to another agent use bus_handoff, then end your turn; when you receive a handoff, finish it with bus_done.`
 
 func mcpTools(id string) []mcp.Tool {
 	obj := func(required []string, props string) json.RawMessage {
@@ -129,7 +132,109 @@ func mcpTools(id string) []mcp.Tool {
 				return mcpChannel(id, a.Action, a.Channel, a.Topic, a.Members)
 			},
 		},
+		{
+			Name:        "bus_handoff",
+			Description: "Hand a piece of work to another agent, or to a new one: give an agent's label, or a kind (claude, claude:<model>, codex, codex:<model>) to start one in your directory. The receiver does not share your conversation: put everything it needs in task, context and files. Then end your turn; you are woken with its result when it finishes (bus_done), declines, or ends its turn without finishing.",
+			InputSchema: obj([]string{"to", "task"}, `"to":{"type":"string","description":"an agent's label or id, or a kind to start: claude, claude:sonnet, codex, codex:gpt-5"},"task":{"type":"string","description":"what to do and what done looks like"},"context":{"type":"string","description":"what it must know: decisions, constraints, what you tried"},"files":{"type":"array","items":{"type":"string"},"description":"paths it should read or change"},"channel":{"type":"string","description":"post it in this channel instead of a DM"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct {
+					To, Task, Context, Channel string
+					Files                      []string
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpHandoff(id, a.To, a.Task, a.Context, a.Files, a.Channel)
+			},
+		},
+		{
+			Name:        "bus_done",
+			Description: "Finish a handoff you received: say what you did (what changed, where, what you checked), or why you decline (status \"declined\"). Call it once, as your last bus action, then end your turn; the agent that handed it over is woken with your result.",
+			InputSchema: obj([]string{"handoff", "result"}, `"handoff":{"type":"string","description":"the handoff id, h-xxxxxxxx"},"result":{"type":"string"},"status":{"type":"string","enum":["done","declined"],"description":"done by default"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct{ Handoff, Result, Status string }
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				from, _, err := mcpMe(id)
+				if err != nil {
+					return "", err
+				}
+				h, res, err := bus.Done(from, strings.TrimSpace(a.Handoff), a.Result, a.Status)
+				if err != nil {
+					return "", err
+				}
+				return mcpJSON(map[string]any{"handoff": h.ID, "status": h.Status, "woke": res.Woke})
+			},
+		},
 	}
+}
+
+// spawnAgent is drive.Spawn, replaceable in tests.
+var spawnAgent = drive.Spawn
+
+// mcpHandoff hands work from agent id to the agent to names, or to a new
+// agent when to is a kind (name or name:model). A chain may start at most
+// bus.MaxSpawns agents without a word from a person in the channel.
+func mcpHandoff(id, to, task, context string, files []string, channel string) (string, error) {
+	from, st, err := mcpMe(id)
+	if err != nil {
+		return "", err
+	}
+	channel = strings.TrimPrefix(strings.TrimSpace(channel), "#")
+	var target *state.Agent
+	spawned := false
+	if target, err = mcpAgent(st, to); err != nil {
+		kind, model, _ := strings.Cut(strings.TrimSpace(to), ":")
+		known := false
+		for _, k := range kinds() {
+			known = known || k.Name == kind
+		}
+		if !known {
+			return "", err
+		}
+		// Only these have the bus, to finish it with.
+		if kind != "claude" && kind != "codex" {
+			return "", fmt.Errorf("a new agent for a handoff is claude or codex (with :model), not %s", kind)
+		}
+		depth, spawns, cerr := bus.ChainState(id, "", channel)
+		switch {
+		case cerr != nil:
+			return "", cerr
+		case depth >= bus.MaxDepth:
+			return "", fmt.Errorf("a chain of handoffs is at most %d deep; do the work yourself or finish yours with bus_done", bus.MaxDepth)
+		case spawns >= bus.MaxSpawns:
+			return "", fmt.Errorf("this chain has started %d agents already without a word from the person; hand off to one that exists (bus_who), or ask the person", spawns)
+		}
+		p, me := st.FindAgent(id)
+		suffix := make([]byte, 2)
+		_, _ = rand.Read(suffix)
+		target, err = spawnAgent(drive.Spec{Kind: kind, Model: model, Dir: p.Dir(me), Name: kind + "-" + hex.EncodeToString(suffix)}, kinds())
+		if target == nil {
+			return "", err
+		}
+		spawned = true
+		if err != nil { // it came up asking something: the person must answer
+			return "", fmt.Errorf("started %s but it is not ready: %v", drive.Label(target), err)
+		}
+	}
+	h, res, err := bus.HandOff(from, target.ID, task, context, files, channel, "")
+	if err != nil {
+		if spawned {
+			err = fmt.Errorf("%v (%s was started and waits)", err, drive.Label(target))
+		}
+		return "", err
+	}
+	if spawned {
+		_ = bus.MarkSpawned(h.ID)
+	}
+	return mcpJSON(map[string]any{
+		"handoff": h.ID,
+		"to":      map[string]any{"id": target.ID, "label": drive.Label(target), "spawned": spawned},
+		"status":  h.Status,
+		"woke":    res.Woke,
+		"note":    "End your turn now; you are woken when it finishes.",
+	})
 }
 
 // mcpMe is the agent the server serves, as the bus names an author.

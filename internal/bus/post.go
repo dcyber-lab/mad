@@ -121,6 +121,12 @@ type postSpec struct {
 	from    From
 	text    string
 	replyTo int
+	// kind is the message's kind when it is not text (handoff, done or
+	// system); then mentions are the agents it wakes, as given, and ref
+	// the handoff it belongs to.
+	kind     string
+	mentions []string
+	ref      *HandoffRef
 }
 
 // Post adds text from from to channel, and wakes the agents it mentions.
@@ -152,16 +158,18 @@ func post(sp postSpec) (PostResult, error) {
 		return PostResult{}, errors.New("nothing to post")
 	}
 	byAgent := sp.from.ID != You
-	if byAgent && (utf8.RuneCountInString(text) < minPost || ackRe.MatchString(text)) {
+	if byAgent && sp.kind == "" && (utf8.RuneCountInString(text) < minPost || ackRe.MatchString(text)) {
 		return PostResult{}, errAck
 	}
 	st, err := state.Load()
 	if err != nil {
 		return PostResult{}, err
 	}
-	mentions, err := mentionsIn(st, text)
-	if err != nil {
-		return PostResult{}, err
+	mentions := sp.mentions
+	if sp.kind == "" {
+		if mentions, err = mentionsIn(st, text); err != nil {
+			return PostResult{}, err
+		}
 	}
 	if sp.wake != "" && sp.wake != You {
 		a := findIn(st, sp.wake)
@@ -205,9 +213,14 @@ func post(sp postSpec) (PostResult, error) {
 			}
 		}
 
-		m := Message{From: sp.from, Kind: "text", Text: text, Mentions: mentions, ReplyTo: sp.replyTo}
+		kind := "text"
+		if sp.kind != "" {
+			kind = sp.kind
+		}
+		m := Message{From: sp.from, Kind: kind, Text: text, Mentions: mentions, ReplyTo: sp.replyTo, Handoff: sp.ref}
 		pause := ""
 		switch {
+		case kind == "system": // mad's own line counts for nothing
 		case !byAgent:
 			c.Paused = false
 		case c.Paused:
