@@ -153,13 +153,22 @@ func TestDispatchSpendCounted(t *testing.T) {
 	}
 	old := sendQueued
 	t.Cleanup(func() { sendQueued = old })
-	sendQueued = func(*state.State, *state.Agent, string, []agent.Kind) error { return nil }
+	markedAtSend := false
+	sendQueued = func(_ *state.State, a *state.Agent, _ string, _ []agent.Kind) error {
+		m.madNext.mu.Lock()
+		_, markedAtSend = m.madNext.at[a.ID]
+		m.madNext.mu.Unlock()
+		return nil
+	}
 	cmd := m.dispatchCmd(time.Now())
 	if cmd == nil {
 		t.Fatal("nothing offered")
 	}
 	if msg := cmd().(dispatchedMsg); msg.err != nil || msg.spent {
 		t.Fatalf("dispatched: %+v", msg)
+	}
+	if !markedAtSend {
+		t.Error("the mark came after the send: a fast start would miss it")
 	}
 	if !m.madNext.take(to, time.Now()) {
 		t.Error("a delivery mad started did not mark the agent's next turn as mad's")
