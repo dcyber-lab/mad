@@ -898,6 +898,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #chanhead { padding: 8px 14px; }
   #chanhead .cwho { display: none; }
   #chanhead .cwhat b { display: none; }
+  #chanhead .chmore { display: none; }
   #chanhead.bare { display: none; }
   .msg { font-size: 15.5px; }
   .msg.from-user { max-width: 88%; margin-top: 20px; }
