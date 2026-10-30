@@ -410,8 +410,16 @@ func busList(out io.Writer) error {
 	for _, c := range chans {
 		var names []string
 		members := c.Members
-		if len(members) == 0 { // a DM whose agent was forgotten
-			members = bus.DMSides(c.ID)
+		if strings.HasPrefix(c.ID, "dm.") {
+			// The id keeps both sides when the members don't, and a DM
+			// with you is named for the agent alone, as the deck and the
+			// window name it.
+			members = nil
+			for _, id := range bus.DMSides(c.ID) {
+				if id != bus.You {
+					members = append(members, id)
+				}
+			}
 		}
 		for _, id := range members {
 			if _, a := st.FindAgent(id); a != nil {

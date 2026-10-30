@@ -14,11 +14,13 @@ var (
 	cAccent = lipgloss.Color("75")  // brand, stage, keys
 	cText   = lipgloss.Color("252") // names
 	cDim    = lipgloss.Color("243") // secondary text
-	cFaint  = lipgloss.Color("239") // rules, counts
-	// The tones of status.Looks: mid-strength codes that read on a dark
-	// and on a light terminal alike.
-	cWorking  = lipgloss.Color("34")  // green
-	cNeeds    = lipgloss.Color("172") // amber
+	cFaint  = lipgloss.Color("241") // rules, counts, the quiet words
+	// The tones of status.Looks: codes with at least 3:1 contrast on both a
+	// black and a white terminal (luminance between 0.10 and 0.30), checked
+	// by TestToneContrast. Amber is the dull end of that range: a brighter
+	// one is lost on white.
+	cWorking  = lipgloss.Color("28")  // green
+	cNeeds    = lipgloss.Color("136") // amber
 	cFinished = lipgloss.Color("33")  // blue
 	cError    = lipgloss.Color("160") // red: only for what broke
 	cSelOn    = lipgloss.Color("24")  // cursor bar, sidebar focused
@@ -38,7 +40,7 @@ var (
 	stFinished = lipgloss.NewStyle().Foreground(cFinished)
 	stError    = lipgloss.NewStyle().Foreground(cError)
 	stStage    = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	stFlash    = lipgloss.NewStyle().Foreground(cError)
+	stInfo     = lipgloss.NewStyle().Foreground(cDim).Bold(true)
 )
 
 // toneStyle is the style a status.Tone is drawn in.

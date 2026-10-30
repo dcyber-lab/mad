@@ -152,6 +152,7 @@ type model struct {
 	confirmYes func() tea.Cmd
 
 	flash      string
+	flashErr   bool // the flash tells of a failure
 	flashUntil time.Time
 
 	pk        picker
@@ -304,7 +305,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case widthSettledMsg:
 		if msg.width == m.width && msg.width != deck.SidebarWidth() {
 			if err := deck.SaveSidebarWidth(msg.width); err != nil {
-				m.setFlash(err.Error())
+				m.setFlashErr(err.Error())
 			}
 		}
 	case tickMsg:
@@ -409,7 +410,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case doneMsg:
 		if msg.err != nil {
-			m.setFlash(msg.err.Error())
+			m.setFlashErr(msg.err.Error())
 		}
 		if msg.failedID != "" {
 			m.st.RemoveAgent(msg.failedID)

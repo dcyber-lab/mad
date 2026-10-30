@@ -273,7 +273,7 @@ func (m *model) keyWorktree(k tea.KeyMsg) tea.Cmd {
 	case "enter":
 		name := strings.TrimSpace(m.input.Value())
 		if err := validBranch(name); err != nil {
-			m.setFlash(err.Error())
+			m.setFlashErr(err.Error())
 			return nil
 		}
 		m.wtBranch = name

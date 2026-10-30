@@ -23,3 +23,16 @@ func TestAfterTitle(t *testing.T) {
 		}
 	}
 }
+
+// An asker's own trailing ellipsis is not a cut: the body is what follows
+// the line, not a stray "…".
+func TestAfterTitleOwnEllipsis(t *testing.T) {
+	for text, want := range map[string]string{
+		"@you should I wait…\nA: yes\nB: no": "A: yes\nB: no",
+		"@you which one…":                    "",
+	} {
+		if got := afterTitle(text, firstLine(text, titleRunes)); got != want {
+			t.Errorf("afterTitle(%q) = %q, want %q", text, got, want)
+		}
+	}
+}

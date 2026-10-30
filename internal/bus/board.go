@@ -359,10 +359,14 @@ func awaited(t Task, byID map[string]Task) []string {
 // does not already say: the body must not repeat the title.
 func afterTitle(text, title string) string {
 	text = strings.TrimSpace(text)
-	if stem, cut := strings.CutSuffix(title, "…"); cut {
-		return strings.TrimSpace(strings.TrimPrefix(text, stem))
+	first, rest, _ := strings.Cut(text, "\n")
+	// Only a title unlike the real first line was cut by firstLine; an
+	// asker's own trailing "…" is part of the line.
+	if strings.TrimSpace(first) != title {
+		if stem, cut := strings.CutSuffix(title, "…"); cut {
+			return strings.TrimSpace(strings.TrimPrefix(text, stem))
+		}
 	}
-	_, rest, _ := strings.Cut(text, "\n")
 	return strings.TrimSpace(rest)
 }
 
