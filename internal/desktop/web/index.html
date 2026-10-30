@@ -19,11 +19,18 @@
   </aside>
   <div id="resizer" title="drag to resize"></div>
   <main>
-    <div id="tabs"></div>
+    <div id="bar" hidden>
+      <div id="tabs"></div>
+      <div id="views" hidden>
+        <button type="button" data-view="chat" title="its conversation, from its transcript (Alt-t)">Chat</button>
+        <button type="button" data-view="term" title="its own TUI, attached to its pane (Alt-t)">Terminal</button>
+      </div>
+    </div>
     <div id="terms">
       <div id="empty">
         <p>Pick an agent on the left.</p>
-        <p class="muted">Its real TUI opens here, attached to the same tmux pane the terminal deck shows.
+        <p class="muted">Its conversation opens here, read from its transcript; <kbd>Alt</kbd>+<kbd>t</kbd>
+          switches to its own TUI, attached to the same tmux pane the terminal deck shows.
           <kbd>Alt</kbd>+<kbd>n</kbd> jumps to the next agent that needs you.</p>
       </div>
     </div>
@@ -39,6 +46,8 @@
 </div>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/addon-fit.js"></script>
+<script src="vendor/marked.js"></script>
+<script src="vendor/purify.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

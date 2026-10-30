@@ -67,9 +67,9 @@ var builtin = []Kind{
 		Name:         "codex",
 		Icon:         ">_",
 		Color:        "252",
-		Start:        "codex {codex_notify}",
-		Resume:       "codex resume {codex_notify} {sid}",
-		ResumeLatest: "codex resume {codex_notify} --last",
+		Start:        "codex {codex_notify} {codex_live}",
+		Resume:       "codex resume {codex_notify} {codex_live} {sid}",
+		ResumeLatest: "codex resume {codex_notify} {codex_live} --last",
 		// The last two: the folder trust and update prompts at its start.
 		Waiting: []string{`Would you like to`, `Allow command`, `Approve`, `Trust this folder`, `enter continue`},
 	},
@@ -78,7 +78,7 @@ var builtin = []Kind{
 		Name:  "pi",
 		Icon:  "π",
 		Color: "111",
-		Start: "pi --session-id {id}",
+		Start: "pi {pi_live} --session-id {id}",
 	},
 	{
 		Name:  "shell",
@@ -225,8 +225,16 @@ func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	if a.Fork && k.Fork != "" && k.Resume != "" && tpl == k.Resume {
 		tpl += " " + k.Fork
 	}
-	pairs := []string{"{id}", a.ID, "{sid}", sid}
+	vars := map[string]string{"{codex_live}": "", "{pi_live}": ""} // filled per agent (package live)
 	for name, text := range l.Vars {
+		vars[name] = text
+	}
+	pairs := []string{"{id}", a.ID, "{sid}", sid}
+	for name, text := range vars {
+		if text == "" {
+			// Nothing in its place, nor the space before it.
+			pairs = append(pairs, " "+name, "")
+		}
 		pairs = append(pairs, name, text)
 	}
 	cmd := strings.NewReplacer(pairs...).Replace(tpl)

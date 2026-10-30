@@ -86,7 +86,7 @@ func TestCodexCommand(t *testing.T) {
 	}
 	// A notify mad can't run in the user's stead: codex's wiring fills in
 	// nothing.
-	if got := codex.Command(a, false, Launch{Vars: map[string]string{"{codex_notify}": ""}}); got != "codex " {
+	if got := codex.Command(a, false, Launch{Vars: map[string]string{"{codex_notify}": ""}}); got != "codex" {
 		t.Errorf("start without mad's notify = %q", got)
 	}
 	// codex names its own threads: whether one was written doesn't matter.
@@ -96,6 +96,12 @@ func TestCodexCommand(t *testing.T) {
 	a.SessionID = "thread-9"
 	if got := codex.Command(a, true, none); !strings.HasPrefix(got, "codex resume ") || !strings.HasSuffix(got, " thread-9") {
 		t.Errorf("resume by id = %q", got)
+	}
+	// Followed live (package live): its calls go through mad stream.
+	live := none
+	live.Vars = map[string]string{"{codex_notify}": "-c 'notify=[mad]'", "{codex_live}": `-c 'openai_base_url="http://h/o/id-2"'`}
+	if got := codex.Command(a, true, live); got != `codex resume -c 'notify=[mad]' -c 'openai_base_url="http://h/o/id-2"' thread-9` {
+		t.Errorf("resume followed live = %q", got)
 	}
 }
 

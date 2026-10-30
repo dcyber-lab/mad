@@ -77,8 +77,17 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 code, kbd { font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
 
 main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#tabs { display: flex; background: var(--panel); border-bottom: 1px solid var(--line); min-height: 32px; overflow-x: auto; }
-#tabs:empty { display: none; }
+#bar { display: flex; background: var(--panel); border-bottom: 1px solid var(--line); min-height: 32px; }
+#bar[hidden], #views[hidden] { display: none; }
+#tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; }
+#views { display: flex; align-items: center; gap: 2px; padding: 0 8px; flex: none; }
+#views button {
+  background: none; border: 1px solid transparent; border-radius: 4px; color: var(--muted);
+  font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer;
+}
+#views button:hover:not(:disabled) { color: var(--text); }
+#views button.on { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+#views button:disabled { opacity: .35; cursor: default; }
 .tab {
   display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; height: 32px;
   border-right: 1px solid var(--line); color: var(--muted); cursor: pointer; white-space: nowrap; max-width: 240px;
@@ -98,6 +107,66 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
   background: var(--panel-2); border: 1px solid var(--line); padding: 12px 16px; border-radius: 6px; max-width: 70%;
 }
+.chat { position: absolute; inset: 0; overflow-y: auto; display: none; background: var(--bg); }
+.chat.on { display: block; }
+.chat .log { max-width: 860px; margin: 0 auto; padding: 18px 24px 28px; display: flex; flex-direction: column; gap: 6px; }
+.chat .note { color: var(--muted); text-align: center; font-size: 12px; padding: 8px; }
+.chat .wait {
+  position: sticky; bottom: 12px; margin: 0 auto; width: fit-content; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--waiting); color: var(--waiting);
+  padding: 6px 12px; border-radius: 6px; font-size: 12px;
+}
+.chat .wait[hidden] { display: none; }
+.msg { line-height: 1.6; font-size: 14px; overflow-wrap: anywhere; }
+.msg.from-user {
+  align-self: flex-end; max-width: 80%; margin: 14px 0 4px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px;
+}
+.msg.from-agent { margin: 4px 0; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md pre, .md table, .md blockquote { margin: 6px 0; }
+.md h1, .md h2, .md h3, .md h4 { margin: 14px 0 6px; line-height: 1.35; }
+.md h1 { font-size: 18px; } .md h2 { font-size: 16px; } .md h3, .md h4 { font-size: 14px; }
+.md ul, .md ol { padding-left: 22px; }
+.md a { color: var(--accent); }
+.md code { font-size: 12.5px; }
+.md pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.5; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.md th { background: var(--panel); }
+.md blockquote { border-left: 3px solid var(--line); margin-left: 0; padding-left: 10px; color: var(--muted); }
+.md hr { border: none; border-top: 1px solid var(--line); }
+.cmd { align-self: flex-end; font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent); margin-top: 10px; }
+.call { font-size: 12px; color: var(--muted); }
+.call summary { display: flex; gap: 8px; align-items: baseline; cursor: pointer; list-style: none; padding: 1px 0; }
+.call summary::-webkit-details-marker { display: none; }
+.call summary:hover { color: var(--text); }
+.call .st { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; border: 1px solid var(--running); }
+.call.done .st { background: var(--running); }
+.call.failed .st { background: var(--stopped); border-color: var(--stopped); }
+.call .tool { color: var(--text); font-weight: 600; flex: none; }
+.call .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+pre.input, pre.output {
+  margin: 4px 0 6px 15px; padding: 6px 10px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.45;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px; color: var(--text);
+}
+pre.output { color: var(--muted); }
+pre.output.err { color: var(--stopped); }
+.log > pre.output { margin-left: 0; }
+.live { display: contents; }
+.msg.streaming .md > :last-child:not(ul):not(ol)::after,
+.msg.streaming .md > :is(ul, ol):last-child > li:last-child::after {
+  content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 2px; vertical-align: -2px;
+  background: var(--accent); animation: pulse 1s ease-in-out infinite;
+}
+.thinking { color: var(--muted); font-size: 12px; font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.thinking .what { font-style: normal; color: var(--text); margin-right: 6px; }
+.call.pending .st, .working .st { background: var(--running); animation: pulse 1.2s ease-in-out infinite; }
+.working { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.working .st { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 #empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--text); }
 #empty .muted { color: var(--muted); max-width: 440px; text-align: center; line-height: 1.6; }
 

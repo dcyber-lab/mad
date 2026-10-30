@@ -25,11 +25,16 @@ type Config struct {
 	// stage before mad ends its process to free the memory it holds;
 	// opening it resumes the session. An hour unless set; 0 never.
 	SleepAfter time.Duration
+	// Stream is whether what agents write is followed as they write it,
+	// for the desktop window (package live): claude's and codex's API
+	// calls go through mad stream, pi loads mad's extension. On unless
+	// turned off; agents started since follow it.
+	Stream bool
 }
 
 // DefaultConfig is what an empty or missing config.json means.
 func DefaultConfig() Config {
-	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour}
+	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour, Stream: true}
 }
 
 // LoadConfig reads config.json. A malformed file gives DefaultConfig and
@@ -40,6 +45,7 @@ func LoadConfig() (Config, error) {
 		Diff   *DiffConfig    `json:"diff"`
 		Finish []FinishAction `json:"finish"`
 		Quota  *bool          `json:"quota"`
+		Stream *bool          `json:"stream"`
 		Sleep  *struct {
 			After string `json:"after"`
 		} `json:"sleep"`
@@ -62,6 +68,9 @@ func LoadConfig() (Config, error) {
 	c.Finish = file.Finish
 	if file.Quota != nil {
 		c.Quota = *file.Quota
+	}
+	if file.Stream != nil {
+		c.Stream = *file.Stream
 	}
 	return c, nil
 }

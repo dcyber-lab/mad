@@ -38,10 +38,11 @@ with dependencies pointing downwards in this list:
 | Package              | Responsibility                                                   |
 | -------------------- | ---------------------------------------------------------------- |
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
-| `internal/desktop`   | `mad desktop`: the deck in a window (web sidebar, xterm.js terminals) |
+| `internal/desktop`   | `mad desktop`: the deck in a window (web sidebar, conversations, xterm.js terminals) |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
 | `internal/queue`     | Messages waiting for an agent's turn to end (the sidebar sends them) |
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux config              |
+| `internal/live`      | `mad stream`: what agents write as they write it (an API proxy for claude and codex, an extension for pi) |
 | `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/discover`  | Per-agent providers: history, sessions, transcript lines, processes outside the deck |
 | `internal/status`    | Hook reports and running/waiting/idle inference                  |

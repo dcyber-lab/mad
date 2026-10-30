@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -46,11 +48,17 @@ func TestTokenRequired(t *testing.T) {
 		{"/api/deck?token=" + s.Token, http.StatusOK},
 		{"/", http.StatusOK}, // the page itself holds nothing secret
 		{"/vendor/xterm.js", http.StatusOK},
+		{"/vendor/marked.js", http.StatusOK},
+		{"/vendor/purify.js", http.StatusOK},
+		{"/api/chat?id=x", http.StatusForbidden},
 	} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", tc.url, nil))
 		if w.Code != tc.want {
 			t.Errorf("GET %s = %d, want %d", tc.url, w.Code, tc.want)
+		}
+		if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
+			t.Errorf("GET %s: Content-Security-Policy %q", tc.url, csp)
 		}
 	}
 }
@@ -310,6 +318,92 @@ func TestWindowCommand(t *testing.T) {
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	if cmd := WindowCommand("u", "p"); !strings.HasSuffix(cmd.Path, "open") && !strings.HasSuffix(cmd.Args[0], "open") {
 		t.Errorf("fallback = %v", cmd.Args)
+	}
+}
+
+// The conversation is read as the transcript grows: each look sends what
+// was written after the last one, whole lines only.
+func TestChatAPI(t *testing.T) {
+	dir := isolate(t)
+	const sid = "c0ffee00-0000-4000-8000-000000000001"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: dir, Agents: []*state.Agent{
+		{ID: "a1", Kind: "claude", SessionID: sid}, {ID: "sh", Kind: "shell"},
+	}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	tdir := filepath.Join(dir, ".claude", "projects", regexp.MustCompile(`[^A-Za-z0-9]`).ReplaceAllString(dir, "-"))
+	if err := os.MkdirAll(tdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(tdir, sid+".jsonl")
+	write := func(s string) {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		_, _ = f.WriteString(s)
+	}
+	s := New(agent.Builtin())
+	h := s.Handler()
+	look := func(id, file string, from int64) Chat {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", fmt.Sprintf("/api/chat?id=%s&file=%s&from=%d&token=%s", id, file, from, s.Token), nil))
+		var c Chat
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &c) != nil {
+			t.Fatalf("GET /api/chat: %d %s", w.Code, w.Body)
+		}
+		return c
+	}
+	texts := func(c Chat) string {
+		var out []string
+		for _, e := range c.Entries {
+			out = append(out, e.Kind+":"+e.Text)
+		}
+		return strings.Join(out, " ")
+	}
+
+	if c := look("a1", "", 0); c.File != "" || len(c.Entries) != 0 {
+		t.Errorf("before anything was written: %+v", c)
+	}
+	write(`{"type":"user","message":{"content":"run the tests"}}` + "\n" + `{"type":"assistant","message":{"content":[{"type":"text","text":"On it."}]}}` + "\n")
+	first := look("a1", "", 0)
+	if !first.Reset || first.File == "" || texts(first) != "user:run the tests text:On it." {
+		t.Fatalf("first look: %+v", first)
+	}
+	if c := look("a1", first.File, first.Offset); c.Reset || len(c.Entries) != 0 || c.Offset != first.Offset {
+		t.Errorf("nothing new: %+v", c)
+	}
+	// A line half written waits for its end.
+	write(`{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}`)
+	if c := look("a1", first.File, first.Offset); len(c.Entries) != 0 || c.Offset != first.Offset {
+		t.Errorf("a partial line was read: %+v", c)
+	}
+	write("\n")
+	next := look("a1", first.File, first.Offset)
+	if next.Reset || texts(next) != "text:Done." {
+		t.Errorf("next look: %+v", next)
+	}
+	// Another session's file, or an offset past the end, starts over.
+	if c := look("a1", "other", next.Offset); !c.Reset || len(c.Entries) != 3 {
+		t.Errorf("another file: %+v", c)
+	}
+	if c := look("a1", first.File, 1<<40); !c.Reset || len(c.Entries) != 3 {
+		t.Errorf("past the end: %+v", c)
+	}
+	// A kind without a transcript has no conversation.
+	if c := look("sh", "", 0); len(c.Entries) != 0 {
+		t.Errorf("shell: %+v", c)
+	}
+
+	p := newPoller(agent.Builtin(), newTerms())
+	p.Poll(time.Now())
+	for _, a := range p.Snapshot().Projects[0].Agents {
+		if a.Chat != (a.ID == "a1") {
+			t.Errorf("%s: chat = %v", a.ID, a.Chat)
+		}
 	}
 }
 

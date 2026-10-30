@@ -34,7 +34,8 @@ const (
 	IDSidebar     = "_sidebar"
 	IDPlaceholder = "_placeholder"
 	IDKeepalive   = "_keep"
-	IDTask        = "_task" // a one-off pane on stage: the diff viewer (v), a finish command (f)
+	IDStream      = "_stream" // mad stream: what agents write, as they write it
+	IDTask        = "_task"   // a one-off pane on stage: the diff viewer (v), a finish command (f)
 )
 
 func envOr(k, def string) string {
