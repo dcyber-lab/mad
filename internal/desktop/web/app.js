@@ -85,7 +85,7 @@ const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.
 
 function drawSidebar() {
   const nav = $("#projects");
-  nav.replaceChildren();
+  nav.replaceChildren(channelsGroup());
   agents.clear();
   if (!deck.projects.length) {
     const p = el("div", "none");
@@ -277,12 +277,23 @@ function drawQueue(fresh) {
   const box = $("#queue");
   const a = current && agents.get(current);
   // Nothing to say here to a shell: it is the terminal deck's.
-  const off = !nc.open && (!a || !a.chat);
+  const off = !nc.open && !cv.open && (!a || !a.chat);
   if (box.hidden !== off) {
     box.hidden = off;
     fitInput();
   }
   $("#attach").hidden = !takesImages();
+  if (cv.open) {
+    // A channel: what is typed is posted, as you.
+    $("#qinput").placeholder = "Message " + chanTitle(cv.open) + ", @ to wake an agent";
+    $("#qitems").replaceChildren();
+    $("#qitems").dataset.key = "";
+    $("#qpause").hidden = true;
+    drawChanWho();
+    drawTodo();
+    drawSend();
+    return;
+  }
   if (nc.open) {
     $("#qinput").placeholder = "Ask anything, or / for commands";
     $("#qitems").replaceChildren();
@@ -413,6 +424,10 @@ async function submit() {
   const t = $("#qinput");
   const text = t.value;
   const id = current;
+  if (cv.open) {
+    if (text.trim()) postChannel(text);
+    return;
+  }
   if (nc.open) {
     if (text.trim() || pendingImgs.length) newSubmit(text);
     return;
@@ -535,8 +550,8 @@ function rank(c, q) {
 async function drawMenu() {
   const t = $("#qinput");
   const id = current;
-  const at = (id || nc.open) && mentionWord(t);
-  if (at) return drawFiles(at);
+  const at = (id || nc.open || cv.open) && mentionWord(t);
+  if (at) return cv.open ? drawAgentMenu(at) : drawFiles(at);
   const w = id && commandWord(t);
   if (!w) return closeMenu();
   const list = await commandsOf(id);
@@ -722,6 +737,7 @@ async function refresh() {
     drawQuota(deck.quota);
     drawSidebar();
     openWanted();
+    if (cv.open) drawChanHead();
     const o = opened.get(current);
     if (o && agents.get(current)?.chat) {
       loadChat(current, o);
@@ -802,6 +818,7 @@ function show(id) {
   }
   current = id;
   closeNew();
+  closeChannel();
   closeMenu();
   closePopup();
   commandsOf(id);
@@ -912,7 +929,8 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    t.replaceChildren(el("span", "pt", nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.className = "";
     return;
   }
   const what = el("span", "pw");
@@ -1412,7 +1430,7 @@ function drawSend() {
   b.disabled = !stop && !typed;
   // How what is typed goes: run here, at once.
   const h = $("#hint");
-  const key = nc.open ? "now" : windowed(agents.get(current)) ? (o && o.hs && o.hs.status === "running" ? "stop" : "now") : "queue";
+  const key = nc.open || cv.open ? "now" : windowed(agents.get(current)) ? (o && o.hs && o.hs.status === "running" ? "stop" : "now") : "queue";
   if (h.dataset.key !== key) {
     h.dataset.key = key;
     h.replaceChildren({ queue: "Sent when its turn is over", now: "Sent now", stop: "Esc stops it" }[key] + " · ",

@@ -740,6 +740,12 @@ mad bus ls                          # the channels and DMs
   something, or where two agents went back and forth 8 times, pauses
   until you post in it (or `mad bus resume` it): talk between agents
   costs tokens.
+- The desktop window (and the phone) lists the channels and DMs over the
+  projects, with what you have not read: one opens in place of an
+  agent's conversation, and what you type there is posted (`@` offers the
+  agents). An agent's menu has Message on the bus, a DM; + by Channels
+  makes a channel with the agents you pick. A DM between two agents is
+  theirs to read.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
