@@ -195,7 +195,7 @@ func (m *model) screensCmd(byPane map[string]string) tea.Cmd {
 // applyPoll takes in a full poll: panes, stage, every screen and hook.
 func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 	if msg.err != nil {
-		m.setFlash(msg.err.Error())
+		m.setFlashErr(msg.err.Error())
 		return nil
 	}
 	m.reloadConfig()

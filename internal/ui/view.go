@@ -521,7 +521,7 @@ func (m *model) renderFooter() string {
 			}
 		}
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
-			title = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
+			title = " " + m.flashStyle().Render(textutil.Truncate(m.flash, m.width-2))
 		}
 		return rule(m.width) + "\n" +
 			layout(m.width, nil, []seg{{stHeader, title}}, []seg{{stFaint, "esc "}}) + "\n" +
@@ -546,7 +546,7 @@ func (m *model) renderFooter() string {
 		return m.menu(m.finTitle, names, m.finCursor)
 	default:
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
-			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
+			l1 = " " + m.flashStyle().Render(textutil.Truncate(m.flash, m.width-2))
 		} else if m.spend.Closed {
 			l1 = " " + stNeeds.Render(spendFooter(m.spend))
 		} else {

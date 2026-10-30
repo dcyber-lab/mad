@@ -124,7 +124,7 @@ func (m *model) runDetailSegs(run *state.Run) []seg {
 	case madrun.Running:
 		return []seg{indent, {stDim, fmt.Sprintf("%s · round %d", step, pr.Round)}}
 	case madrun.Waiting:
-		return []seg{indent, {stFlash, pr.Waiting}}
+		return []seg{indent, {stNeeds, pr.Waiting}}
 	case madrun.Done:
 		took := ""
 		if !pr.Started.IsZero() && !pr.Ended.IsZero() {
@@ -132,7 +132,7 @@ func (m *model) runDetailSegs(run *state.Run) []seg {
 		}
 		return []seg{indent, {stFaint, fmt.Sprintf("approved%s%s · f to finish", madrun.RoundsOfChanges(pr.Round-1), strings.TrimSuffix(took, "0s"))}}
 	case madrun.Failed:
-		return []seg{indent, {stFlash, pr.Waiting}}
+		return []seg{indent, {stError, pr.Waiting}}
 	}
 	return []seg{indent, {stFaint, "its branch and files stay"}}
 }
@@ -232,7 +232,7 @@ func (m *model) keyNote(k tea.KeyMsg) tea.Cmd {
 	case "enter":
 		if text := strings.TrimSpace(m.input.Value()); text != "" {
 			if err := madrun.AddNote(m.noteRun, "", text); err != nil {
-				m.setFlash(err.Error())
+				m.setFlashErr(err.Error())
 			} else {
 				m.setFlash("noted for run " + m.noteRun.Name)
 			}
@@ -248,7 +248,7 @@ func (m *model) keyNote(k tea.KeyMsg) tea.Cmd {
 
 func (m *model) runCommand(run *state.Run, cmd string) tea.Cmd {
 	if err := madrun.Command(run, cmd); err != nil {
-		m.setFlash(err.Error())
+		m.setFlashErr(err.Error())
 		return nil
 	}
 	word := map[string]string{madrun.Continue: "continue", madrun.Cancel: "cancel"}[cmd]

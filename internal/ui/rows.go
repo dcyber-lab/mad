@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/transcript"
 )
@@ -196,19 +198,33 @@ func (m *model) save() {
 		return
 	}
 	if err := m.st.SaveMerged(m.base, m.stMod); err != nil {
-		m.setFlash(err.Error())
+		m.setFlashErr(err.Error())
 	}
 	m.stMod = state.ModTime()
 	m.base = m.st.Clone()
 }
 
 func (m *model) setFlash(s string) {
-	m.flash, m.flashUntil = s, time.Now().Add(5*time.Second)
+	m.flash, m.flashErr, m.flashUntil = s, false, time.Now().Add(5*time.Second)
 }
 
 // configError shows a broken config file longer than other flashes: the
 // file and line lead, so they survive truncation to the sidebar's width.
 func (m *model) configError(err error) {
 	msg := strings.ReplaceAll(err.Error(), "\n", "; ") // errors.Join puts one per line
-	m.flash, m.flashUntil = msg, time.Now().Add(20*time.Second)
+	m.flash, m.flashErr, m.flashUntil = msg, true, time.Now().Add(20*time.Second)
+}
+
+// setFlashErr flashes a failure, the only flash drawn in the error red.
+func (m *model) setFlashErr(s string) {
+	m.setFlash(s)
+	m.flashErr = true
+}
+
+// flashStyle is the style of the flash: red only when something failed.
+func (m *model) flashStyle() lipgloss.Style {
+	if m.flashErr {
+		return stError
+	}
+	return stInfo
 }
