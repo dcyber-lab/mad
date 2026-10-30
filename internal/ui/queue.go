@@ -198,7 +198,14 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 				}
 				text, upto, yours = t, u, y
 			}
+			// Marked before the send: the agent may be seen running before it returns.
+			if it.Bus && !yours {
+				m.madNext.mark(id, time.Now())
+			} else {
+				m.madNext.clear(id)
+			}
 			if err := sendQueued(st, ag, text, kinds); err != nil {
+				m.madNext.clear(id)
 				_ = queue.PutBack(id, it, err.Error())
 				return dispatchedMsg{id: id, err: err}
 			}
@@ -208,11 +215,6 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 				if !yours {
 					_ = bus.SpendSent(id, costs[id], now)
 				}
-			}
-			if it.Bus && !yours {
-				m.madNext.mark(id, time.Now())
-			} else {
-				m.madNext.clear(id)
 			}
 			return dispatchedMsg{id: id}
 		}
