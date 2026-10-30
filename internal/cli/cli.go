@@ -55,6 +55,8 @@ usage:
                       (mad-flow) where claude finds it
   mad desktop [-no-window]
                       open the deck in a window of its own (preview)
+  mad phone [on|off]  the window on your phone, over Tailscale: on
+                      serves it and shows the QR code to scan
   mad kill-server     stop the deck, every agent in it and what they
                       left running
   mad version         print the version
@@ -138,6 +140,8 @@ func Run(args []string, stdio IO) int {
 		err = queueCmd(args, stdio)
 	case "desktop":
 		err = desktopCmd(args, stdio)
+	case "phone":
+		err = phoneCmd(args, stdio)
 	case "kill-server":
 		err = killServer(stdio.Out)
 	case "sidebar":

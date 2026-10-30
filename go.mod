@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.1.4
 	github.com/coder/websocket v1.8.14
 	golang.org/x/term v0.20.0
+	rsc.io/qr v0.2.0
 )
 
 require (

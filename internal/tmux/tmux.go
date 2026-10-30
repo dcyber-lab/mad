@@ -35,6 +35,7 @@ const (
 	IDPlaceholder = "_placeholder"
 	IDKeepalive   = "_keep"
 	IDStream      = "_stream" // mad stream: what agents write, as they write it
+	IDPhone       = "_phone"  // mad desktop -serve: the window, for a phone (package phone)
 	IDTask        = "_task"   // a one-off pane on stage: the diff viewer (v), a finish command (f)
 )
 

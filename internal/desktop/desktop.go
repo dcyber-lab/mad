@@ -31,11 +31,14 @@ var webFS embed.FS
 // Server is the desktop window's backend.
 type Server struct {
 	Token string
-	kinds []agent.Kind
-	poll  *poller
-	looks *looks
-	cmds  *answers[discover.Command]
-	hist  historyCache
+	// Origins are host:port the page is opened from besides its own, its
+	// websockets taken from too: the phone's, through tailscale serve.
+	Origins []string
+	kinds   []agent.Kind
+	poll    *poller
+	looks   *looks
+	cmds    *answers[discover.Command]
+	hist    historyCache
 	// fileList: what @ offers in a message; modelList: what a new
 	// chat can start on.
 	fileList  fileCache
@@ -93,6 +96,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/models", s.auth(http.HandlerFunc(s.models)))
 	mux.Handle("GET /api/image", s.auth(http.HandlerFunc(s.image)))
 	mux.Handle("GET /api/file", s.auth(http.HandlerFunc(s.file)))
+	mux.Handle("GET /api/phone", s.auth(http.HandlerFunc(s.phone)))
+	mux.Handle("POST /api/phone", s.auth(http.HandlerFunc(s.phone)))
+	mux.Handle("DELETE /api/phone", s.auth(http.HandlerFunc(s.phone)))
+	mux.Handle("GET /api/phone/qr", s.auth(http.HandlerFunc(s.phoneQR)))
 	return headers(mux)
 }
 

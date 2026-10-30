@@ -68,6 +68,8 @@ func StatusDir() string        { return filepath.Join(StateDir(), "status") }
 func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width") }
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
 func StreamLog() string        { return filepath.Join(StateDir(), "stream.log") }
+func PhoneLog() string         { return filepath.Join(StateDir(), "phone.log") }
+func PhoneToken() string       { return filepath.Join(StateDir(), "phone_token") }
 
 // HostSocket is where `mad host` serves agent id; short, as a socket's
 // path must be.

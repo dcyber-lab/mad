@@ -770,11 +770,63 @@ function permissionName(hs) {
   return m ? m.name || m.value : "";
 }
 
+// ---- the phone: this window on it, over Tailscale (/api/phone) ----
+
+async function phoneDialog() {
+  let s;
+  try {
+    s = await api("GET", "/api/phone");
+  } catch (e) {
+    toast(e.message, "err");
+    return;
+  }
+  const body = el("div", "phonebox");
+  let actions = [{ label: "OK", cls: "primary", value: null }];
+  if (s.problem) {
+    body.append(el("p", "dtext", s.problem));
+  } else if (!s.on) {
+    body.append(el("p", "dtext", `Serve this window to your phone over Tailscale, at ${s.host}: only your own devices reach it, and they need the code it shows to get in.`));
+    actions = [{ label: "Cancel", value: null }, { label: "Turn on", cls: "primary", value: "on" }];
+  } else {
+    const img = el("img", "qr");
+    img.alt = "QR code";
+    img.src = `/api/phone/qr?${new URLSearchParams({ token, t: Date.now() })}`;
+    const url = el("div", "purl");
+    const copy = el("button", "icon-btn");
+    copy.type = "button";
+    copy.title = "copy";
+    copy.append(icon("copy"));
+    copy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(s.url);
+        toast("Copied");
+      } catch (_) { /* no clipboard here */ }
+    };
+    url.append(el("span", "", s.url), copy);
+    body.append(img, el("p", "dtext muted", "Scan it with the phone's camera, the phone on your tailnet. There, Add to Home Screen keeps it at hand."), url);
+    actions = [{ label: "Turn off", value: "off" }, { label: "Done", cls: "primary", value: null }];
+  }
+  const v = await dialog({ title: "On your phone", body, actions });
+  try {
+    if (v === "on") {
+      const r = await api("POST", "/api/phone");
+      if (r.problem) toast(r.problem, "err");
+      else phoneDialog();
+    } else if (v === "off") {
+      await api("DELETE", "/api/phone");
+      toast("The phone's way in is closed");
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
 // ---- wiring ----
 
 $("#newchat").onclick = () => openNew();
 $("#emptynew").onclick = () => openNew();
 $("#addproject").onclick = () => addProject();
+$("#phone").onclick = () => phoneDialog();
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#popup").hidden) {
     closePopup();
