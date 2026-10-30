@@ -142,6 +142,8 @@ func Run(args []string, stdio IO) int {
 		err = killServer(stdio.Out)
 	case "sidebar":
 		err = ui.Run()
+	case "stream":
+		err = streamCmd()
 	case "placeholder":
 		deck.RunPlaceholder(stdio.Out)
 	case "hook":

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -45,6 +46,8 @@ type Agent struct {
 	Role string  `json:"role,omitempty"`
 	// Queue is what waits for its turn to end (package queue).
 	Queue *queue.Queue `json:"queue,omitempty"`
+	// Chat: its transcript reads as a conversation (/api/chat).
+	Chat bool `json:"chat,omitempty"`
 }
 
 // How often each part of the snapshot is brought up to date. Screens are
@@ -176,6 +179,7 @@ func (p *poller) Poll(now time.Time) {
 			if q, ok := queues[a.ID]; ok {
 				ag.Queue = &q
 			}
+			_, ag.Chat = discover.Conversation(a.Kind)
 			out.Agents = append(out.Agents, ag)
 		}
 		snap.Projects = append(snap.Projects, out)

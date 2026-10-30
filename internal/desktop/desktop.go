@@ -53,11 +53,13 @@ func (s *Server) Handler() http.Handler {
 	// the URL's fragment, which the browser never sends.
 	mux.Handle("GET /", http.FileServerFS(web))
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
+	mux.Handle("GET /api/chat", s.auth(http.HandlerFunc(s.chat)))
+	mux.Handle("GET /api/live", s.auth(http.HandlerFunc(s.live)))
 	mux.Handle("GET /api/term", s.auth(http.HandlerFunc(s.term)))
 	mux.Handle("POST /api/queue", s.auth(http.HandlerFunc(s.queueAdd)))
 	mux.Handle("DELETE /api/queue", s.auth(http.HandlerFunc(s.queueRemove)))
 	mux.Handle("POST /api/queue/pause", s.auth(http.HandlerFunc(s.queuePause)))
-	return noCache(mux)
+	return headers(mux)
 }
 
 // auth refuses requests without the token. Browsers let any page open a
@@ -74,9 +76,17 @@ func (s *Server) auth(h http.Handler) http.Handler {
 	})
 }
 
-func noCache(h http.Handler) http.Handler {
+// csp lets the page run its own scripts and nothing else. It draws what
+// agents wrote, and a script slipped in there would have the token: a
+// shell on this machine. Its markdown is sanitized too (app.js).
+const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+	"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+// headers: nothing is cached, and the page is held to csp.
+func headers(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", csp)
 		h.ServeHTTP(w, r)
 	})
 }

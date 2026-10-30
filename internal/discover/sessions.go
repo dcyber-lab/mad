@@ -107,7 +107,7 @@ func UserText(raw json.RawMessage) string {
 
 // toolLabel names a call: the tool, then what it was pointed at.
 func toolLabel(name string, input map[string]json.RawMessage) string {
-	for _, k := range []string{"description", "file_path", "command", "pattern", "url", "query"} {
+	for _, k := range []string{"description", "file_path", "command", "cmd", "pattern", "url", "query", "path"} {
 		raw, ok := input[k]
 		if !ok {
 			continue
@@ -120,7 +120,7 @@ func toolLabel(name string, input map[string]json.RawMessage) string {
 			}
 			s = strings.Join(parts, " ")
 		}
-		if k == "file_path" {
+		if k == "file_path" || k == "path" {
 			s = filepath.Base(s)
 		}
 		s = strings.TrimSpace(strings.SplitN(s, "\n", 2)[0])

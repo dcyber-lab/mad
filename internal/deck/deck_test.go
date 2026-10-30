@@ -119,7 +119,7 @@ func TestSidebarWidth(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if c, err := LoadConfig(); err != nil || !reflect.DeepEqual(c, DefaultConfig()) || !c.Quota || c.SleepAfter != time.Hour {
+	if c, err := LoadConfig(); err != nil || !reflect.DeepEqual(c, DefaultConfig()) || !c.Quota || c.SleepAfter != time.Hour || !c.Stream {
 		t.Errorf("no file: %+v %v", c, err)
 	}
 	write := func(body string) {
@@ -127,10 +127,10 @@ func TestLoadConfig(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "mad", "config.json"), []byte(body), 0o644)
 	}
 	write(`{"notify": {"on": []}, "diff": {"command": "x {dir}"},
-		"finish": [{"name": "x", "command": "y"}], "quota": false, "sleep": {"after": "90m"}}`)
+		"finish": [{"name": "x", "command": "y"}], "quota": false, "stream": false, "sleep": {"after": "90m"}}`)
 	c, err := LoadConfig()
 	if err != nil || c.Notify.Wants(notify.Done) || c.Diff.Command != "x {dir}" ||
-		len(c.Finish) != 1 || c.Finish[0].Name != "x" || c.Quota || c.SleepAfter != 90*time.Minute {
+		len(c.Finish) != 1 || c.Finish[0].Name != "x" || c.Quota || c.Stream || c.SleepAfter != 90*time.Minute {
 		t.Errorf("full file: %+v %v", c, err)
 	}
 	for _, bad := range []string{`"soon"`, `"-1h"`, `"60"`} {
@@ -260,13 +260,38 @@ func TestLayout(t *testing.T) {
 	if _, ok := tmux.FindPane(ps, tmux.IDKeepalive); !ok {
 		t.Error("pool keepalive missing")
 	}
+	if p, ok := tmux.FindPane(ps, tmux.IDStream); !ok || p.Session != tmux.PoolSession {
+		t.Errorf("mad stream = %+v, %v; want it in the pool", p, ok)
+	}
 
-	// Re-running on an existing deck keeps the layout (sidebar respawned).
+	// Re-running on an existing deck keeps the layout (sidebar respawned),
+	// and the one mad stream.
 	if err := EnsureLayout("/", 120, 40); err != nil {
 		t.Fatal(err)
 	}
-	if got := len(panes(t)); got != 3 {
-		t.Errorf("panes after re-run = %d, want 3", got)
+	if got := len(panes(t)); got != 4 {
+		t.Errorf("panes after re-run = %d, want 4", got)
+	}
+	stream, _ := tmux.FindPane(panes(t), tmux.IDStream)
+
+	// mad from another binary restarts mad stream with it; the same one
+	// leaves it running.
+	old := SelfCommand
+	t.Cleanup(func() { SelfCommand = old })
+	SelfCommand = func(sub string) string { return "sleep 601 # mad " + sub }
+	if err := EnsureLayout("/", 120, 40); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := tmux.FindPane(panes(t), tmux.IDStream)
+	if cmd, _ := tmux.Out("display-message", "-p", "-t", again.ID, "#{pane_start_command}"); again.ID != stream.ID || !strings.Contains(cmd, "sleep 601") {
+		t.Errorf("mad stream after a new binary: %s %q", again.ID, cmd)
+	}
+	pid := again.PID
+	if err := EnsureLayout("/", 120, 40); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := tmux.FindPane(panes(t), tmux.IDStream); p.PID != pid {
+		t.Errorf("mad stream restarted for the same binary: pid %d → %d", pid, p.PID)
 	}
 }
 

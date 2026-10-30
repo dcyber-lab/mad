@@ -13,6 +13,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/live"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -78,9 +79,47 @@ func sidebarCommand() string {
 		SelfCommand("sidebar"), paths.ShellQuote(paths.SidebarLog()))
 }
 
+// streamCommand keeps mad stream alive as sidebarCommand does the sidebar:
+// claude agents started while it ran send their API calls through it.
+func streamCommand() string {
+	return fmt.Sprintf("while :; do %s 2>>%s; sleep 1; done",
+		SelfCommand("stream"), paths.ShellQuote(paths.StreamLog()))
+}
+
+// ensureStream starts mad stream in a pool window of its own unless it
+// runs, and restarts it when mad was started from another binary since:
+// not for a rebuilt one, as a restart cuts the replies streaming through
+// it (claude asks again). It is not waited for: an agent started before
+// it answers talks to the API itself (live.Env).
+func ensureStream() error {
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return err
+	}
+	cmd := streamCommand()
+	if p, ok := tmux.FindPane(panes, tmux.IDStream); ok {
+		if had, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd"); had == cmd {
+			return nil
+		}
+		if err := tmux.Run("respawn-pane", "-k", "-t", p.ID, cmd); err != nil {
+			return err
+		}
+		return tmux.Run("set-option", "-p", "-t", p.ID, "@mad_cmd", cmd)
+	}
+	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", "stream",
+		"-P", "-F", "#{pane_id}", cmd)
+	if err != nil {
+		return err
+	}
+	if err := tmux.Run("set-option", "-p", "-t", id, "@mad_cmd", cmd); err != nil {
+		return err
+	}
+	return tmux.Tag(id, tmux.IDStream)
+}
+
 // EnsureLayout creates the main (sidebar | stage) window and the hidden
-// pool session. On an existing deck it restarts the sidebar so a rebuilt
-// binary takes effect.
+// pool session, with mad stream in it. On an existing deck it restarts the
+// sidebar so a rebuilt binary takes effect.
 func EnsureLayout(cwd string, w, h int) error {
 	ws, hs := strconv.Itoa(w), strconv.Itoa(h)
 	if err := os.MkdirAll(paths.StateDir(), 0o755); err != nil {
@@ -96,6 +135,9 @@ func EnsureLayout(cwd string, w, h int) error {
 		if err := tmux.Tag(id, tmux.IDKeepalive); err != nil {
 			return err
 		}
+	}
+	if err := ensureStream(); err != nil {
+		return err
 	}
 
 	if !tmux.HasSession(tmux.MainSession) {
@@ -352,6 +394,11 @@ func DiffCommand(cfg DiffConfig, dir string) string {
 // to resume.
 func command(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) string {
 	l := agent.Launch{Vars: discover.Placeholders()}
+	if streaming() {
+		for k, v := range live.Vars(a.Kind, a.ID) {
+			l.Vars[k] = v
+		}
+	}
 	if pv := discover.Lookup(a.Kind); pv != nil {
 		dir := p.Dir(a)
 		l.Exists = func(sid string) bool { return len(pv.Transcripts(dir, sid)) > 0 }
@@ -359,12 +406,30 @@ func command(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) 
 	return agent.ByName(kinds, a.Kind).Command(a, resume, l)
 }
 
-// StartAgent launches a in a new pool window, with MAD_AGENT_ID set for
-// its status hooks.
+// agentEnv is the -e flags an agent's process starts with: MAD_AGENT_ID
+// for its status hooks, and what mad stream wants of its kind.
+func agentEnv(a *state.Agent) []string {
+	args := []string{"-e", "MAD_AGENT_ID=" + a.ID}
+	if streaming() {
+		for _, kv := range live.Env(a.Kind, a.ID) {
+			args = append(args, "-e", kv)
+		}
+	}
+	return args
+}
+
+// streaming reports whether agents are started to be followed live
+// (Config.Stream); a config.json that does not read leaves it on.
+func streaming() bool {
+	c, _ := LoadConfig()
+	return c.Stream
+}
+
+// StartAgent launches a in a new pool window (agentEnv).
 func StartAgent(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) error {
 	cmd := command(p, a, resume, kinds)
-	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", a.Kind, "-c", p.Dir(a),
-		"-e", "MAD_AGENT_ID="+a.ID, "-P", "-F", "#{pane_id}", cmd)
+	args := append([]string{"new-window", "-d", "-t", tmux.PoolSession + ":", "-n", a.Kind, "-c", p.Dir(a)}, agentEnv(a)...)
+	id, err := tmux.Out(append(args, "-P", "-F", "#{pane_id}", cmd)...)
 	if err != nil {
 		return err
 	}
@@ -378,7 +443,8 @@ func RestartAgent(p *state.Project, a *state.Agent, paneID string, kinds []agent
 	if err := tmux.Run("set-option", "-p", "-u", "-t", paneID, "@mad_asleep"); err != nil {
 		return err
 	}
-	return tmux.Run("respawn-pane", "-k", "-t", paneID, "-c", p.Dir(a), "-e", "MAD_AGENT_ID="+a.ID, cmd)
+	args := append([]string{"respawn-pane", "-k", "-t", paneID, "-c", p.Dir(a)}, agentEnv(a)...)
+	return tmux.Run(append(args, cmd)...)
 }
 
 // OpenAgent shows agent id in the view in use, (re)starting it with its
