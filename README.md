@@ -547,6 +547,69 @@ process group of its own (claude runs every command in one) or with
 `nohup`, such as a dev server; mad ends those too, hanging up, then
 terminating, then killing what is left, and names them.
 
+## Keeping the deck running
+
+The deck works for you as long as its machine is up: the agents, the
+sidebar that hands them what the bus has for them (and follows up, and
+sends the report), and, after `mad phone on`, the server your phone
+talks to. On a machine that stays on (a desktop Mac, a Mac mini, a Linux
+box) the agents carry on while you are away, and the phone is how you
+look in.
+
+- **Awake.** While it serves the phone, a Mac stays awake (`caffeinate
+  -i`), locked or not. A Mac with a lid still sleeps when it is closed,
+  unless a display is attached; a desktop Mac also wants System
+  Settings, Energy: "Prevent automatic sleeping when the display is off".
+- **After a restart** the deck is gone until `mad` runs again, and
+  nothing is lost: each agent resumes its conversation when you open it,
+  or when work for it arrives on the bus.
+- **At login.** `mad` without a terminal opens the deck in the background
+  (it says it could not open a terminal, and that is all). So a login
+  item can bring the deck and the phone back. On a Mac, a LaunchAgent
+  (a login shell, so that mad, tmux and tailscale are on its PATH):
+
+  ```xml
+  <!-- ~/Library/LaunchAgents/com.github.dcyber-lab.mad.plist -->
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0"><dict>
+    <key>Label</key><string>com.github.dcyber-lab.mad</string>
+    <key>ProgramArguments</key><array>
+      <string>/bin/zsh</string><string>-lc</string>
+      <string>cd ~/code/myproject &amp;&amp; mad &amp;&amp; mad phone on</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+  </dict></plist>
+  ```
+
+  then `launchctl load ~/Library/LaunchAgents/com.github.dcyber-lab.mad.plist`.
+  On Linux, a user service that outlives your login (after `loginctl
+  enable-linger $USER`), for example:
+
+  ```ini
+  # ~/.config/systemd/user/mad.service
+  [Unit]
+  Description=mad
+  After=network-online.target
+
+  [Service]
+  Type=oneshot
+  RemainAfterExit=yes
+  WorkingDirectory=%h/code/myproject
+  ExecStart=/bin/sh -lc 'mad; mad phone on'
+  ExecStop=/bin/sh -lc 'mad phone off; mad kill-server'
+
+  [Install]
+  WantedBy=default.target
+  ```
+
+  then `systemctl --user enable --now mad`; `mad` from an ssh session
+  takes you into the deck.
+- **Bounds.** What mad starts by itself stays bounded while you are
+  away: follow-up nudges are capped and stop after 8 hours without you
+  (see [Talking on the bus](#talking-on-the-bus)), and a run stops at its
+  budget.
+
 ## Sleeping idle agents
 
 Every agent in the deck is a live process: an idle claude holds a few hundred
