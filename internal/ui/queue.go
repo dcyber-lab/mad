@@ -9,6 +9,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
 const (
@@ -53,6 +54,7 @@ type followedMsg struct{}
 // Replaceable in tests.
 var (
 	checkFollowUps = bus.CheckFollowUps
+	deckWatched    = tmux.Watched
 	checkReport    = bus.CheckReport
 )
 
@@ -75,8 +77,15 @@ func (m *model) followCmd(now time.Time) tea.Cmd {
 			statuses[id] = tr.Status
 		}
 	}
+	viewed := false // in a desktop window
+	for _, p := range m.panes {
+		viewed = viewed || p.Viewed
+	}
 	st, clock := m.st.Clone(), m.cfg.Bus.Report
 	return func() tea.Msg {
+		if viewed || deckWatched() {
+			bus.PersonAt = now // here: nudging is not wasted on an empty room
+		}
 		_ = checkFollowUps(now, statuses)
 		_ = checkReport(st, statuses, now, clock)
 		return followedMsg{}

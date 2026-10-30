@@ -20,7 +20,9 @@ func followSetup(t *testing.T) (turns map[string]*status.Turn, hooks map[string]
 	turns, hooks = map[string]*status.Turn{}, map[string]*status.Hook{}
 	fakeTurn(t, turns)
 	personTold = nil
-	oldTell, oldHook, oldF, oldOn, oldIdle := tellPerson, readHook, FollowUp, NudgesOn, MaxIdle
+	oldTell, oldHook, oldF, oldOn, oldIdle, oldAt := tellPerson, readHook, FollowUp, NudgesOn, MaxIdle, PersonAt
+	PersonAt = time.Time{}
+	t.Cleanup(func() { PersonAt = oldAt })
 	tellPerson = func(kind, msg string) { personTold = append(personTold, kind+": "+msg) }
 	readHook = func(id string) *status.Hook { return hooks[id] }
 	FollowUp, NudgesOn, MaxIdle = 20*time.Minute, true, 8*time.Hour
@@ -214,11 +216,61 @@ func TestFollowUpLapsedSenderActed(t *testing.T) {
 	turns[idBuild] = &status.Turn{Reply: "hm", At: t0.Add(time.Minute)}
 	setNow(2 * time.Minute)
 	_ = CheckLapses(now())
-	// The sender took it up: its turn ended after the lapse.
-	turns[idArch] = &status.Turn{Reply: "on it", At: t0.Add(5 * time.Minute)}
+	dm := DMChannel(idArch, idBuild)
+	// Woken by the lapse line, the sender ended a turn: that is no answer.
+	turns[idArch] = &status.Turn{Reply: "hm", At: t0.Add(3 * time.Minute)}
 	check(t, 30*time.Minute, idleBoth)
-	if n := nudgesIn(t, DMChannel(idArch, idBuild)); len(n) != 0 {
+	if n := nudgesIn(t, dm); len(n) != 1 || n[0].Mentions[0] != idArch {
+		t.Fatalf("a sender that only ended a turn: %+v", n)
+	}
+}
+
+func TestFollowUpLapsedSenderPosted(t *testing.T) {
+	turns, _ := followSetup(t)
+	mustHand(t, arch, idBuild, "build the thing", "")
+	deliver(t, idBuild)
+	drain(t, idBuild)
+	t0 := now()
+	turns[idBuild] = &status.Turn{Reply: "hm", At: t0.Add(time.Minute)}
+	setNow(2 * time.Minute)
+	_ = CheckLapses(now())
+	dm := DMChannel(idArch, idBuild)
+	// The sender took it up: it said so after the lapse.
+	setNow(5 * time.Minute)
+	mustPost(t, dm, arch, "I will finish it myself")
+	check(t, 30*time.Minute, idleBoth)
+	if n := nudgesIn(t, dm); len(n) != 0 {
 		t.Errorf("nudged a sender that acted: %+v", n)
+	}
+}
+
+// A stopped agent cannot act on a nudge: none is spent on it.
+func TestFollowUpStoppedOwner(t *testing.T) {
+	followSetup(t)
+	doingTask(t, "wire the handler")
+	stopped := map[string]string{idArch: status.Idle, idBuild: status.Stopped}
+	check(t, 25*time.Minute, stopped)
+	if n := nudgesIn(t, "dev"); len(n) != 0 {
+		t.Errorf("nudged a stopped owner: %+v", n)
+	}
+}
+
+// A task given to another starts a new ladder: its new owner is nudged.
+func TestFollowUpReassignedTaskNudgedAgain(t *testing.T) {
+	followSetup(t)
+	tk := doingTask(t, "wire the handler")
+	check(t, 25*time.Minute, idleBoth)
+	if n := nudgesIn(t, "dev"); len(n) != 1 || n[0].Mentions[0] != idBuild {
+		t.Fatalf("first owner's nudge = %+v", n)
+	}
+	setNow(26 * time.Minute)
+	if _, err := SetTask(me, TaskChange{ID: tk.ID, Owner: sp(idArch)}); err != nil {
+		t.Fatal(err)
+	}
+	check(t, 26*time.Minute+25*time.Minute, idleBoth)
+	n := nudgesIn(t, "dev")
+	if len(n) != 2 || n[1].Mentions[0] != idArch {
+		t.Errorf("the new owner was not nudged: %+v", n)
 	}
 }
 
@@ -328,6 +380,21 @@ func TestFollowUpMaxIdle(t *testing.T) {
 	check(t, 125*time.Minute, idleBoth)
 	if len(nudgesIn(t, "dev")) != 1 {
 		t.Error("not nudged once the person is back")
+	}
+}
+
+// A person at the deck is here though they post nothing on the bus.
+func TestFollowUpPersonAtTheDeck(t *testing.T) {
+	followSetup(t)
+	MaxIdle = time.Hour
+	old := PersonAt
+	t.Cleanup(func() { PersonAt = old })
+	doingTask(t, "add the 404 case")
+	setNow(80 * time.Minute)
+	PersonAt = now()
+	check(t, 90*time.Minute, idleBoth)
+	if len(nudgesIn(t, "dev")) != 1 {
+		t.Error("not nudged with the person at the deck")
 	}
 }
 

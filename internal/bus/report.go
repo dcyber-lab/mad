@@ -280,8 +280,16 @@ func CheckReport(st *state.State, statuses map[string]string, at time.Time, cloc
 	if !first {
 		_ = json.Unmarshal(data, &rs)
 	}
+	// Something new waits for you that told you nothing: a permission, a
+	// pause and a question to you each notify already.
+	var quiet []Card
+	for _, c := range cards {
+		if c.Kind == CardTask && (c.Why == "" || c.Why == WhyUnowned) {
+			quiet = append(quiet, c) // yours, or nobody's
+		}
+	}
 	grew := false
-	for _, k := range waiting {
+	for _, k := range waitingKeys(quiet) {
 		if !has(rs.Waiting, k) {
 			grew = true
 		}
