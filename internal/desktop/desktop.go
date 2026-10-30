@@ -91,6 +91,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
 	mux.Handle("GET /api/files", s.auth(http.HandlerFunc(s.files)))
 	mux.Handle("GET /api/models", s.auth(http.HandlerFunc(s.models)))
+	mux.Handle("GET /api/image", s.auth(http.HandlerFunc(s.image)))
+	mux.Handle("GET /api/file", s.auth(http.HandlerFunc(s.file)))
 	return headers(mux)
 }
 

@@ -131,8 +131,18 @@ function callCard(tool, args, ctx, label, input) {
   return d;
 }
 
-// callResult adds what call d gave back to it.
-function callResult(d, text, error) {
+// callResult adds what call d gave back to it: text, and images (their
+// URLs), which open the call to be seen.
+function callResult(d, text, error, images) {
+  if (images?.length) {
+    if (text || error) d.append(el("pre", `output${error ? " err" : ""}`, text || "(no output)"));
+    const box = el("div", "cbody result");
+    box.append(imageRow(images));
+    d.append(box);
+    d.classList.add(error ? "failed" : "done");
+    d.open = true;
+    return;
+  }
   if (d.view?.exec) {
     // What codex's script printed, after how it went.
     const m = /^Script (completed|failed)\n(?:Wall time[^\n]*\n)?(?:Output:\n)?/.exec(text || "");

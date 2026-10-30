@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -87,13 +88,12 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(m)
 }
 
-// readChat reads agent a's transcript from offset from of file (a key
-// from an earlier answer), or from the start of the one it has now.
-func readChat(ctx context.Context, p *state.Project, a *state.Agent, file string, from int64) (Chat, error) {
-	out := Chat{Entries: []discover.Entry{}}
+// transcriptOf finds agent a's transcript: its path, and the key the page
+// knows it by; "" when it has none yet, or its kind keeps none.
+func transcriptOf(ctx context.Context, p *state.Project, a *state.Agent) (conv discover.Conversations, path, key string) {
 	conv, ok := discover.Conversation(a.Kind)
 	if !ok {
-		return out, nil
+		return nil, "", ""
 	}
 	sid := a.SessionID
 	if sid == "" {
@@ -108,11 +108,22 @@ func readChat(ctx context.Context, p *state.Project, a *state.Agent, file string
 	}
 	paths := conv.Transcripts(p.Dir(a), sid)
 	if len(paths) == 0 {
-		return out, nil // nothing written yet
+		return conv, "", "" // nothing written yet
 	}
 	sum := sha256.Sum256([]byte(paths[0]))
-	out.File = hex.EncodeToString(sum[:8])
-	f, err := os.Open(paths[0])
+	return conv, paths[0], hex.EncodeToString(sum[:8])
+}
+
+// readChat reads agent a's transcript from offset from of file (a key
+// from an earlier answer), or from the start of the one it has now.
+func readChat(ctx context.Context, p *state.Project, a *state.Agent, file string, from int64) (Chat, error) {
+	out := Chat{Entries: []discover.Entry{}}
+	conv, path, key := transcriptOf(ctx, p, a)
+	if path == "" {
+		return out, nil
+	}
+	out.File = key
+	f, err := os.Open(path)
 	if err != nil {
 		return out, err
 	}
@@ -145,8 +156,17 @@ func readChat(ctx context.Context, p *state.Project, a *state.Agent, file string
 		if err != nil {
 			break // a partial last line waits for its newline
 		}
+		at := out.Offset
 		out.Offset += int64(len(line))
-		out.Entries = append(out.Entries, conv.Chat(line)...)
+		entries := conv.Chat(line)
+		// An image is fetched by where it is: its line, entry and place.
+		for i := range entries {
+			for n := range entries[i].Images {
+				entries[i].Images[n].URL = "/api/image?" + url.Values{"id": {a.ID}, "file": {key},
+					"at": {strconv.FormatInt(at, 10)}, "e": {strconv.Itoa(i)}, "n": {strconv.Itoa(n)}}.Encode()
+			}
+		}
+		out.Entries = append(out.Entries, entries...)
 	}
 	if out.Reset && len(out.Entries) > chatMax {
 		out.Entries, out.Earlier = out.Entries[len(out.Entries)-chatMax:], true

@@ -999,13 +999,15 @@ function addEntry(o, e) {
   switch (e.kind) {
     case "user": {
       const m = el("div", "msg from-user");
-      m.append(md(e.text));
+      if ((e.text || "").trim()) m.append(md(e.text));
+      if (e.images?.length) m.append(imageRow(e.images.map((i) => i.url)));
       put(o, m);
       break;
     }
     case "text": {
       const m = el("div", "msg from-agent");
       m.append(md(e.text), copyButton(e.text));
+      localImages(m, e.text, o.id);
       put(o, m);
       break;
     }
@@ -1028,11 +1030,90 @@ function addEntry(o, e) {
     case "result": {
       o.results++;
       const call = e.id && o.calls.get(e.id);
-      if (call) callResult(call, e.text, e.error);
-      else put(o, el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)"));
+      const imgs = (e.images || []).map((i) => i.url);
+      if (call) {
+        callResult(call, e.text, e.error, imgs);
+      } else {
+        if (e.text || !imgs.length) put(o, el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)"));
+        if (imgs.length) put(o, imageRow(imgs));
+      }
       break;
     }
   }
+}
+
+// ---- images: what the user sent, a call gave back, a reply names ----
+
+// imageRow shows images by their URLs (/api/image, /api/file), each to
+// open large.
+function imageRow(urls) {
+  const row = el("div", "imgs");
+  for (const u of urls) row.append(imageNode(u));
+  return row;
+}
+
+function imageNode(u) {
+  const img = el("img", "cimg");
+  img.loading = "lazy";
+  img.alt = "";
+  img.src = `${u}&token=${encodeURIComponent(token)}`;
+  img.onclick = () => openLightbox(img.src);
+  // Grown as it came: a conversation read at its end stays there.
+  img.onload = () => {
+    const o = opened.get(current);
+    if (o && o.stick !== false && o.chat.contains(img)) o.chat.scrollTop = o.chat.scrollHeight;
+  };
+  return img;
+}
+
+// localImages shows under agent message m the image files it names: in
+// markdown (![](path)) or as paths (shot.png, ~/Desktop/a.png, /tmp/b.jpg).
+// One that is not there, or not an image, goes away.
+const imagePathRe = /(?:^|[\s(`'"“])((?:~\/|\.{1,2}\/|\/)?(?:[\w.@+-]+\/)*[\w.@+-]+\.(?:png|jpe?g|gif|webp))(?=$|[\s)`'"”,;:!?]|\.(?:\s|$))/gi;
+function localImages(m, text, id) {
+  const file = (p) => `/api/file?${new URLSearchParams({ id, path: p })}`;
+  const seen = new Set();
+  for (const img of m.querySelectorAll(".md img")) {
+    const src = img.getAttribute("src") || "";
+    if (/^(https?:|data:|\/api\/)/.test(src)) continue;
+    seen.add(src);
+    const n = imageNode(file(decodeURI(src)));
+    n.onerror = () => n.remove();
+    img.replaceWith(n);
+  }
+  const row = el("div", "imgs");
+  for (const [, p] of (text || "").matchAll(imagePathRe)) {
+    if (seen.has(p) || seen.size >= 6) continue;
+    seen.add(p);
+    const n = imageNode(file(p));
+    n.onerror = () => {
+      n.remove();
+      if (!row.children.length) row.remove();
+    };
+    row.append(n);
+  }
+  if (row.children.length) m.insertBefore(row, m.querySelector(".mcopy"));
+}
+
+function openLightbox(src) {
+  const box = el("div", "");
+  box.id = "lightbox";
+  const img = el("img");
+  img.src = src;
+  box.append(img);
+  const close = () => {
+    box.remove();
+    window.removeEventListener("keydown", key, true);
+  };
+  const key = (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+    }
+  };
+  box.onclick = close;
+  window.addEventListener("keydown", key, true);
+  document.body.append(box);
 }
 
 // copyButton copies an agent's message as it wrote it (markdown).

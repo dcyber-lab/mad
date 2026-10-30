@@ -283,7 +283,10 @@ menu under the message box (also `/model`), the send button stops it
 while it works (as does `Esc`), and a message goes to it at once, waking
 it if it is asleep. `@` in a message offers the files of its directory;
 while its todo list has items left, the one it is on is pinned over the
-message box. Opening an agent starts nothing.
+message box. Images show where they are: one you sent, a screenshot a
+call gave back, an image file its reply names (`shot.png`,
+`~/Desktop/a.png`); a click shows it large. Opening an agent starts
+nothing.
 
 An agent run in the window is in **window mode**: its pane runs `mad host`
 in place of its TUI, driving it through the protocol its own apps use

@@ -82,8 +82,9 @@ func (piChat) Chat(line []byte) []Entry {
 	m, at := ln.Message, ln.Timestamp
 	switch m.Role {
 	case "user":
-		if text := resultText(m.Content); text != "" {
-			return []Entry{{Kind: EntryUser, Text: text, At: at}}
+		text, imgs := partsShown(m.Content)
+		if text != "" || len(imgs) > 0 {
+			return []Entry{{Kind: EntryUser, Text: text, Images: imgs, At: at}}
 		}
 	case "bashExecution":
 		return []Entry{
@@ -91,7 +92,8 @@ func (piChat) Chat(line []byte) []Entry {
 			{Kind: EntryResult, Text: shown(m.Output), At: at},
 		}
 	case "toolResult":
-		return []Entry{{Kind: EntryResult, ID: m.ToolCallID, Text: shown(resultText(m.Content)), Error: m.IsError, At: at}}
+		text, imgs := partsShown(m.Content)
+		return []Entry{{Kind: EntryResult, ID: m.ToolCallID, Text: shown(text), Error: m.IsError, Images: imgs, At: at}}
 	case "assistant":
 		var blocks []struct {
 			Type      string                     `json:"type"`

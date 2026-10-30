@@ -400,6 +400,21 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .quests .qo { font-size: 13px; }
 .ask .abody .diff, .ask .abody .cbody, .ask .abody .todos { border: 1px solid var(--border); border-radius: 10px; max-height: 320px; }
 
+/* Images: what the user sent, a call gave back, a reply names. */
+.imgs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; }
+.cimg {
+  display: block; max-width: min(100%, 420px); max-height: 300px; object-fit: contain; cursor: zoom-in;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--code-bg);
+}
+.msg.from-user .imgs { margin: 4px 0; justify-content: flex-end; }
+.msg.from-user .cimg { max-width: min(100%, 260px); max-height: 220px; }
+.call .cbody.result .imgs { margin: 0; }
+#lightbox {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+  background: rgba(8, 8, 12, 0.86); cursor: zoom-out; animation: fade 0.12s ease-out;
+}
+#lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+
 /* What is being written: the live parts, last in the log. */
 .live { display: contents; }
 .live > * { animation: none; }
