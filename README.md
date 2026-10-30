@@ -596,7 +596,7 @@ look in.
   Type=oneshot
   RemainAfterExit=yes
   WorkingDirectory=%h/code/myproject
-  ExecStart=/bin/sh -lc 'mad; mad phone on'
+  ExecStart=/bin/sh -lc 'mad && mad phone on'
   ExecStop=/bin/sh -lc 'mad phone off; mad kill-server'
 
   [Install]
