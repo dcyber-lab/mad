@@ -322,6 +322,11 @@ not followed.
   directory (claude and pi say which, asked headless with nothing sent to
   a model). `Tab` completes one, `Enter` sends it. Commands only a TUI
   has, such as `/resume`, are not offered.
+- A new chat picks its project, its kind and its model: each kind lists
+  its models when asked headless, as for its commands.
+- On a narrow screen (a phone's) the list of agents and what is open take
+  the screen in turn: back, or the phone's back gesture, returns to the
+  list, and menus rise from the bottom.
 - Notifications still come from the deck, which counts the agent shown in
   the focused window as one you are looking at.
 
