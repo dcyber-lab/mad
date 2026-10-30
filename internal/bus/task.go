@@ -312,6 +312,9 @@ func SetTask(by From, c TaskChange) (Task, error) {
 		if c.Title != nil {
 			t.Title = strings.TrimSpace(*c.Title)
 		}
+		if c.Owner != nil && *c.Owner != t.Owner || c.Status != nil && *c.Status != t.Status {
+			t.Nudges = nil // a new owner, or a new state: a new ladder
+		}
 		if c.Owner != nil {
 			t.Owner = *c.Owner
 		}
@@ -367,7 +370,7 @@ func attachTask(ts []Task, h Handoff, taskID, project string) (out []Task, prev 
 	}
 	cp := *t
 	prev = &cp
-	t.Owner, t.Handoff, t.Status, t.UpdatedAt = h.To, h.ID, TaskTodo, at
+	t.Owner, t.Handoff, t.Status, t.UpdatedAt, t.Nudges = h.To, h.ID, TaskTodo, at, nil
 	if t.Channel == "" {
 		t.Channel = h.Channel
 	}
@@ -403,7 +406,7 @@ func finishTask(h Handoff) {
 		case "done":
 			t.Status, t.Note = TaskDone, firstLine(h.Result, 200)
 		case "declined":
-			t.Owner, t.Status, t.Note = h.From, TaskTodo, "declined: "+firstLine(h.Result, 200)
+			t.Owner, t.Status, t.Note, t.Nudges = h.From, TaskTodo, "declined: "+firstLine(h.Result, 200), nil
 		default:
 			return nil
 		}

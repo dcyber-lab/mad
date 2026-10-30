@@ -32,9 +32,12 @@ var (
 	// NudgesOn is false when config.json says bus.follow_up is "0": the
 	// board still derives stalled cards, but no agent is nudged.
 	NudgesOn = true
-	// MaxIdle: with no message by a person anywhere for this long, nobody
-	// is nudged at all.
+	// MaxIdle: with no message by a person anywhere for this long, and
+	// the deck not in front of them (PersonAt), nobody is nudged at all.
 	MaxIdle = 8 * time.Hour
+	// PersonAt is when the person was last seen looking at the deck (a
+	// focused client, a desktop window); the sidebar sets it.
+	PersonAt time.Time
 
 	// maxNudges is the most nudges one record ever gets.
 	maxNudges = 2
@@ -252,10 +255,14 @@ func (n nudge) send(at time.Time) bool {
 	return true
 }
 
-// canNudge tells whether id is an agent mad may wake: it exists and is not
-// in a run.
-func canNudge(st *state.State, id string) bool {
+// canNudge tells whether id is an agent mad may wake: it exists, is not
+// in a run, and is not stopped (a nudge would wait in its queue, spent).
+func canNudge(st *state.State, statuses map[string]string, id string) bool {
 	if id == "" || id == You || id == system {
+		return false
+	}
+	switch statuses[id] {
+	case "stopped", "exited":
 		return false
 	}
 	a := findIn(st, id)
@@ -333,6 +340,9 @@ func CheckFollowUps(at time.Time, statuses map[string]string) error {
 	nudging := NudgesOn && FollowUp > 0
 	if nudging {
 		since, err := lastYou("")
+		if PersonAt.After(since) {
+			since = PersonAt
+		}
 		nudging = err == nil && !since.IsZero() && at.Sub(since) <= MaxIdle
 	}
 	f := FollowUp
@@ -361,7 +371,7 @@ func CheckFollowUps(at time.Time, statuses map[string]string) error {
 				continue
 			}
 			sent := false
-			if ta >= f && !hasWhy(t.Nudges, "owner") && canNudge(st, t.Owner) {
+			if ta >= f && !hasWhy(t.Nudges, "owner") && canNudge(st, statuses, t.Owner) {
 				yours := fmt.Sprintf("%s %q has been yours %s with no word. ", t.ID, t.Title, mins(ta))
 				if h != nil && h.Status == "open" {
 					yours += fmt.Sprintf("Finish it (bus_done %s), decline it, hand it on, or say what blocks you with @you.", h.ID)
@@ -401,9 +411,9 @@ func escalate(st *state.State, cl chanList, statuses map[string]string, t Task, 
 		return
 	}
 	to, why := "", ""
-	if h != nil && h.From != t.Owner && canNudge(st, h.From) && atRest(statuses[h.From]) {
+	if h != nil && h.From != t.Owner && canNudge(st, statuses, h.From) && atRest(statuses[h.From]) {
 		to, why = h.From, "sender"
-	} else if c := cl.find(t.Channel); c != nil && c.Lead != t.Owner && canNudge(st, c.Lead) && atRest(statuses[c.Lead]) {
+	} else if c := cl.find(ch); c != nil && c.Lead != t.Owner && canNudge(st, statuses, c.Lead) && atRest(statuses[c.Lead]) {
 		to, why = c.Lead, "lead"
 	}
 	if to == "" {
@@ -413,14 +423,11 @@ func escalate(st *state.State, cl chanList, statuses map[string]string, t Task, 
 	nudge{t.ID, true, ch, to, why, text}.send(at)
 }
 
-// senderActed tells whether the sender of lapsed handoff h did anything
-// since it lapsed: posted, or ended a turn.
+// senderActed tells whether the sender of lapsed handoff h posted since it
+// lapsed. A turn ended does not count: the lapse line wakes the sender, so
+// one always ends after it.
 func senderActed(d *boardData, h Handoff) bool {
-	if d.lastBy(h.From).After(h.DoneAt) {
-		return true
-	}
-	tr := readTurn(h.From)
-	return tr != nil && tr.At.After(h.DoneAt)
+	return d.lastBy(h.From).After(h.DoneAt)
 }
 
 // askTargets are the agents a question m in channel c is put to: the
@@ -458,7 +465,7 @@ func unansweredAsks(st *state.State, cl chanList, d *boardData, statuses map[str
 				continue
 			}
 			for _, x := range askTargets(c, m) {
-				if !canNudge(st, x) || !atRest(statuses[x]) || answeredBy(msgs[i+1:], x) {
+				if !canNudge(st, statuses, x) || !atRest(statuses[x]) || answeredBy(msgs[i+1:], x) {
 					continue
 				}
 				asker := m.From.Label

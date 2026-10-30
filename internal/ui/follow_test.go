@@ -16,9 +16,15 @@ func TestFollowCmd(t *testing.T) {
 	st.Projects[0].Agents = []*state.Agent{{ID: "one", Kind: "claude"}, {ID: "two", Kind: "claude"}}
 	m.rebuildRows()
 
-	oldF, oldOn := bus.FollowUp, bus.NudgesOn
-	oldFU, oldRep := checkFollowUps, checkReport
-	t.Cleanup(func() { bus.FollowUp, bus.NudgesOn, checkFollowUps, checkReport = oldF, oldOn, oldFU, oldRep })
+	oldF, oldOn, oldAt := bus.FollowUp, bus.NudgesOn, bus.PersonAt
+	oldFU, oldRep, oldW := checkFollowUps, checkReport, deckWatched
+	t.Cleanup(func() {
+		bus.FollowUp, bus.NudgesOn, bus.PersonAt = oldF, oldOn, oldAt
+		checkFollowUps, checkReport, deckWatched = oldFU, oldRep, oldW
+	})
+	watched := false
+	deckWatched = func() bool { return watched }
+	bus.PersonAt = time.Time{}
 	var gotStatuses map[string]string
 	var gotAt time.Time
 	var clock string
@@ -51,6 +57,16 @@ func TestFollowCmd(t *testing.T) {
 	if bus.FollowUp != 45*time.Minute || !bus.NudgesOn {
 		t.Errorf("bus.FollowUp=%v NudgesOn=%v, want 45m on", bus.FollowUp, bus.NudgesOn)
 	}
+	if !bus.PersonAt.IsZero() {
+		t.Errorf("the person seen with nobody at the deck: %v", bus.PersonAt)
+	}
+	// Someone at the deck: they are here, as of this round.
+	watched = true
+	m.Update(followedMsg{})
+	m.followCmd(at)()
+	if !bus.PersonAt.Equal(at) {
+		t.Errorf("PersonAt=%v with the deck watched, want %v", bus.PersonAt, at)
+	}
 	m.Update(followedMsg{})
 	if m.following {
 		t.Error("still following after the round ended")
@@ -67,8 +83,9 @@ func TestFollowCmd(t *testing.T) {
 // A tick starts a round when the last was a minute ago, and not before.
 func TestTickStartsFollowUps(t *testing.T) {
 	m, _ := setup(t, "/code/a")
-	oldFU := checkFollowUps
-	t.Cleanup(func() { checkFollowUps = oldFU })
+	oldFU, oldW := checkFollowUps, deckWatched
+	t.Cleanup(func() { checkFollowUps, deckWatched = oldFU, oldW })
+	deckWatched = func() bool { return false }
 	m.lastFollow = time.Now()
 	m.Update(tickMsg(time.Now()))
 	if m.following {

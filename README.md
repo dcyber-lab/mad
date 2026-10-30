@@ -791,9 +791,11 @@ mad bus handoffs                    # work agents gave each other, as chains
   hours while unchanged; an agent waiting 30 minutes for your permission
   gets you one reminder; an agent's question to another agent that is
   unanswered for 20 minutes nudges the other, once. Nudges count toward
-  the channel's 30-post limit, are never posted in a paused channel, are
-  at most 2 per task, 6 per 10 minutes on the whole deck, and stop when
-  you have said nothing anywhere for 8 hours. Set `"bus": {"follow_up":
+  the channel's 30-post limit, are never posted in a paused channel or to
+  a stopped agent, are at most 2 per task (a task given to another agent,
+  or moved on, starts again), 6 per 10 minutes on the whole deck, and
+  stop when you have been away 8 hours: nothing posted on the bus, and
+  the deck not in front of you. Set `"bus": {"follow_up":
   "30m"}` in config.json to change the time; `"0"` turns the nudges off.
 - Leads: the agent that makes a channel is its lead; `mad bus lead
   CHANNEL AGENT` (or `bus_channel` with action `lead`) changes it. The
@@ -804,8 +806,9 @@ mad bus handoffs                    # work agents gave each other, as chains
   you (...)"). `mad bus report [CHANNEL]` posts it in the channel as a
   line from mad (it wakes no one). The sidebar sends it as a `report`
   notification each day at `"bus": {"report": "09:00"}` (local time; `""`
-  turns it off) while anything is open, and when something new waits for
-  you, at most every 10 minutes. `"on"` in `notify` takes `"followup"` and
+  turns the daily one off) while anything is open, and when a task that
+  is yours or nobody's appears (a permission, a pause or a question to you
+  notify already), at most every 10 minutes. `"on"` in `notify` takes `"followup"` and
   `"report"` too.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
