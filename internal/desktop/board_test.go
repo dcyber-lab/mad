@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/skill"
@@ -35,10 +36,11 @@ func TestBoardAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := New(manageKinds)
+	var snap Snapshot
 	board := func() []bus.Card {
 		t.Helper()
 		s.poll.Poll(time.Now())
-		var snap Snapshot
+		snap = Snapshot{}
 		if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
 			t.Fatal(err)
 		}
@@ -63,8 +65,15 @@ func TestBoardAPI(t *testing.T) {
 	if c := find(cards, "task"); c == nil || c.Task.ID != task.ID || c.Owner != a1 || c.Column != "todo" {
 		t.Errorf("the task's card: %+v (all %+v)", c, cards)
 	}
-	if c := find(cards, "skill"); c == nil || c.Title != "/deploy" || c.Column != "waiting-you" || c.OwnerLabel != "alice" {
-		t.Errorf("the skill's card: %+v", c)
+	// The skill waits for the person in the inbox, not on the board.
+	var sk *attention.Item
+	for i, it := range snap.Inbox.Items {
+		if it.Kind == attention.KindSkill {
+			sk = &snap.Inbox.Items[i]
+		}
+	}
+	if sk == nil || sk.Title != "/deploy" || sk.Context != "skill from alice" || find(cards, "skill") != nil {
+		t.Errorf("the skill's item: %+v (board %+v)", sk, cards)
 	}
 
 	// Asked how it stands: alice hears it, in a DM (it has no channel).

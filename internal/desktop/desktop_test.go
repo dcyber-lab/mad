@@ -19,7 +19,6 @@ import (
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
-	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 func isolate(t *testing.T) string {
@@ -95,21 +94,6 @@ func TestSnapshot(t *testing.T) {
 	}
 	if back.States[0].Word == "" || back.States[0].Tone == "" {
 		t.Errorf("state without a look: %+v", back.States[0])
-	}
-}
-
-func TestDetailOf(t *testing.T) {
-	info := transcript.Info{Tool: "Bash · go test", Prompt: "fix the build"}
-	for s, want := range map[string]string{
-		status.Running: "Bash · go test", status.Waiting: "Bash · go test",
-		status.Idle: "fix the build", status.Asleep: "fix the build", status.Stopped: "fix the build",
-	} {
-		if got := detailOf(s, info); got != want {
-			t.Errorf("detailOf(%s) = %q, want %q", s, got, want)
-		}
-	}
-	if got := detailOf(status.Running, transcript.Info{Prompt: "p"}); got != "p" {
-		t.Errorf("running without a tool = %q", got)
 	}
 }
 

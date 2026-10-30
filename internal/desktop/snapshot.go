@@ -24,16 +24,11 @@ type Snapshot struct {
 	Projects []Project      `json:"projects"`
 	Quota    map[string]any `json:"quota,omitempty"` // by kind: claude, codex
 	Bus      []BusChannel   `json:"bus"`             // the channels and DMs (bus.go)
-	// Board is the task board as the page draws it today, with skill and
-	// budget cards in "Waiting for you" (board.go).
-	// TODO(batch 2b): the page draws that column from Inbox; Board goes
-	// then, and BoardRest takes its name.
-	Board []bus.Card `json:"board"`
-	// BoardRest is the board without its "Waiting for you" column: that
+	// Board is the task board without its "Waiting for you" column: that
 	// column is Inbox.
-	BoardRest []bus.Card     `json:"board_rest"`
-	Spend     bus.SpendState `json:"spend"`  // the day's budget for mad's own work
-	Timers    []bus.Timer    `json:"timers"` // check-ins and routines (timer.go)
+	Board  []bus.Card     `json:"board"`
+	Spend  bus.SpendState `json:"spend"`  // the day's budget for mad's own work
+	Timers []bus.Timer    `json:"timers"` // check-ins and routines (timer.go)
 	// Inbox is what waits on the person, in Next's order: every "needs
 	// you" on every surface reads it.
 	Inbox attention.Inbox `json:"inbox"`
@@ -73,7 +68,6 @@ type Agent struct {
 	Color  string `json:"color,omitempty"`
 	Name   string `json:"name,omitempty"`  // the user's
 	Title  string `json:"title,omitempty"` // the conversation's
-	Detail string `json:"detail,omitempty"`
 	Status string `json:"status"`
 	// Shown is the state to draw (status.Shown): Status, with a finished
 	// unseen run told apart and Exited folded into Stopped.
@@ -95,16 +89,6 @@ type Agent struct {
 	// Activity is its activity line, its fields in the entry: since,
 	// tool, target, todo, reply.
 	attention.Activity
-}
-
-// detailOf is the line under an agent's name: the tool it calls while it
-// works or waits, else the prompt it is on. The tool stays in the
-// transcript after its turn ends, so it would mislead then.
-func detailOf(s string, info transcript.Info) string {
-	if (s == status.Running || s == status.Waiting) && info.Tool != "" {
-		return info.Tool
-	}
-	return info.Prompt
 }
 
 // How often each part of the snapshot is brought up to date. Screens are
@@ -230,10 +214,9 @@ func (p *poller) Poll(now time.Time) {
 			s := tr.Observe(k, pn, ok, rep.Hook, screens[pn.ID], p.looks.Focused(a.ID) || ok && tmux.Seen(pn), now)
 			info := p.infos[a.ID]
 			facts = append(facts, attention.AgentOf(pr, a, tr, pn.ID, rep, info))
-			detail := detailOf(s, info)
 			ag := Agent{
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
-				Name: a.Name, Title: info.Title, Detail: detail,
+				Name: a.Name, Title: info.Title,
 				Status: s, Shown: status.Shown(s, tr.Done()), Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role, Team: a.Team,
 			}
 			if q, ok := queues[a.ID]; ok {
@@ -265,11 +248,10 @@ func (p *poller) Poll(now time.Time) {
 	snap.Bus = busChannels(st, look)
 	snap.Spend = bus.SpendNow(now)
 	snap.Timers = timersOf()
-	snap.Board = boardCards(look.Cards, pending, snap.Spend, now)
 	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Spend: snap.Spend, Now: now})
-	snap.Inbox, snap.Working, snap.BoardRest = view.Inbox, view.Working, view.Board
-	if snap.BoardRest == nil {
-		snap.BoardRest = []bus.Card{}
+	snap.Inbox, snap.Working, snap.Board = view.Inbox, view.Working, view.Board
+	if snap.Board == nil {
+		snap.Board = []bus.Card{}
 	}
 	snap.Teams = rollUp(snap.Projects, view)
 

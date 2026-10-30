@@ -8,7 +8,6 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
-	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 )
 
@@ -28,31 +27,6 @@ func statusesOf(snap Snapshot) map[string]string {
 		}
 	}
 	return statuses
-}
-
-// boardCards is the board as the page draws it today: bus.Board's cards,
-// and the pending skills and a spent budget as cards waiting for you.
-func boardCards(board []bus.Card, pending []skill.Pending, sp bus.SpendState, now time.Time) []bus.Card {
-	cards := append([]bus.Card{}, board...)
-	// A skill an agent saved waits for the person too.
-	for _, p := range pending {
-		cards = append(cards, bus.Card{
-			Kind: "skill", Title: "/" + p.Name, Column: "waiting-you", Why: "approve",
-			OwnerLabel: p.By, Age: now.Sub(p.At), Note: p.Description,
-		})
-	}
-	// So does the day's budget for mad's own work, once spent.
-	if sp.Closed {
-		age := time.Duration(0)
-		if !sp.ClosedAt.IsZero() {
-			age = now.Sub(sp.ClosedAt)
-		}
-		cards = append(cards, bus.Card{
-			Kind: "budget", Title: "Agents wait: today's budget is spent", Column: "waiting-you", Why: "budget",
-			OwnerLabel: "mad", Age: age, Note: "mad's own work today: " + sp.Line(),
-		})
-	}
-	return cards
 }
 
 // budgetSet answers POST /api/budget {op, usd}: the person raises today's
