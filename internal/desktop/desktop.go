@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/discover"
 )
 
 //go:embed web
@@ -33,10 +34,12 @@ type Server struct {
 	kinds []agent.Kind
 	poll  *poller
 	looks *looks
-	cmds  *commandCache
+	cmds  *answers[discover.Command]
 	hist  historyCache
-	// fileList: what @ offers in a message.
-	fileList fileCache
+	// fileList: what @ offers in a message; modelList: what a new
+	// chat can start on.
+	fileList  fileCache
+	modelList *answers[discover.Model]
 }
 
 // New makes a server with a fresh random token.
@@ -46,7 +49,16 @@ func New(kinds []agent.Kind) *Server {
 		panic(err) // crypto/rand does not fail on supported systems
 	}
 	l := newLooks()
-	return &Server{Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, l), looks: l, cmds: newCommandCache()}
+	return &Server{
+		Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, l), looks: l,
+		// Through the vars, which tests replace.
+		cmds: newAnswers(func(ctx context.Context, k, d string) ([]discover.Command, error) {
+			return findCommands(ctx, k, d)
+		}),
+		modelList: newAnswers(func(ctx context.Context, k, d string) ([]discover.Model, error) {
+			return findModels(ctx, k, d)
+		}),
+	}
 }
 
 // Handler routes the page, its assets and the API.
@@ -78,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/history", s.auth(http.HandlerFunc(s.history)))
 	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
 	mux.Handle("GET /api/files", s.auth(http.HandlerFunc(s.files)))
+	mux.Handle("GET /api/models", s.auth(http.HandlerFunc(s.models)))
 	return headers(mux)
 }
 

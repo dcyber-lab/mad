@@ -572,6 +572,13 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .composer { container-type: inline-size; }
 @container (max-width: 720px) { .hintline { display: none; } }
 @container (max-width: 560px) { #who .what { display: none; } }
+@container (max-width: 440px) {
+  #who { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
+  #who::-webkit-scrollbar { display: none; }
+  #who > .pill { display: none; }
+  #who .seg .kn { display: none; }
+  #who .seg button { padding: 0 9px; }
+}
 
 /* ---- nothing open ---- */
 
@@ -625,6 +632,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .agent:hover .meta, .agent:hover .pill { visibility: hidden; }
 .agent .more .i { width: 15px; height: 15px; }
 
+#back, #ptitle { display: none; }
 #bar #acts { display: flex; align-items: center; gap: 6px; flex: none; }
 #bar #acts[hidden] { display: none; }
 .bar-btn {
@@ -781,3 +789,68 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .dl.a { background: color-mix(in srgb, var(--running) 13%, transparent); }
 .dl.d { background: color-mix(in srgb, var(--stopped) 12%, transparent); }
 .dl.h { color: var(--text-3); background: var(--raise); }
+
+/* ---- a phone: the list, or what is open, a screen each ---- */
+
+@media (max-width: 640px) {
+  html, body { -webkit-tap-highlight-color: transparent; }
+  #app { height: 100dvh; }
+  #sidebar { width: 100% !important; min-width: 0; max-width: none; padding-top: env(safe-area-inset-top); }
+  #resizer, main { display: none; }
+  body.in-main #sidebar { display: none; }
+  body.in-main main { display: flex; }
+
+  #sidebar header { padding: 14px 16px 12px; }
+  #filterKey { display: none; }
+  .search input { font-size: 16px; }
+  .agent { padding-top: 10px; padding-bottom: 10px; }
+  .agent .more, .agent:hover .more { display: none; }
+  .agent:hover .meta, .agent:hover .pill { visibility: visible; }
+  .project > .head .hacts { display: inline-flex; }
+  .project > .head .cost { display: none; }
+  #sidebar footer { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+
+  #bar, body.in-main #bar[hidden] { display: flex; }
+  #bar { height: calc(52px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 6px 0 2px; gap: 4px; }
+  #tabs { display: none; }
+  #back { display: grid; }
+  #back .i { width: 22px; height: 22px; }
+  #ptitle { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
+  #ptitle .pw { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  #ptitle .pt { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; font-size: 15px; }
+  #ptitle .ps { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; color: var(--text-3); }
+  #changes { padding: 0 9px; font-size: 0; gap: 0; }
+  #changes .i { width: 16px; height: 16px; }
+
+  .chat .log { padding: 18px 14px 28px; }
+  .msg { font-size: 15.5px; }
+  .msg.from-user { max-width: 88%; margin-top: 20px; }
+  .mcopy { display: none; }
+  .md pre { font-size: 12.5px; }
+  .call summary { padding: 9px 12px; }
+  .ask { padding: 12px 13px; }
+  .ask .acts .say { flex-basis: 100%; }
+
+  #queue { padding: 0 8px calc(8px + env(safe-area-inset-bottom)); }
+  .composer { padding: 8px 8px 6px 14px; border-radius: 22px; }
+  #qinput { font-size: 16px; }
+  #center.fresh #queue { padding-top: 0; }
+  #new { padding: 16px 16px 14px; }
+  .newhead { margin-bottom: 18px; }
+  .newhead h1 { font-size: 24px; }
+  #past { padding: 12px 10px 16px; }
+
+  #side { position: fixed; inset: 0; z-index: 40; width: 100%; border-left: none; padding-top: env(safe-area-inset-top); }
+  #empty .keys { display: none; }
+
+  /* Menus rise from the bottom, as sheets. */
+  .popup {
+    left: 8px !important; right: 8px !important; top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    min-width: 0; max-width: none; max-height: 70dvh; border-radius: 18px; padding: 8px;
+  }
+  .popup li { padding: 11px 12px; }
+  .popup li .l { font-size: 15px; }
+  .dlg { width: calc(100vw - 24px); padding: 18px 16px 16px; }
+  .say.wide { font-size: 16px; }
+}

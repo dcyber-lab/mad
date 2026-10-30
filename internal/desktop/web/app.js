@@ -364,11 +364,11 @@ function drawWho(a) {
     const parts = [avatar(a, true), what];
     const name = modelName(o.hs);
     keepModels(a.kind, o.hs.models);
-    if (name && o.hs.models && o.hs.models.length) {
+    if (o.hs.models && o.hs.models.length) {
       const b = el("button", "chip model");
       b.type = "button";
       b.title = "its model";
-      b.append(el("span", "", name), icon("down"));
+      b.append(el("span", "", name || "Model"), icon("down"));
       b.onmousedown = (e) => { e.preventDefault(); modelMenu(b, o); };
       parts.push(b);
     }
@@ -782,6 +782,7 @@ function open(id) {
 }
 
 function show(id) {
+  inMain(true);
   if (current && current !== id) {
     const prev = opened.get(current);
     if (prev) {
@@ -847,9 +848,44 @@ function close(id) {
     current = null;
     const next = [...opened.keys()].pop();
     if (next) show(next);
-    else if (!nc.open) $("#empty").style.display = "";
+    else if (!nc.open) {
+      $("#empty").style.display = "";
+      inMain(false);
+    }
   }
   drawSidebar();
+}
+
+// ---- on a phone: the list, or what is open, a screen each ----
+
+const phone = matchMedia("(max-width: 640px)");
+
+// inMain shows what is open (an agent, a new chat) over the list, on a
+// phone; the phone's back goes back to the list.
+function inMain(on) {
+  const was = document.body.classList.contains("in-main");
+  document.body.classList.toggle("in-main", on);
+  if (on && !was && phone.matches) history.pushState({ main: true }, "");
+  drawTitle();
+}
+window.addEventListener("popstate", () => inMain(false));
+$("#back").onclick = () => {
+  if (history.state?.main) history.back();
+  else inMain(false);
+};
+
+// drawTitle says over a phone's screen what is open.
+function drawTitle() {
+  const t = $("#ptitle");
+  const a = current && agents.get(current);
+  if (!a) {
+    t.replaceChildren(el("span", "pt", nc.open ? "New chat" : ""));
+    return;
+  }
+  const what = el("span", "pw");
+  what.append(el("span", "pt", label(a)), el("span", "ps", `${a.kind} · ${a.project.name}`));
+  t.replaceChildren(avatar(a, true), what);
+  t.className = `s-${shownStatus(a)}`;
 }
 
 // seen tells mad which agent is in front of you, while the window has the

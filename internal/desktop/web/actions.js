@@ -135,6 +135,8 @@ function openNew(project) {
     current = null;
   }
   nc.open = true;
+  inMain(true);
+  for (const [k] of KINDS) knownModels(k); // asked now: there by the time it is picked
   nc.project = project || was || nc.project || (deck.projects[0] && deck.projects[0].path) || "";
   if (nc.project && !projectOf(nc.project)) nc.project = deck.projects[0] ? deck.projects[0].path : "";
   $("#empty").style.display = "none";
@@ -243,7 +245,8 @@ function drawNewWho() {
   for (const [k, name] of KINDS) {
     const b = el("button", k === nc.kind ? "on" : "");
     b.type = "button";
-    b.append(el("span", "kg", kindIcon(k)), name);
+    b.title = name;
+    b.append(el("span", "kg", kindIcon(k)), el("span", "kn", name));
     b.onmousedown = (e) => {
       e.preventDefault();
       nc.kind = k;
@@ -282,7 +285,25 @@ function projectPicker(anchor) {
 }
 
 // The models a kind offers, as one of its agents run here said last.
+// knownModels is what a new chat of kind can start on: asked of mad once
+// a page (/api/models), what an agent of the kind said last shown till
+// it answers.
+const modelLists = new Map(); // kind → its models, once asked
 function knownModels(kind) {
+  const got = modelLists.get(kind);
+  if (got) return Array.isArray(got) ? got : savedModels(kind);
+  modelLists.set(kind, fetch(`/api/models?${new URLSearchParams({ token, kind, project: nc.project || "" })}`)
+    .then((r) => (r.ok ? r.json() : []))
+    .catch(() => [])
+    .then((list) => {
+      if (list && list.length) keepModels(kind, list);
+      modelLists.set(kind, list && list.length ? list : savedModels(kind));
+      if (nc.open && nc.kind === kind) drawQueue();
+    }));
+  return savedModels(kind);
+}
+
+function savedModels(kind) {
   try {
     return JSON.parse(localStorageGet(`mad.models.${kind}`) || "[]");
   } catch (_) {
@@ -497,6 +518,7 @@ async function openTerminal(a) {
 
 // drawActs shows the bar's buttons for the agent shown.
 function drawActs() {
+  drawTitle();
   const a = current && agents.get(current);
   $("#acts").hidden = !a;
   if (!a) return;
