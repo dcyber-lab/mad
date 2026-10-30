@@ -606,9 +606,10 @@ look in.
   then `systemctl --user enable --now mad`; `mad` from an ssh session
   takes you into the deck.
 - **Bounds.** What mad starts by itself stays bounded while you are
-  away: follow-up nudges are capped and stop after 8 hours without you
-  (see [Talking on the bus](#talking-on-the-bus)), and a run stops at its
-  budget.
+  away: a daily spend gate ($20 or 150 turns of agent-to-agent work by
+  default; your own messages are never held), follow-up nudges that are
+  capped and stop after 8 hours without you (see [Talking on the
+  bus](#talking-on-the-bus)), and a run's own budget.
 
 ## Sleeping idle agents
 
