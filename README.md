@@ -267,53 +267,58 @@ has the same queue under each agent's terminal.
 
 `mad desktop` opens the deck in a window of its own: the projects and
 agents in a sidebar on the left, and each agent you click in a tab on the
-right. The window is one more client of the same tmux server, so agents
-keep running when it closes, and the terminal deck can be open at the
-same time.
+right. It draws the agents itself, without a terminal: claude, codex and
+pi run in it headless, and the terminal deck can be open at the same time.
+Agents keep running when it closes.
 
-A tab shows the agent's conversation (claude, codex and pi), read from its
-transcript: what you asked, its replies as formatted markdown, and its tool
-calls, each opening to its input and output. Reading it starts nothing; an
-agent asleep or stopped stays so. `Alt-t` (or Chat / Terminal at the top
-right) switches to the agent's own TUI, attached to its pane. When the
-agent asks you something, its TUI opens under the conversation, to answer
-there, and goes away once answered; the keys you type stay in the message
-box until you click into it. A shell opens in its TUI.
+A tab is the agent's conversation: what you asked, its replies as
+formatted markdown as it writes them, and its tool calls, each opening to
+its input and output. What it asks you is a card there to answer: whether
+it may use a tool or run a command (Allow, Always allow, Deny, or what to
+do instead), a question with its options, a plan to approve. Its model is
+a menu under the message box (also `/model`), the send button stops it
+while it works (as does `Esc`), and a message goes to it at once, waking
+it if it is asleep. Opening an agent starts nothing.
 
-What an agent is writing streams in as it writes it, token by token, and
-gives way to the transcript's copy once that has it. For that the deck runs
-`mad stream` next to the agents, and starts them through it: claude with
+An agent run in the window is in **window mode**: its pane runs `mad host`
+in place of its TUI, driving it through the protocol its own apps use
+(claude: stream-json, as the Agent SDK does; codex: `codex app-server`;
+pi: RPC mode) and telling the window what it writes and asks. It is the
+same session as in its TUI, and switches by itself: the window takes an
+agent that is asleep, stopped or idle, and the terminal deck opening it
+puts it back in its TUI. One that is working or asking something in its
+TUI, or holds a draft of yours there, stays in the terminal deck until it
+is done (the window follows what it writes meanwhile). In the deck, a pane
+in window mode says what the agent is doing; `t` there takes it back too.
+A shell lives in the terminal deck only.
+
+An agent its TUI runs streams in as it writes too: the deck runs
+`mad stream` next to the agents and starts them through it, claude with
 `ANTHROPIC_BASE_URL` and codex with `openai_base_url` pointed at it, which
 passes their API calls on as they came and reads the replies on their way
-back; pi with an extension that posts the message as it grows. An agent
-started before `mad stream` ran (resume it) or after it stopped talks to
-its API itself, unfollowed. `{"stream": false}` in `config.json` turns this
-off. codex keeps its own `openai_base_url`, and claude on Bedrock or Vertex
-its own API: those are not followed.
+back; pi with an extension that posts the message as it grows.
+`{"stream": false}` in `config.json` turns this off. codex keeps its own
+`openai_base_url`, and claude on Bedrock or Vertex its own API: those are
+not followed.
 
 - It opens in Chrome, Chromium, Edge or Brave in app mode (no tabs, no
   address bar), with a browser profile of mad's own; without one of
   those, in your default browser. `-no-window` only prints the URL.
 - The server listens on 127.0.0.1 only and wants the token in the URL it
-  printed: a terminal in the window is a shell on your machine. The page
-  runs only its own scripts, and what agents wrote is sanitized before it
-  is drawn.
+  printed: the window drives agents that run commands on your machine. The
+  page runs only its own scripts, and what agents wrote is sanitized
+  before it is drawn.
 - `Alt-n` jumps to the next agent that needs you, `Alt-j` / `Alt-k` to the
-  next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-t` switches
-  between conversation and terminal, `Alt-w` closes the tab.
+  next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-w` closes the tab.
 - `⌘K` searches the agents. The window is light or dark as the system is,
-  or as picked at the bottom of the sidebar; terminals stay dark.
+  or as picked at the bottom of the sidebar.
 - `/` at the start of a message offers the agent's slash commands: its
-  TUI's own and the skills, prompts and plugins' commands it finds in its
+  own and the skills, prompts and plugins' commands it finds in its
   directory (claude and pi say which, asked headless with nothing sent to
-  a model). `Tab` completes one, `Enter` sends it. One that brings up a
-  picker or a report, such as `/model`, opens the TUI under the
-  conversation, where that shows, until its result is in.
-- An agent is in one place at a time: opening its terminal in the window
-  takes it off the terminal deck's stage, and the deck showing it again
-  takes it back, closing its terminal in the window.
-- Notifications still come from the deck, which counts an agent shown in
-  the window as one you are looking at.
+  a model). `Tab` completes one, `Enter` sends it. Commands only a TUI
+  has, such as `/resume`, are not offered.
+- Notifications still come from the deck, which counts the agent shown in
+  the focused window as one you are looking at.
 
 ## Reading the sidebar
 

@@ -96,7 +96,7 @@ type Pane struct {
 	Active bool
 	// Last: the pane was active before the active one, in its window.
 	Last bool
-	// Viewed: a desktop window shows the pane (see DeskPrefix).
+	// Viewed: a desktop window shows the pane (see MarkSeen).
 	Viewed bool
 	TTY    string
 	PID    int // the pane's process
@@ -106,12 +106,18 @@ type Pane struct {
 
 const paneFormat = "#{pane_id}\t#{@mad_id}\t#{session_name}\t#{window_id}\t#{window_index}.#{pane_index}\t" +
 	"#{pane_dead}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{pane_tty}\t#{pane_pid}\t#{@mad_asleep}\t#{pane_last}\t" +
-	"#{window_active}\t#{session_attached}"
+	"#{@mad_seen}"
 
-// DeskPrefix starts the names of the sessions a desktop window attaches
-// through: each is grouped with the pool, sharing its windows, and has
-// the window of the agent it shows as its current one.
-const DeskPrefix = "_desk-"
+// SeenFor is how long a pane a desktop window said it shows counts as
+// looked at: the window says so again every few seconds while it does.
+const SeenFor = 15 * time.Second
+
+// MarkSeen notes that a desktop window shows pane id at now (@mad_seen,
+// a Unix time): the deck neither notifies of nor puts to sleep an agent
+// someone looks at there.
+func MarkSeen(id string, now time.Time) error {
+	return Run("set-option", "-p", "-t", id, "@mad_seen", strconv.FormatInt(now.Unix(), 10))
+}
 
 func ListPanes() ([]Pane, error) {
 	out, err := Out("list-panes", "-a", "-F", paneFormat)
@@ -121,21 +127,13 @@ func ListPanes() ([]Pane, error) {
 	return parsePanes(out), nil
 }
 
-// parsePanes lists each pane once. A session grouped with the pool lists
-// the pool's panes again; those entries only say which pane a desktop
-// window shows.
+// parsePanes reads ListPanes' lines.
 func parsePanes(out string) []Pane {
 	var panes []Pane
-	viewed := map[string]bool{}
+	now := time.Now()
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 15 {
-			continue
-		}
-		if strings.HasPrefix(f[2], DeskPrefix) {
-			if f[13] == "1" && f[14] != "0" {
-				viewed[f[0]] = true
-			}
+		if len(f) != 14 {
 			continue
 		}
 		p := Pane{ID: f[0], MadID: f[1], Session: f[2], WindowID: f[3], Dead: f[5] == "1", Active: f[8] == "1", TTY: f[9],
@@ -143,44 +141,16 @@ func parsePanes(out string) []Pane {
 		p.Width, _ = strconv.Atoi(f[6])
 		p.Height, _ = strconv.Atoi(f[7])
 		p.PID, _ = strconv.Atoi(f[10])
+		if seen, err := strconv.ParseInt(f[13], 10, 64); err == nil {
+			p.Viewed = now.Sub(time.Unix(seen, 0)) < SeenFor
+		}
 		p.Index = -1
 		if w, i, ok := strings.Cut(f[4], "."); ok && p.Session == MainSession && w == "0" {
 			p.Index, _ = strconv.Atoi(i)
 		}
 		panes = append(panes, p)
 	}
-	for i := range panes {
-		panes[i].Viewed = viewed[panes[i].ID]
-	}
 	return panes
-}
-
-// CloseDesks ends the desktop windows' sessions that show window id. The
-// deck calls it before it takes a pane out of its pool window or closes
-// it: a session left on the window would show, and type into, the pane
-// swapped in in its place, or another agent's window once it is gone.
-func CloseDesks(windowID string) error {
-	out, err := Out("list-sessions", "-F", "#{session_name}\t#{window_id}")
-	if err != nil {
-		return err
-	}
-	for _, s := range desksShowing(out, windowID) {
-		_ = Run("kill-session", "-t", "="+s) // one gone meanwhile is closed
-	}
-	return nil
-}
-
-// desksShowing picks the desktop sessions whose current window is
-// windowID out of "session<TAB>window" lines.
-func desksShowing(out, windowID string) []string {
-	var names []string
-	for _, line := range strings.Split(out, "\n") {
-		name, win, ok := strings.Cut(line, "\t")
-		if ok && win == windowID && strings.HasPrefix(name, DeskPrefix) {
-			names = append(names, name)
-		}
-	}
-	return names
 }
 
 func FindPane(panes []Pane, madID string) (Pane, bool) {
@@ -283,7 +253,7 @@ func deckClients(out string) string {
 	var keep []string
 	for _, line := range strings.Split(out, "\n") {
 		sess, flags, ok := strings.Cut(line, "\t")
-		if ok && (sess == MainSession || strings.HasPrefix(sess, DeskPrefix)) {
+		if ok && sess == MainSession {
 			keep = append(keep, flags)
 		}
 	}

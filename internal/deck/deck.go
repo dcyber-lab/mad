@@ -17,6 +17,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
@@ -234,11 +235,6 @@ func ShowPane(madID string, focus bool) error {
 		return nil
 	}
 	if target.ID != stage.ID {
-		// The swap puts the stage's pane in the agent's window: a desktop
-		// window showing that window lets it go first.
-		if err := tmux.CloseDesks(target.WindowID); err != nil {
-			return err
-		}
 		// Pre-size the agent's window so the swap doesn't trigger a resize.
 		_ = tmux.Run("resize-window", "-t", target.WindowID,
 			"-x", strconv.Itoa(stage.Width), "-y", strconv.Itoa(stage.Height))
@@ -389,10 +385,37 @@ func DiffCommand(cfg DiffConfig, dir string) string {
 	return fmt.Sprintf("cd %s && { git -c color.status=always status --short --branch; echo; git -c color.diff=always diff HEAD; } | less -R", q)
 }
 
-// command is a's shell command, with the placeholders of every agent's
-// wiring filled; the kind's provider, if any, says which sessions exist
-// to resume.
+// Headless are the kinds that can run in window mode: headless under
+// `mad host`, drawn by the desktop window (package host).
+var Headless = map[string]bool{"claude": true, "codex": true, "pi": true}
+
+// Windowed reports whether a runs in window mode.
+func Windowed(a *state.Agent) bool { return a.Mode == state.ModeWindow && Headless[a.Kind] }
+
+// RunsHost reports whether pane runs agent id's `mad host`, not its TUI:
+// an agent put in window mode while its TUI ran goes on as its TUI until
+// that is free to restart.
+func RunsHost(pane tmux.Pane, id string) bool {
+	if pane.Dead {
+		return false
+	}
+	cmd, err := tmux.Out("display-message", "-p", "-t", pane.ID, "#{pane_start_command}")
+	return err == nil && strings.Contains(cmd, "host "+id)
+}
+
+// command is what runs in a's pane: `mad host` in window mode, else its
+// TUI (TUICommand).
 func command(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) string {
+	if Windowed(a) {
+		return SelfCommand("host " + a.ID)
+	}
+	return TUICommand(p, a, resume, kinds)
+}
+
+// TUICommand is a's own shell command, with the placeholders of every
+// agent's wiring filled; the kind's provider, if any, says which sessions
+// exist to resume. mad host runs it headless.
+func TUICommand(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kind) string {
 	l := agent.Launch{Vars: discover.Placeholders()}
 	if streaming() {
 		for k, v := range live.Vars(a.Kind, a.ID) {
@@ -447,9 +470,58 @@ func RestartAgent(p *state.Project, a *state.Agent, paneID string, kinds []agent
 	return tmux.Run(append(args, cmd)...)
 }
 
+// SetMode makes agent id run as mode (state.ModeWindow, or "" for its
+// TUI) from now on, and restarts it so if it runs: its session goes on.
+// The caller sees that it is not in the middle of something.
+func SetMode(id, mode string, kinds []agent.Kind) error {
+	var p state.Project
+	var a state.Agent
+	if err := state.Update(func(st *state.State) error {
+		pp, aa := st.FindAgent(id)
+		if aa == nil {
+			return fmt.Errorf("unknown agent %s", id)
+		}
+		aa.Mode = mode
+		p, a = *pp, *aa
+		return nil
+	}); err != nil {
+		return err
+	}
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return err
+	}
+	if pane, ok := tmux.FindPane(panes, id); ok && !pane.Dead {
+		return RestartAgent(&p, &a, pane.ID, kinds)
+	}
+	return nil
+}
+
+// takeBack puts an agent in window mode back in its TUI as the terminal
+// deck opens it, unless it is busy there (a turn, a question): then the
+// deck shows mad host's pane.
+func takeBack(st *state.State, id string, kinds []agent.Kind) error {
+	_, a := st.FindAgent(id)
+	if a == nil || a.Mode != state.ModeWindow {
+		return nil
+	}
+	if h := status.ReadHook(id); h != nil && (h.State == status.Running || h.State == status.Waiting) {
+		if panes, err := tmux.ListPanes(); err == nil {
+			if pane, ok := tmux.FindPane(panes, id); ok && !pane.Dead {
+				return nil
+			}
+		}
+	}
+	a.Mode = ""
+	return SetMode(id, "", kinds)
+}
+
 // OpenAgent shows agent id in the view in use, (re)starting it with its
-// previous session if its process is gone.
+// previous session if its process is gone; one in window mode as its TUI.
 func OpenAgent(st *state.State, id string, kinds []agent.Kind) error {
+	if err := takeBack(st, id, kinds); err != nil {
+		return err
+	}
 	if err := ensureAgent(st, id, kinds); err != nil {
 		return err
 	}
@@ -489,11 +561,6 @@ func KillAgent(id string) error {
 		} else {
 			defer Arrange()
 		}
-	}
-	// Its window goes with it; a desktop window showing it would move on
-	// to another agent's.
-	if err := tmux.CloseDesks(pane.WindowID); err != nil {
-		return err
 	}
 	return tmux.Run("kill-pane", "-t", pane.ID)
 }

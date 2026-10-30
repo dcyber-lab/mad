@@ -29,6 +29,9 @@ type Command struct {
 	// TUI: what it brings up (a picker, a dialog, a report) is on the
 	// agent's screen only, not in its transcript.
 	TUI bool `json:"tui,omitempty"`
+	// Headless: the agent named it when asked headless, so it takes it
+	// headless too (window mode, package host).
+	Headless bool `json:"headless,omitempty"`
 }
 
 // askTimeout bounds asking an agent: a claude connects its MCP servers
@@ -64,6 +67,7 @@ func merge(known, found []Command) []Command {
 			continue
 		}
 		c.Description = strings.Join(strings.Fields(c.Description), " ")
+		c.Headless = true
 		byName[c.Name] = len(out)
 		out = append(out, c)
 	}

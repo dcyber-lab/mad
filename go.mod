@@ -8,7 +8,6 @@ require (
 	github.com/charmbracelet/lipgloss v0.12.1
 	github.com/charmbracelet/x/ansi v0.1.4
 	github.com/coder/websocket v1.8.14
-	github.com/creack/pty v1.1.24
 	golang.org/x/term v0.20.0
 )
 

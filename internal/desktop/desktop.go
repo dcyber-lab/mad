@@ -32,8 +32,9 @@ type Server struct {
 	Token string
 	kinds []agent.Kind
 	poll  *poller
-	terms *terms
+	looks *looks
 	cmds  *commandCache
+	hist  historyCache
 }
 
 // New makes a server with a fresh random token.
@@ -42,8 +43,8 @@ func New(kinds []agent.Kind) *Server {
 	if _, err := rand.Read(b); err != nil {
 		panic(err) // crypto/rand does not fail on supported systems
 	}
-	t := newTerms()
-	return &Server{Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, t), terms: t, cmds: newCommandCache()}
+	l := newLooks()
+	return &Server{Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, l), looks: l, cmds: newCommandCache()}
 }
 
 // Handler routes the page, its assets and the API.
@@ -57,10 +58,23 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/chat", s.auth(http.HandlerFunc(s.chat)))
 	mux.Handle("GET /api/live", s.auth(http.HandlerFunc(s.live)))
 	mux.Handle("GET /api/commands", s.auth(http.HandlerFunc(s.commands)))
-	mux.Handle("GET /api/term", s.auth(http.HandlerFunc(s.term)))
+	mux.Handle("POST /api/mode", s.auth(http.HandlerFunc(s.mode)))
+	mux.Handle("POST /api/send", s.auth(http.HandlerFunc(s.send)))
+	mux.Handle("GET /api/host", s.auth(http.HandlerFunc(s.hostWS)))
+	mux.Handle("POST /api/seen", s.auth(http.HandlerFunc(s.seen)))
 	mux.Handle("POST /api/queue", s.auth(http.HandlerFunc(s.queueAdd)))
 	mux.Handle("DELETE /api/queue", s.auth(http.HandlerFunc(s.queueRemove)))
 	mux.Handle("POST /api/queue/pause", s.auth(http.HandlerFunc(s.queuePause)))
+	mux.Handle("GET /api/projects/suggest", s.auth(http.HandlerFunc(s.suggest)))
+	mux.Handle("POST /api/projects", s.auth(http.HandlerFunc(s.projectAdd)))
+	mux.Handle("DELETE /api/projects", s.auth(http.HandlerFunc(s.projectRemove)))
+	mux.Handle("POST /api/agents", s.auth(http.HandlerFunc(s.agentAdd)))
+	mux.Handle("PATCH /api/agents", s.auth(http.HandlerFunc(s.agentRename)))
+	mux.Handle("DELETE /api/agents", s.auth(http.HandlerFunc(s.agentRemove)))
+	mux.Handle("POST /api/agents/stop", s.auth(http.HandlerFunc(s.agentStop)))
+	mux.Handle("POST /api/terminal", s.auth(http.HandlerFunc(s.terminal)))
+	mux.Handle("GET /api/history", s.auth(http.HandlerFunc(s.history)))
+	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
 	return headers(mux)
 }
 
@@ -113,7 +127,6 @@ func (s *Server) Serve(ctx context.Context, addr string, ready func(url string))
 	go s.poll.Run(ctx)
 	go func() {
 		<-ctx.Done()
-		s.terms.CloseAll()
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(sctx)

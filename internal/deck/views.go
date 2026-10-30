@@ -40,11 +40,6 @@ func AddView(madID string, focus bool) error {
 	case len(views) >= MaxViews:
 		return ErrFullStage
 	}
-	// Its window goes when the pane leaves it: a desktop window showing it
-	// lets it go first (see ShowPane).
-	if err := tmux.CloseDesks(target.WindowID); err != nil {
-		return err
-	}
 	// After the last view: Arrange keeps the panes in their order.
 	args := []string{"join-pane", "-h", "-s", target.ID, "-t", views[len(views)-1].ID}
 	if !focus {
@@ -92,6 +87,9 @@ func OpenAgentView(st *state.State, id string, kinds []agent.Kind, focus bool) e
 	}
 	if p, ok := tmux.FindPane(panes, id); (!ok || !tmux.OnStage(p)) && len(tmux.Views(panes)) >= MaxViews {
 		return ErrFullStage
+	}
+	if err := takeBack(st, id, kinds); err != nil {
+		return err
 	}
 	if err := ensureAgent(st, id, kinds); err != nil {
 		return err

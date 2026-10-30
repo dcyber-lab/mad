@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,10 +13,10 @@ import (
 
 func TestParsePanes(t *testing.T) {
 	out := strings.Join([]string{
-		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t0\t1",
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t0\t1",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t\t0\t0\t1",
-		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1\t0\t0\t1",
+		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t169\t50\t0\t/dev/ttys003\t102\t\t0\t",
+		"%3\tagent-b\t_pool\t@2\t1.0\t1\t169\t50\t1\t/dev/ttys004\t103\t1\t0\t",
 		"garbage line",
 		"",
 	}, "\n")
@@ -55,9 +56,9 @@ func TestParsePanes(t *testing.T) {
 	// Several views: the one in use is the focused one, else the one
 	// focused last.
 	views := parsePanes(strings.Join([]string{
-		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t0\t1",
-		"%5\tagent-c\tmain\t@1\t0.2\t0\t84\t50\t0\t/dev/ttys005\t105\t\t1\t0\t1",
-		"%2\tagent-a\tmain\t@1\t0.1\t0\t84\t50\t0\t/dev/ttys003\t102\t\t0\t0\t1",
+		"%1\t_sidebar\tmain\t@1\t0.0\t0\t30\t50\t1\t/dev/ttys002\t101\t\t0\t",
+		"%5\tagent-c\tmain\t@1\t0.2\t0\t84\t50\t0\t/dev/ttys005\t105\t\t1\t",
+		"%2\tagent-a\tmain\t@1\t0.1\t0\t84\t50\t0\t/dev/ttys003\t102\t\t0\t",
 	}, "\n"))
 	if v := Views(views); len(v) != 2 || v[0].MadID != "agent-a" || v[1].Index != 2 {
 		t.Errorf("Views = %+v", v)
@@ -71,25 +72,19 @@ func TestParsePanes(t *testing.T) {
 	}
 }
 
-// A desktop window's session lists the pool's panes again: once each is
-// all ListPanes gives, the shown one marked as viewed.
-func TestParsePanesDesk(t *testing.T) {
+// A pane a desktop window said it shows a moment ago counts as looked at;
+// one it said so long ago does not.
+func TestParsePanesSeen(t *testing.T) {
+	now := time.Now().Unix()
 	panes := parsePanes(strings.Join([]string{
-		"%0\t_keep\t_desk-1\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t0\t1",
-		"%3\tagent-b\t_desk-1\t@2\t1.0\t0\t169\t50\t1\t/dev/ttys004\t103\t\t0\t1\t1",
-		"%4\tagent-c\t_desk-2\t@3\t2.0\t0\t169\t50\t1\t/dev/ttys005\t104\t\t0\t1\t0",
-		"%0\t_keep\t_pool\t@0\t0.0\t0\t200\t50\t1\t/dev/ttys001\t100\t\t0\t1\t0",
-		"%3\tagent-b\t_pool\t@2\t1.0\t0\t169\t50\t1\t/dev/ttys004\t103\t\t0\t0\t0",
-		"%4\tagent-c\t_pool\t@3\t2.0\t0\t169\t50\t1\t/dev/ttys005\t104\t\t0\t0\t0",
+		"%3\tagent-b\t_pool\t@2\t1.0\t0\t169\t50\t1\t/dev/ttys004\t103\t\t0\t" + strconv.FormatInt(now-2, 10),
+		"%4\tagent-c\t_pool\t@3\t2.0\t0\t169\t50\t1\t/dev/ttys005\t104\t\t0\t" + strconv.FormatInt(now-600, 10),
+		"%5\tagent-d\t_pool\t@4\t3.0\t0\t169\t50\t1\t/dev/ttys006\t105\t\t0\t",
 	}, "\n"))
 	if len(panes) != 3 {
-		t.Fatalf("got %d panes, want 3: %+v", len(panes), panes)
+		t.Fatalf("got %d panes: %+v", len(panes), panes)
 	}
 	for _, p := range panes {
-		if p.Session != PoolSession {
-			t.Errorf("%s listed in %s", p.MadID, p.Session)
-		}
-		// agent-c's session has no client: nobody looks at it.
 		if want := p.MadID == "agent-b"; p.Viewed != want {
 			t.Errorf("%s viewed = %v", p.MadID, p.Viewed)
 		}
@@ -208,22 +203,12 @@ func TestWatched(t *testing.T) {
 }
 
 func TestDeckClients(t *testing.T) {
-	out := "main\txattached,UTF-8\nwork\txattached,focused\n_desk-1\txattached,focused\n"
-	if got := deckClients(out); got != "xattached,UTF-8\nxattached,focused" {
+	out := "main\txattached,UTF-8\nwork\txattached,focused\n"
+	if got := deckClients(out); got != "xattached,UTF-8" {
 		t.Errorf("deckClients = %q", got)
 	}
 	if watched(deckClients("work\txattached,focused"), true) {
 		t.Error("a client of another session counts as watching the deck")
-	}
-}
-
-func TestDesksShowing(t *testing.T) {
-	out := "main\t@1\n_pool\t@2\n_desk-1\t@2\n_desk-2\t@3\n_desk-3\t@2\n"
-	if got := desksShowing(out, "@2"); strings.Join(got, " ") != "_desk-1 _desk-3" {
-		t.Errorf("desksShowing = %q", got)
-	}
-	if got := desksShowing(out, "@1"); len(got) != 0 {
-		t.Errorf("the deck's own session is closed: %q", got)
 	}
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/host"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -266,6 +267,9 @@ func Send(st *state.State, a *state.Agent, text string, kinds []agent.Kind) erro
 	if a.ID == os.Getenv("MAD_AGENT_ID") {
 		return errors.New("an agent can't send to itself")
 	}
+	if deck.Windowed(a) {
+		return sendHost(st, a, text, kinds)
+	}
 	k := agent.ByName(kinds, a.Kind)
 	pane, err := ready(st, a, kinds)
 	if err != nil {
@@ -292,6 +296,40 @@ func Send(st *state.State, a *state.Agent, text string, kinds []agent.Kind) erro
 		}
 	}
 	return nil
+}
+
+// sendHost gives the message to an agent in window mode through its host
+// (package host), starting it first if it is asleep or stopped: refused,
+// as Send refuses, while it works or asks something.
+func sendHost(st *state.State, a *state.Agent, text string, kinds []agent.Kind) error {
+	if _, _, err := wake(st, a, kinds); err != nil {
+		return err
+	}
+	var s host.State
+	var err error
+	for end := now().Add(10 * time.Second); now().Before(end); time.Sleep(tick) {
+		if s, err = host.Peek(a.ID); err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("%s: its host did not start: %w", Label(a), err)
+	}
+	switch s.Status {
+	case host.Running:
+		return fmt.Errorf("%s %w", Label(a), ErrBusy)
+	case host.Waiting:
+		ask := ""
+		if len(s.Requests) > 0 {
+			ask = s.Requests[0].Title
+		}
+		return &AskingError{Label(a), ask}
+	}
+	if err := status.MarkSent(a.ID, now(), Digest(text)); err != nil {
+		return err
+	}
+	_ = poke.Send(poke.Poll)
+	return host.Do(a.ID, host.Command{Type: "send", Text: text})
 }
 
 // Digest stands for a message as Send marks it sent (see Took).

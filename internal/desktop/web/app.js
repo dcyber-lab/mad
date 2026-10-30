@@ -1,6 +1,7 @@
 // mad desktop: the sidebar is drawn from /api/deck; each opened agent is
-// its conversation, drawn from its transcript (/api/chat), or an xterm.js
-// terminal on /api/term, a tmux client attached to its pane.
+// its conversation, drawn from its transcript (/api/chat) and, run here,
+// from its host (/api/host: window mode), or followed as its TUI writes
+// (/api/live).
 "use strict";
 
 const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
@@ -114,6 +115,20 @@ function drawSidebar() {
       localStorageSet("mad.collapsed", JSON.stringify([...collapsed]));
       drawSidebar();
     };
+    head.oncontextmenu = (e) => { e.preventDefault(); projectMenu(p, { x: e.clientX, y: e.clientY }); };
+    const hacts = el("span", "hacts");
+    const plus = el("button", "icon-btn");
+    plus.type = "button";
+    plus.title = `a new chat in ${p.name}`;
+    plus.append(icon("plus"));
+    plus.onclick = (e) => { e.stopPropagation(); openNew(p.path); };
+    const pmore = el("button", "icon-btn");
+    pmore.type = "button";
+    pmore.title = "more";
+    pmore.append(icon("more"));
+    pmore.onclick = (e) => { e.stopPropagation(); projectMenu(p, pmore); };
+    hacts.append(plus, pmore);
+    head.append(hacts);
     box.append(head);
     for (const a of shown) {
       const st = shownStatus(a);
@@ -131,6 +146,13 @@ function drawSidebar() {
       // What it does, or else what it is: rows of one height.
       row.append(el("span", "detail", a.detail || `${a.kind} · ${(statusWords[st] || ["", st])[1].toLowerCase()}`));
       row.onclick = () => show(a.id);
+      row.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
+      const amore = el("button", "icon-btn more");
+      amore.type = "button";
+      amore.title = "more";
+      amore.append(icon("more"));
+      amore.onclick = (e) => { e.stopPropagation(); agentMenu(a, amore, { right: true }); };
+      row.append(amore);
       box.append(row);
     }
     nav.append(box);
@@ -144,17 +166,44 @@ function drawSidebar() {
     if (!a) continue;
     o.tab.className = `tab s-${shownStatus(a)}${id === current ? " on" : ""}`;
     o.tab.querySelector(".t").textContent = label(a);
-    o.wait.hidden = a.status !== "waiting" || !!o.dock;
-    // Asking you something: what it asks, and the keys to answer, are in
-    // its own TUI, docked under the conversation until it is answered.
-    if (a.status === "waiting" && o.status !== "waiting" && !o.dock) dock(id, "waiting");
-    if (o.dock === "waiting" && a.status !== "waiting") dock(id, null);
-    // What a command brought up is done with once its result is in.
-    if (o.dock === "command" && o.results > o.dockAt && a.status !== "waiting") dock(id, null);
+    if (windowed(a)) {
+      // Drawn from its host: what it asks is a card in the conversation.
+      if (!o.hostWS) hostConnect(id, o);
+      if (o.follow) unfollow(o);
+    } else if (a.chat) {
+      // Back in its TUI; not one just put here that the deck's look has
+      // yet to show.
+      if ((o.hostWS || o.hs) && Date.now() - o.claimAt > 3000) hostLeave(o);
+      if (id === current) {
+        claim(id, o);
+        if (!o.follow) follow(id, o);
+      }
+    }
+    drawWait(o, a);
     o.status = a.status;
   }
   $("#bar").hidden = opened.size === 0;
-  drawViews();
+  drawActs();
+  if (nc.open && !projectOf(nc.project) && deck.projects.length) {
+    nc.project = deck.projects[0].path;
+    drawNew();
+  }
+}
+
+// drawWait says, over an agent its TUI has in the terminal deck, why it
+// is not run here yet: it comes here once that is done.
+function drawWait(o, a) {
+  const busy = !windowed(a) && a.chat && a.headless && (a.status === "running" || a.status === "waiting");
+  o.wait.hidden = !busy;
+  if (!busy) return;
+  const text = a.status === "waiting"
+    ? "It asks something in the terminal deck: answer it there. It comes here once done."
+    : "It works in the terminal deck: it comes here once done.";
+  if (o.wait.dataset.text !== text) {
+    o.wait.dataset.text = text;
+    o.wait.className = `wait${a.status === "waiting" ? " asks" : ""}`;
+    o.wait.replaceChildren(icon(a.status === "waiting" ? "alert" : "terminal"), el("span", "", text));
+  }
 }
 
 // drawSpotlight puts the agents that want a look on the page shown with
@@ -219,10 +268,23 @@ applyTheme();
 function drawQueue(fresh) {
   const box = $("#queue");
   const a = current && agents.get(current);
-  if (box.hidden === !!current) {
-    box.hidden = !current;
+  // Nothing to say here to a shell: it is the terminal deck's.
+  const off = !nc.open && (!a || !a.chat);
+  if (box.hidden !== off) {
+    box.hidden = off;
     fitInput();
   }
+  $("#attach").hidden = !takesImages();
+  if (nc.open) {
+    $("#qinput").placeholder = "Ask anything, or / for commands";
+    $("#qitems").replaceChildren();
+    $("#qitems").dataset.key = "";
+    $("#qpause").hidden = true;
+    drawNewWho();
+    drawSend();
+    return;
+  }
+  $("#qinput").placeholder = "Message the agent, or / for commands";
   if (!a) return;
   const q = fresh || a.queue || { items: [] };
   if (fresh) a.queue = fresh;
@@ -244,13 +306,16 @@ function drawQueue(fresh) {
       list.append(li);
     });
   }
-  $("#qerr").textContent = q.error && items.length ? `Not sent yet: ${q.error}` : "";
+  const o = opened.get(current);
+  $("#qerr").textContent = windowed(a) ? (o && (o.err || o.hs && o.hs.error)) || ""
+    : q.error && items.length ? `Not sent yet: ${q.error}` : "";
   const pause = $("#qpause");
   pause.hidden = !items.length && !q.paused;
   pause.replaceChildren(icon(q.paused ? "play" : "pause"));
   pause.title = q.paused ? "the queue is held: let it go" : "hold the queued messages";
   pause.classList.toggle("on", !!q.paused);
   drawWho(a);
+  drawSend();
 }
 
 // drawWho says, under the message box, which agent it goes to and what
@@ -259,6 +324,34 @@ function drawWho(a) {
   const who = $("#who");
   const what = el("span", "what");
   what.append(el("b", "", a.kind), ` · ${a.project.name}${a.project.branch ? " / " + a.project.branch : ""}`);
+  const o = opened.get(a.id);
+  if (windowed(a) && o && o.hs) {
+    // Run here: its model to pick, and what its host says it does.
+    const parts = [avatar(a, true), what];
+    const name = modelName(o.hs);
+    keepModels(a.kind, o.hs.models);
+    if (name && o.hs.models && o.hs.models.length) {
+      const b = el("button", "chip model");
+      b.type = "button";
+      b.title = "its model";
+      b.append(el("span", "", name), icon("down"));
+      b.onmousedown = (e) => { e.preventDefault(); modelMenu(b, o); };
+      parts.push(b);
+    }
+    const perm = permissionName(o.hs);
+    if (perm) {
+      const b = el("button", `chip perm p-${o.hs.permission}`);
+      b.type = "button";
+      b.title = "what it may do without asking";
+      b.append(icon("shield"), el("span", "", perm), icon("down"));
+      b.onmousedown = (e) => { e.preventDefault(); permissionMenu(b, o); };
+      parts.push(b);
+    }
+    parts.push(hostPill(o.hs));
+    who.replaceChildren(...parts);
+    who.className = `s-${{ running: "running", waiting: "waiting" }[o.hs.status] || "idle"}`;
+    return;
+  }
   who.replaceChildren(avatar(a, true), what, statusPill(a));
   who.className = `s-${shownStatus(a)}`;
 }
@@ -278,8 +371,13 @@ async function submit() {
   const t = $("#qinput");
   const text = t.value;
   const id = current;
-  if (!text.trim() || !id) return;
+  if (nc.open) {
+    if (text.trim() || pendingImgs.length) newSubmit(text);
+    return;
+  }
+  if (!text.trim() && !(pendingImgs.length && windowed(agents.get(id))) || !id) return;
   closeMenu();
+  if (windowed(agents.get(id)) || await claim(id, opened.get(id), true)) return hostSubmit(id, text);
   // Cleared at once, so what is typed next is a message of its own; put
   // back if it was not queued.
   t.value = "";
@@ -289,15 +387,17 @@ async function submit() {
     fitInput();
     return;
   }
-  // What one of the TUI's own commands brings up is on its screen only.
-  const name = /^\/(\S+)/.exec(text.trim())?.[1];
-  if (name && findCommand(id, name)?.tui) dock(id, "command");
 }
 
 $("#qinput").addEventListener("keydown", (e) => {
   if (e.isComposing) return;
   if (!$("#qmenu").hidden && menuKey(e)) {
     e.preventDefault();
+    return;
+  }
+  // Esc stops one run here, as in its TUI.
+  if (e.key === "Escape" && $("#qsend").classList.contains("stop")) {
+    hostSend(opened.get(current), { type: "interrupt" });
     return;
   }
   if (e.key !== "Enter" || e.shiftKey) return;
@@ -308,7 +408,7 @@ $("#qinput").addEventListener("keydown", (e) => {
 // it if there is something.
 function fitInput() {
   const t = $("#qinput");
-  $("#qsend").disabled = !t.value.trim();
+  drawSend();
   t.style.height = "";
   // Not drawn yet (no tab shown): measured once it is.
   if (!t.offsetParent) return;
@@ -319,8 +419,10 @@ $("#qinput").addEventListener("input", () => {
   fitInput();
   drawMenu();
 });
-$("#qsend").append(icon("send"));
-$("#qsend").onclick = () => submit();
+$("#qsend").onclick = () => {
+  if ($("#qsend").classList.contains("stop")) hostSend(opened.get(current), { type: "interrupt" });
+  else submit();
+};
 $(".composer").addEventListener("mousedown", (e) => {
   // A click anywhere in the box but its buttons is a click in the text.
   if (!e.target.closest("button, textarea, #qmenu, #qitems")) {
@@ -390,7 +492,10 @@ async function drawMenu() {
   const list = await commandsOf(id);
   const now = commandWord(t);
   if (id !== current || !now || now.query !== w.query) return; // typed on: drawn for that
-  const items = list.map((c) => [rank(c, w.query), c]).filter(([r]) => r >= 0)
+  // Run here, it takes what it takes headless; /model is the window's.
+  const here = windowed(agents.get(id));
+  const items = list.filter((c) => !here || c.headless || c.name === "model")
+    .map((c) => [rank(c, w.query), c]).filter(([r]) => r >= 0)
     .sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).map(([, c]) => c);
   if (!items.length) return closeMenu();
   if (menu.query !== w.query) menu.sel = 0;
@@ -486,6 +591,12 @@ function xtermColor(n) {
 }
 
 async function poll() {
+  await refresh();
+  setTimeout(poll, 1000);
+}
+
+// refresh takes the deck's latest look and draws it.
+async function refresh() {
   try {
     const r = await fetch(`/api/deck?token=${encodeURIComponent(token)}`);
     if (!r.ok) throw new Error(r.status);
@@ -495,7 +606,7 @@ async function poll() {
     drawQuota(deck.quota);
     drawSidebar();
     const o = opened.get(current);
-    if (o && o.view === "chat") {
+    if (o && agents.get(current)?.chat) {
       loadChat(current, o);
       try {
         drawLive(o); // what the agent is doing, as of this look
@@ -507,28 +618,11 @@ async function poll() {
     $("#conn").classList.remove("ok");
     $("#conn").title = `no connection to mad (${e.message || e})`;
   }
-  setTimeout(poll, 1000);
 }
 
 // ---- terminals ----
 
 function open(id) {
-  const box = el("div", "term");
-  $("#terms").append(box);
-  const term = new Terminal({
-    fontFamily: '"JetBrains Mono", "SF Mono", Menlo, "DejaVu Sans Mono", monospace',
-    fontSize: 13,
-    cursorBlink: true,
-    scrollback: 0, // tmux keeps the history; the wheel scrolls it
-    allowProposedApi: false,
-    macOptionIsMeta: true,
-    // Dark in either theme: the agents' TUIs draw for a dark terminal.
-    theme: { background: "#121214", foreground: "#ececf1", cursor: "#ececf1", selectionBackground: "#2f4a77" },
-  });
-  const fit = new FitAddon.FitAddon();
-  term.loadAddon(fit);
-  term.open(box);
-
   const tab = el("div", "tab");
   tab.append(el("span", "dot"), el("span", "t", label(agents.get(id) || { id, kind: "" })));
   const x = el("span", "x");
@@ -539,40 +633,23 @@ function open(id) {
   tab.onclick = () => show(id);
   $("#tabs").append(tab);
 
-  // The conversation, for kinds whose transcript reads as one. The
-  // terminal connects when first shown: reading starts nothing.
+  // Its conversation. Reading it starts nothing.
   const chat = el("div", "chat");
   const log = el("div", "log");
   const live = el("div", "live"); // the message being written, last in the log
-  log.append(live);
+  const asks = el("div", "asks"); // what it asks, run here (window mode)
+  log.append(live, asks);
+  // While its TUI has it in the terminal deck: what it does is followed
+  // here, what it asks answered there.
   const wait = el("div", "wait");
   wait.hidden = true;
-  wait.append(icon("alert"), el("span", "", "It needs you: answer in its terminal"), el("kbd", "", "Alt"), el("kbd", "", "T"));
-  wait.onclick = () => dock(id, "user");
   chat.append(log, wait);
   $("#terms").append(chat);
 
-  // The bar over the terminal docked under the conversation (dock).
-  const dockbar = el("div", "dockbar");
-  const dockWhat = el("span", "what");
-  const expand = el("button", "icon-btn");
-  expand.type = "button";
-  expand.title = "the whole tab (Alt-t)";
-  expand.append(icon("expand"));
-  expand.onclick = () => setView(id, "term");
-  const shut = el("button", "icon-btn");
-  shut.type = "button";
-  shut.title = "put it away (it keeps running)";
-  shut.append(icon("x"));
-  shut.onclick = () => dock(id, null);
-  dockbar.append(icon("terminal"), dockWhat, el("span", "grow"), expand, shut);
-  $("#terms").append(dockbar);
-
   const a = agents.get(id);
   const o = {
-    id, term, fit, box, tab, ws: null, chat, log, live, wait, dockbar, dockWhat,
-    dock: null, dockAt: 0, results: 0, // the terminal docked under the conversation, and why
-    view: a && a.chat ? "chat" : "term",
+    id, tab, chat, log, live, wait,
+    asks, hostWS: null, hs: null, err: "", claimAt: 0, // window mode: its host, and what it says
     status: a && a.status,
     file: "", offset: 0, loaded: false, loading: false, entries: 0,
     calls: new Map(), // tool call id → its node, which its result joins
@@ -581,170 +658,89 @@ function open(id) {
     msg: null, version: 0, msgAt: 0, follow: null, // the message being written (/api/live)
   };
   opened.set(id, o);
-
-  term.onData((d) => send(o, new TextEncoder().encode(d)));
-  term.onBinary((d) => send(o, Uint8Array.from(d, (c) => c.charCodeAt(0))));
-  term.onResize(({ cols, rows }) => sendCtl(o, { type: "resize", cols, rows }));
-  term.textarea.addEventListener("focus", () => sendCtl(o, { type: "focus" }));
-  term.textarea.addEventListener("blur", () => sendCtl(o, { type: "blur" }));
-  new ResizeObserver(() => { if (box.classList.contains("on")) safeFit(o); }).observe(box);
   return o;
-}
-
-function connect(id, o) {
-  safeFit(o);
-  const q = new URLSearchParams({ token, id, cols: o.term.cols, rows: o.term.rows });
-  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/term?${q}`);
-  ws.binaryType = "arraybuffer";
-  o.ws = ws;
-  ws.onopen = () => {
-    // The size in the URL can be from before the tab was shown (xterm's
-    // 80x24), and a fit while it connected was sent nowhere.
-    safeFit(o);
-    sendCtl(o, { type: "resize", cols: o.term.cols, rows: o.term.rows });
-    if (id === current && document.hasFocus()) sendCtl(o, { type: "focus" });
-  };
-  ws.onmessage = (ev) => {
-    if (typeof ev.data === "string") {
-      const m = JSON.parse(ev.data);
-      if (m.type === "error") message(o, `Could not open the agent: ${m.message}`);
-      return;
-    }
-    o.term.write(new Uint8Array(ev.data));
-  };
-  ws.onclose = () => {
-    if (!opened.has(id) || o.ws !== ws) return;
-    o.ws = null;
-    if (!o.box.querySelector(".msg")) message(o, "Closed: the terminal deck took this agent, or mad stopped. Click to open it here again.", () => connect(id, o));
-  };
-}
-
-function message(o, text, onclick) {
-  o.box.querySelector(".msg")?.remove();
-  const m = el("div", "msg", text);
-  if (onclick) { m.style.cursor = "pointer"; m.onclick = () => { m.remove(); onclick(); }; }
-  o.box.append(m);
-}
-
-function send(o, bytes) {
-  if (o.ws && o.ws.readyState === WebSocket.OPEN) o.ws.send(bytes);
-}
-function sendCtl(o, m) {
-  if (o.ws && o.ws.readyState === WebSocket.OPEN) o.ws.send(JSON.stringify(m));
-}
-function safeFit(o) {
-  try { o.fit.fit(); } catch (_) { /* hidden: measured when shown */ }
 }
 
 function show(id) {
   if (current && current !== id) {
     const prev = opened.get(current);
     if (prev) {
-      prev.box.classList.remove("on"); prev.chat.classList.remove("on"); prev.tab.classList.remove("on");
-      prev.dockbar.classList.remove("on");
-      sendCtl(prev, { type: "blur" });
+      prev.chat.classList.remove("on");
+      prev.tab.classList.remove("on");
       unfollow(prev);
     }
   }
   current = id;
+  closeNew();
   closeMenu();
+  closePopup();
   commandsOf(id);
   const o = opened.get(id) || open(id);
   $("#empty").style.display = "none";
   present(id, o);
   o.tab.scrollIntoView({ block: "nearest" });
+  // The changes beside it are this agent's.
+  if (side.id && side.id !== id) {
+    if (agents.get(id)?.chat) openChanges(id);
+    else closeChanges();
+  }
   drawSidebar();
+  seen();
 }
 
-// present shows agent id's tab in its view: the conversation, or the
-// terminal, connected the first time it is shown.
+// present shows agent id's conversation, run here if it can be (window
+// mode), else followed as its TUI runs it.
 function present(id, o) {
-  const term = o.view === "term";
-  const docked = !term && !!o.dock;
-  $("#main").classList.toggle("term-view", term || docked);
+  o.chat.classList.add("on");
   fitInput();
-  o.box.classList.toggle("on", term || docked);
-  o.box.classList.toggle("dock", docked);
-  o.box.classList.toggle("asks", o.dock === "waiting");
-  o.dockbar.classList.toggle("on", docked);
-  o.dockbar.classList.toggle("asks", o.dock === "waiting");
-  o.chat.classList.toggle("on", !term);
-  o.chat.classList.toggle("docked", docked);
-  if (term || docked) {
-    if (!o.ws && !o.box.querySelector(".msg")) connect(id, o);
-    // Keys go to it at once, but not when it asked on its own: what is
-    // being typed in the message box would answer it.
-    requestAnimationFrame(() => {
-      safeFit(o);
-      if (term || o.dock !== "waiting") o.term.focus();
-      if (docked) o.chat.scrollTop = o.chat.scrollHeight;
-    });
-  } else {
-    sendCtl(o, { type: "blur" });
-    if (o.box.contains(document.activeElement)) $("#qinput").focus();
+  const a = agents.get(id);
+  if (a && !a.chat) {
+    // A shell, or a kind of the user's own: a terminal's alone.
+    if (!o.log.querySelector(".tui-only")) {
+      const n = el("div", "tui-only");
+      const t = el("div", "");
+      t.append(el("b", "", `A ${a.kind} is a terminal`), el("span", "muted", "It runs in the terminal deck: open it in your terminal app."));
+      n.append(icon("terminal"), t, button("Open in terminal", "primary", () => openTerminal(agents.get(id) || a)));
+      o.log.insertBefore(n, o.live);
+    }
+    return;
   }
-  if (term) {
-    unfollow(o);
+  loadChat(id, o);
+  if (windowed(a)) {
+    hostConnect(id, o);
   } else {
-    loadChat(id, o);
+    claim(id, o);
     follow(id, o);
   }
 }
-
-// dock shows agent id's terminal under its conversation, for reason:
-// "waiting" (it asks something), "command" (what a command brought up is
-// on its screen) or "user"; null puts it away.
-function dock(id, reason) {
-  const o = opened.get(id);
-  if (!o || o.dock === reason) return;
-  o.dock = reason;
-  o.dockAt = o.results;
-  o.dockWhat.textContent = reason === "waiting" ? "It needs you: answer here" : "On its screen";
-  o.wait.hidden = true;
-  if (id === current && o.view === "chat") present(id, o);
-}
-
-function setView(id, view) {
-  const o = opened.get(id);
-  if (!o || o.view === view || view === "chat" && !agents.get(id)?.chat) return;
-  o.view = view;
-  if (id === current) present(id, o);
-  drawViews();
-}
-
-function drawViews() {
-  const o = opened.get(current);
-  $("#views").hidden = !o;
-  if (!o) return;
-  for (const b of document.querySelectorAll("#views button")) {
-    b.classList.toggle("on", b.dataset.view === o.view);
-    if (b.dataset.view === "chat") b.disabled = !agents.get(current)?.chat;
-  }
-}
-for (const b of document.querySelectorAll("#views button")) b.onclick = () => setView(current, b.dataset.view);
 
 function close(id) {
   const o = opened.get(id);
   if (!o) return;
   opened.delete(id);
   unfollow(o);
-  o.ws?.close();
-  o.term.dispose();
-  o.box.remove();
-  o.dockbar.remove();
+  hostLeave(o);
   o.chat.remove();
   o.tab.remove();
+  if (side.id === id) closeChanges();
   if (current === id) {
     current = null;
     const next = [...opened.keys()].pop();
     if (next) show(next);
-    else {
-      $("#empty").style.display = "";
-      $("#main").classList.remove("term-view");
-    }
+    else if (!nc.open) $("#empty").style.display = "";
   }
   drawSidebar();
 }
+
+// seen tells mad which agent is in front of you, while the window has the
+// focus: it neither notifies of nor puts to sleep one you look at.
+function seen() {
+  if (current && document.hasFocus() && agents.get(current)) {
+    fetch(`/api/seen?${new URLSearchParams({ token, id: current })}`, { method: "POST" }).catch(() => {});
+  }
+}
+setInterval(seen, 5000);
+window.addEventListener("focus", seen);
 
 // ---- the conversation: what the agent's transcript says ----
 
@@ -798,7 +794,7 @@ async function loadChat(id, o) {
     if (!r.ok) throw new Error(await r.text());
     const c = await r.json();
     if (c.reset) {
-      o.log.replaceChildren(o.live);
+      o.log.replaceChildren(o.live, o.asks);
       o.calls.clear();
       o.parts.clear();
       o.partIDs.clear();
@@ -982,7 +978,8 @@ function drawLive(o) {
   const a = agents.get(o.id);
   const last = o.live.previousElementSibling;
   const busy = m && m.id && !m.done || last && last.matches("details.call:not(.done):not(.failed)");
-  if (!shown && a && a.status === "running" && busy) {
+  const running = windowed(a) && o.hs ? o.hs.status === "running" : a && a.status === "running";
+  if (!shown && running && busy) {
     const n = el("div", "busy");
     n.append(el("span", "spin"), el("span", "shimmer", a.detail || "Working"));
     box.append(n);
@@ -996,6 +993,297 @@ function hint(partial) {
   const m = /"(description|command|file_path|pattern|url|query|prompt)"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(partial || "");
   if (!m) return "";
   try { return JSON.parse(`"${m[2].replace(/\\$/, "")}"`).split("\n")[0]; } catch (_) { return m[2]; }
+}
+
+// ---- window mode: agents mad host runs headless, drawn here ----
+
+// windowed: agent a runs headless under mad host, for the window to draw.
+function windowed(a) {
+  return !!a && a.mode === "window";
+}
+
+// claim puts agent id in window mode as the window opens it, or (now) a
+// message is sent to it, unless it is busy as its TUI or holds a draft of
+// yours there (the server says): it is asked again a while later. It
+// reports whether the agent runs here now.
+async function claim(id, o, now) {
+  const a = agents.get(id);
+  if (!a || !o || !a.headless || windowed(a)) return windowed(a);
+  if (a.status === "running" || a.status === "waiting") return false;
+  if (!now && Date.now() - o.claimAt < 4000) return false;
+  o.claimAt = Date.now();
+  try {
+    const r = await fetch(`/api/mode?${new URLSearchParams({ token, id, mode: "window" })}`, { method: "POST" });
+    if (!r.ok) return false;
+  } catch (_) {
+    return false;
+  }
+  // The deck's next look says so too; till then, the page knows.
+  for (const x of [a, agents.get(id)]) if (x) x.mode = "window";
+  unfollow(o);
+  hostConnect(id, o);
+  if (id === current) drawQueue();
+  return true;
+}
+
+// hostConnect keeps a websocket to agent id's host while its tab is open.
+function hostConnect(id, o) {
+  if (o.hostWS || !opened.has(id)) return;
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/host?${new URLSearchParams({ token, id })}`);
+  o.hostWS = ws;
+  ws.onmessage = (ev) => {
+    let m;
+    try { m = JSON.parse(ev.data); } catch (_) { return; }
+    if (m.type === "state" && m.state) hostState(id, o, m.state);
+    else if (m.type === "error") {
+      o.err = m.error;
+      if (id === current) drawQueue();
+    }
+  };
+  ws.onclose = () => {
+    if (o.hostWS !== ws) return;
+    o.hostWS = null;
+    if (opened.has(id) && windowed(agents.get(id))) setTimeout(() => hostConnect(id, o), 1500);
+  };
+}
+
+// hostLeave stops listening to agent's host: it went back to its TUI, or
+// its tab closed.
+function hostLeave(o) {
+  const ws = o.hostWS;
+  o.hostWS = null;
+  o.hs = null;
+  ws?.close();
+  o.asks.replaceChildren();
+}
+
+function hostSend(o, cmd) {
+  if (!o || !o.hostWS || o.hostWS.readyState !== WebSocket.OPEN) return false;
+  o.hostWS.send(JSON.stringify(cmd));
+  return true;
+}
+
+// hostState takes what the host says: the message being written, what it
+// asks, and how it is.
+function hostState(id, o, s) {
+  o.hs = s;
+  const m = s.message;
+  if (m && m.id && (!o.msg || o.msg.id !== m.id || o.msg.version !== m.version || o.msg.done !== m.done)) {
+    o.msg = { ...m, blocks: m.blocks || [] };
+    o.msgAt = Date.now();
+  }
+  try {
+    drawLive(o);
+  } catch (err) {
+    console.error("live", err);
+  }
+  drawAsks(o);
+  if (id === current) drawQueue();
+}
+
+// hostSubmit sends text to agent id run here; its host starts if it is
+// asleep. /model is the window's menu.
+async function hostSubmit(id, text) {
+  const t = $("#qinput");
+  const o = opened.get(id);
+  t.value = "";
+  fitInput();
+  if (/^\/model\s*$/.test(text.trim())) {
+    const chip = document.querySelector("#who .model");
+    if (chip && o && o.hs) modelMenu(chip, o);
+    return;
+  }
+  const imgs = takeImages();
+  let err = "";
+  try {
+    await sendTo(id, text, imgs);
+  } catch (e) {
+    err = e.message || "no connection to mad";
+    restoreImages(imgs);
+  }
+  if (o) {
+    o.err = err;
+    if (!err) hostConnect(id, o);
+  }
+  if (err && !t.value) {
+    t.value = text;
+    fitInput();
+  }
+  if (id === current) drawQueue();
+}
+
+// drawSend makes the send button a stop button while one run here works
+// and nothing is typed.
+function drawSend() {
+  const b = $("#qsend");
+  const o = opened.get(current);
+  const typed = !!$("#qinput").value.trim();
+  const stop = !typed && windowed(agents.get(current)) && !!o && !!o.hs && o.hs.status === "running";
+  if (b.classList.contains("stop") !== stop || !b.firstChild) {
+    b.classList.toggle("stop", stop);
+    b.replaceChildren(icon(stop ? "stop" : "send"));
+    b.title = stop ? "stop it (Esc)" : "send (Enter)";
+  }
+  b.disabled = !stop && !typed;
+  // How what is typed goes: run here, at once.
+  const h = $("#hint");
+  const key = nc.open ? "now" : windowed(agents.get(current)) ? (o && o.hs && o.hs.status === "running" ? "stop" : "now") : "queue";
+  if (h.dataset.key !== key) {
+    h.dataset.key = key;
+    h.replaceChildren({ queue: "Sent when its turn is over", now: "Sent now", stop: "Esc stops it" }[key] + " · ",
+      el("kbd", "", "⇧"), el("kbd", "", "↵"), " new line");
+  }
+}
+
+// currentModel is the one of hs.models it runs: named so, or the family
+// its full name is of (claude-haiku-5-5 is haiku's).
+function currentModel(hs) {
+  const ms = hs.models || [];
+  return ms.find((x) => x.value === hs.model) ||
+    ms.find((x) => x.value !== "default" && (hs.model || "").includes(x.value));
+}
+
+function modelName(hs) {
+  const m = currentModel(hs);
+  return m ? m.name || m.value : hs.model || "";
+}
+
+function hostPill(hs) {
+  const [cls, text] = {
+    running: ["working", "Working"], waiting: ["needs", "Needs you"], starting: ["quiet", "Starting"],
+    idle: ["quiet", "Idle"], exited: ["quiet", "Ended"], off: ["quiet", "Asleep"],
+  }[hs.status] || ["quiet", hs.status];
+  return el("span", `pill ${cls}`, text);
+}
+
+// drawAsks keeps a card for each thing agent asks: added as asked, gone
+// once answered; one being filled in is left as it is.
+function drawAsks(o) {
+  const want = new Map(((o.hs && o.hs.requests) || []).map((r) => [r.id, r]));
+  for (const card of [...o.asks.children]) if (!want.has(card.dataset.id)) card.remove();
+  const had = new Set([...o.asks.children].map((c) => c.dataset.id));
+  let added = false;
+  for (const [rid, r] of want) {
+    if (had.has(rid)) continue;
+    o.asks.append(askCard(o, r));
+    added = true;
+  }
+  if (added) o.chat.scrollTop = o.chat.scrollHeight;
+}
+
+function button(text, cls, onclick) {
+  const b = el("button", `btn${cls ? " " + cls : ""}`, text);
+  b.type = "button";
+  if (onclick) b.onclick = onclick;
+  return b;
+}
+
+// askCard is request r as a card: may it use a tool (Allow, Always allow,
+// Deny, or what to do instead), questions with options, or a plan.
+function askCard(o, r) {
+  const card = el("div", `ask ask-${r.kind}`);
+  card.dataset.id = r.id;
+  const reply = (answer) => {
+    if (!hostSend(o, { type: "answer", answer: { id: r.id, ...answer } })) return;
+    card.classList.add("sent");
+    for (const c of card.querySelectorAll("button, input")) c.disabled = true;
+  };
+  const head = el("div", "ah");
+  const body = el("div", "abody");
+  const acts = el("div", "acts");
+  const instead = (place, onsay) => {
+    const say = el("input", "say");
+    say.placeholder = place;
+    say.onkeydown = (e) => {
+      if (e.key === "Enter" && !e.isComposing && say.value.trim()) onsay(say.value.trim());
+    };
+    return say;
+  };
+  if (r.kind === "question") {
+    head.append(icon("chat", "ai"), el("span", "t", "It asks you"));
+    const qs = (r.questions || []).map((q) => questionBlock(q, body));
+    const answers = () => {
+      const out = {};
+      for (const [q, get] of qs) {
+        const v = get();
+        if (!v) return null;
+        out[q.question] = v;
+      }
+      return out;
+    };
+    const send = button("Answer", "primary", () => {
+      const a = answers();
+      if (a) reply({ allow: true, answers: a });
+    });
+    send.disabled = true;
+    body.addEventListener("change", () => {
+      send.disabled = !answers();
+      // One question, one choice: picking is answering.
+      if (qs.length === 1 && !qs[0][0].multiSelect && qs[0][2]()) send.click();
+    });
+    acts.append(send, button("Skip", "", () => reply({ allow: false, message: "The user skipped the question." })));
+  } else if (r.kind === "plan") {
+    head.append(icon("todo", "ai"), el("span", "t", "Its plan"));
+    body.append(md(r.plan || ""));
+    acts.append(button("Approve", "primary", () => reply({ allow: true })),
+      instead("Or say what to change, and press Enter", (msg) => reply({ allow: false, message: msg })));
+  } else {
+    head.append(icon(toolIcon(r.tool), "ai"), el("span", "t", r.title || `Allow ${r.tool}?`));
+    if (r.label && !r.title) head.append(el("span", "al", r.label));
+    if (r.input) body.append(el("pre", "input", r.input));
+    acts.append(button("Allow", "primary", () => reply({ allow: true })));
+    if (r.always) acts.append(button("Always allow", "", () => reply({ allow: true, always: true })));
+    acts.append(button("Deny", "", () => reply({ allow: false })),
+      instead("Or tell it what to do instead, and press Enter", (msg) => reply({ allow: false, message: msg })));
+  }
+  card.append(head, body, acts);
+  return card;
+}
+
+// questionBlock draws question q into box: its options to pick (several
+// for a multiSelect one), or something else written. It returns q, what
+// is picked or written, and whether an option was picked last.
+function questionBlock(q, box) {
+  const wrap = el("div", "quest");
+  if (q.header) wrap.append(el("span", "qh", q.header));
+  wrap.append(el("div", "qq", q.question));
+  const chosen = new Set();
+  let picked = false;
+  const list = el("div", "opts");
+  const other = el("input", "say");
+  other.placeholder = "Something else…";
+  const changed = () => box.dispatchEvent(new Event("change"));
+  for (const opt of q.options || []) {
+    const b = el("button", "opt");
+    b.type = "button";
+    b.dataset.label = opt.label;
+    b.append(el("span", "ol", opt.label));
+    if (opt.description) b.append(el("span", "od", opt.description));
+    b.onclick = () => {
+      if (q.multiSelect) {
+        if (chosen.has(opt.label)) chosen.delete(opt.label); else chosen.add(opt.label);
+      } else {
+        chosen.clear();
+        chosen.add(opt.label);
+      }
+      for (const x of list.children) x.classList.toggle("on", chosen.has(x.dataset.label));
+      other.value = "";
+      picked = true;
+      changed();
+    };
+    list.append(b);
+  }
+  other.oninput = () => {
+    if (other.value.trim()) {
+      chosen.clear();
+      for (const x of list.children) x.classList.remove("on");
+    }
+    picked = false;
+    changed();
+  };
+  wrap.append(list, other);
+  box.append(wrap);
+  return [q, () => other.value.trim() || [...chosen].join(", "), () => picked];
 }
 
 // ---- keys: the deck's own, so hands don't have to learn new ones ----
@@ -1022,10 +1310,6 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault(); e.stopPropagation();
     close(current);
     return;
-  } else if (e.code === "KeyT" && current) {
-    e.preventDefault(); e.stopPropagation();
-    setView(current, opened.get(current)?.view === "chat" ? "term" : "chat");
-    return;
   } else {
     return;
   }
@@ -1033,9 +1317,6 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
   if (target) show(target);
 }, true);
-
-window.addEventListener("focus", () => { const o = opened.get(current); if (o && o.view === "term") sendCtl(o, { type: "focus" }); });
-window.addEventListener("blur", () => { const o = opened.get(current); if (o) sendCtl(o, { type: "blur" }); });
 
 // ---- sidebar width ----
 

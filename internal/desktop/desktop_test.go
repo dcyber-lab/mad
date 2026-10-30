@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,15 +10,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/coder/websocket"
-
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
-	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -44,10 +39,10 @@ func TestTokenRequired(t *testing.T) {
 	}{
 		{"/api/deck", http.StatusForbidden},
 		{"/api/deck?token=nope", http.StatusForbidden},
-		{"/api/term?id=x", http.StatusForbidden},
+		{"/api/host?id=x", http.StatusForbidden},
 		{"/api/deck?token=" + s.Token, http.StatusOK},
 		{"/", http.StatusOK}, // the page itself holds nothing secret
-		{"/vendor/xterm.js", http.StatusOK},
+		{"/icons.js", http.StatusOK},
 		{"/vendor/marked.js", http.StatusOK},
 		{"/vendor/purify.js", http.StatusOK},
 		{"/api/chat?id=x", http.StatusForbidden},
@@ -75,7 +70,7 @@ func TestSnapshot(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
-	p := newPoller(agent.Builtin(), newTerms())
+	p := newPoller(agent.Builtin(), newLooks())
 	p.Poll(time.Now())
 	snap := p.Snapshot()
 	if len(snap.Projects) != 1 || len(snap.Projects[0].Agents) != 1 {
@@ -113,61 +108,6 @@ func useDeck(t *testing.T) (*state.Project, *state.Agent) {
 	return p, a
 }
 
-func dial(t *testing.T, s *Server, id string) (*websocket.Conn, context.Context) {
-	t.Helper()
-	// A websocket's handler outlives ts.Close (the connection is hijacked):
-	// the test waits for it, or it would still use the tmux socket the
-	// test is putting back.
-	var handlers sync.WaitGroup
-	h := s.Handler()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlers.Add(1)
-		defer handlers.Done()
-		h.ServeHTTP(w, r)
-	}))
-	t.Cleanup(func() {
-		ts.Close()
-		handlers.Wait()
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	t.Cleanup(cancel)
-	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/term?cols=100&rows=30&id=" + id + "&token=" + s.Token
-	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {ts.URL}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { c.CloseNow() })
-	return c, ctx
-}
-
-// readUntil reads the terminal's output until it shows want.
-func readUntil(t *testing.T, ctx context.Context, c *websocket.Conn, want string) {
-	t.Helper()
-	var seen strings.Builder
-	for !strings.Contains(seen.String(), want) {
-		typ, data, err := c.Read(ctx)
-		if err != nil {
-			t.Fatalf("waiting for %q: %v; got %q", want, err, seen.String())
-		}
-		if typ == websocket.MessageText {
-			t.Fatalf("message: %s", data)
-		}
-		seen.Write(data)
-	}
-}
-
-func deskSessions(t *testing.T) []string {
-	t.Helper()
-	out, _ := tmux.Out("list-sessions", "-F", "#{session_name}")
-	var ds []string
-	for _, s := range strings.Split(out, "\n") {
-		if strings.HasPrefix(s, tmux.DeskPrefix) {
-			ds = append(ds, s)
-		}
-	}
-	return ds
-}
-
 func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Helper()
 	for end := time.Now().Add(5 * time.Second); !ok(); {
@@ -175,130 +115,6 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 			t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-// Opening an agent from the window starts it, shows its screen, takes the
-// keys, marks it viewed and, once closed, leaves no session behind.
-func TestTerm(t *testing.T) {
-	_, a := useDeck(t)
-	s := New(fakeKind)
-	c, ctx := dial(t, s, a.ID)
-
-	readUntil(t, ctx, c, "agent up "+a.ID)
-	if err := c.Write(ctx, websocket.MessageBinary, []byte("hello desk\r")); err != nil {
-		t.Fatal(err)
-	}
-	readUntil(t, ctx, c, "hello desk")
-
-	panes, err := tmux.ListPanes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, ok := tmux.FindPane(panes, a.ID)
-	if !ok || !p.Viewed || p.Session != tmux.PoolSession {
-		t.Errorf("pane = %+v, %v; want it viewed, listed once in the pool", p, ok)
-	}
-	if n := len(deskSessions(t)); n != 1 {
-		t.Errorf("%d desk sessions, want 1", n)
-	}
-
-	msg, _ := json.Marshal(control{Type: "focus"})
-	_ = c.Write(ctx, websocket.MessageText, msg)
-	waitFor(t, "focus", func() bool { return s.terms.Focused(a.ID) })
-
-	c.Close(websocket.StatusNormalClosure, "")
-	waitFor(t, "the desk session to go", func() bool { return len(deskSessions(t)) == 0 })
-	if s.terms.Focused(a.ID) {
-		t.Error("still focused after close")
-	}
-}
-
-// An agent on the terminal deck's stage is taken off it: a pane is in
-// one window at a time.
-func TestTermTakesAgentOffStage(t *testing.T) {
-	_, a := useDeck(t)
-	st, _ := state.Load()
-	if err := drive.EnsureDeck(t.TempDir()); err != nil {
-		t.Fatal(err)
-	}
-	if err := deck.OpenAgent(st, a.ID, fakeKind); err != nil {
-		t.Fatal(err)
-	}
-	panes, _ := tmux.ListPanes()
-	if p, _ := tmux.FindPane(panes, a.ID); !tmux.OnStage(p) {
-		t.Fatalf("setup: agent not on stage: %+v", p)
-	}
-
-	c, ctx := dial(t, New(fakeKind), a.ID)
-	readUntil(t, ctx, c, "agent up")
-	panes, _ = tmux.ListPanes()
-	if p, _ := tmux.FindPane(panes, a.ID); tmux.OnStage(p) || !p.Viewed {
-		t.Errorf("agent pane = %+v; want it off stage and viewed", p)
-	}
-	if stage, ok := tmux.Stage(panes); !ok || stage.MadID != tmux.IDPlaceholder {
-		t.Errorf("stage = %+v, %v; want the placeholder", stage, ok)
-	}
-}
-
-// The terminal deck taking the agent back, in place of what is on stage
-// or beside it, or closing it, closes the window's terminal on it: left
-// open, it would show, and type into, the pane swapped into the agent's
-// window, or another agent's window once that one is gone.
-func TestDeckTakesAgentBack(t *testing.T) {
-	for name, take := range map[string]func(st *state.State, id string) error{
-		"open": func(st *state.State, id string) error { return deck.OpenAgent(st, id, fakeKind) },
-		"view": func(st *state.State, id string) error { return deck.OpenAgentView(st, id, fakeKind, false) },
-		"kill": func(_ *state.State, id string) error { return deck.KillAgent(id) },
-	} {
-		t.Run(name, func(t *testing.T) {
-			p, a := useDeck(t)
-			b := &state.Agent{ID: "5d0f3a51-2b8e-4c1d-9e47-0b6f3c2a8d19", Kind: "fake"}
-			p.Agents = append(p.Agents, b)
-			st := &state.State{Projects: []*state.Project{p}}
-			if err := st.Save(); err != nil {
-				t.Fatal(err)
-			}
-			if err := drive.EnsureDeck(t.TempDir()); err != nil {
-				t.Fatal(err)
-			}
-			// b on stage: taking a in its place puts b in a's window.
-			if err := deck.OpenAgent(st, b.ID, fakeKind); err != nil {
-				t.Fatal(err)
-			}
-
-			c, ctx := dial(t, New(fakeKind), a.ID)
-			readUntil(t, ctx, c, "agent up "+a.ID)
-			if err := take(st, a.ID); err != nil {
-				t.Fatal(err)
-			}
-			rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			for {
-				if _, _, err := c.Read(rctx); err != nil {
-					if rctx.Err() != nil {
-						t.Fatal("the window's terminal stayed open")
-					}
-					break
-				}
-			}
-			waitFor(t, "the desk session to go", func() bool { return len(deskSessions(t)) == 0 })
-			panes, _ := tmux.ListPanes()
-			for _, p := range panes {
-				if p.Viewed {
-					t.Errorf("%s viewed with no window on it", p.MadID)
-				}
-			}
-		})
-	}
-}
-
-func TestUnknownAgent(t *testing.T) {
-	useDeck(t)
-	c, ctx := dial(t, New(fakeKind), "nope")
-	typ, data, err := c.Read(ctx)
-	if err != nil || typ != websocket.MessageText || !strings.Contains(string(data), `"error"`) {
-		t.Errorf("got %v %q %v; want an error message", typ, data, err)
 	}
 }
 
@@ -398,7 +214,7 @@ func TestChatAPI(t *testing.T) {
 		t.Errorf("shell: %+v", c)
 	}
 
-	p := newPoller(agent.Builtin(), newTerms())
+	p := newPoller(agent.Builtin(), newLooks())
 	p.Poll(time.Now())
 	for _, a := range p.Snapshot().Projects[0].Agents {
 		if a.Chat != (a.ID == "a1") {
