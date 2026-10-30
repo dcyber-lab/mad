@@ -32,8 +32,24 @@ function label(a) {
   return a.name || a.title || `${a.kind} ${a.id.slice(0, 8)}`;
 }
 
+// looks is the state table the deck sent (status.Looks): every status
+// word, glyph and tone is read from it, by shown state or by the raw
+// status folded into one (exited reads as stopped).
+let looks = new Map();
+function look(state) {
+  return looks.get(state) || { state, word: state, meaning: "", glyph: "", tone: "quiet" };
+}
+
+// shownStatus is the state drawn for agent a on every surface: its tab, its
+// row, its avatar and the composer header. Run in window mode, its host
+// knows best, except that a finished run the person has not seen still
+// reads as finished.
 function shownStatus(a) {
-  return a.done ? "done" : a.status;
+  const o = opened.get(a.id);
+  const hs = windowed(a) && o && o.hs;
+  if (!hs) return a.shown;
+  const s = look(hs.status).state;
+  return s === "idle" && a.shown === "finished" ? "finished" : s;
 }
 
 function money(v) {
@@ -62,22 +78,22 @@ function drawQuota(q) {
 }
 
 // avatar is agent a's kind as a tile in its color, with its status as a
-// dot on the corner.
+// dot on the corner. It carries the status itself: a card or a message
+// has no row around it to color the dot.
 function avatar(a, small) {
   const glyph = a.icon || (a.kind || "?")[0];
-  const v = el("span", `avatar${small ? " small" : ""}${[...glyph].length > 1 ? " wide" : ""}`, glyph);
+  const st = a.id ? ` s-${shownStatus(a)}` : "";
+  const v = el("span", `avatar${small ? " small" : ""}${[...glyph].length > 1 ? " wide" : ""}${st}`, glyph);
   if (a.color) v.style.setProperty("--kc", /^#/.test(a.color) ? a.color : xtermColor(a.color));
   v.append(el("span", "dot"));
   return v;
 }
 
-const statusWords = {
-  running: ["working", "Working"], waiting: ["needs", "Needs you"], done: ["done", "Done"],
-  idle: ["quiet", "Idle"], asleep: ["quiet", "Asleep"], stopped: ["quiet", "Stopped"], exited: ["quiet", "Exited"],
-};
 function statusPill(a) {
-  const [cls, text] = statusWords[shownStatus(a)] || ["quiet", shownStatus(a)];
-  return el("span", `pill ${cls}`, text);
+  const l = look(shownStatus(a));
+  const p = el("span", `pill ${l.tone}`, l.word);
+  p.title = a.status === "exited" ? `${l.meaning} (its process ended)` : l.meaning;
+  return p;
 }
 
 // Projects folded away, by path.
@@ -100,8 +116,9 @@ function drawSidebar() {
       a.project = p;
       agents.set(a.id, a);
       count++;
-      if (a.status === "running") working++;
-      if (a.status === "waiting") needs++;
+      const shown = shownStatus(a);
+      if (shown === "running") working++;
+      if (shown === "waiting") needs++;
     }
     const shown = p.agents.filter((a) => matches(p, a));
     if (q && !shown.length) continue;
@@ -141,7 +158,7 @@ function drawSidebar() {
     for (const a of shown) {
       const st = shownStatus(a);
       const row = el("div", `agent s-${st}${a.id === current ? " sel" : ""}`);
-      row.title = `${a.kind} · ${st}${a.role ? " · " + a.role : ""}\n${a.id}`;
+      row.title = `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`;
       const name = el("span", "name", label(a));
       const qu = a.queue;
       if (qu && qu.items && qu.items.length) {
@@ -150,9 +167,12 @@ function drawSidebar() {
         name.append(n);
       }
       row.append(avatar(a), name);
-      row.append(st === "waiting" ? statusPill(a) : el("span", "meta", money(a.cost)));
+      const cost = money(a.cost);
+      const side = el("span", "side");
+      side.append(...(cost ? [el("span", "meta", cost)] : []), statusPill(a));
+      row.append(side);
       // What it does, or else what it is: rows of one height.
-      row.append(el("span", "detail", a.detail || `${a.kind} · ${(statusWords[st] || ["", st])[1].toLowerCase()}`));
+      row.append(el("span", "detail", a.detail || `${a.kind} · ${look(st).word.toLowerCase()}`));
       row.onclick = () => show(a.id);
       row.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
       const amore = el("button", "icon-btn more");
@@ -219,7 +239,7 @@ function drawWait(o, a) {
 function drawSpotlight() {
   const box = $("#spotlight");
   if ($("#empty").style.display === "none") return;
-  const prio = { waiting: 0, done: 1, running: 2 };
+  const prio = { waiting: 0, finished: 1, running: 2 };
   const picked = [...agents.values()].filter((a) => shownStatus(a) in prio)
     .sort((x, y) => prio[shownStatus(x)] - prio[shownStatus(y)]).slice(0, 6);
   box.replaceChildren(...picked.map((a) => {
@@ -404,9 +424,9 @@ function drawWho(a) {
       b.onmousedown = (e) => { e.preventDefault(); permissionMenu(b, o); };
       parts.push(b);
     }
-    parts.push(hostPill(o.hs));
+    parts.push(statusPill(a));
     who.replaceChildren(...parts);
-    who.className = `s-${{ running: "running", waiting: "waiting" }[o.hs.status] || "idle"}`;
+    who.className = `s-${shownStatus(a)}`;
     return;
   }
   who.replaceChildren(avatar(a, true), what, statusPill(a));
@@ -741,6 +761,7 @@ async function refresh() {
     const r = await fetch(`/api/deck?token=${encodeURIComponent(token)}`);
     if (!r.ok) throw new Error(r.status);
     deck = await r.json();
+    looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");
     $("#conn").title = "connected";
     drawQuota(deck.quota);
@@ -1469,14 +1490,6 @@ function modelName(hs) {
   return m ? m.name || m.value : hs.model || "";
 }
 
-function hostPill(hs) {
-  const [cls, text] = {
-    running: ["working", "Working"], waiting: ["needs", "Needs you"], starting: ["quiet", "Starting"],
-    idle: ["quiet", "Idle"], exited: ["quiet", "Ended"], off: ["quiet", "Asleep"],
-  }[hs.status] || ["quiet", hs.status];
-  return el("span", `pill ${cls}`, text);
-}
-
 // drawAsks keeps a card for each thing agent asks: added as asked, gone
 // once answered; one being filled in is left as it is.
 function drawAsks(o) {
@@ -1622,10 +1635,11 @@ window.addEventListener("keydown", (e) => {
   const ids = order();
   let target = null;
   if (e.code === "KeyN") {
-    // Next agent that needs you: waiting first, then done.
+    // Next agent that needs you: waiting first, then finished.
     const start = Math.max(0, ids.indexOf(current) + 1);
     const ring = ids.slice(start).concat(ids.slice(0, start));
-    target = ring.find((id) => agents.get(id)?.status === "waiting") || ring.find((id) => agents.get(id)?.done);
+    const shown = (id) => agents.get(id) && shownStatus(agents.get(id));
+    target = ring.find((id) => shown(id) === "waiting") || ring.find((id) => shown(id) === "finished");
   } else if (e.code === "KeyJ" || e.code === "KeyK") {
     const i = ids.indexOf(current);
     target = ids[(i + (e.code === "KeyJ" ? 1 : ids.length - 1)) % ids.length];

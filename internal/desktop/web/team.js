@@ -15,7 +15,7 @@ function teamLine(t) {
     if (a) {
       const v = avatar(a, true);
       v.onclick = () => show(a.id);
-      v.title = `${label(a)}: ${(statusWords[shownStatus(a)] || ["", shownStatus(a)])[1].toLowerCase()}`;
+      v.title = `${label(a)}: ${look(shownStatus(a)).word.toLowerCase()}`;
       chip.append(v);
     }
     chip.append(el("span", "", r.lead ? `${r.role} (lead)` : r.role));
