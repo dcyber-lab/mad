@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -319,13 +320,14 @@ func (s *Server) agentRemove(w http.ResponseWriter, r *http.Request) {
 	finish(w, err)
 }
 
-// agentStop ends the agent's process; it resumes when it is sent a
-// message. One with a command running under it is left as it is.
+// agentStop puts the agent to sleep (the menu's Put to sleep): its
+// process ends, and it resumes when it is sent a message. One with a
+// command running under it is left as it is, and the person told why.
 func (s *Server) agentStop(w http.ResponseWriter, r *http.Request) {
 	var busy *deck.BusyError
 	_, err := deck.SleepAgent(r.URL.Query().Get("id"), false)
 	if errors.As(err, &busy) {
-		fail(w, http.StatusConflict, err)
+		fail(w, http.StatusConflict, fmt.Errorf("not put to sleep: %s runs under it, and ending it now would cut that short. Interrupt it, or let it finish", busy.Command))
 		return
 	}
 	finish(w, err)

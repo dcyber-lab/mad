@@ -333,3 +333,23 @@ func TestKeysRouteUnreadable(t *testing.T) {
 		t.Errorf("no pane: %T", v.Inbox.Items[0].route)
 	}
 }
+
+// Esc goes to a working TUI only while its screen says Esc interrupts it.
+func TestInterruptPane(t *testing.T) {
+	k := newKeyed(t, "", transcript.Info{})
+	for _, c := range []struct {
+		name, screen string
+		sent         []string
+	}{
+		{"working", fixture(t, "codex-working.txt"), []string{"%7 Escape"}},
+		{"idle", fixture(t, "claude-idle.txt"), nil},
+		{"asking", fixture(t, "claude-bash.txt"), nil},
+		{"said long ago", "press esc to interrupt it\n" + strings.Repeat("a line\n", statusLines) + "❯ ", nil},
+	} {
+		k.screen, k.sent = c.screen, nil
+		err := InterruptPane("%7")
+		if !reflect.DeepEqual(k.sent, c.sent) || (c.sent == nil) != errors.Is(err, ErrGone) {
+			t.Errorf("%s: %v, sent %q", c.name, err, k.sent)
+		}
+	}
+}

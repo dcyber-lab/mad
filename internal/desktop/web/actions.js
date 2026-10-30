@@ -461,7 +461,8 @@ function agentMenu(a, anchor, opts) {
     { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
     { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
     { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
-    { label: "Stop", desc: off ? "it is not running" : "ends it for now: a message wakes it", icon: "sleep", disabled: off, onclick: () => stopAgent(a) },
+    { label: "Interrupt", desc: a.status === "running" ? "stops what it does now, as Esc in its TUI; it stays up" : "it is not working", icon: "stop", disabled: a.status !== "running" || !a.chat, onclick: () => interruptAgent(a) },
+    { label: "Put to sleep", desc: off ? "it is not running" : "ends its process to free memory; a message wakes it where it left off", icon: "sleep", disabled: off, onclick: () => sleepAgent(a) },
     "-",
     { label: "Delete", desc: "out of mad; its conversation stays on disk", icon: "trash", danger: true, onclick: () => deleteAgent(a) },
   ], opts || {});
@@ -488,10 +489,22 @@ async function renameAgent(a) {
   }
 }
 
-async function stopAgent(a) {
+// sleepAgent ends agent a's process (the server refuses while a command
+// runs under it, and says why); interruptAgent only stops its turn.
+async function sleepAgent(a) {
   try {
     await api("POST", "/api/agents/stop", { id: a.id });
-    toast(`Stopped ${label(a)}`);
+    toast(`${label(a)} is asleep: a message wakes it`);
+    refresh();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function interruptAgent(a) {
+  try {
+    await api("POST", "/api/interrupt", { id: a.id });
+    toast(`Interrupted ${label(a)}`);
     refresh();
   } catch (e) {
     toast(e.message, "err");

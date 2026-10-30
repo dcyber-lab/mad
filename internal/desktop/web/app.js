@@ -297,6 +297,7 @@ function agentRow(a, key) {
   const right = [];
   if (a.role) right.push(el("span", "tag", a.role));
   else if (st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
+  if (st === "running" && a.chat) right.push(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI"));
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
@@ -482,6 +483,11 @@ function workCard(a) {
     const t = el("div", "todo");
     t.append(meter(a.todo.done / a.todo.total, ""), el("span", "tn", a.todo.now || `${a.todo.done} of ${a.todo.total}`));
     c.append(t);
+  }
+  if (a.chat) {
+    const acts = el("div", "acts");
+    acts.append(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI"));
+    c.append(acts);
   }
   c.onclick = () => show(a.id);
   return c;
@@ -729,9 +735,9 @@ $("#qinput").addEventListener("keydown", (e) => {
     replyTo(null);
     return;
   }
-  // Esc stops one run here, as in its TUI.
+  // Esc interrupts it, as in its TUI.
   if (e.key === "Escape" && $("#qsend").classList.contains("stop")) {
-    hostSend(opened.get(current), { type: "interrupt" });
+    interruptCurrent();
     return;
   }
   if (e.key !== "Enter" || e.shiftKey) return;
@@ -760,7 +766,7 @@ $("#qinput").addEventListener("input", () => {
   drawMenu();
 });
 $("#qsend").onclick = () => {
-  if ($("#qsend").classList.contains("stop")) hostSend(opened.get(current), { type: "interrupt" });
+  if ($("#qsend").classList.contains("stop")) interruptCurrent();
   else submit();
 };
 $(".composer").addEventListener("mousedown", (e) => {
@@ -1723,25 +1729,43 @@ async function hostSubmit(id, text) {
   if (id === current) drawQueue();
 }
 
-// drawSend makes the send button a stop button while one run here works
-// and nothing is typed.
+// working tells whether the agent shown works now: run here, as its host
+// says; run as its TUI, as the deck's look says.
+function working() {
+  const a = agents.get(current);
+  const o = opened.get(current);
+  if (!a || !o || nc.open || cv.open) return false;
+  return windowed(a) ? !!o.hs && o.hs.status === "running" : !!a.chat && a.status === "running";
+}
+
+// interruptCurrent stops what the agent shown does, as Esc in its TUI.
+function interruptCurrent() {
+  const a = agents.get(current);
+  if (windowed(a) && hostSend(opened.get(current), { type: "interrupt" })) return;
+  if (a) interruptAgent(a);
+}
+
+// drawSend makes the send button an Interrupt button while the agent
+// works and nothing is typed: run here or as its TUI alike.
 function drawSend() {
   const b = $("#qsend");
-  const o = opened.get(current);
   const typed = !!$("#qinput").value.trim();
-  const stop = !typed && windowed(agents.get(current)) && !!o && !!o.hs && o.hs.status === "running";
+  const busy = working();
+  const stop = !typed && busy;
   if (b.classList.contains("stop") !== stop || !b.firstChild) {
     b.classList.toggle("stop", stop);
     b.replaceChildren(icon(stop ? "stop" : "send"));
-    b.title = stop ? "stop it (Esc)" : "send (Enter)";
+    b.title = stop ? "Interrupt: stop what it does now (Esc)" : "send (Enter)";
+    b.setAttribute("aria-label", stop ? "Interrupt" : "Send");
   }
   b.disabled = !stop && !typed;
   // How what is typed goes: run here, at once.
   const h = $("#hint");
-  const key = nc.open || cv.open ? "now" : windowed(agents.get(current)) ? (o && o.hs && o.hs.status === "running" ? "stop" : "now") : "queue";
+  const here = windowed(agents.get(current));
+  const key = nc.open || cv.open ? "now" : busy && (here || !typed) ? "stop" : here ? "now" : "queue";
   if (h.dataset.key !== key) {
     h.dataset.key = key;
-    h.replaceChildren({ queue: "Sent when its turn is over", now: "Sent now", stop: "Esc stops it" }[key] + " · ",
+    h.replaceChildren({ queue: "Sent when its turn is over", now: "Sent now", stop: "Esc interrupts it" }[key] + " · ",
       el("kbd", "", "⇧"), el("kbd", "", "↵"), " new line");
   }
 }
