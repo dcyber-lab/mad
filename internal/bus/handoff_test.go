@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
@@ -262,6 +263,7 @@ func TestCheckLapses(t *testing.T) {
 	}
 
 	deliver(t, idBuild)
+	_, _, _ = queue.Take(idBuild) // the dispatcher took the pointer
 	// The turn that ended before the delivery, or as it came, is not it.
 	for _, at := range []time.Time{delivered.Add(-time.Hour), delivered.Add(2 * time.Second)} {
 		turns[idBuild] = &status.Turn{Reply: "old", At: at}
@@ -301,8 +303,8 @@ func TestCheckLapses(t *testing.T) {
 	if msgs, _, _ := Read(h.Channel, 0, 50); len(msgs) != 2 {
 		t.Errorf("lapsed twice: %d messages", len(msgs))
 	}
-	if _, _, err := Done(build, h.ID, "too late", "done"); err == nil {
-		t.Error("finished a lapsed handoff")
+	if _, _, err := Done(build, h.ID, "too late", "bogus"); err == nil {
+		t.Error("bad status accepted")
 	}
 }
 

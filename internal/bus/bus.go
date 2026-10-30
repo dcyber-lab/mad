@@ -202,10 +202,16 @@ func addMsg(ch string, msgs *[]Message, m Message) (Message, error) {
 	}
 	*msgs = append(*msgs, m)
 	if len(*msgs) > maxLines {
-		kept := append([]Message(nil), (*msgs)[len(*msgs)-keepLines:]...)
+		cut := len(*msgs) - keepLines
+		held := undelivered(ch, (*msgs)[:cut])
+		kept := append(held, (*msgs)[cut:]...)
+		text := fmt.Sprintf("Older messages were dropped; the last %d are kept.", keepLines)
+		if len(held) > 0 {
+			text = fmt.Sprintf("Older messages were dropped; the last %d are kept, and %d older ones not yet delivered to the agents they wake.", keepLines, len(held))
+		}
 		kept = append(kept, Message{
 			Seq: m.Seq + 1, At: m.At, From: From{ID: system, Label: system, Kind: "system"}, Kind: "system",
-			Text: fmt.Sprintf("Older messages were dropped; the last %d are kept.", keepLines),
+			Text: text,
 		})
 		var b strings.Builder
 		for _, k := range kept {
@@ -230,6 +236,34 @@ func addMsg(ch string, msgs *[]Message, m Message) (Message, error) {
 	defer f.Close()
 	_, err = f.Write(append(line, '\n'))
 	return m, err
+}
+
+// maxHeld is the most old messages a compaction keeps for agents that have
+// not been told of them.
+const maxHeld = 200
+
+// undelivered picks, of the messages dropped from channel ch, those that
+// would wake a member that has not been delivered them yet (at most
+// maxHeld, the newest). The bus lock is held by the caller.
+func undelivered(ch string, dropped []Message) []Message {
+	cl, err := loadChannels()
+	if err != nil {
+		return nil
+	}
+	c := cl.find(ch)
+	if c == nil {
+		return nil
+	}
+	var out []Message
+	for _, m := range dropped {
+		for _, id := range c.Members {
+			if m.Seq > cursorOf(id, ch).Delivered && wakesAgent(*c, m, id) {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out[max(0, len(out)-maxHeld):]
 }
 
 // slug makes a channel id of a name: lower case letters, digits and dashes.
@@ -378,6 +412,9 @@ func Join(channel, member string) error { return Invite(channel, []string{member
 
 // Invite makes members (agent ids) members of channel.
 func Invite(channel string, members []string) error {
+	if isDM(channel) {
+		return errors.New("a DM has its two sides and no others; make a channel to talk with more")
+	}
 	return change(channel, func(c *Channel, msgs []Message) error {
 		return addMembers(c, msgs, members...)
 	})
@@ -385,6 +422,9 @@ func Invite(channel string, members []string) error {
 
 // Leave takes member out of channel, and its cursor with it.
 func Leave(channel, member string) error {
+	if isDM(channel) {
+		return errors.New("a DM cannot be left: it is the conversation of its two sides")
+	}
 	return change(channel, func(c *Channel, _ []Message) error {
 		var kept []string
 		for _, m := range c.Members {
@@ -495,6 +535,7 @@ func Forget(agentID string) {
 			c.Members = kept
 		}
 		_ = os.Remove(cursorFile(agentID))
+		_ = os.Remove(wakeFile(agentID))
 		return saveChannels(cl)
 	})
 }

@@ -176,7 +176,8 @@ var spawnAgent = drive.Spawn
 
 // mcpHandoff hands work from agent id to the agent to names, or to a new
 // agent when to is a kind (name or name:model). A chain may start at most
-// bus.MaxSpawns agents without a word from a person in the channel.
+// bus.MaxSpawns agents without a word from a person, and the deck
+// at most bus.MaxOpenSpawned at work on handoffs at once.
 func mcpHandoff(id, to, task, context string, files []string, channel string) (string, error) {
 	from, st, err := mcpMe(id)
 	if err != nil {
@@ -205,7 +206,12 @@ func mcpHandoff(id, to, task, context string, files []string, channel string) (s
 		case depth >= bus.MaxDepth:
 			return "", fmt.Errorf("a chain of handoffs is at most %d deep; do the work yourself or finish yours with bus_done", bus.MaxDepth)
 		case spawns >= bus.MaxSpawns:
-			return "", fmt.Errorf("this chain has started %d agents already without a word from the person; hand off to one that exists (bus_who), or ask the person", spawns)
+			return "", fmt.Errorf("%d agents were started for handoffs already without a word from the person; hand off to one that exists (bus_who), or ask the person", spawns)
+		}
+		if open, oerr := bus.OpenSpawned(); oerr != nil {
+			return "", oerr
+		} else if open >= bus.MaxOpenSpawned {
+			return "", fmt.Errorf("%d agents started for handoffs are still at work; hand off to one that exists (bus_who), or ask the person", open)
 		}
 		p, me := st.FindAgent(id)
 		suffix := make([]byte, 2)

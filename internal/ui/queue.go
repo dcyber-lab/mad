@@ -48,6 +48,9 @@ func (m *model) lapseCmd(now time.Time) tea.Cmd {
 type dispatchedMsg struct {
 	id  string
 	err error
+	// wait, when set, is how long the bus item must still wait for the
+	// agent's minute; nothing was sent and it is not a failure.
+	wait time.Duration
 }
 
 // dispatchCmd sends the first message queued for an agent whose turn is
@@ -77,7 +80,19 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 		m.dispatching = true
 		m.epoch++ // a woken agent changes the panes
 		return func() tea.Msg {
-			it, ok, err := queue.Take(id)
+			// The bus wakes an agent once a minute at most (a handoff
+			// and its result excepted): until then its bus item stays
+			// and the other queued messages go first.
+			var it queue.Item
+			var ok bool
+			var err error
+			if wait := bus.WaitFor(id, now); wait > 0 {
+				if it, ok, err = queue.TakeWhere(id, func(x queue.Item) bool { return !x.Bus }); err == nil && !ok {
+					return dispatchedMsg{id: id, wait: wait}
+				}
+			} else {
+				it, ok, err = queue.Take(id)
+			}
 			if err != nil || !ok {
 				return dispatchedMsg{id: id, err: err}
 			}
@@ -115,6 +130,10 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 
 func (m *model) applyDispatched(msg dispatchedMsg) tea.Cmd {
 	m.dispatching = false
+	if msg.wait > 0 {
+		m.queueAt[msg.id] = time.Now().Add(msg.wait)
+		return nil
+	}
 	if msg.err != nil {
 		m.queueAt[msg.id] = time.Now().Add(queueRetry)
 		return nil
