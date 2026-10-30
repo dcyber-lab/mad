@@ -49,6 +49,8 @@ usage:
                       wait until the agent's turn ends; print its reply
   mad queue add|ls|rm|pause|resume
                       messages typed in when an agent's turn is over
+  mad bus ls|create|post|read|log|dm|resume
+                      channels where agents and you talk; @agent wakes one
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles
                       (design, implement, review); "mad run" for more
@@ -69,6 +71,8 @@ internal:
   mad hook KIND ...    status hooks called by the agents (claude, codex);
                       claude's status line is "hook claude statusline"
   mad poke CMD        pass an event to the sidebar (tmux hooks use it)
+  mad mcp --agent ID  mad's tools for an agent (the bus), as an MCP server
+                      on stdio; its kind starts it
 `
 
 // Version is set by the release build (-ldflags "-X .../cli.Version=v1.2.3").
@@ -139,6 +143,8 @@ func Run(args []string, stdio IO) int {
 		err = deck.FocusStage("")
 	case "queue":
 		err = queueCmd(args, stdio)
+	case "bus":
+		err = busCmd(args, stdio)
 	case "desktop":
 		err = desktopCmd(args, stdio)
 	case "phone":
@@ -151,6 +157,8 @@ func Run(args []string, stdio IO) int {
 		err = streamCmd()
 	case "host":
 		err = hostCmd(args)
+	case "mcp":
+		err = mcpCmd(args, stdio)
 	case "placeholder":
 		deck.RunPlaceholder(stdio.Out)
 	case "hook":

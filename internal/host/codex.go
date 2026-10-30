@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/live"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -81,7 +82,8 @@ var codexBin = "codex"
 
 func (c *codex) run(ctx context.Context) error {
 	defer c.forgetImages()
-	cmd := agentCmd(ctx, c.dir, codexBin, "app-server")
+	// With mad's MCP server, as its TUI starts with it (deck.MCPFlags).
+	cmd := agentCmd(ctx, c.dir, codexBin, append([]string{"app-server"}, deck.CodexMCPArgs(c.agent)...)...)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err

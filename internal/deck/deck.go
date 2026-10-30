@@ -422,6 +422,7 @@ func TUICommand(p *state.Project, a *state.Agent, resume bool, kinds []agent.Kin
 			l.Vars[k] = v
 		}
 	}
+	l.Vars["{mad_mcp}"] = MCPFlags(a.Kind, a.ID)
 	if pv := discover.Lookup(a.Kind); pv != nil {
 		dir := p.Dir(a)
 		l.Exists = func(sid string) bool { return len(pv.Transcripts(dir, sid)) > 0 }

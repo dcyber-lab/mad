@@ -26,6 +26,10 @@ type Item struct {
 	ID    string    `json:"id"`
 	Text  string    `json:"text"`
 	Added time.Time `json:"added"`
+	// Bus marks a pointer to the bus (package bus): when it comes up the
+	// sidebar composes a digest of what waits there and sends that; Text is
+	// only what lists show.
+	Bus bool `json:"bus,omitempty"`
 }
 
 // Queue is what waits for one agent.
@@ -107,6 +111,26 @@ func Push(agentID, text string, now time.Time) (Item, error) {
 		q.Items = append(q.Items, it)
 		return nil
 	})
+}
+
+// PushBus adds a bus item at the end of agent id's queue unless one is
+// already pending; it reports whether it did.
+func PushBus(agentID, text string, now time.Time) (bool, error) {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	it := Item{ID: hex.EncodeToString(b), Text: text, Added: now, Bus: true}
+	added := false
+	err := Update(agentID, func(q *Queue) error {
+		for _, x := range q.Items {
+			if x.Bus {
+				return nil
+			}
+		}
+		q.Items = append(q.Items, it)
+		added = true
+		return nil
+	})
+	return added, err
 }
 
 // Remove drops item itemID; one already gone is no error.

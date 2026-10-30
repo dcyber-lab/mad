@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -68,11 +69,28 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 			if ag == nil {
 				return dispatchedMsg{id: id} // removed meanwhile; so is its queue
 			}
-			if err := sendQueued(st, ag, it.Text, kinds); err != nil {
+			text := it.Text
+			var upto map[string]int
+			if it.Bus { // a pointer: say what waits on the bus now
+				t, u, ok, err := bus.Compose(id, time.Now())
+				if err != nil {
+					_ = queue.PutBack(id, it, err.Error())
+					return dispatchedMsg{id: id, err: err}
+				}
+				if !ok { // nothing to say any more
+					_ = queue.Sent(id)
+					return dispatchedMsg{id: id}
+				}
+				text, upto = t, u
+			}
+			if err := sendQueued(st, ag, text, kinds); err != nil {
 				_ = queue.PutBack(id, it, err.Error())
 				return dispatchedMsg{id: id, err: err}
 			}
 			_ = queue.Sent(id)
+			if it.Bus {
+				_ = bus.Delivered(id, upto)
+			}
 			return dispatchedMsg{id: id}
 		}
 	}

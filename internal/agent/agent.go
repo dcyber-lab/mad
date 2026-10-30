@@ -57,8 +57,8 @@ var builtin = []Kind{
 		Name:    "claude",
 		Icon:    "✻",
 		Color:   "173", // claude's orange
-		Start:   "claude --settings {claude_settings} --session-id {id}",
-		Resume:  "claude --settings {claude_settings} --resume {sid}",
+		Start:   "claude --settings {claude_settings} {mad_mcp} --session-id {id}",
+		Resume:  "claude --settings {claude_settings} {mad_mcp} --resume {sid}",
 		Fork:    "--fork-session",
 		Waiting: []string{`Do you want to`, `❯ 1\. Yes`, `trust this folder`, `Enter to confirm`},
 		Hooks:   true,
@@ -67,9 +67,9 @@ var builtin = []Kind{
 		Name:         "codex",
 		Icon:         ">_",
 		Color:        "252",
-		Start:        "codex {codex_notify} {codex_live}",
-		Resume:       "codex resume {codex_notify} {codex_live} {sid}",
-		ResumeLatest: "codex resume {codex_notify} {codex_live} --last",
+		Start:        "codex {codex_notify} {codex_live} {mad_mcp}",
+		Resume:       "codex resume {codex_notify} {codex_live} {mad_mcp} {sid}",
+		ResumeLatest: "codex resume {codex_notify} {codex_live} {mad_mcp} --last",
 		// The last two: the folder trust and update prompts at its start.
 		Waiting: []string{`Would you like to`, `Allow command`, `Approve`, `Trust this folder`, `enter continue`},
 	},
@@ -225,7 +225,8 @@ func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	if a.Fork && k.Fork != "" && k.Resume != "" && tpl == k.Resume {
 		tpl += " " + k.Fork
 	}
-	vars := map[string]string{"{codex_live}": "", "{pi_live}": ""} // filled per agent (package live)
+	// Filled per agent: by package live, and with mad's MCP server (deck).
+	vars := map[string]string{"{codex_live}": "", "{pi_live}": "", "{mad_mcp}": ""}
 	for name, text := range l.Vars {
 		vars[name] = text
 	}
