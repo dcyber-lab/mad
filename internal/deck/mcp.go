@@ -34,7 +34,8 @@ var agentIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 
 // MCPFlags put mad's MCP server on agent id's command line: claude's
 // --mcp-config (beside the user's own servers), codex's -c
-// mcp_servers.mad; "" for other kinds.
+// mcp_servers.mad, pi's extension (pibus.go) with the server to run; ""
+// for other kinds.
 func MCPFlags(kind, id string) string {
 	if !agentIDRe.MatchString(id) {
 		return ""
@@ -52,6 +53,12 @@ func MCPFlags(kind, id string) string {
 			parts = append(parts, args[i], paths.ShellQuote(args[i+1]))
 		}
 		return strings.Join(parts, " ")
+	case "pi":
+		if writePiBus() != nil {
+			return ""
+		}
+		spec, _ := json.Marshal(map[string]any{"command": paths.Self(), "args": mcpArgs(id), "env": mcpEnv()})
+		return "-e " + paths.ShellQuote(piBusFile()) + " --mad-bus " + paths.ShellQuote(string(spec))
 	}
 	return ""
 }
