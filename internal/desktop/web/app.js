@@ -82,7 +82,8 @@ function drawQuota(q) {
 // has no row around it to color the dot.
 function avatar(a, small) {
   const glyph = a.icon || (a.kind || "?")[0];
-  const st = a.id ? ` s-${shownStatus(a)}` : "";
+  const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
+  const st = live ? ` s-${shownStatus(live)}` : "";
   const v = el("span", `avatar${small ? " small" : ""}${[...glyph].length > 1 ? " wide" : ""}${st}`, glyph);
   if (a.color) v.style.setProperty("--kc", /^#/.test(a.color) ? a.color : xtermColor(a.color));
   v.append(el("span", "dot"));
