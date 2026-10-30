@@ -13,6 +13,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/mcp"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
@@ -146,6 +147,21 @@ func mcpTools(id string) []mcp.Tool {
 					return "", err
 				}
 				return mcpHandoff(id, a.To, a.Task, a.Context, a.Files, a.Channel)
+			},
+		},
+		{
+			Name:        "skill_save",
+			Description: "Save a way of working that proved itself as a skill others load later. description says when to use it (one or two sentences, the trigger words a person would say); body is markdown: the steps, exact commands and checks, the pitfalls you hit. Leave out secrets, machine paths and this conversation's specifics. It is pending until the person approves it.",
+			InputSchema: obj([]string{"name", "description", "body"}, `"name":{"type":"string","description":"short, lower case, dashes: becomes the skill's directory and /name"},"description":{"type":"string","description":"when to use it, at most 400 characters"},"body":{"type":"string","description":"markdown: the steps"},"scope":{"type":"string","enum":["project","user"],"description":"project (default): for this project; user: general"},"replace":{"type":"boolean","description":"overwrite a skill of that name that mad did not install"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct {
+					Name, Description, Body, Scope string
+					Replace                        bool
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpSkillSave(id, a.Name, a.Description, a.Body, a.Scope, a.Replace)
 			},
 		},
 		{
@@ -349,7 +365,7 @@ func mcpWho(id string) (string, error) {
 		}
 	}
 	sort.SliceStable(agents, func(i, j int) bool { return agents[i].Label < agents[j].Label })
-	return mcpJSON(map[string]any{"me": map[string]string{"id": me.ID, "label": me.Label}, "agents": agents, "channels": outCh})
+	return mcpJSON(map[string]any{"me": map[string]string{"id": me.ID, "label": me.Label}, "agents": agents, "channels": outCh, "skills": mcpSkillNames(st, id)})
 }
 
 func mcpRead(id, channel string, since, limit int) (string, error) {
@@ -430,4 +446,34 @@ func mcpChannel(id, action, channel, topic string, members []string) (string, er
 func mcpJSON(v any) (string, error) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	return string(b), err
+}
+
+// mcpSkillSave queues a skill from agent id for the person to approve.
+func mcpSkillSave(id, name, description, body, scope string, replace bool) (string, error) {
+	me, st, err := mcpMe(id)
+	if err != nil {
+		return "", err
+	}
+	project := ""
+	if p, _ := st.FindAgent(id); p != nil {
+		project = p.Path
+	}
+	p, err := skill.Save(me.Label, project, scope, name, description, body, replace)
+	if err != nil {
+		return "", err
+	}
+	return mcpJSON(map[string]any{"pending": p.Path(), "name": p.Name, "note": "The person approves it before it is installed."})
+}
+
+// mcpSkillNames are the approved skills available to agent id.
+func mcpSkillNames(st *state.State, id string) []string {
+	project := ""
+	if p, _ := st.FindAgent(id); p != nil {
+		project = p.Path
+	}
+	names := []string{}
+	for _, s := range skill.List(project) {
+		names = append(names, s.Name)
+	}
+	return names
 }
