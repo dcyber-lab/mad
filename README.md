@@ -512,6 +512,13 @@ agent on stage while its terminal has focus, for runs shorter than 5
 seconds, or twice for the same agent and event within 15 seconds. They
 keep coming while the deck is detached.
 
+A finished notification carries the first line of what the agent said
+(`kim: Tests pass, PR #42 opened`). It comes only for a turn you started:
+a turn mad started by itself (a bus digest with no message from you, a
+nudge, a relay) sends no finished notification, while waiting for you
+always does. A newer notification for an agent replaces its older one on
+your phone.
+
 Configure them in `~/.config/mad/config.json`:
 
 ```json
