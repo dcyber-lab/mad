@@ -97,23 +97,12 @@ func (m *model) sidebarView() string {
 	return b.String()
 }
 
-// renderHeader is the brand plus what needs you: waiting, running and
-// finished-while-away counts, or the agent count when all is quiet.
+// renderHeader is the brand plus what needs you: the inbox's count, the
+// agents at work and those finished while away, as the window counts
+// them; or the agent count when all is quiet.
 func (m *model) renderHeader() string {
-	var waiting, running, done int
 	agents := m.st.OrderedAgents()
-	for _, a := range agents {
-		if tr := m.trackers[a.ID]; tr != nil {
-			switch {
-			case tr.Status == status.Waiting:
-				waiting++
-			case tr.Status == status.Running:
-				running++
-			case tr.Done():
-				done++
-			}
-		}
-	}
+	waiting, running, done := m.view.Inbox.Needs, len(m.view.Working), len(m.view.Inbox.Finished())
 	var right []seg
 	add := func(n int, state string) {
 		if n > 0 {
@@ -471,30 +460,20 @@ func (m *model) statusGlyph(s string, attention bool) (icon, label seg) {
 	return seg{ist, m.glyph(l)}, seg{st, l.Word}
 }
 
-// projectSummary is the most urgent status inside a collapsed project.
+// projectSummary is the most urgent state inside a collapsed project,
+// when it is more than quiet.
 func (m *model) projectSummary(p *state.Project) seg {
-	waiting, running, done := 0, 0, 0
+	var shown []string
 	for _, a := range p.Agents {
-		if tr := m.trackers[a.ID]; tr != nil {
-			switch {
-			case tr.Status == status.Waiting:
-				waiting++
-			case tr.Status == status.Running:
-				running++
-			case tr.Attention:
-				done++
-			}
+		if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
+			shown = append(shown, status.Shown(tr.Status, tr.Attention && !inRun(p, a)))
 		}
 	}
-	switch {
-	case waiting > 0:
-		return m.shownSeg(status.Waiting)
-	case running > 0:
-		return m.shownSeg(status.Running)
-	case done > 0:
-		return m.shownSeg(status.Finished)
+	top := status.Roll(shown).Top()
+	if top == "" || status.LookOf(top).Tone == status.ToneQuiet {
+		return seg{}
 	}
-	return seg{}
+	return m.shownSeg(top)
 }
 
 // shownSeg is the colored icon of a shown state.

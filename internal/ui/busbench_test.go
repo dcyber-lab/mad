@@ -37,7 +37,7 @@ func BenchmarkBusLook(b *testing.B) {
 	})
 	b.Run("unmoved", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			busSignature()
+			bus.Signature()
 		}
 	})
 }
