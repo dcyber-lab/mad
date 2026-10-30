@@ -127,13 +127,19 @@ kbd {
 #sidebar header { display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 15.5px; letter-spacing: -0.01em; }
 /* The look the page draws is old: say so over everything, and dim it. */
+:root { --stale-h: 0px; }
+body.stale { --stale-h: calc(28px + env(safe-area-inset-top)); }
 #offline {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 200; padding: calc(5px + env(safe-area-inset-top)) 16px 5px;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200; box-sizing: border-box; height: var(--stale-h);
+  padding: env(safe-area-inset-top) 16px 0; line-height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-align: center; font-size: 12.5px; font-weight: 600; color: #fff; background: #b91c1c;
 }
 #offline[hidden] { display: none; }
 body.stale #projects, body.stale main { opacity: 0.6; }
-body.stale #app { padding-top: calc(28px + env(safe-area-inset-top)); box-sizing: border-box; }
+/* The banner is the page's top: the page, and every fixed panel and sheet
+   over it, starts below. */
+body.stale #app { padding-top: var(--stale-h); box-sizing: border-box; }
+body.stale #lightbox, body.stale #dialog { top: var(--stale-h); }
 
 .conn {
   width: 7px; height: 7px; border-radius: 50%; margin-left: auto; background: var(--stopped);
@@ -960,6 +966,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #past { padding: 12px 10px 16px; }
 
   #side { position: fixed; inset: 0; z-index: 40; width: 100%; border-left: none; padding-top: env(safe-area-inset-top); }
+  body.stale #side { top: var(--stale-h); padding-top: 0; }
+  body.stale #sidebar { padding-top: 0; }
   #empty .keys { display: none; }
 
   /* Menus rise from the bottom, as sheets. */
