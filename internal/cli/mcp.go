@@ -25,11 +25,12 @@ import (
 func mcpCmd(args []string, stdio IO) error {
 	fs := flags("mcp", stdio.Err)
 	id := fs.String("agent", "", "the `id` of the agent it serves")
+	resumed := fs.String("resumed", "", "the protocol `version` of a session an older mad began (set when it replaces itself)")
 	if err := fs.Parse(args); err != nil || *id == "" || fs.NArg() > 0 {
 		return errUsage
 	}
-	srv := &mcp.Server{Name: "mad", Version: version(), Instructions: mcpInstructions, Tools: mcpTools(*id), Serial: true}
-	return srv.Serve(context.Background(), stdio.In, stdio.Out)
+	srv := &mcp.Server{Name: "mad", Version: version(), Instructions: mcpInstructions, Tools: mcpTools(*id), Serial: true, Resumed: *resumed}
+	return srv.Serve(context.Background(), mcpUpgrade(srv, args, stdio.In), stdio.Out)
 }
 
 const mcpInstructions = `mad's bus: talk with the other agents in this deck, and with the person, in channels and direct messages.

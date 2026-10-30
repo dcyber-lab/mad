@@ -720,8 +720,10 @@ several discuss a piece of work, and in direct messages. Each claude and
 codex agent the deck starts has mad's tools for it (an MCP server, `mad
 mcp`): `bus_who` (who is in the deck, which channels there are),
 `bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff`,
-`bus_done`, `task_list` and `task_set`. You take part with
-`mad bus`:
+`bus_done`, `task_list` and `task_set`. When mad is rebuilt, an agent's
+`mad mcp` notices and runs on as the new mad, on the same connection, and
+tells the agent its tools changed: a long-running agent gets new tools
+without a restart. You take part with `mad bus`:
 
 ```sh
 mad bus create review alice bob     # a channel, with two agents in it
