@@ -68,10 +68,19 @@ func StatusDir() string        { return filepath.Join(StateDir(), "status") }
 func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width") }
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
 func StreamLog() string        { return filepath.Join(StateDir(), "stream.log") }
-func LeaveNote() string        { return filepath.Join(StateDir(), "leave_note") }
-func TmuxConf() string         { return filepath.Join(GenDir(), "tmux.conf") }
-func AgentsConfig() string     { return filepath.Join(ConfigDir(), "agents.json") }
-func ConfigFile() string       { return filepath.Join(ConfigDir(), "config.json") }
+
+// HostSocket is where `mad host` serves agent id; short, as a socket's
+// path must be.
+func HostSocket(id string) string {
+	if len(id) > 13 {
+		id = id[:13]
+	}
+	return filepath.Join(StateDir(), "h-"+id+".sock")
+}
+func LeaveNote() string    { return filepath.Join(StateDir(), "leave_note") }
+func TmuxConf() string     { return filepath.Join(GenDir(), "tmux.conf") }
+func AgentsConfig() string { return filepath.Join(ConfigDir(), "agents.json") }
+func ConfigFile() string   { return filepath.Join(ConfigDir(), "config.json") }
 
 // Self is the absolute path of the running mad binary; tmux bindings and
 // agent hooks call back into it.

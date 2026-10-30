@@ -144,6 +144,8 @@ func Run(args []string, stdio IO) int {
 		err = ui.Run()
 	case "stream":
 		err = streamCmd()
+	case "host":
+		err = hostCmd(args)
 	case "placeholder":
 		deck.RunPlaceholder(stdio.Out)
 	case "hook":

@@ -87,6 +87,21 @@ type anthropicEvents struct {
 	msg string // the message's id, from message_start
 }
 
+// Stream reads Messages API stream events into a hub: what a headless
+// claude passes on as stream_event lines (package host).
+type Stream struct{ e *anthropicEvents }
+
+// NewStream reads agent's events in session into h.
+func NewStream(h *Hub, agent, session string) *Stream {
+	return &Stream{&anthropicEvents{hub: h, tapped: tapped{agent: agent, session: session}}}
+}
+
+// Event takes one event, as JSON.
+func (s *Stream) Event(data []byte) { s.e.event(data) }
+
+// End marks the message being written as written.
+func (s *Stream) End() { s.e.end() }
+
 func (a *anthropicEvents) end() {
 	if a.msg != "" {
 		a.hub.End(a.agent, a.msg)

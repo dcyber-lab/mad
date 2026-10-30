@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/queue"
@@ -48,6 +49,10 @@ type Agent struct {
 	Queue *queue.Queue `json:"queue,omitempty"`
 	// Chat: its transcript reads as a conversation (/api/chat).
 	Chat bool `json:"chat,omitempty"`
+	// Headless: it can run in window mode; Mode is "window" when it does
+	// (package host).
+	Headless bool   `json:"headless,omitempty"`
+	Mode     string `json:"mode,omitempty"`
 }
 
 // How often each part of the snapshot is brought up to date. Screens are
@@ -60,7 +65,7 @@ const (
 
 type poller struct {
 	kinds []agent.Kind
-	terms *terms
+	looks *looks
 
 	mu   sync.Mutex
 	snap Snapshot
@@ -74,9 +79,9 @@ type poller struct {
 	lastGit  time.Time
 }
 
-func newPoller(kinds []agent.Kind, t *terms) *poller {
+func newPoller(kinds []agent.Kind, l *looks) *poller {
 	return &poller{
-		kinds: kinds, terms: t,
+		kinds: kinds, looks: l,
 		trackers: map[string]*status.Tracker{},
 		reader:   transcript.NewReader(),
 		infos:    map[string]transcript.Info{},
@@ -165,7 +170,7 @@ func (p *poller) Poll(now time.Time) {
 			pn, ok := tmux.FindPane(panes, a.ID)
 			// A window looking at the agent counts as it being on stage:
 			// what finished there was seen.
-			s := tr.Observe(k, pn, ok, status.ReadHook(a.ID), screens[pn.ID], p.terms.Focused(a.ID), now)
+			s := tr.Observe(k, pn, ok, status.ReadHook(a.ID), screens[pn.ID], p.looks.Focused(a.ID), now)
 			info := p.infos[a.ID]
 			detail := info.Tool
 			if detail == "" {
@@ -180,6 +185,11 @@ func (p *poller) Poll(now time.Time) {
 				ag.Queue = &q
 			}
 			_, ag.Chat = discover.Conversation(a.Kind)
+			ag.Headless = deck.Headless[a.Kind]
+			// In window mode once its TUI, if it runs, gave way.
+			if deck.Windowed(a) && (!ok || pn.Dead || deck.RunsHost(pn, a.ID)) {
+				ag.Mode = state.ModeWindow
+			}
 			out.Agents = append(out.Agents, ag)
 		}
 		snap.Projects = append(snap.Projects, out)

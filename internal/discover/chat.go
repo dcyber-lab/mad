@@ -203,6 +203,15 @@ func resultText(raw json.RawMessage) string {
 
 // toolInput shows a call's input: the command it runs, the change it
 // makes, else its arguments.
+// ToolText is how a call to tool name with input (JSON) shows: what it is
+// pointed at, and its input, as the conversation shows calls.
+func ToolText(name string, input json.RawMessage) (label, text string) {
+	var in map[string]json.RawMessage
+	_ = json.Unmarshal(input, &in)
+	label = strings.TrimPrefix(strings.TrimPrefix(toolLabel(name, in), name), " · ")
+	return label, shown(toolInput(in))
+}
+
 func toolInput(in map[string]json.RawMessage) string {
 	str := func(k string) string {
 		var s string

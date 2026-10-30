@@ -44,6 +44,9 @@ type Run struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ModeWindow: the agent runs headless, drawn by the desktop window.
+const ModeWindow = "window"
+
 type Agent struct {
 	ID   string `json:"id"` // UUID; also passed as --session-id where supported
 	Kind string `json:"kind"`
@@ -62,6 +65,9 @@ type Agent struct {
 	// Args are added to the kind's command, on resume too: the model,
 	// permission flags (`mad spawn`).
 	Args []string `json:"args,omitempty"`
+	// Mode is how the agent runs in its pane: as its TUI (""), or headless
+	// under `mad host`, for the desktop window to draw (ModeWindow).
+	Mode string `json:"mode,omitempty"`
 	// Run is the id of the run the agent works in, Role its part there.
 	Run       string    `json:"run,omitempty"`
 	Role      string    `json:"role,omitempty"`

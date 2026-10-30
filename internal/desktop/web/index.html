@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mad</title>
-<link rel="stylesheet" href="vendor/xterm.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,6 +13,7 @@
       <span class="brand"><span class="mark">m</span>mad</span>
       <span id="conn" class="conn" title="connection to mad"></span>
     </header>
+    <button id="newchat" type="button" class="newchat" title="a new conversation (⌘N)"><span data-icon="compose"></span>New chat</button>
     <label class="search">
       <span class="ico" data-icon="search"></span>
       <input id="filter" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false">
@@ -24,6 +24,7 @@
       <div id="quota"></div>
       <div class="foot">
         <span class="muted" id="summary"></span>
+        <button id="addproject" type="button" class="icon-btn" title="add a project"><span data-icon="folderplus"></span></button>
         <button id="theme" type="button" class="icon-btn" title="theme"></button>
       </div>
     </footer>
@@ -32,49 +33,67 @@
   <main id="main">
     <div id="bar" hidden>
       <div id="tabs"></div>
-      <div id="views" hidden>
-        <button type="button" data-view="chat" title="its conversation, from its transcript (Alt-t)"><span data-icon="chat"></span>Chat</button>
-        <button type="button" data-view="term" title="its own TUI, attached to its pane (Alt-t)"><span data-icon="terminal"></span>Terminal</button>
+      <div id="acts" hidden>
+        <button id="changes" type="button" class="bar-btn" title="what it changed in its directory"><span data-icon="diff"></span>Changes</button>
+        <button id="more" type="button" class="icon-btn" title="more"><span data-icon="more"></span></button>
       </div>
     </div>
-    <div id="terms">
-      <div id="empty">
-        <div class="hero">
-          <div class="mark big">m</div>
-          <h1>Your agents, in one place</h1>
-          <p class="muted">Pick one on the left to read its conversation and send it messages.
-            <kbd>Alt</kbd> <kbd>T</kbd> switches to its own terminal.</p>
+    <div id="body">
+      <div id="center">
+        <div id="terms">
+          <div id="empty">
+            <div class="hero">
+              <div class="mark big">m</div>
+              <h1>Your agents, in one place</h1>
+              <p class="muted">Start a conversation, or pick an agent on the left: it runs here,
+                what it writes drawn as it writes, what it asks answered in place.</p>
+              <button id="emptynew" type="button" class="btn primary">New chat</button>
+            </div>
+            <div id="spotlight"></div>
+            <div class="keys muted">
+              <span><kbd>⌘</kbd> <kbd>N</kbd> new chat</span>
+              <span><kbd>Alt</kbd> <kbd>N</kbd> next that needs you</span>
+              <span><kbd>⌘</kbd> <kbd>K</kbd> search</span>
+            </div>
+          </div>
+          <section id="new" hidden>
+            <div class="newhead">
+              <h1 id="newtitle">What should we work on?</h1>
+              <p id="newsub" class="muted"></p>
+            </div>
+          </section>
         </div>
-        <div id="spotlight"></div>
-        <div class="keys muted">
-          <span><kbd>Alt</kbd> <kbd>N</kbd> next that needs you</span>
-          <span><kbd>Alt</kbd> <kbd>J</kbd> <kbd>K</kbd> next / previous</span>
-          <span><kbd>⌘</kbd> <kbd>K</kbd> search</span>
-        </div>
+        <section id="queue" hidden>
+          <div class="composer">
+            <ul id="qmenu" hidden></ul>
+            <div id="qerr"></div>
+            <ol id="qitems"></ol>
+            <div id="qimgs"></div>
+            <textarea id="qinput" rows="1" placeholder="Message the agent, or / for commands"></textarea>
+            <div class="cbar">
+              <button id="attach" type="button" class="icon-btn" title="attach images (or paste them)"><span data-icon="attach"></span></button>
+              <span id="who"></span>
+              <span class="grow"></span>
+              <span id="hint" class="hintline muted">Sent when its turn is over · <kbd>⇧</kbd><kbd>↵</kbd> new line</span>
+              <button id="qpause" type="button" class="icon-btn" title="hold the queued messages"></button>
+              <button id="qsend" type="button" class="send" title="send (Enter)" disabled></button>
+            </div>
+            <input id="imgpick" type="file" accept="image/*" multiple hidden>
+          </div>
+        </section>
+        <div id="past" hidden></div>
       </div>
+      <aside id="side" hidden></aside>
     </div>
-    <section id="queue" hidden>
-      <div class="composer">
-        <ul id="qmenu" hidden></ul>
-        <div id="qerr"></div>
-        <ol id="qitems"></ol>
-        <textarea id="qinput" rows="1" placeholder="Message the agent, or / for commands"></textarea>
-        <div class="cbar">
-          <span id="who"></span>
-          <span class="grow"></span>
-          <span class="hintline muted">Sent when its turn is over · <kbd>⇧</kbd><kbd>↵</kbd> new line</span>
-          <button id="qpause" type="button" class="icon-btn" title="hold the queued messages"></button>
-          <button id="qsend" type="button" class="send" title="send (Enter)" disabled></button>
-        </div>
-      </div>
-    </section>
   </main>
 </div>
-<script src="vendor/xterm.js"></script>
-<script src="vendor/addon-fit.js"></script>
+<ul id="popup" class="popup" hidden></ul>
+<div id="dialog" hidden></div>
+<div id="toasts"></div>
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
 <script src="icons.js"></script>
 <script src="app.js"></script>
+<script src="actions.js"></script>
 </body>
 </html>
