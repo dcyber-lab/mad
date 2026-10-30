@@ -661,6 +661,16 @@ func pending(turn *status.Turn, hook *status.Hook, sent time.Time) bool {
 // Statuses tells what each agent is doing, as the sidebar would: their
 // screens are looked at twice, quietFor apart.
 func Statuses(st *state.State, kinds []agent.Kind) map[string]string {
+	out := map[string]string{}
+	for id, tr := range Trackers(st, kinds) {
+		out[id] = tr.Status
+	}
+	return out
+}
+
+// Trackers are the trackers Statuses read each agent's status off, for
+// what else they know (Since, Done).
+func Trackers(st *state.State, kinds []agent.Kind) map[string]*status.Tracker {
 	panes, _ := tmux.ListPanes() // no server: every agent is stopped
 	agents := st.OrderedAgents()
 	var live []string
@@ -670,7 +680,6 @@ func Statuses(st *state.State, kinds []agent.Kind) map[string]string {
 		}
 	}
 	trackers := map[string]*status.Tracker{}
-	out := map[string]string{}
 	look := func() {
 		screens, err := tmux.CaptureAll(live)
 		if err != nil {
@@ -687,7 +696,7 @@ func Statuses(st *state.State, kinds []agent.Kind) map[string]string {
 			}
 			p, ok := tmux.FindPane(panes, a.ID)
 			k := agent.ByName(kinds, a.Kind)
-			out[a.ID] = tr.Observe(k, p, ok, status.ReadHook(a.ID), screens[p.ID], false, now())
+			tr.Observe(k, p, ok, status.ReadHook(a.ID), screens[p.ID], false, now())
 		}
 	}
 	look()
@@ -695,5 +704,5 @@ func Statuses(st *state.State, kinds []agent.Kind) map[string]string {
 		time.Sleep(quietFor)
 		look()
 	}
-	return out
+	return trackers
 }
