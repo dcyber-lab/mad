@@ -215,6 +215,7 @@ function chanMenu(c, anchor) {
       },
     });
   }
+  items.push({ label: "Routine here…", desc: "post in it on a schedule", icon: "play", onclick: () => routineDialog(c.id) });
   const others = (c.members || []).filter((m) => m.id !== c.lead && agents.has(m.id));
   if (others.length) {
     items.push({

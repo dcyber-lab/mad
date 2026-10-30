@@ -13,7 +13,7 @@ const boardColumns = [
 const boardWhy = {
   permission: "waits on a permission", paused: "its channel is paused", asked: "asked you",
   unowned: "has no owner", lapsed: "handoff lapsed", waits: "waits on another task", stalled: "stalled",
-  approve: "a skill to approve", budget: "agents wait for you",
+  approve: "a skill to approve", budget: "agents wait for you", checkin: "a check-in that could not go out",
 };
 
 // boardRow is the sidebar's way to the board, with what waits for you.
@@ -66,7 +66,8 @@ function drawBoard() {
   if (!bd.open) return;
   const cards = deck.board || [];
   const key = JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
-    + JSON.stringify([...agents.values()].map((a) => a.status)) + JSON.stringify(deck.spend || {});
+    + JSON.stringify([...agents.values()].map((a) => a.status)) + JSON.stringify(deck.spend || {})
+    + JSON.stringify((deck.timers || []).map((t) => [t.id, t.next_at, t.paused, t.held, t.why, t.fired, t.missed]));
   if (key === bd.key) return;
   bd.key = key;
   const root = $("#boardview");
@@ -86,7 +87,7 @@ function drawBoard() {
     for (const c of list) box.append(boardCard(c));
     cols.append(box);
   }
-  root.replaceChildren(...(spend ? [head, spend, cols] : [head, cols]));
+  root.replaceChildren(...[head, spend, timerStrip(), cols].filter(Boolean));
 }
 
 // spendLine is what mad's own work cost today against its budget, with a
@@ -152,6 +153,7 @@ function cardMenu(c, anchor) {
     items.push({ label: "Raise by $5 today", desc: "agents go on with what waits", icon: "play", onclick: () => boardCall("/api/budget", { op: "raise", usd: 5 }) });
     items.push({ label: "Open for today", desc: "no bound until midnight", icon: "play", onclick: () => boardCall("/api/budget", { op: "open" }) });
   }
+  if (c.kind === "checkin") items.push({ label: "Cancel the check-in", desc: "it was dropped or cannot go out", icon: "trash", danger: true, onclick: () => boardCall("/api/timer", { op: "rm", id: c.ref }) });
   if (c.kind === "skill") items.push({ label: "Review it", desc: "approve, edit or discard it under Skills", icon: "skill", onclick: () => openSkills() });
   if (c.why === "permission" && a) items.push({ label: `Answer ${label(a)}`, desc: "it waits on a permission", icon: "shield", onclick: () => show(a.id) });
   if (c.channel && (c.kind === "paused" || c.why === "paused")) {

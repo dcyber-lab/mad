@@ -204,6 +204,10 @@ type postSpec struct {
 	stored func(seq int) error
 }
 
+// mads tells whether kind is one of mad's own words that the guards hold
+// back like a nudge: a nudge, or a timer going off.
+func mads(kind string) bool { return kind == "nudge" || kind == "timer" }
+
 // errNudgePaused is why a nudge is not posted: a paused channel waits for a
 // person, and mad does not add to it.
 var errNudgePaused = errors.New("channel is paused: no nudge")
@@ -281,7 +285,7 @@ func post(sp postSpec) (PostResult, error) {
 	// With the day's budget spent, mad starts no turn by itself: a nudge
 	// is not posted, and an agent's words wake no one.
 	spent := !SpendOK(now())
-	if spent && sp.kind == "nudge" {
+	if spent && mads(sp.kind) {
 		return PostResult{}, errNudgeSpent
 	}
 	res := PostResult{Woke: []string{}}
@@ -303,7 +307,7 @@ func post(sp postSpec) (PostResult, error) {
 		if c == nil || c.Archived {
 			return fmt.Errorf("no channel #%s", sp.channel)
 		}
-		if sp.kind == "nudge" && c.Paused {
+		if mads(sp.kind) && c.Paused {
 			return errNudgePaused
 		}
 		msgs, err := readMsgs(c.ID)
@@ -400,7 +404,7 @@ func post(sp postSpec) (PostResult, error) {
 	case !byAgent:
 	case paused:
 		tell(sp.channel, sp.from, "#"+sp.channel+" is paused: it waits for you")
-	case sp.kind == "nudge": // its "@you" is for the agent to use, not a message for the person
+	case mads(sp.kind): // its "@you" is for the agent to use, not a message for the person
 	case sp.wake == You || youRe.MatchString(text):
 		tell(sp.channel, sp.from, text)
 	}

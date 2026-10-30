@@ -605,4 +605,5 @@ func Forget(agentID string) {
 		_ = os.Remove(wakeFile(agentID))
 		return saveChannels(cl)
 	})
+	_ = dropCheckins(agentID)
 }

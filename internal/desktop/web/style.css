@@ -1029,10 +1029,38 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .c-blocked .bwhy { color: var(--stopped); }
 .bnote { margin-top: 6px; font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
 .bnudged { margin-top: 4px; font-size: 11.5px; }
+/* The Scheduled strip of the Board, and the routine dialog. */
+.bsched { padding: 14px 24px 0; max-width: 900px; }
+.bschedhead { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.bschedhead h2 { font-size: 13px; margin: 0; color: var(--text-2); }
+.bschedhead .btn { margin-left: auto; height: 26px; font-size: 12.5px; }
+.trow {
+  display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; padding: 7px 10px; margin-bottom: 4px;
+  border: 1px solid var(--border-2); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 13px;
+}
+.trow:hover { border-color: var(--text-3); }
+.trow.off { opacity: 0.6; }
+.trow .twho { display: flex; align-items: center; gap: 6px; flex: none; }
+.trow .twhat { flex: 1; min-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.trow .tmeta { flex: none; font-size: 12px; }
+.rform { display: flex; flex-direction: column; gap: 10px; }
+.rform .rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rform .rrow[hidden] { display: none; }
+.rform .rchips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.rform .rchip {
+  height: 26px; padding: 0 10px; border: 1px solid var(--border-2); border-radius: 13px; background: none;
+  color: var(--text-2); font-size: 12.5px; cursor: pointer;
+}
+.rform .rchip.day.on { background: var(--raise); color: var(--text); border-color: var(--text-3); }
+.rform .rline { font-size: 13px; color: var(--text-2); }
+.rform input.say, .rform select.say { height: 32px; width: auto; }
+.rform .rtext { height: auto; resize: vertical; font-family: inherit; }
+.rform .rsug { margin-top: -6px; }
 @media (max-width: 640px) {
   .bhead { padding: 16px 16px 0; }
   .bhead h1 { display: none; } /* the top bar says Board */
   .bspend { padding: 6px 16px 0; }
+  .bsched { padding: 12px 16px 0; }
   .bcols { display: block; padding: 12px 16px 40px; min-width: 0; }
   .bcol { margin-bottom: 18px; }
 }

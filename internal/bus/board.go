@@ -40,6 +40,8 @@ const (
 	CardTask   = "task"
 	CardAsk    = "ask"
 	CardPaused = "paused"
+	// CardCheckin is a check-in that could not go out.
+	CardCheckin = "checkin"
 
 	WhyPermission = "permission"
 	WhyPaused     = "paused"
@@ -48,6 +50,7 @@ const (
 	WhyLapsed     = "lapsed"
 	WhyWaits      = "waits"
 	WhyStalled    = "stalled"
+	WhyCheckin    = "checkin"
 )
 
 // CardMessage is the message an ask card is about.
@@ -73,6 +76,8 @@ type Card struct {
 	Age        time.Duration `json:"age"` // in its state
 	Message    *CardMessage  `json:"message,omitempty"`
 	Note       string        `json:"note,omitempty"`
+	// Ref is the timer of a check-in card.
+	Ref string `json:"ref,omitempty"`
 }
 
 // boardData is what Board reads from the bus, once.
@@ -306,6 +311,18 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 			cards = append(cards, Card{Kind: CardPaused, Title: "#" + ch.ID + " is paused", Column: ColWaitingYou, Why: WhyPaused,
 				Channel: ch.ID, Age: max(0, at.Sub(last))})
 		}
+	}
+
+	// Check-ins that could not go out: the agent is stopped, or it was
+	// held so long that it was dropped.
+	timers, _ := loadTimers()
+	for _, t := range timers {
+		if t.Kind != TimerOnce || t.Held != "stopped" && t.Held != "expired" {
+			continue
+		}
+		who := d.label(t.By)
+		cards = append(cards, Card{Kind: CardCheckin, Title: who + "'s check-in: " + firstLine(t.Note, titleRunes), Column: ColWaitingYou,
+			Why: WhyCheckin, Owner: t.By, OwnerLabel: who, Channel: t.Channel, Age: max(0, at.Sub(t.NextAt)), Note: t.Why, Ref: t.ID})
 	}
 
 	rank := map[string]int{}

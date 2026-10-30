@@ -52,6 +52,9 @@ usage:
                       messages typed in when an agent's turn is over
   mad bus ls|create|post|read|log|chat|dm|resume|lead|report|handoffs
                       channels where agents and you talk; @agent wakes one
+  mad routine add|ls|rm|pause|resume|fire|checkins
+                      posts on a schedule ("weekdays 09:00"); agents'
+                      check-ins to themselves
   mad board [-w]      the task board: who owns what, what waits for you
                       (-w keeps it up to date)
   mad run new|start|ls|continue|cancel
@@ -157,6 +160,8 @@ func Run(args []string, stdio IO) int {
 		err = queueCmd(args, stdio)
 	case "bus":
 		err = busCmd(args, stdio)
+	case "routine":
+		err = routineCmd(args, stdio)
 	case "desktop":
 		err = desktopCmd(args, stdio)
 	case "phone":
