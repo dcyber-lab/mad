@@ -17,6 +17,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/team"
 )
 
 // mcpCmd serves mad's tools to the agent that started it, over stdio
@@ -33,7 +34,8 @@ func mcpCmd(args []string, stdio IO) error {
 	return srv.Serve(context.Background(), mcpUpgrade(srv, args, stdio.In), stdio.Out)
 }
 
-// mcpIdentity tells the agent who it is on the bus, when the deck knows it.
+// mcpIdentity tells the agent who it is on the bus, when the deck knows it,
+// and its part when it is in a team.
 func mcpIdentity(id string) string {
 	st, err := state.Load()
 	if err != nil {
@@ -41,7 +43,7 @@ func mcpIdentity(id string) string {
 	}
 	if _, a := st.FindAgent(id); a != nil {
 		name := drive.Label(a)
-		return "The person runs several agents in this deck and calls this session " + name + ": on the bus your name is " + name + ", and a message that @mentions " + name + " or a DM to " + name + " is for you.\n"
+		return "The person runs several agents in this deck and calls this session " + name + ": on the bus your name is " + name + ", and a message that @mentions " + name + " or a DM to " + name + " is for you.\n" + team.Brief(st, id)
 	}
 	return ""
 }

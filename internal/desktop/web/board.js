@@ -173,7 +173,7 @@ function cardMenu(c, anchor) {
 }
 
 function reassign(t, anchor) {
-  const list = [...agents.values()].filter((x) => x.chat && !x.role && x.id !== t.owner);
+  const list = [...agents.values()].filter((x) => x.chat && (!x.role || x.team) && x.id !== t.owner);
   setTimeout(() => popup(anchor, list.map((x) => ({
     label: label(x), desc: `${x.kind} · ${x.project.name}`,
     onclick: () => boardCall("/api/board/task", { id: t.id, owner: x.id }),

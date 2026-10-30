@@ -452,6 +452,22 @@ func SetLead(channel, agentID string) error {
 	return err
 }
 
+// Archive closes channel: it is no longer listed, and nothing is posted
+// in it. Its messages stay.
+func Archive(channel string) error {
+	if isDM(channel) {
+		return errors.New("a DM is not archived")
+	}
+	err := change(channel, func(c *Channel, _ []Message) error {
+		c.Archived = true
+		return nil
+	})
+	if err == nil {
+		poked()
+	}
+	return err
+}
+
 // Join makes member (an agent id) a member of channel.
 func Join(channel, member string) error { return Invite(channel, []string{member}) }
 

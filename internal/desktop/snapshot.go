@@ -49,6 +49,8 @@ type Agent struct {
 	Done bool    `json:"done,omitempty"`
 	Cost float64 `json:"cost,omitempty"`
 	Role string  `json:"role,omitempty"`
+	// Team: it is a member of that team, in Role (package team).
+	Team string `json:"team,omitempty"`
 	// Queue is what waits for its turn to end (package queue).
 	Queue *queue.Queue `json:"queue,omitempty"`
 	// Chat: its transcript reads as a conversation (/api/chat).
@@ -183,7 +185,7 @@ func (p *poller) Poll(now time.Time) {
 			ag := Agent{
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
 				Name: a.Name, Title: info.Title, Detail: detail,
-				Status: s, Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role,
+				Status: s, Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role, Team: a.Team,
 			}
 			if q, ok := queues[a.ID]; ok {
 				ag.Queue = &q

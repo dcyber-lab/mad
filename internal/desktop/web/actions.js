@@ -420,6 +420,7 @@ function projectMenu(p, anchor) {
   popup(anchor, [
     { label: "New chat", icon: "compose", onclick: () => openNew(p.path) },
     { label: "New terminal", desc: "a shell, in your terminal app", icon: "terminal", onclick: () => newShell(p) },
+    { label: "New team…", desc: "agents in roles start together in a channel", icon: "agent", onclick: () => newTeam(p.path) },
     { label: "Past conversations", icon: "history", onclick: () => openNew(p.path) },
     "-",
     { label: "Remove project", icon: "trash", danger: true, disabled: p.agents.length > 0,
@@ -458,8 +459,8 @@ function agentMenu(a, anchor, opts) {
     { label: "Rename", icon: "edit", onclick: () => renameAgent(a) },
     { label: "Open in terminal", desc: "the terminal deck, in your terminal app", icon: "external", onclick: () => openTerminal(a) },
     { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
-    { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || !!a.role, onclick: () => messageAgent(a) },
-    { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || !!a.role, onclick: () => saveAsSkill(a) },
+    { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
+    { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
     { label: "Stop", desc: off ? "it is not running" : "ends it for now: a message wakes it", icon: "sleep", disabled: off, onclick: () => stopAgent(a) },
     "-",
     { label: "Delete", desc: "out of mad; its conversation stays on disk", icon: "trash", danger: true, onclick: () => deleteAgent(a) },

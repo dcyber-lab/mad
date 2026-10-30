@@ -57,6 +57,9 @@ usage:
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles
                       (design, implement, review); "mad run" for more
+  mad team ls|start|show|sleep|rm|check
+                      teams: agents in roles started together in a channel
+                      with a lead; "mad team" for more
   mad skill install   put the skill that designs flows with you
                       (mad-flow) where claude finds it
   mad skill pending|approve|discard|sync|ls
@@ -142,6 +145,8 @@ func Run(args []string, stdio IO) int {
 		err = wait(args, stdio)
 	case "run":
 		err = runCmd(args, stdio)
+	case "team":
+		err = teamCmd(args, stdio)
 	case "skill":
 		err = skillCmd(args, stdio)
 	case "fit":

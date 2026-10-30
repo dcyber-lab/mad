@@ -156,6 +156,8 @@ type Spec struct {
 	Branch string
 	// Run and Role, if set, make the agent a role of that run.
 	Run, Role string
+	// Team, if set, makes the agent a member of that team, in Role.
+	Team string
 }
 
 // Spawn adds an agent to its project and starts it off stage, starting
@@ -180,7 +182,7 @@ func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 			return nil, err
 		}
 	}
-	a := &state.Agent{ID: state.NewUUID(), Kind: s.Kind, Name: s.Name, Args: s.Args, Run: s.Run, Role: s.Role, CreatedAt: now()}
+	a := &state.Agent{ID: state.NewUUID(), Kind: s.Kind, Name: s.Name, Args: s.Args, Run: s.Run, Role: s.Role, Team: s.Team, CreatedAt: now()}
 	if s.Model != "" {
 		a.Args = append([]string{"--model", s.Model}, a.Args...)
 	}
