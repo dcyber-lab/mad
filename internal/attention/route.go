@@ -2,9 +2,11 @@ package attention
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/host"
@@ -15,8 +17,9 @@ import (
 
 // A route is how an item's acts reach what they act on. The route, not
 // the kind, decides the acts: a window-mode agent's permission offers
-// Allow and Deny (hostRoute), a TUI-run agent's offers Open (openRoute)
-// until it can be answered by keys. One type both offers the acts and
+// Allow and Deny (hostRoute), a TUI-run agent's the options its screen
+// shows (keysRoute), or Open when it shows none it can read (openRoute).
+// One type both offers the acts and
 // carries them out, so the two cannot drift apart.
 type route interface {
 	// acts are what the person can do to it, in the order shown.
@@ -38,6 +41,8 @@ var (
 	dropTimer  = bus.RemoveTimer
 	resume     = bus.Resume
 	markSeen   = tmux.MarkSeen
+	capture    = tmux.Capture
+	sendKey    = tmux.SendKey
 )
 
 // hostRoute answers a request of a window-mode agent through its host,
@@ -94,15 +99,83 @@ func (r hostRoute) do(a Answer, _ *Facts) error {
 	return err
 }
 
-// openRoute offers Open only: the waits of TUI-run agents, and tasks.
-// Answering a TUI by keys to its pane slots in as a route of its own,
-// chosen where builder.agent picks this one.
+// openRoute offers Open only: the waits of TUI-run agents whose screen
+// shows no prompt keys can answer, and tasks.
 type openRoute struct{ label string }
 
 func (r openRoute) acts() []Act {
 	return []Act{{Verb: VerbOpen, Label: r.label, Row: true, Primary: true}}
 }
 func (r openRoute) do(Answer, *Facts) error { return ErrNotOffered }
+
+// keysRoute answers a TUI-run agent's prompt as the person would in its
+// pane: the key of the option they chose, or Esc. It offers the options
+// its screen showed (p), and sends only while the pane still shows that
+// prompt.
+type keysRoute struct {
+	pane string
+	p    prompt
+}
+
+// rowLabel is the longest option label a sidebar row shows.
+const rowLabel = 12
+
+func (r keysRoute) acts() []Act {
+	var acts []Act
+	rows := 0
+	for _, o := range r.p.Options {
+		a := Act{Verb: VerbAnswer, Label: o.Label, Option: o.Label, Primary: o.N == r.p.Cursor}
+		if a.Primary || rows < 2 && utf8.RuneCountInString(o.Label) <= rowLabel {
+			a.Row = true
+			rows++
+		}
+		acts = append(acts, a)
+	}
+	return append(acts, Act{Verb: VerbDeny, Label: "Cancel (Esc)"})
+}
+
+// keySettle is how long a TUI is given to take a digit before its screen
+// is read again.
+var keySettle = 500 * time.Millisecond
+
+func (r keysRoute) do(a Answer, _ *Facts) error {
+	now, ok := parsePrompt(capture(r.pane))
+	if !ok || now.ID != r.p.ID {
+		return ErrGone // answered in the pane, or it asks something else now
+	}
+	if a.Verb == VerbDeny {
+		return press(r.pane, "Escape")
+	}
+	o, ok := now.option(a.Option)
+	if !ok {
+		return ErrNotOffered
+	}
+	if err := press(r.pane, strconv.Itoa(o.N)); err != nil {
+		return err
+	}
+	// A digit picks the option in claude's and codex's prompts; where it
+	// only moves the cursor (codex's trust screen), Enter picks it.
+	time.Sleep(keySettle)
+	if after, ok := parsePrompt(capture(r.pane)); ok && after.ID == now.ID && after.Cursor == o.N {
+		return press(r.pane, "Enter")
+	}
+	return nil
+}
+
+// press sends key to pane, if it is one mad sends: a digit that picks an
+// option, Enter, Escape. Nothing typed, nothing to another target.
+func press(pane, key string) error {
+	if !strings.HasPrefix(pane, "%") {
+		return fmt.Errorf("%q is not a pane", pane)
+	}
+	switch {
+	case key == "Enter", key == "Escape":
+	case len(key) == 1 && key[0] >= '1' && key[0] <= '9':
+	default:
+		return fmt.Errorf("%q is not a key mad sends", key)
+	}
+	return sendKey(pane, key)
+}
 
 // busRoute answers an ask, in its channel or DM.
 type busRoute struct {

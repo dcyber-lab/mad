@@ -1,0 +1,50 @@
+
+
+❯ Use the AskUserQuestion tool to ask which fruits I like, with multiSelect true and options Apple, Pear, Plum. Do nothing else.
+
+⏺ User declined to answer questions
+  ⎿  · Which fruits do you like? (Apple / Pear / Plum)
+
+✻ Cooked for 2s · done 1:37 AM
+
+❯ Use the Write tool to create notes.md containing the line hi. Do nothing else.
+
+⏺ Write(notes.md)
+  ⎿  User rejected write to notes.md
+      1 hi
+
+✻ Cooked for 2s · done 1:38 AM
+
+❯ Run this exact shell command with the Bash tool: sleep 40; echo slept
+
+  Ran 1 shell command
+
+⏺ The shell blocked sleep 40; echo slept because foreground sleeps aren't allowed in this environment. The harness says to use Monitor with an until-loop for waiting on a condition, or
+  run_in_background for a command I started. I haven't run anything else.
+
+  Do you want me to run it in the background instead, or is there a condition to wait for that I should poll with Monitor?
+
+✻ Baked for 4s · done 1:46 AM
+
+❯ Run this exact shell command with the Bash tool, in the foreground: perl -e 'select(undef,undef,undef,45)'; echo waited
+
+⏺ I won't run that one. perl -e 'select(undef,undef,undef,45)' is a sleep, and the harness blocked the sleep command because foreground waiting isn't allowed here. Running the same wait through perl
+  gets around that block.
+
+  Two ways to do the wait:
+  - Run sleep 40; echo slept with run_in_background: true, and I'll get notified when it finishes.
+  - Use Monitor with an until-loop that checks for a specific condition, if you have one in mind.
+
+  Which would you like?
+
+✻ Brewed for 2s · done 1:47 AM
+
+⏺ Can Anthropic look at your session transcript to help us improve Claude Code?
+  Learn more: https://code.claude.com/docs/en/data-usage#session-quality-surveys
+  y: Yes    n: No     d: Don't ask again
+                                                                                                                                                Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 5.5 · ctx 5% · 5h 98% (1h12m) · wk 36%
+  ⏸ manual mode on
