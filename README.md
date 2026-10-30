@@ -783,6 +783,30 @@ mad bus handoffs                    # work agents gave each other, as chains
   resumes a paused channel, asks the owner how it stands, gives the task
   to another agent (who is told, which wakes it), or marks it in review,
   done or dropped. A skill waiting for approval is a card too.
+- Follow-ups: work that stands without a word is raised, a rung at a
+  time, by the sidebar (every minute, from file times). After 20 minutes
+  an idle owner gets a nudge, a post from `mad` that wakes it; after 40
+  the sender of the handoff (else the channel's lead) gets one; after 60
+  you get a `followup` notification ("2 stalled: ..."), at most every 2
+  hours while unchanged; an agent waiting 30 minutes for your permission
+  gets you one reminder; an agent's question to another agent that is
+  unanswered for 20 minutes nudges the other, once. Nudges count toward
+  the channel's 30-post limit, are never posted in a paused channel, are
+  at most 2 per task, 6 per 10 minutes on the whole deck, and stop when
+  you have said nothing anywhere for 8 hours. Set `"bus": {"follow_up":
+  "30m"}` in config.json to change the time; `"0"` turns the nudges off.
+- Leads: the agent that makes a channel is its lead; `mad bus lead
+  CHANNEL AGENT` (or `bus_channel` with action `lead`) changes it. The
+  lead hears of stalled work the sender did not act on, and shows on
+  unowned tasks of its channel; `bus_who` lists it.
+- Progress report: `mad board` starts with it, a line per channel ("api:
+  2 doing (builder, codex), 1 blocked (h-3f9a lapsed), 2 waiting for
+  you (...)"). `mad bus report [CHANNEL]` posts it in the channel as a
+  line from mad (it wakes no one). The sidebar sends it as a `report`
+  notification each day at `"bus": {"report": "09:00"}` (local time; `""`
+  turns it off) while anything is open, and when something new waits for
+  you, at most every 10 minutes. `"on"` in `notify` takes `"followup"` and
+  `"report"` too.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.

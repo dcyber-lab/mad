@@ -261,6 +261,16 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 		if c.Why != WhyAsked {
 			c.Message = nil
 		}
+		// An unowned task is the lead's to place: say who that is.
+		if c.Why == WhyUnowned && t.Channel != "" {
+			if ch := cl.find(t.Channel); ch != nil && ch.Lead != "" {
+				lead := "lead: " + d.label(ch.Lead)
+				if c.Note != "" {
+					lead = c.Note + " · " + lead
+				}
+				c.Note = lead
+			}
+		}
 		cards = append(cards, c)
 	}
 
@@ -327,9 +337,22 @@ func waitsOn(t Task, byID map[string]Task) bool {
 // and has not been heard from for FollowUp since the task was last touched
 // or its handoff delivered. A turn ending, or a post, counts as heard.
 func stalled(d *boardData, t Task, h *Handoff, owner string, at time.Time) bool {
-	if FollowUp <= 0 || owner != status.Idle && owner != status.Asleep && owner != status.Stopped {
+	if FollowUp <= 0 || !atRest(owner) {
 		return false
 	}
+	return at.Sub(lastMoved(d, t, h)) >= FollowUp
+}
+
+// atRest tells whether an agent with status s is between turns: idle,
+// asleep or stopped. Running is at work, and waiting is for the person.
+func atRest(s string) bool {
+	return s == status.Idle || s == status.Asleep || s == status.Stopped
+}
+
+// lastMoved is when task t, with its handoff h (nil if none), last moved:
+// the latest of its last change, its handoff's delivery, the end of its
+// owner's last turn and the owner's last post. Files only.
+func lastMoved(d *boardData, t Task, h *Handoff) time.Time {
 	last := t.UpdatedAt
 	if h != nil && h.DeliveredAt.After(last) {
 		last = h.DeliveredAt
@@ -340,5 +363,5 @@ func stalled(d *boardData, t Task, h *Handoff, owner string, at time.Time) bool 
 	if m := d.lastBy(t.Owner); m.After(last) {
 		last = m
 	}
-	return at.Sub(last) >= FollowUp
+	return last
 }

@@ -17,7 +17,7 @@ func TestFromFile(t *testing.T) {
 		want Config
 	}{
 		{"no notify key", nil, Default()},
-		{"no on list", &Config{Command: "say hi"}, Config{On: []string{Done, Waiting, Bus}, Command: "say hi"}},
+		{"no on list", &Config{Command: "say hi"}, Config{On: []string{Done, Waiting, Bus, FollowUp, Report}, Command: "say hi"}},
 		{"off", &Config{On: []string{}}, Config{On: []string{}}},
 		{"done only", &Config{On: []string{Done}}, Config{On: []string{Done}}},
 	}
@@ -36,6 +36,8 @@ func TestBody(t *testing.T) {
 		"claude finished":           {Kind: Done, Agent: "claude"},
 		"codex needs you":           {Kind: Waiting, Agent: "codex"},
 		"claude#2: needs Bash okay": {Kind: Waiting, Agent: "claude#2", Message: "needs Bash okay"},
+		"2 stalled: t-1 (a, 1h)":    {Kind: FollowUp, Message: "2 stalled:  t-1 (a, 1h)"},
+		"3 open · 1 doing":          {Kind: Report, Message: "3 open · 1 doing"},
 	}
 	for want, e := range cases {
 		if got := e.Body(); got != want {

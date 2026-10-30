@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
@@ -23,6 +25,9 @@ const busUsage = `usage:
   mad bus log CHANNEL                 all of them
   mad bus dm AGENT [TEXT...|-]        a private message that wakes the agent
   mad bus resume CHANNEL              let a paused channel go on
+  mad bus lead CHANNEL AGENT          make AGENT the channel's lead (who hears when work stalls)
+  mad bus report [CHANNEL]            post the board's progress report as a line from mad
+                                      (in CHANNEL, or in each channel with open work)
   mad bus handoffs                    the work agents gave each other, as chains
 
 Inside an agent (MAD_AGENT_ID set) these speak as that agent, else as you.
@@ -66,6 +71,16 @@ func busCmd(args []string, stdio IO) error {
 		return busList(stdio.Out)
 	case "handoffs":
 		return busHandoffs(stdio.Out)
+	case "report":
+		if len(args) > 1 {
+			fmt.Fprint(stdio.Err, busUsage)
+			return errUsage
+		}
+		ch := ""
+		if len(args) == 1 {
+			ch = strings.TrimPrefix(args[0], "#")
+		}
+		return busReport(ch, stdio)
 	}
 	if len(args) == 0 {
 		fmt.Fprint(stdio.Err, busUsage)
@@ -140,9 +155,57 @@ func busCmd(args []string, stdio IO) error {
 		return busRead(target, n, sub == "log", stdio)
 	case "resume":
 		return bus.Resume(target)
+	case "lead":
+		if len(args) != 1 {
+			fmt.Fprint(stdio.Err, busUsage)
+			return errUsage
+		}
+		_, a, err := find(args[0])
+		if err != nil {
+			return err
+		}
+		return bus.SetLead(target, a.ID)
 	}
 	fmt.Fprint(stdio.Err, busUsage)
 	return errUsage
+}
+
+// busReport posts the board's report as a line from mad, which wakes no
+// one: the channel's part in channel, else each channel's part in its own
+// channel. The whole report is printed.
+func busReport(channel string, stdio IO) error {
+	st, err := state.Load()
+	if err != nil {
+		return err
+	}
+	statuses, at := drive.Statuses(st, kinds()), time.Now()
+	if channel != "" {
+		line := bus.ReportChannel(st, statuses, at, channel)
+		if line == "" {
+			fmt.Fprintf(stdio.Out, "Nothing open in #%s.\n", channel)
+			return nil
+		}
+		fmt.Fprintln(stdio.Out, line)
+		return bus.PostSystem(channel, line)
+	}
+	all := bus.Report(st, statuses, at)
+	if all == "" {
+		fmt.Fprintln(stdio.Out, "Nothing open.")
+		return nil
+	}
+	fmt.Fprintln(stdio.Out, all)
+	lines := bus.ReportLines(st, statuses, at)
+	var chans []string
+	for ch := range lines {
+		chans = append(chans, ch)
+	}
+	sort.Strings(chans)
+	for _, ch := range chans {
+		if err := bus.PostSystem(ch, lines[ch]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func busCreate(name string, args []string, stdio IO) error {

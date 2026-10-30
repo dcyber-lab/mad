@@ -204,6 +204,10 @@ type postSpec struct {
 	stored func(seq int) error
 }
 
+// errNudgePaused is why a nudge is not posted: a paused channel waits for a
+// person, and mad does not add to it.
+var errNudgePaused = errors.New("channel is paused: no nudge")
+
 // relay tells whether the post carries a handoff: its start, its result or
 // a lapse. These always wake their target and are not counted by the
 // guards, so a pause cannot swallow the end of a relay.
@@ -288,6 +292,9 @@ func post(sp postSpec) (PostResult, error) {
 		}
 		if c == nil || c.Archived {
 			return fmt.Errorf("no channel #%s", sp.channel)
+		}
+		if sp.kind == "nudge" && c.Paused {
+			return errNudgePaused
 		}
 		msgs, err := readMsgs(c.ID)
 		if err != nil {
@@ -376,6 +383,7 @@ func post(sp postSpec) (PostResult, error) {
 	case !byAgent:
 	case paused:
 		tell(sp.channel, sp.from, "#"+sp.channel+" is paused: it waits for you")
+	case sp.kind == "nudge": // its "@you" is for the agent to use, not a message for the person
 	case sp.wake == You || youRe.MatchString(text):
 		tell(sp.channel, sp.from, text)
 	}
