@@ -87,3 +87,37 @@ func TestBusAPI(t *testing.T) {
 	}
 	post("/api/bus/resume", `{"channel":"review"}`, 200)
 }
+
+// The person answers a message: the post says which, in a channel and in
+// a DM of theirs.
+func TestBusReply(t *testing.T) {
+	isolate(t)
+	const a1 = "aaaa1111-0000-0000-0000-000000000001"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: t.TempDir(), Agents: []*state.Agent{
+		{ID: a1, Kind: "claude", Name: "alice"},
+	}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	alice := bus.From{ID: a1, Label: "alice", Kind: "claude"}
+	if _, err := bus.Create("api", "", []string{a1}, alice); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.Post("api", alice, "@you which status for an unknown id?", 0); err != nil {
+		t.Fatal(err)
+	}
+	dm, _, err := bus.DM(alice, bus.You, "and the log level?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(manageKinds)
+	for _, c := range []struct{ ch, text string }{{"api", "404"}, {dm, "warn"}} {
+		if w := call(t, s, "POST", "/api/bus/post", `{"channel":"`+c.ch+`","text":"`+c.text+`","reply_to":1}`); w.Code != 200 {
+			t.Fatalf("reply in %s: %d %s", c.ch, w.Code, w.Body)
+		}
+		msgs, _, _ := bus.Read(c.ch, 0, 0)
+		if last := msgs[len(msgs)-1]; last.Text != c.text || last.ReplyTo != 1 || last.From.ID != bus.You {
+			t.Errorf("in %s: %+v", c.ch, last)
+		}
+	}
+}

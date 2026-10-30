@@ -456,6 +456,11 @@ $("#qinput").addEventListener("keydown", (e) => {
     e.preventDefault();
     return;
   }
+  // Esc in a channel: not a reply after all.
+  if (e.key === "Escape" && cv.open && cv.reply) {
+    replyTo(null);
+    return;
+  }
   // Esc stops one run here, as in its TUI.
   if (e.key === "Escape" && $("#qsend").classList.contains("stop")) {
     hostSend(opened.get(current), { type: "interrupt" });
