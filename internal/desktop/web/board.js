@@ -53,7 +53,7 @@ function drawBoard() {
 }
 
 function drawBoardNow() {
-  const cards = deck.board_rest || [];
+  const cards = deck.board || [];
   const waiting = needsYou();
   const key = JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
     + JSON.stringify([...agents.values()].map((a) => a.shown))

@@ -61,19 +61,10 @@ func TestInboxInSnapshotAndActs(t *testing.T) {
 	if strings.Join(got, " ") != "msg:plan#1 skill:deploy" || snap.Inbox.Needs != 2 {
 		t.Errorf("inbox %v (needs %d)", got, snap.Inbox.Needs)
 	}
-	for _, c := range snap.BoardRest {
-		if c.Column == bus.ColWaitingYou {
-			t.Errorf("waiting-you in board_rest: %+v", c)
-		}
-	}
-	legacy := 0
 	for _, c := range snap.Board {
 		if c.Column == bus.ColWaitingYou {
-			legacy++
+			t.Errorf("waiting-you in the board: %+v", c)
 		}
-	}
-	if legacy == 0 {
-		t.Errorf("the page's board lost its waiting column: %+v", snap.Board)
 	}
 	if r := snap.Projects[0].Rollup; len(r) != 1 || r[0] != (status.Count{State: status.Stopped, N: 2}) {
 		t.Errorf("rollup %+v", r)
@@ -86,7 +77,7 @@ func TestInboxInSnapshotAndActs(t *testing.T) {
 			t.Errorf("plan %+v", c)
 		}
 	}
-	for _, k := range []string{"inbox", "working", "board_rest", "teams"} {
+	for _, k := range []string{"inbox", "working", "board", "teams"} {
 		if _, ok := raw[k]; !ok {
 			t.Errorf("no %q in the snapshot", k)
 		}

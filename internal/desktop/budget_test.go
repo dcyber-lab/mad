@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
-// A spent budget is a card waiting for the person, with the day in the
-// snapshot; POST /api/budget raises it or opens it, and the card goes.
+// A spent budget is an item waiting for the person, with the day in the
+// snapshot; POST /api/budget raises it or opens it, and the item goes.
 func TestBudgetCard(t *testing.T) {
 	dir := isolate(t)
 	const a1 = "aaaa1111-0000-0000-0000-000000000001"
@@ -38,17 +39,17 @@ func TestBudgetCard(t *testing.T) {
 		_ = json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &out)
 		return out
 	}
-	budgetCard := func(sn Snapshot) *bus.Card {
-		for i, c := range sn.Board {
-			if c.Kind == "budget" {
-				return &sn.Board[i]
+	budgetCard := func(sn Snapshot) *attention.Item {
+		for i, it := range sn.Inbox.Items {
+			if it.Kind == attention.KindBudget {
+				return &sn.Inbox.Items[i]
 			}
 		}
 		return nil
 	}
 
 	if sn := snap(); sn.Spend.Closed || budgetCard(sn) != nil || sn.Spend.BudgetTurns != 2 {
-		t.Fatalf("fresh day: %+v %+v", sn.Spend, sn.Board)
+		t.Fatalf("fresh day: %+v %+v", sn.Spend, sn.Inbox)
 	}
 	now := time.Now()
 	for i := 0; i < 2; i++ {
@@ -64,7 +65,7 @@ func TestBudgetCard(t *testing.T) {
 	}
 	sn := snap()
 	c := budgetCard(sn)
-	if !sn.Spend.Closed || sn.Spend.Turns != 2 || c == nil || c.Column != "waiting-you" || c.Why != "budget" {
+	if !sn.Spend.Closed || sn.Spend.Turns != 2 || c == nil || !c.Blocks {
 		t.Fatalf("spent: %+v card=%+v", sn.Spend, c)
 	}
 
