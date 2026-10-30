@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/drive"
@@ -137,16 +138,17 @@ func mcpTools(id string) []mcp.Tool {
 		{
 			Name:        "bus_handoff",
 			Description: "Hand a piece of work to another agent, or to a new one: give an agent's label, or a kind (claude, claude:<model>, codex, codex:<model>) to start one in your directory. The receiver does not share your conversation: put everything it needs in task, context and files. Then end your turn; you are woken with its result when it finishes (bus_done), declines, or ends its turn without finishing.",
-			InputSchema: obj([]string{"to", "task"}, `"to":{"type":"string","description":"an agent's label or id, or a kind to start: claude, claude:sonnet, codex, codex:gpt-5"},"task":{"type":"string","description":"what to do and what done looks like"},"context":{"type":"string","description":"what it must know: decisions, constraints, what you tried"},"files":{"type":"array","items":{"type":"string"},"description":"paths it should read or change"},"channel":{"type":"string","description":"post it in this channel instead of a DM"}`),
+			InputSchema: obj([]string{"to", "task"}, `"to":{"type":"string","description":"an agent's label or id, or a kind to start: claude, claude:sonnet, codex, codex:gpt-5"},"task":{"type":"string","description":"what to do and what done looks like"},"context":{"type":"string","description":"what it must know: decisions, constraints, what you tried"},"files":{"type":"array","items":{"type":"string"},"description":"paths it should read or change"},"channel":{"type":"string","description":"post it in this channel instead of a DM"},"task_id":{"type":"string","description":"a task on the board (t-xxxxxxxx) this hands over, instead of a new one"}`),
 			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
 				var a struct {
 					To, Task, Context, Channel string
 					Files                      []string
+					TaskID                     string `json:"task_id"`
 				}
 				if err := json.Unmarshal(raw, &a); err != nil {
 					return "", err
 				}
-				return mcpHandoff(id, a.To, a.Task, a.Context, a.Files, a.Channel)
+				return mcpHandoff(id, a.To, a.Task, a.Context, a.Files, a.Channel, a.TaskID)
 			},
 		},
 		{
@@ -184,7 +186,157 @@ func mcpTools(id string) []mcp.Tool {
 				return mcpJSON(map[string]any{"handoff": h.ID, "status": h.Status, "woke": res.Woke})
 			},
 		},
+		{
+			Name:        "task_list",
+			Description: "The deck's task board: who owns what and how it stands. mine (default) is what you own, including handoffs you received. Call it when you start a turn with several things open, or before taking new work. Reading needs no reply.",
+			InputSchema: obj([]string{}, `"scope":{"type":"string","enum":["mine","channel","all"],"description":"mine by default"},"channel":{"type":"string","description":"for scope channel"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct{ Scope, Channel string }
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpTaskList(id, a.Scope, a.Channel)
+			},
+		},
+		{
+			Name:        "task_set",
+			Description: "Create a task (no id) or change one. Keep the board true in a few words: doing when you start, review when a PR or diff waits for someone, done with a one-line note when finished, dropped with why. A handoff you give or finish updates its task by itself (bus_handoff, bus_done); do not mirror those. Set owner only to give work to an agent that already knows about it (it is not woken): to relay work use bus_handoff.",
+			InputSchema: obj([]string{}, `"id":{"type":"string","description":"the task to change, t-xxxxxxxx; omit to create"},"title":{"type":"string"},"owner":{"type":"string","description":"an agent's label or id, or \"you\""},"status":{"type":"string","enum":["todo","doing","review","done","dropped"]},"channel":{"type":"string"},"note":{"type":"string"},"links":{"type":"array","items":{"type":"object","required":["kind","ref"],"properties":{"kind":{"type":"string","enum":["pr","file","url"]},"ref":{"type":"string"}}}},"waits_on":{"type":"array","items":{"type":"string"},"description":"task ids this waits for"},"parent":{"type":"string","description":"the task this is a part of"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct {
+					ID                   string
+					Title, Owner, Status *string
+					Channel, Note        *string
+					Links                *[]bus.Link
+					WaitsOn              *[]string `json:"waits_on"`
+					Parent               *string
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpTaskSet(id, bus.TaskChange{ID: strings.TrimSpace(a.ID), Title: a.Title, Owner: a.Owner, Status: a.Status,
+					Channel: a.Channel, Note: a.Note, Links: a.Links, WaitsOn: a.WaitsOn, Parent: a.Parent})
+			},
+		},
 	}
+}
+
+// taskOfHandoff is the task of handoff id.
+func taskOfHandoff(id string) (bus.Task, bool) {
+	ts, _ := bus.Tasks()
+	for _, t := range ts {
+		if t.Handoff == id {
+			return t, true
+		}
+	}
+	return bus.Task{}, false
+}
+
+// mcpStatuses says how each agent stands, from what its hooks reported:
+// cheap, unlike drive.Statuses.
+func mcpStatuses(st *state.State) map[string]string {
+	out := map[string]string{}
+	for _, a := range st.OrderedAgents() {
+		if h := status.ReadHook(a.ID); h != nil && h.State != "" {
+			out[a.ID] = h.State
+		}
+	}
+	return out
+}
+
+// mcpTaskList lists the tasks of the board as agent id sees them: its own,
+// those of a channel, or all, each with how it stands.
+func mcpTaskList(id, scope, channel string) (string, error) {
+	_, st, err := mcpMe(id)
+	if err != nil {
+		return "", err
+	}
+	channel = strings.TrimPrefix(strings.TrimSpace(channel), "#")
+	switch scope {
+	case "":
+		scope = "mine"
+		if channel != "" {
+			scope = "channel"
+		}
+	case "mine", "all":
+	case "channel":
+		if channel == "" {
+			return "", errors.New("scope channel needs a channel")
+		}
+	default:
+		return "", fmt.Errorf("scope is mine, channel or all, not %q", scope)
+	}
+	cards, err := bus.Board(st, mcpStatuses(st), time.Now())
+	if err != nil {
+		return "", err
+	}
+	type row struct {
+		ID      string     `json:"id"`
+		Title   string     `json:"title"`
+		Owner   string     `json:"owner"`
+		Status  string     `json:"status"`
+		Derived string     `json:"derived"`
+		Channel string     `json:"channel,omitempty"`
+		Handoff string     `json:"handoff,omitempty"`
+		Age     string     `json:"age"`
+		Note    string     `json:"note,omitempty"`
+		Links   []bus.Link `json:"links,omitempty"`
+	}
+	rows := []row{}
+	for _, c := range cards {
+		t := c.Task
+		if t == nil || scope == "mine" && t.Owner != id || scope == "channel" && t.Channel != channel {
+			continue
+		}
+		derived := c.Column
+		if c.Why != "" {
+			derived += ":" + c.Why
+		}
+		rows = append(rows, row{t.ID, t.Title, c.OwnerLabel, t.Status, derived, t.Channel, t.Handoff, mcpAge(c.Age), t.Note, t.Links})
+	}
+	b, err := json.Marshal(rows)
+	return string(b), err
+}
+
+// mcpAge is a duration in the largest unit that fits: 5m, 3h, 2d.
+func mcpAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// mcpTaskSet makes or changes a task as agent id; its owner is named by
+// label or id, or "you".
+func mcpTaskSet(id string, c bus.TaskChange) (string, error) {
+	from, st, err := mcpMe(id)
+	if err != nil {
+		return "", err
+	}
+	if c.Owner != nil && *c.Owner != "" && !strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(*c.Owner), "@"), bus.You) {
+		a, err := mcpAgent(st, *c.Owner)
+		if err != nil {
+			return "", err
+		}
+		c.Owner = &a.ID
+	} else if c.Owner != nil && *c.Owner != "" {
+		you := bus.You
+		c.Owner = &you
+	}
+	if c.Channel != nil {
+		ch := strings.TrimPrefix(strings.TrimSpace(*c.Channel), "#")
+		c.Channel = &ch
+	}
+	t, err := bus.SetTask(from, c)
+	if err != nil {
+		return "", err
+	}
+	return mcpJSON(t)
 }
 
 // spawnAgent is drive.Spawn, replaceable in tests.
@@ -194,7 +346,7 @@ var spawnAgent = drive.Spawn
 // agent when to is a kind (name or name:model). A chain may start at most
 // bus.MaxSpawns agents without a word from a person, and the deck
 // at most bus.MaxOpenSpawned at work on handoffs at once.
-func mcpHandoff(id, to, task, context string, files []string, channel string) (string, error) {
+func mcpHandoff(id, to, task, context string, files []string, channel, taskID string) (string, error) {
 	from, st, err := mcpMe(id)
 	if err != nil {
 		return "", err
@@ -241,7 +393,7 @@ func mcpHandoff(id, to, task, context string, files []string, channel string) (s
 			return "", fmt.Errorf("started %s but it is not ready: %v", drive.Label(target), err)
 		}
 	}
-	h, res, err := bus.HandOff(from, target.ID, task, context, files, channel, "")
+	h, res, err := bus.HandOffTask(from, target.ID, task, context, files, channel, "", strings.TrimSpace(taskID))
 	if err != nil {
 		if spawned {
 			err = fmt.Errorf("%v (%s was started and waits)", err, drive.Label(target))
@@ -251,8 +403,13 @@ func mcpHandoff(id, to, task, context string, files []string, channel string) (s
 	if spawned {
 		_ = bus.MarkSpawned(h.ID)
 	}
+	tid := ""
+	if t, ok := taskOfHandoff(h.ID); ok {
+		tid = t.ID
+	}
 	return mcpJSON(map[string]any{
 		"handoff": h.ID,
+		"task":    tid,
 		"to":      map[string]any{"id": target.ID, "label": drive.Label(target), "spawned": spawned},
 		"status":  h.Status,
 		"woke":    res.Woke,
@@ -344,6 +501,14 @@ func mcpWho(id string) (string, error) {
 		Status   string   `json:"status"`
 		Project  string   `json:"project"`
 		Channels []string `json:"channels,omitempty"`
+		Tasks    int      `json:"tasks"`
+	}
+	open := map[string]int{}
+	ts, _ := bus.Tasks()
+	for _, t := range ts {
+		if t.Status != bus.TaskDone && t.Status != bus.TaskDropped {
+			open[t.Owner]++
+		}
 	}
 	var agents []agent
 	for _, p := range st.Projects {
@@ -361,7 +526,7 @@ func mcpWho(id string) (string, error) {
 					chs = append(chs, c)
 				}
 			}
-			agents = append(agents, agent{a.ID, drive.Label(a), a.Kind, s, p.Name, chs})
+			agents = append(agents, agent{a.ID, drive.Label(a), a.Kind, s, p.Name, chs, open[a.ID]})
 		}
 	}
 	sort.SliceStable(agents, func(i, j int) bool { return agents[i].Label < agents[j].Label })

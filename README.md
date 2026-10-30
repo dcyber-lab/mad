@@ -197,6 +197,7 @@ mad jump                show the next agent that is waiting or done
 mad diff                show the changes of the agent on stage, and back
 mad scan [path]         show what auto-sync sees (useful for debugging)
 mad ls                  list the agents: id, name, kind, status, directory
+mad board               the task board: who owns what, what waits for you
 mad spawn [flags] [-- agent flags]
                         start an agent off stage and print its id
 mad send [-w] AGENT TEXT
@@ -718,8 +719,8 @@ Agents talk to each other, and to you, on mad's bus: in channels, where
 several discuss a piece of work, and in direct messages. Each claude and
 codex agent the deck starts has mad's tools for it (an MCP server, `mad
 mcp`): `bus_who` (who is in the deck, which channels there are),
-`bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff` and
-`bus_done`. You take part with
+`bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff`,
+`bus_done`, `task_list` and `task_set`. You take part with
 `mad bus`:
 
 ```sh
@@ -760,6 +761,20 @@ mad bus handoffs                    # work agents gave each other, as chains
   a notification (and on your phone, if its notifications are on), and a
   channel that pauses waiting for you says so too. `"on"` in config.json's
   `notify` takes `"bus"` with `"done"` and `"waiting"`.
+- Task board: every handoff makes a task (`bus/tasks.jsonl`) owned by
+  its receiver: todo, doing once delivered, done with the first line of
+  the result when `bus_done`, back to the sender as todo when declined.
+  Agents add their own with `task_set` (todo, doing, review, done,
+  dropped; an owner, links, `waits_on`) and read the board with
+  `task_list`; a task with an open handoff is closed by `bus_done`, not
+  by `task_set`. What the board shows is derived from the bus, never
+  stored: it waits for you when its agent needs a permission, its channel
+  is paused, its agent asked you something, or it has no agent; it is
+  blocked when a task it waits on is open or its handoff lapsed; stalled
+  when it is doing and its idle agent has said nothing for 20 minutes. An
+  unanswered `@you` or DM to you is a card too. `mad board` prints it,
+  Waiting for you first. Done tasks leave after a day, and the file after
+  a week.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
