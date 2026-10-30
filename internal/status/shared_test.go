@@ -41,3 +41,34 @@ func TestTrackerSinceShared(t *testing.T) {
 		t.Errorf("exited since %v", window.Since())
 	}
 }
+
+// A first look guesses nothing: no hook time and no record leave Since
+// unknown and write no record (a read-only `mad desktop` must not touch
+// the deck's state); a change the tracker watches is a fact and is kept.
+func TestTrackerFirstLookIsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	at := func(d time.Duration) time.Time { return t0.Add(d) }
+	tr := &Tracker{ID: "q"}
+	tr.Observe(claude, alive, true, nil, "x", false, at(time.Hour))
+	tr.Observe(claude, alive, true, nil, "x", false, at(time.Hour+time.Minute))
+	if !tr.Since().IsZero() {
+		t.Errorf("first look: since %v, want unknown", tr.Since())
+	}
+	if _, ok := readSince("q"); ok {
+		t.Error("first look wrote a record")
+	}
+	tr.Observe(claude, tmux.Pane{Dead: true}, true, nil, "x", false, at(2*time.Hour))
+	if !tr.Since().Equal(at(2 * time.Hour)) {
+		t.Errorf("watched change: since %v", tr.Since())
+	}
+	if rec, ok := readSince("q"); !ok || !rec.At.Equal(at(2*time.Hour)) {
+		t.Errorf("watched change: record %+v, %v", rec, ok)
+	}
+	// Another process starting afterwards reads that record, not its own look.
+	late := &Tracker{ID: "q"}
+	late.Observe(claude, tmux.Pane{Dead: true}, true, nil, "x", false, at(3*time.Hour))
+	if !late.Since().Equal(at(2 * time.Hour)) {
+		t.Errorf("late tracker: since %v", late.Since())
+	}
+}

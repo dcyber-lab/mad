@@ -398,7 +398,14 @@ func working(agents []Agent) []string {
 		}
 	}
 	// agents are in the deck's order, which a stable sort keeps among equals.
-	sort.SliceStable(ws, func(i, j int) bool { return ws[i].Since.Before(ws[j].Since) })
+	// An unknown Since (zero) is not the longest: it goes last.
+	sort.SliceStable(ws, func(i, j int) bool {
+		a, b := ws[i].Since, ws[j].Since
+		if a.IsZero() || b.IsZero() {
+			return !a.IsZero() && b.IsZero()
+		}
+		return a.Before(b)
+	})
 	out := []string{}
 	for _, a := range ws {
 		out = append(out, a.ID)

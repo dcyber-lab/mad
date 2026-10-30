@@ -211,20 +211,28 @@ func sinceOf(s string, prev time.Time, hook *Hook, now time.Time) time.Time {
 	return now
 }
 
-// began is when status s began, s being new to this tracker at now. The
-// deck, the window and `mad board` track an agent apart, and a process
-// started later would date a hookless state by its own first look: the
-// hook's time is what they all read alike, then the record of the state
-// the first of them saw, and only then now.
+// began is when status s began, s being new to this tracker at now: when
+// the hook says so, its time, which every process polling the same file
+// reads alike; else the record of the state the first of them saw begin;
+// else, if this tracker watched the state change, now. A tracker's first
+// look (nothing seen before) cannot tell when the state began, so it
+// guesses nothing: the time is zero (unknown), nothing is written (a
+// read-only `mad desktop` leaves the deck's state alone) and no surface
+// shows an age for it.
 func (t *Tracker) began(s string, hook *Hook, now time.Time) time.Time {
+	first := t.Status == ""
 	at := sinceOf(s, t.since, hook, now)
+	hooked := !at.Equal(now)
 	if t.ID == "" {
+		if first && !hooked {
+			return time.Time{}
+		}
 		return at
 	}
 	rec, ok := readSince(t.ID)
 	same := ok && rec.State == s
-	if !at.Equal(now) { // the hook's
-		if !same || !rec.At.Equal(at) {
+	if hooked {
+		if !first && (!same || !rec.At.Equal(at)) {
 			writeSince(t.ID, sinceRecord{State: s, At: at})
 		}
 		return at
@@ -232,11 +240,10 @@ func (t *Tracker) began(s string, hook *Hook, now time.Time) time.Time {
 	if same && !rec.At.After(now) {
 		return rec.At
 	}
-	// A tracker's first look guesses (it cannot tell a busy screen from a
-	// quiet one until it changes): it does not overwrite what another saw.
-	if t.Status != "" || !ok {
-		writeSince(t.ID, sinceRecord{State: s, At: now})
+	if first {
+		return time.Time{}
 	}
+	writeSince(t.ID, sinceRecord{State: s, At: now})
 	return now
 }
 
