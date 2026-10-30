@@ -18,6 +18,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/phone"
 	"github.com/dcyber-lab/mad/internal/poke"
 	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -236,6 +237,8 @@ func open(errOut io.Writer) error {
 	if err := deck.EnsureLayout(cwd, w, h); err != nil {
 		return err
 	}
+	// The phone's server, if it runs, on this mad too.
+	_ = phone.Refresh()
 
 	bin, err := exec.LookPath("tmux")
 	if err != nil {

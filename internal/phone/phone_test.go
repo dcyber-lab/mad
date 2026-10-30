@@ -88,6 +88,9 @@ func TestOnOff(t *testing.T) {
 	tmux.Socket = fmt.Sprintf("mad-phone-test-%d", time.Now().UnixNano())
 	// Not a comment: the pane's loop goes on after it.
 	deck.SelfCommand = func(sub string) string { return "sleep 600; : mad " + sub }
+	oldAwake := awake
+	awake = ": awake;"
+	t.Cleanup(func() { awake = oldAwake })
 	t.Cleanup(func() {
 		_ = tmux.Run("kill-server")
 		tmux.Socket, deck.SelfCommand = old, oldSelf
@@ -131,6 +134,26 @@ func TestOnOff(t *testing.T) {
 	}
 	if g := Get(ctx); !g.On || g.URL != s.URL {
 		t.Errorf("get: %+v", g)
+	}
+	if !strings.Contains(cmd, ": awake; sleep 600") {
+		t.Errorf("not kept awake: %q", cmd)
+	}
+
+	// A mad rebuilt: the deck opening starts the server again on it, in
+	// the same pane, from what the pane says, even a pane of a mad that
+	// kept only its command.
+	deck.SelfCommand = func(sub string) string { return "sleep 601; : mad " + sub }
+	if err := tmux.Run("set-option", "-p", "-u", "-t", p.ID, "@mad_phone_host"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	panes, _ = tmux.ListPanes()
+	p3, _ := tmux.FindPane(panes, tmux.IDPhone)
+	cmd, _ = tmux.Out("show-options", "-p", "-v", "-t", p3.ID, "@mad_cmd")
+	if p3.ID != p.ID || !strings.Contains(cmd, "sleep 601; : mad desktop -serve -addr 127.0.0.1:7484 -origin 'box.tail1.ts.net:7443'") {
+		t.Errorf("refreshed: pane %s, %q", p3.ID, cmd)
 	}
 
 	if err := Off(ctx); err != nil {
