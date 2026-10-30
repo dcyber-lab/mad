@@ -31,6 +31,8 @@ const busUsage = `usage:
   mad bus report [CHANNEL]            post the board's progress report as a line from mad
                                       (in CHANNEL, or in each channel with open work)
   mad bus handoffs                    the work agents gave each other, as chains
+  mad bus budget [+N|open]            today's budget for what mad starts by itself;
+                                      +N adds N dollars for today, open lifts it
 
 Inside an agent (MAD_AGENT_ID set) these speak as that agent, else as you.
 `
@@ -73,6 +75,8 @@ func busCmd(args []string, stdio IO) error {
 		return busList(stdio.Out)
 	case "handoffs":
 		return busHandoffs(stdio.Out)
+	case "budget":
+		return busBudget(args, stdio)
 	case "report":
 		if len(args) > 1 {
 			fmt.Fprint(stdio.Err, busUsage)
@@ -187,6 +191,45 @@ func busCmd(args []string, stdio IO) error {
 	}
 	fmt.Fprint(stdio.Err, busUsage)
 	return errUsage
+}
+
+// busBudget shows the day's budget for what mad starts by itself, and with
+// +N or open (the person's, never an agent's) raises or lifts it.
+func busBudget(args []string, stdio IO) error {
+	at := time.Now()
+	if len(args) > 1 {
+		fmt.Fprint(stdio.Err, busUsage)
+		return errUsage
+	}
+	if len(args) == 1 {
+		if os.Getenv("MAD_AGENT_ID") != "" {
+			return errors.New("the budget is the person's to change, not an agent's: ask them with @you")
+		}
+		if args[0] == "open" {
+			if err := bus.SpendOpenToday(at); err != nil {
+				return err
+			}
+		} else {
+			usd, err := strconv.ParseFloat(strings.TrimPrefix(args[0], "+"), 64)
+			if err != nil || usd <= 0 || !strings.HasPrefix(args[0], "+") {
+				fmt.Fprint(stdio.Err, busUsage)
+				return errUsage
+			}
+			if err := bus.SpendRaise(usd, at); err != nil {
+				return err
+			}
+		}
+	}
+	s := bus.SpendNow(at)
+	how := "open"
+	switch {
+	case s.Closed:
+		how = "spent: agents wait for you (mad bus budget +5, or open)"
+	case s.Opened:
+		how = "lifted for today"
+	}
+	fmt.Fprintf(stdio.Out, "%s: mad's own work today %s; %s\n", s.Day, s.Line(), how)
+	return nil
 }
 
 // busReport posts the board's report as a line from mad, which wakes no

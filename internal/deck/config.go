@@ -36,20 +36,26 @@ type Config struct {
 
 // BusConfig is the "bus" object of config.json:
 //
-//	{"bus": {"follow_up": "20m", "report": "09:00"}}
+//	{"bus": {"follow_up": "20m", "report": "09:00",
+//	         "budget": {"usd": 20, "turns": 150}}}
 //
 // follow_up is how long work may stand without a word before mad nudges
 // the agents (and the board calls it stalled); "0" turns the nudges off.
 // report is the local time of day of the daily progress report
-// notification; "" turns it off.
+// notification; "" turns it off. budget bounds, per local day, what mad
+// starts by itself (turns for agents that mention each other, nudges,
+// relays; never the person's own work): usd of claude's cost, turns of
+// every kind. 0 turns that bound off.
 type BusConfig struct {
-	FollowUp time.Duration
-	Report   string
+	FollowUp    time.Duration
+	Report      string
+	BudgetUSD   float64
+	BudgetTurns int
 }
 
 // DefaultConfig is what an empty or missing config.json means.
 func DefaultConfig() Config {
-	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour, Stream: true, Bus: BusConfig{FollowUp: 20 * time.Minute, Report: "09:00"}}
+	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour, Stream: true, Bus: BusConfig{FollowUp: 20 * time.Minute, Report: "09:00", BudgetUSD: 20, BudgetTurns: 150}}
 }
 
 // LoadConfig reads config.json. A malformed file gives DefaultConfig and
@@ -64,6 +70,10 @@ func LoadConfig() (Config, error) {
 		Bus    *struct {
 			FollowUp *string `json:"follow_up"`
 			Report   *string `json:"report"`
+			Budget   *struct {
+				USD   *float64 `json:"usd"`
+				Turns *int     `json:"turns"`
+			} `json:"budget"`
 		} `json:"bus"`
 		Sleep *struct {
 			After string `json:"after"`
@@ -93,6 +103,20 @@ func LoadConfig() (Config, error) {
 				return c, fmt.Errorf("config.json: bus.report %q is not a time of day such as \"09:00\" (\"\" turns it off)", *b.Report)
 			}
 			c.Bus.Report = *b.Report
+		}
+		if bg := b.Budget; bg != nil {
+			if bg.USD != nil {
+				if *bg.USD < 0 {
+					return c, fmt.Errorf("config.json: bus.budget.usd %v is negative (0 turns the dollar bound off)", *bg.USD)
+				}
+				c.Bus.BudgetUSD = *bg.USD
+			}
+			if bg.Turns != nil {
+				if *bg.Turns < 0 {
+					return c, fmt.Errorf("config.json: bus.budget.turns %d is negative (0 turns the turn bound off)", *bg.Turns)
+				}
+				c.Bus.BudgetTurns = *bg.Turns
+			}
 		}
 	}
 	c.Notify = notify.FromFile(file.Notify)

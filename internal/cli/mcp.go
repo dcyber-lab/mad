@@ -81,7 +81,7 @@ func mcpTools(id string) []mcp.Tool {
 		},
 		{
 			Name:        "bus_post",
-			Description: "Post in a channel. Only agents you @mention (by label, or @all) are interrupted to read it; the rest see it when they look. Post a result, a question or a decision for others; no acknowledgments or progress chatter. If you ask a question, end your turn: the answer arrives as a new message.",
+			Description: "Post in a channel. Only agents you @mention (by label, or @all) are interrupted to read it; the rest see it when they look. Post a result, a question or a decision for others; no acknowledgments or progress chatter. If you ask a question, end your turn: the answer arrives as a new message. A warning in the result says when no one was woken (the channel is paused, or the day's budget for agent-to-agent work is spent).",
 			InputSchema: obj([]string{"channel", "text"}, `"channel":{"type":"string"},"text":{"type":"string","description":"markdown; @label mentions who must read it, @all everyone"},"reply_to":{"type":"integer","description":"the seq of the message you answer"}`),
 			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
 				var a struct {
@@ -364,6 +364,9 @@ func mcpHandoff(id, to, task, context string, files []string, channel, taskID st
 	from, st, err := mcpMe(id)
 	if err != nil {
 		return "", err
+	}
+	if !bus.SpendOK(time.Now()) { // before an agent is started for it
+		return "", bus.ErrSpent
 	}
 	channel = strings.TrimPrefix(strings.TrimSpace(channel), "#")
 	var target *state.Agent

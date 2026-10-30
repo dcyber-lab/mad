@@ -541,6 +541,8 @@ func (m *model) renderFooter() string {
 	default:
 		if m.flash != "" && time.Now().Before(m.flashUntil) {
 			l1 = " " + stFlash.Render(textutil.Truncate(m.flash, m.width-2))
+		} else if m.spend.Closed {
+			l1 = " " + stWaiting.Render(spendFooter(m.spend))
 		} else {
 			l1 = hints("⏎", "open", "n", "new", "a", "add", "d", "next")
 		}

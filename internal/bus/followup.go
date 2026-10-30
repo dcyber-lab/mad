@@ -337,7 +337,7 @@ func CheckFollowUps(at time.Time, statuses map[string]string) error {
 	d := &boardData{st: st, chans: cl, msgs: map[string][]Message{}}
 	closed := func(ch string) bool { c := cl.find(ch); return c == nil || c.Archived || c.Paused }
 
-	nudging := NudgesOn && FollowUp > 0
+	nudging := NudgesOn && FollowUp > 0 && SpendOK(at) // no nudge when the day's budget is spent
 	if nudging {
 		since, err := lastYou("")
 		if PersonAt.After(since) {

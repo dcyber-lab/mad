@@ -25,6 +25,9 @@ const (
 	// Report: the board's progress report, daily and when something new
 	// waits for the person (package bus).
 	Report = "report"
+	// Budget: mad's own work for the day reached its bound and agents wait
+	// for the person (package bus).
+	Budget = "budget"
 )
 
 type Event struct {
@@ -42,7 +45,7 @@ func (e Event) Body() string {
 	switch {
 	case e.Kind == Bus:
 		return e.Agent + ": " + shorten(e.Message, 200)
-	case e.Kind == FollowUp || e.Kind == Report:
+	case e.Kind == FollowUp || e.Kind == Report || e.Kind == Budget:
 		return shorten(e.Message, 300)
 	case e.Kind == Waiting && e.Message != "":
 		return e.Agent + ": " + e.Message
@@ -67,7 +70,7 @@ type Config struct {
 }
 
 // Default notifies about every event with the desktop notification.
-func Default() Config { return Config{On: []string{Done, Waiting, Bus, FollowUp, Report}} }
+func Default() Config { return Config{On: []string{Done, Waiting, Bus, FollowUp, Report, Budget}} }
 
 // shorten cuts s to n runes at most, on one line.
 func shorten(s string, n int) string {
