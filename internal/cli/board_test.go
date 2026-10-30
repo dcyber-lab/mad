@@ -127,8 +127,13 @@ func TestBoardCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("board = %d %q", code, errs)
 	}
+	// The report heads it, a blank line ends it.
+	header, rest, _ := strings.Cut(out, "\n\n")
+	if !strings.HasPrefix(header, "4 open · 2 waiting for you · 1 review · 1 todo\ndev: 1 review\n") {
+		t.Errorf("header = %q", header)
+	}
 	var heads []string
-	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+	for _, l := range strings.Split(strings.TrimSpace(rest), "\n") {
 		if !strings.HasPrefix(l, " ") {
 			heads = append(heads, l)
 		}

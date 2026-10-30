@@ -17,6 +17,9 @@ const (
 	// lapseEvery: how often handoffs are checked for a receiver that
 	// ended its turn without finishing.
 	lapseEvery = 10 * time.Second
+	// followEvery: how often work that stands without a word is raised
+	// (bus.CheckFollowUps) and the progress report considered.
+	followEvery = time.Minute
 	// queueRetry: after an agent refused a queued message (it was busy,
 	// asking you something, or had a draft of yours), how long until it
 	// is offered again.
@@ -41,6 +44,42 @@ func (m *model) lapseCmd(now time.Time) tea.Cmd {
 	return func() tea.Msg {
 		_ = bus.CheckLapses(now)
 		return lapsedMsg{}
+	}
+}
+
+// followedMsg ends one round of follow-ups.
+type followedMsg struct{}
+
+// Replaceable in tests.
+var (
+	checkFollowUps = bus.CheckFollowUps
+	checkReport    = bus.CheckReport
+)
+
+// followCmd raises work that stands without a word (nudges, and the
+// notifications for the person) and sends the progress report when it is
+// due. The agents' statuses are the sidebar's own. The follow-up time and
+// whether to nudge at all come from config.json's "bus" object.
+func (m *model) followCmd(now time.Time) tea.Cmd {
+	if len(m.trackers) == 0 && len(m.st.OrderedAgents()) > 0 {
+		return nil // no poll yet: statuses unknown, and a guess would look like news
+	}
+	m.following, m.lastFollow = true, now
+	bus.NudgesOn = m.cfg.Bus.FollowUp > 0
+	if bus.NudgesOn {
+		bus.FollowUp = m.cfg.Bus.FollowUp
+	}
+	statuses := map[string]string{}
+	for id, tr := range m.trackers {
+		if tr != nil && tr.Status != "" {
+			statuses[id] = tr.Status
+		}
+	}
+	st, clock := m.st.Clone(), m.cfg.Bus.Report
+	return func() tea.Msg {
+		_ = checkFollowUps(now, statuses)
+		_ = checkReport(st, statuses, now, clock)
+		return followedMsg{}
 	}
 }
 

@@ -21,8 +21,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	"github.com/dcyber-lab/mad/internal/state"
 )
 
 // You is the person, a member of every channel; it is never woken.
@@ -47,6 +49,11 @@ type Channel struct {
 	CreatedAt time.Time `json:"created_at"`
 	Paused    bool      `json:"paused,omitempty"`
 	Archived  bool      `json:"archived,omitempty"`
+	// Lead is the agent that answers for the channel's work: the one who
+	// hears of a stall when its owner and sender do not act, and whom
+	// unowned tasks of the channel are shown with. An agent that makes a
+	// channel is its lead until SetLead says otherwise.
+	Lead string `json:"lead,omitempty"`
 }
 
 // HandoffRef points from a message to the handoff it opens or closes.
@@ -353,6 +360,9 @@ func Create(name, topic string, members []string, by From) (Channel, error) {
 			return fmt.Errorf("channel #%s exists", id)
 		}
 		c := Channel{ID: id, Topic: topic, Members: []string{}, CreatedBy: by.ID, CreatedAt: now()}
+		if by.ID != You && by.ID != "" && by.ID != system {
+			c.Lead = by.ID
+		}
 		for _, m := range append(append([]string(nil), members...), by.ID) {
 			if m != "" && m != You && !has(c.Members, m) {
 				c.Members = append(c.Members, m)
@@ -407,6 +417,41 @@ func change(id string, fn func(*Channel, []Message) error) error {
 	})
 }
 
+// SetLead makes agent agentID the lead of channel, adding it to the members
+// if it is not one. The agent must exist and not be in a run; "" clears the
+// lead. A DM has none.
+func SetLead(channel, agentID string) error {
+	if isDM(channel) {
+		return errors.New("a DM has no lead")
+	}
+	if agentID != "" {
+		st, err := state.Load()
+		if err != nil {
+			return err
+		}
+		a := findIn(st, agentID)
+		if a == nil {
+			return fmt.Errorf("no agent %q", agentID)
+		}
+		if a.Run != "" {
+			return fmt.Errorf("%s is in a run and cannot lead a channel", drive.Label(a))
+		}
+	}
+	err := change(channel, func(c *Channel, msgs []Message) error {
+		if agentID != "" {
+			if err := addMembers(c, msgs, agentID); err != nil {
+				return err
+			}
+		}
+		c.Lead = agentID
+		return nil
+	})
+	if err == nil {
+		poked()
+	}
+	return err
+}
+
 // Join makes member (an agent id) a member of channel.
 func Join(channel, member string) error { return Invite(channel, []string{member}) }
 
@@ -433,6 +478,9 @@ func Leave(channel, member string) error {
 			}
 		}
 		c.Members = kept
+		if c.Lead == member {
+			c.Lead = ""
+		}
 		return setCursor(member, channel, nil)
 	})
 }
@@ -533,6 +581,9 @@ func Forget(agentID string) {
 				}
 			}
 			c.Members = kept
+			if c.Lead == agentID {
+				c.Lead = ""
+			}
 		}
 		_ = os.Remove(cursorFile(agentID))
 		_ = os.Remove(wakeFile(agentID))

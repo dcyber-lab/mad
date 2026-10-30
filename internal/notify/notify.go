@@ -19,6 +19,12 @@ const (
 	Done    = "done"    // was running, now idle
 	Waiting = "waiting" // needs input: permission prompt, question
 	Bus     = "bus"     // a message on the bus for the person (package bus)
+	// FollowUp: work on the board has stalled, or an agent has waited for
+	// the person's permission a long while (package bus).
+	FollowUp = "followup"
+	// Report: the board's progress report, daily and when something new
+	// waits for the person (package bus).
+	Report = "report"
 )
 
 type Event struct {
@@ -36,6 +42,8 @@ func (e Event) Body() string {
 	switch {
 	case e.Kind == Bus:
 		return e.Agent + ": " + shorten(e.Message, 200)
+	case e.Kind == FollowUp || e.Kind == Report:
+		return shorten(e.Message, 300)
 	case e.Kind == Waiting && e.Message != "":
 		return e.Agent + ": " + e.Message
 	case e.Kind == Waiting:
@@ -59,7 +67,7 @@ type Config struct {
 }
 
 // Default notifies about every event with the desktop notification.
-func Default() Config { return Config{On: []string{Done, Waiting, Bus}} }
+func Default() Config { return Config{On: []string{Done, Waiting, Bus, FollowUp, Report}} }
 
 // shorten cuts s to n runes at most, on one line.
 func shorten(s string, n int) string {

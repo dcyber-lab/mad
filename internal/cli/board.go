@@ -28,13 +28,18 @@ func board(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	cards, err := bus.Board(st, drive.Statuses(st, kinds()), time.Now())
+	statuses, at := drive.Statuses(st, kinds()), time.Now()
+	cards, err := bus.Board(st, statuses, at)
 	if err != nil {
 		return err
 	}
 	if len(cards) == 0 {
 		fmt.Fprintln(out, "Nothing on the board.")
 		return nil
+	}
+	if r := bus.Report(st, statuses, at); r != "" {
+		fmt.Fprintln(out, r)
+		fmt.Fprintln(out)
 	}
 	for _, col := range bus.Columns {
 		first := true

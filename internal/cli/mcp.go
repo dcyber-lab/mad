@@ -123,8 +123,8 @@ func mcpTools(id string) []mcp.Tool {
 		},
 		{
 			Name:        "bus_channel",
-			Description: "Create a channel for a piece of work several agents share, or join, leave or invite to one. Reuse a channel that exists (bus_who lists them). The person is in every channel.",
-			InputSchema: obj([]string{"action", "channel"}, `"action":{"type":"string","enum":["create","join","leave","invite"]},"channel":{"type":"string","description":"its name (create) or id"},"topic":{"type":"string"},"members":{"type":"array","items":{"type":"string"},"description":"agents' labels or ids (create, invite)"}`),
+			Description: "Create a channel for a piece of work several agents share, or join, leave or invite to one. Reuse a channel that exists (bus_who lists them). The person is in every channel. The agent that creates a channel is its lead (mad nudges the lead when work stalls); lead makes another agent the lead (members[0], or me for yourself).",
+			InputSchema: obj([]string{"action", "channel"}, `"action":{"type":"string","enum":["create","join","leave","invite","lead"]},"channel":{"type":"string","description":"its name (create) or id"},"topic":{"type":"string"},"members":{"type":"array","items":{"type":"string"},"description":"agents' labels or ids (create, invite; lead: the one agent, or me)"}`),
 			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
 				var a struct {
 					Action, Channel, Topic string
@@ -480,6 +480,7 @@ func mcpWho(id string) (string, error) {
 		Members []string `json:"members"`
 		Unread  int      `json:"unread,omitempty"`
 		Paused  bool     `json:"paused,omitempty"`
+		Lead    string   `json:"lead,omitempty"`
 	}
 	var outCh []channel
 	for _, c := range chans {
@@ -493,7 +494,7 @@ func mcpWho(id string) (string, error) {
 		if strings.HasPrefix(c.ID, "dm.") {
 			continue // its own: bus_read with the agent's label
 		}
-		outCh = append(outCh, channel{c.ID, c.Topic, members, unread[c.ID], c.Paused})
+		outCh = append(outCh, channel{c.ID, c.Topic, members, unread[c.ID], c.Paused, label[c.Lead]})
 	}
 	type agent struct {
 		ID       string   `json:"id"`
@@ -580,6 +581,10 @@ func mcpChannel(id, action, channel, topic string, members []string) (string, er
 	}
 	var ids []string
 	for _, m := range members {
+		if action == "lead" && strings.EqualFold(strings.TrimSpace(m), "me") {
+			ids = append(ids, id)
+			continue
+		}
 		a, err := mcpAgent(st, m)
 		if err != nil {
 			return "", err
@@ -600,8 +605,16 @@ func mcpChannel(id, action, channel, topic string, members []string) (string, er
 		err = bus.Leave(ch, id)
 	case "invite":
 		err = bus.Invite(ch, ids)
+	case "lead":
+		lead := id
+		if len(ids) > 0 {
+			lead = ids[0]
+		}
+		if err = bus.SetLead(ch, lead); err == nil {
+			return mcpJSON(map[string]any{"channel": ch, "done": action, "lead": lead})
+		}
 	default:
-		return "", fmt.Errorf("no action %q: create, join, leave or invite", action)
+		return "", fmt.Errorf("no action %q: create, join, leave, invite or lead", action)
 	}
 	if err != nil {
 		return "", err

@@ -30,11 +30,26 @@ type Config struct {
 	// calls go through mad stream, pi loads mad's extension. On unless
 	// turned off; agents started since follow it.
 	Stream bool
+	// Bus is the "bus" object: follow-ups and the progress report.
+	Bus BusConfig
+}
+
+// BusConfig is the "bus" object of config.json:
+//
+//	{"bus": {"follow_up": "20m", "report": "09:00"}}
+//
+// follow_up is how long work may stand without a word before mad nudges
+// the agents (and the board calls it stalled); "0" turns the nudges off.
+// report is the local time of day of the daily progress report
+// notification; "" turns it off.
+type BusConfig struct {
+	FollowUp time.Duration
+	Report   string
 }
 
 // DefaultConfig is what an empty or missing config.json means.
 func DefaultConfig() Config {
-	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour, Stream: true}
+	return Config{Notify: notify.Default(), Quota: true, SleepAfter: time.Hour, Stream: true, Bus: BusConfig{FollowUp: 20 * time.Minute, Report: "09:00"}}
 }
 
 // LoadConfig reads config.json. A malformed file gives DefaultConfig and
@@ -46,7 +61,11 @@ func LoadConfig() (Config, error) {
 		Finish []FinishAction `json:"finish"`
 		Quota  *bool          `json:"quota"`
 		Stream *bool          `json:"stream"`
-		Sleep  *struct {
+		Bus    *struct {
+			FollowUp *string `json:"follow_up"`
+			Report   *string `json:"report"`
+		} `json:"bus"`
+		Sleep *struct {
 			After string `json:"after"`
 		} `json:"sleep"`
 	}
@@ -60,6 +79,21 @@ func LoadConfig() (Config, error) {
 			return c, fmt.Errorf("config.json: sleep.after %q is not a duration such as \"60m\" or \"2h\"", file.Sleep.After)
 		}
 		c.SleepAfter = d
+	}
+	if b := file.Bus; b != nil {
+		if b.FollowUp != nil {
+			d, err := time.ParseDuration(*b.FollowUp)
+			if err != nil || d < 0 {
+				return c, fmt.Errorf("config.json: bus.follow_up %q is not a duration such as \"20m\" (\"0\" turns nudges off)", *b.FollowUp)
+			}
+			c.Bus.FollowUp = d
+		}
+		if b.Report != nil {
+			if _, err := time.Parse("15:04", *b.Report); err != nil && *b.Report != "" {
+				return c, fmt.Errorf("config.json: bus.report %q is not a time of day such as \"09:00\" (\"\" turns it off)", *b.Report)
+			}
+			c.Bus.Report = *b.Report
+		}
 	}
 	c.Notify = notify.FromFile(file.Notify)
 	if file.Diff != nil {
