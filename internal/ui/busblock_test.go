@@ -34,7 +34,7 @@ func busDeck(t *testing.T) (*model, *state.State) {
 
 // look reads the bus into the block, as a tick does.
 func look(m *model, st *state.State) {
-	m.setBus(loadBus(st, map[string]string{}, time.Now()))
+	m.setBus(loadBus(st, map[string]string{}, time.Now(), ""))
 }
 
 func busNames(m *model) []string {
@@ -209,5 +209,20 @@ func TestBusRowsKeysAndOpen(t *testing.T) {
 	}
 	if v := m.View(); !strings.Contains(v, "#ops") {
 		t.Errorf("view lacks the channel:\n%s", v)
+	}
+}
+
+// The channel whose chat is open stays in the block though its chat has
+// read it all: its row is the way to close it.
+func TestBusBlockKeepsTheOpenChat(t *testing.T) {
+	m, st := busDeck(t)
+	mkChannel(t, "ops")
+	m.setBus(loadBus(st, map[string]string{}, time.Now(), "ops"))
+	if got := busNames(m); len(got) != 1 || !strings.HasPrefix(got[0], "#ops") {
+		t.Errorf("the open chat's channel: %q", got)
+	}
+	look(m, st)
+	if len(busNames(m)) != 0 {
+		t.Errorf("closed, a quiet channel shows %q", busNames(m))
 	}
 }

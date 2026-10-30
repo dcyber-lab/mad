@@ -32,7 +32,7 @@ func BenchmarkBusLook(b *testing.B) {
 	}
 	b.Run("moved", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			loadBus(st, map[string]string{}, time.Now())
+			loadBus(st, map[string]string{}, time.Now(), "")
 		}
 	})
 	b.Run("unmoved", func(b *testing.B) {
