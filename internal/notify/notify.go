@@ -4,10 +4,13 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"runtime"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/push"
 )
 
 // Event kinds.
@@ -20,6 +23,7 @@ type Event struct {
 	Kind    string
 	Project string
 	Agent   string // display name, e.g. claude#2
+	AgentID string // the agent's id, for the phone to open it
 	Message string // the agent's own words, when its hook gave any
 }
 
@@ -78,14 +82,20 @@ const timeout = 10 * time.Second
 
 // Send delivers e: the configured command, else the platform's desktop
 // notification (terminal-notifier or else osascript on macOS, notify-send
-// on Linux; nothing where neither exists). Replaceable in tests.
+// on Linux; nothing where neither exists); and to the phones subscribed,
+// if any (package push). Replaceable in tests.
 var Send = func(c Config, e Event) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	pushed := make(chan error, 1)
+	go func() {
+		pushed <- push.Send(ctx, push.Message{Title: e.Title(), Body: e.Body(), Agent: e.AgentID, Tag: e.AgentID + "/" + e.Kind}, "")
+	}()
+	var err error
 	if cmd := command(ctx, c, e, runtime.GOOS, exec.LookPath); cmd != nil {
-		return cmd.Run()
+		err = cmd.Run()
 	}
-	return nil
+	return errors.Join(err, <-pushed)
 }
 
 // command builds the command for e, or nil when there is no way to notify.

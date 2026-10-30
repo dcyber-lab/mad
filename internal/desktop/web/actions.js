@@ -71,7 +71,8 @@ function dialog({ title, body, actions, ready }) {
       document.removeEventListener("keydown", key, true);
       resolve(v);
     };
-    for (const a of actions) row.append(button(a.label, a.cls, () => done(a.value)));
+    // now runs in the click itself: what a browser lets only a click do.
+    for (const a of actions) row.append(button(a.label, a.cls, () => { if (a.now) a.now(); done(a.value); }));
     card.append(row);
     d.replaceChildren(card);
     d.hidden = false;
@@ -821,12 +822,73 @@ async function phoneDialog() {
   }
 }
 
+// ---- notifications pushed to this device (/api/push, sw.js) ----
+
+async function notifyDialog() {
+  const can = "serviceWorker" in navigator && "PushManager" in window && isSecureContext;
+  let reg = null, sub = null, st;
+  try {
+    if (can) {
+      reg = await navigator.serviceWorker.ready;
+      sub = await reg.pushManager.getSubscription();
+    }
+    st = await api("GET", "/api/push", sub ? { endpoint: sub.endpoint } : {});
+  } catch (e) {
+    toast(e.message, "err");
+    return;
+  }
+  const body = el("div", "");
+  let actions = [{ label: "OK", cls: "primary", value: null }];
+  let asked = null;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (!can) {
+    body.append(el("p", "dtext", ios && !navigator.standalone
+      ? "On an iPhone, notifications come to mad on the Home Screen: Share → Add to Home Screen, open mad from there, and turn them on here."
+      : "This browser can't be sent notifications here. Open mad on your phone (the phone button), and turn them on there."));
+  } else if (Notification.permission === "denied") {
+    body.append(el("p", "dtext", "Notifications are blocked for mad in this browser's settings: allow them there first."));
+  } else if (sub && st.on) {
+    body.append(el("p", "dtext", "This device is told when an agent needs you or is done, mad open or not."));
+    actions = [{ label: "Turn off", value: "off" }, { label: "Send a test", value: "test" }, { label: "Done", cls: "primary", value: null }];
+  } else {
+    body.append(el("p", "dtext", "Be told on this device when an agent needs you or is done, mad open or not."));
+    actions = [{ label: "Cancel", value: null },
+      { label: "Turn on", cls: "primary", value: "on", now: () => { asked = Notification.requestPermission(); } }];
+  }
+  const v = await dialog({ title: "Notifications", body, actions });
+  try {
+    if (v === "on") {
+      if ((await asked) !== "granted") {
+        toast("Notifications were not allowed", "err");
+        return;
+      }
+      const key = Uint8Array.from(atob(st.key.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+      // One made for another key of mad's goes first.
+      if (sub) await sub.unsubscribe();
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      await api("POST", "/api/push", {}, sub.toJSON());
+      await api("POST", "/api/push/test", { endpoint: sub.endpoint });
+      toast("Notifications on: a test is on its way");
+    } else if (v === "off") {
+      await api("DELETE", "/api/push", { endpoint: sub.endpoint });
+      await sub.unsubscribe();
+      toast("Notifications off on this device");
+    } else if (v === "test") {
+      await api("POST", "/api/push/test", { endpoint: sub.endpoint });
+      toast("Sent");
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
 // ---- wiring ----
 
 $("#newchat").onclick = () => openNew();
 $("#emptynew").onclick = () => openNew();
 $("#addproject").onclick = () => addProject();
 $("#phone").onclick = () => phoneDialog();
+$("#bell").onclick = () => notifyDialog();
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#popup").hidden) {
     closePopup();

@@ -100,6 +100,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/phone", s.auth(http.HandlerFunc(s.phone)))
 	mux.Handle("DELETE /api/phone", s.auth(http.HandlerFunc(s.phone)))
 	mux.Handle("GET /api/phone/qr", s.auth(http.HandlerFunc(s.phoneQR)))
+	mux.Handle("GET /api/push", s.auth(http.HandlerFunc(s.pushState)))
+	mux.Handle("POST /api/push", s.auth(http.HandlerFunc(s.pushSubscribe)))
+	mux.Handle("DELETE /api/push", s.auth(http.HandlerFunc(s.pushUnsubscribe)))
+	mux.Handle("POST /api/push/test", s.auth(http.HandlerFunc(s.pushTest)))
 	return headers(mux)
 }
 
