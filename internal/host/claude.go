@@ -226,6 +226,7 @@ func (c *claude) ask(id string, raw json.RawMessage) {
 		req.Kind, req.Plan = "plan", in.Plan
 	default:
 		req.Label, req.Input = discover.ToolText(r.Tool, r.Input)
+		req.Args = discover.ToolArgs(r.Input)
 		var sugg []json.RawMessage
 		req.Always = json.Unmarshal(r.Suggestions, &sugg) == nil && len(sugg) > 0
 	}

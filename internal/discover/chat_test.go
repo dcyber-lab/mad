@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,5 +153,33 @@ func TestPiChat(t *testing.T) {
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("Chat:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A call's Args are its input as JSON, long strings cut: what the window
+// draws a diff or a todo list from.
+func TestToolArgs(t *testing.T) {
+	long := strings.Repeat("x", maxArg+10)
+	line := `{"type":"assistant","message":{"id":"m","content":[{"type":"tool_use","id":"t","name":"Write","input":{"file_path":"/r/a.go","content":"` + long + `","n":3}}]}}`
+	e := (claude{}).Chat([]byte(line))[0]
+	var args struct {
+		FilePath string `json:"file_path"`
+		Content  string `json:"content"`
+		N        int    `json:"n"`
+	}
+	if err := json.Unmarshal(e.Args, &args); err != nil {
+		t.Fatalf("Args %s: %v", e.Args, err)
+	}
+	if args.FilePath != "/r/a.go" || args.N != 3 || !strings.HasPrefix(args.Content, "xxx") || !strings.HasSuffix(args.Content, "10 more bytes") {
+		t.Errorf("Args = %+v", args)
+	}
+
+	patch := `{"type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","call_id":"c","input":"*** Begin Patch\n*** Update File: a.go\n-a\n+b\n*** End Patch"}}`
+	e = (codex{}).Chat([]byte(patch))[0]
+	if string(e.Args) != `{"input":"*** Begin Patch\n*** Update File: a.go\n-a\n+b\n*** End Patch"}` {
+		t.Errorf("codex custom Args = %s", e.Args)
+	}
+	if e := (claude{}).Chat([]byte(`{"type":"assistant","message":{"id":"m","content":[{"type":"tool_use","id":"t","name":"X","input":{}}]}}`))[0]; e.Args != nil {
+		t.Errorf("no input: Args = %s", e.Args)
 	}
 }

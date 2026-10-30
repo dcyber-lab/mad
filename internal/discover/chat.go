@@ -25,8 +25,11 @@ type Entry struct {
 	// pointed at ("go test ./..."). Label is what an EntryCommand ran.
 	Tool  string `json:"tool,omitempty"`
 	Label string `json:"label,omitempty"`
-	// Input is a call's input made readable: a command, a diff.
-	Input string `json:"input,omitempty"`
+	// Input is a call's input made readable: a command, a diff. Args is
+	// the input itself, a JSON object, its long strings cut: what the
+	// window draws each tool from, Input where it does not know the tool.
+	Input string          `json:"input,omitempty"`
+	Args  json.RawMessage `json:"args,omitempty"`
 	// ID pairs a call with its result.
 	ID    string `json:"id,omitempty"`
 	Error bool   `json:"error,omitempty"`
@@ -59,10 +62,15 @@ type Chatter interface {
 const maxShown = 6000
 
 func shown(s string) string {
-	if len(s) <= maxShown {
+	return shownN(s, maxShown)
+}
+
+// shownN is s cut to its first n bytes, saying how much more there was.
+func shownN(s string, n int) string {
+	if len(s) <= n {
 		return s
 	}
-	cut := maxShown
+	cut := n
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
@@ -137,6 +145,7 @@ func (claude) Chat(line []byte) []Entry {
 		case "tool_use":
 			label := strings.TrimPrefix(strings.TrimPrefix(toolLabel(b.Name, b.Input), b.Name), " · ")
 			e.Kind, e.Tool, e.Label, e.Input, e.ID = EntryTool, b.Name, label, shown(toolInput(b.Input)), b.ID
+			e.Args = toolArgs(b.Input)
 		}
 		out = append(out, e)
 	}
@@ -237,6 +246,54 @@ func toolInput(in map[string]json.RawMessage) string {
 	return strings.TrimSpace(b.String())
 }
 
+// ToolArgs is how a call's input (JSON) is an entry's Args.
+func ToolArgs(input json.RawMessage) json.RawMessage {
+	var in map[string]json.RawMessage
+	_ = json.Unmarshal(input, &in)
+	return toolArgs(in)
+}
+
+// maxArg bounds each string in a call's Args: a file written whole, say.
+const maxArg = 20000
+
+// toolArgs is a call's input as Args: each string longer than maxArg cut
+// to its head, nil when there is none.
+func toolArgs(in map[string]json.RawMessage) json.RawMessage {
+	if len(in) == 0 {
+		return nil
+	}
+	var cut func(v any) any
+	cut = func(v any) any {
+		switch v := v.(type) {
+		case string:
+			return shownN(v, maxArg)
+		case []any:
+			for i := range v {
+				v[i] = cut(v[i])
+			}
+		case map[string]any:
+			for k := range v {
+				v[k] = cut(v[k])
+			}
+		}
+		return v
+	}
+	out := make(map[string]any, len(in))
+	for k, raw := range in {
+		var v any
+		if json.Unmarshal(raw, &v) == nil {
+			out[k] = cut(v)
+		}
+	}
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if enc.Encode(out) != nil {
+		return nil
+	}
+	return bytes.TrimSpace(b.Bytes())
+}
+
 // marked starts each of s's lines with mark.
 func marked(s, mark string) string {
 	return mark + strings.ReplaceAll(s, "\n", "\n"+mark)
@@ -284,9 +341,12 @@ func (codex) Chat(line []byte) []Entry {
 		var args map[string]json.RawMessage
 		_ = json.Unmarshal([]byte(p.Arguments), &args)
 		label := strings.TrimPrefix(strings.TrimPrefix(toolLabel(p.Name, args), p.Name), " · ")
-		return []Entry{{Kind: EntryTool, Tool: p.Name, Label: label, Input: shown(toolInput(args)), ID: p.CallID, Part: p.ID, At: at}}
+		return []Entry{{Kind: EntryTool, Tool: p.Name, Label: label, Input: shown(toolInput(args)), Args: toolArgs(args), ID: p.CallID, Part: p.ID, At: at}}
 	case p.Type == "custom_tool_call":
-		return []Entry{{Kind: EntryTool, Tool: p.Name, Label: codexLabel(p.Input), Input: shown(p.Input), ID: p.CallID, Part: p.ID, At: at}}
+		// A script for exec, a patch: its input is that text.
+		input, _ := json.Marshal(p.Input)
+		args := toolArgs(map[string]json.RawMessage{"input": input})
+		return []Entry{{Kind: EntryTool, Tool: p.Name, Label: codexLabel(p.Input), Input: shown(p.Input), Args: args, ID: p.CallID, Part: p.ID, At: at}}
 	case strings.HasSuffix(p.Type, "_call_output"):
 		return []Entry{{Kind: EntryResult, ID: p.CallID, Text: shown(resultText(p.Output)), At: at}}
 	case strings.HasSuffix(p.Type, "_call"):
