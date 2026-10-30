@@ -61,7 +61,7 @@ func TestAge(t *testing.T) {
 		30 * 24 * time.Hour: "30d",
 	}
 	for d, want := range cases {
-		if got := ageAt(now.Add(-d), now); got != want {
+		if got := AgeAt(now.Add(-d), now); got != want {
 			t.Errorf("age(%v) = %q, want %q", d, got, want)
 		}
 	}
