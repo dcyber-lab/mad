@@ -17,9 +17,10 @@ import (
 // The order of the steps is the order of precedence when two sources
 // name the same key: an agent's own wait comes before a card about it.
 func build(f Facts) View {
-	b := builder{f: f, byKey: map[Key]int{}, byAgent: map[string][]int{}, known: map[string]bool{}}
-	for _, a := range f.Agents {
+	b := builder{f: f, byKey: map[Key]int{}, byAgent: map[string][]int{}, known: map[string]bool{}, rank: map[string]int{}}
+	for i, a := range f.Agents {
 		b.known[a.ID] = true
+		b.rank[a.ID] = i
 	}
 	for _, a := range f.Agents {
 		b.agent(a)
@@ -34,7 +35,7 @@ func build(f Facts) View {
 	needs := order(b.items)
 	fin := b.finished()
 	return View{
-		Inbox:    Inbox{Items: append(needs, fin...), Needs: len(needs)},
+		Inbox:    Inbox{Items: append(append([]Item{}, needs...), fin...), Needs: len(needs)},
 		Activity: activities(f.Agents),
 		Working:  working(f.Agents),
 		Board:    b.rest,
@@ -50,12 +51,27 @@ type builder struct {
 	// card to fold into; known are the agents among the facts.
 	byAgent map[string][]int
 	known   map[string]bool
-	rest    []bus.Card
+	// rank is each agent's place in the deck's order: what equal times and
+	// equal keys alike are ordered by, so every surface lists equal facts
+	// alike.
+	rank map[string]int
+	rest []bus.Card
+}
+
+// rankOf is the place of agent id's items among equals: items of no agent
+// after all agents'.
+func (b *builder) rankOf(id string) int {
+	if r, ok := b.rank[id]; ok {
+		return r
+	}
+	return len(b.rank)
 }
 
 // add puts it in, or merges it into the item with its key: its tasks
 // are joined, the earlier Since kept, the rest of the first item kept.
 func (b *builder) add(it Item) {
+	it.oneLine()
+	it.rank = b.rankOf(it.Agent)
 	it.Acts = it.route.acts()
 	if it.Acts == nil {
 		it.Acts = []Act{}
@@ -77,6 +93,54 @@ func (b *builder) add(it Item) {
 		b.byAgent[it.Agent] = append(b.byAgent[it.Agent], len(b.items))
 	}
 	b.items = append(b.items, it)
+}
+
+// oneLine makes the words an item is drawn in one line each: a row is a
+// line, however long the task note, the question or the hook's message.
+// What Text had past its line (a note's list, a question's context) is
+// kept in Body, which the page shows whole.
+func (it *Item) oneLine() {
+	full := strings.TrimSpace(it.Text)
+	it.Text = headline(full)
+	switch {
+	case full == it.Text:
+	case it.Body == "":
+		it.Body = full
+	default:
+		it.Body = full + "\n\n" + it.Body
+	}
+	it.Title, it.Context, it.Where = flat(it.Title), flat(it.Context), flat(it.Where)
+	for i := range it.Tasks {
+		it.Tasks[i].Title = flat(it.Tasks[i].Title)
+	}
+}
+
+// flat is s on one line, its whitespace collapsed.
+func flat(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// headline is text as one line: its first line when the rest is a list (a
+// heading and its points), else all of it, collapsed.
+func headline(text string) string {
+	first, rest, multi := strings.Cut(text, "\n")
+	if !multi {
+		return flat(text)
+	}
+	for _, l := range strings.Split(rest, "\n") {
+		l = strings.TrimSpace(l)
+		if strings.HasPrefix(l, "- ") || strings.HasPrefix(l, "* ") || strings.HasPrefix(l, "• ") || numbered(l) {
+			return flat(first)
+		}
+	}
+	return flat(text)
+}
+
+// numbered: "1. " or "2) ".
+func numbered(l string) bool {
+	i := 0
+	for i < len(l) && l[i] >= '0' && l[i] <= '9' {
+		i++
+	}
+	return i > 0 && i+1 < len(l) && (l[i] == '.' || l[i] == ')') && l[i+1] == ' '
 }
 
 func (it *Item) addTask(t TaskRef) {
@@ -101,7 +165,7 @@ func alive(a Agent) bool {
 func (b *builder) agent(a Agent) {
 	if len(a.Report.Asks) > 0 && alive(a) {
 		for _, ask := range a.Report.Asks {
-			it := Item{Key: keyRequest(a.ID, ask.ID), Agent: a.ID, Title: a.Label, Since: ask.At, Blocks: true,
+			it := Item{Key: keyRequest(a.ID, ask.Host, ask.ID), Agent: a.ID, Title: a.Label, Since: ask.At, Blocks: true,
 				Open: Open{Agent: a.ID}, route: hostRoute{agent: a.ID, ask: ask}}
 			switch ask.Kind {
 			case status.AskQuestion:
@@ -193,6 +257,13 @@ func (b *builder) card(c bus.Card) {
 		where := "in #" + c.Channel
 		if strings.HasPrefix(c.Channel, "dm.") {
 			where = "in your DM"
+			if r := (busRoute{channel: c.Channel}); r.theirs() {
+				var names []string
+				for _, s := range bus.DMSides(c.Channel) {
+					names = append(names, b.nameOf(s))
+				}
+				where = "in " + strings.Join(names, " ↔ ") + "'s DM"
+			}
 		}
 		b.add(Item{Key: keyMessage(c.Channel, c.Message.Seq), Kind: KindAsk, Agent: asker, Title: label, Context: where,
 			Text: text, Body: body, Tasks: tasks, Since: since, undated: undated,
@@ -224,6 +295,16 @@ func (b *builder) card(c bus.Card) {
 		b.add(Item{Key: keyCard(c.Kind, c.Channel, c.Title), Kind: KindTask, Icon: "task", Title: c.Title, Context: c.Why,
 			Text: c.Note, Since: since, undated: undated, Open: Open{Page: PageBoard}, route: openRoute{label: "Open board"}})
 	}
+}
+
+// nameOf is agent id's name on the bus, or the id of one gone.
+func (b *builder) nameOf(id string) string {
+	for _, a := range b.f.Agents {
+		if a.ID == id {
+			return a.Label
+		}
+	}
+	return id
 }
 
 // splitFirst is text's first line, and the rest.
@@ -268,8 +349,8 @@ func (b *builder) finished() []Item {
 		}
 		it := Item{Key: keyFinished(a.ID, a.Since), Kind: KindFinished, Agent: a.ID, Title: a.Label, Context: "finished",
 			Since: a.Since, Open: Open{Agent: a.ID}, route: seenRoute{label: a.Label, pane: a.PaneID}}
-		if t := a.Report.Turn; t != nil {
-			it.Text = firstLine(t.Reply, replyRunes)
+		if r := replyOf(a); r != "" {
+			it.Text = firstLine(r, replyRunes)
 		}
 		it.Acts = it.route.acts()
 		out = append(out, it)
@@ -278,15 +359,23 @@ func (b *builder) finished() []Item {
 		if !out[i].Since.Equal(out[j].Since) {
 			return out[i].Since.After(out[j].Since)
 		}
-		return out[i].Key < out[j].Key
+		return less(out[i], out[j])
 	})
 	return out
+}
+
+// less breaks a tie: by the agent's place in the deck's order, then by key.
+func less(a, b Item) bool {
+	if a.rank != b.rank {
+		return a.rank < b.rank
+	}
+	return a.Key < b.Key
 }
 
 // order sorts what needs the person: Blocks first, then Since ascending
 // (oldest first), then Key, so equal times keep one order everywhere.
 func order(items []Item) []Item {
-	out := append([]Item(nil), items...)
+	out := append([]Item{}, items...)
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		if a.Blocks != b.Blocks {
@@ -295,7 +384,7 @@ func order(items []Item) []Item {
 		if !a.Since.Equal(b.Since) {
 			return a.Since.Before(b.Since)
 		}
-		return a.Key < b.Key
+		return less(a, b)
 	})
 	return out
 }
@@ -308,12 +397,8 @@ func working(agents []Agent) []string {
 			ws = append(ws, a)
 		}
 	}
-	sort.SliceStable(ws, func(i, j int) bool {
-		if !ws[i].Since.Equal(ws[j].Since) {
-			return ws[i].Since.Before(ws[j].Since)
-		}
-		return ws[i].ID < ws[j].ID
-	})
+	// agents are in the deck's order, which a stable sort keeps among equals.
+	sort.SliceStable(ws, func(i, j int) bool { return ws[i].Since.Before(ws[j].Since) })
 	out := []string{}
 	for _, a := range ws {
 		out = append(out, a.ID)

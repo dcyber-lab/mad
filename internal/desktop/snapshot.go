@@ -220,7 +220,7 @@ func (p *poller) Poll(now time.Time) {
 			k := agent.ByName(p.kinds, a.Kind)
 			tr := p.trackers[a.ID]
 			if tr == nil {
-				tr = &status.Tracker{}
+				tr = &status.Tracker{ID: a.ID}
 				p.trackers[a.ID] = tr
 			}
 			pn, ok := tmux.FindPane(panes, a.ID)

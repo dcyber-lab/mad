@@ -11,8 +11,12 @@ import (
 // thing one key, and two sources of one thing (an ask card and the task
 // that carries it) collapse into one item.
 
-// keyRequest: a request an agent's host has open (status.Ask.ID).
-func keyRequest(agent, request string) Key { return Key("req:" + agent + "/" + request) }
+// keyRequest: a request an agent's host has open (status.Ask.ID). The
+// host's instance is in it: request ids restart with each host, and a new
+// request must not be taken for an answered one of the same id.
+func keyRequest(agent, host, request string) Key {
+	return Key("req:" + agent + "/" + host + "/" + request)
+}
 
 // keyWait: a TUI-run agent's wait. at is the hook's time: a new wait after
 // an answer writes a new hook, so it gets a new key; an agent waiting by

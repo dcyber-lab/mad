@@ -104,6 +104,10 @@ type Answer struct {
 	// Answers to a question's questions, by question: the label chosen,
 	// labels joined by ", " for several, or what was written.
 	Answers map[string]string `json:"answers,omitempty"`
+	// Instance is the host the request was read from (status.Ask.Host);
+	// another host's answer is refused. Empty: the page's, which has the
+	// request from the host it asks.
+	Instance string `json:"instance,omitempty"`
 }
 
 // Image is a picture sent with a message.
@@ -178,7 +182,15 @@ type Host struct {
 	// <id>.asks.json was last written with.
 	asked map[string]time.Time
 	wrote string
+	// instance names this host in the asks it writes; an answer must name
+	// it, so one meant for an earlier host is never taken for a request of
+	// this one (codex restarts its request ids at 0 in each app-server).
+	instance string
 }
+
+// staleAnswer is what an answer to a request of another host, or of none
+// open, gets back: Desk.Act tells it from its text.
+const staleAnswer = "that was answered already"
 
 func newHost(id string) *Host {
 	return &Host{
@@ -188,6 +200,10 @@ func newHost(id string) *Host {
 		clients: map[chan []byte]bool{},
 		redraw:  make(chan struct{}, 1),
 		asked:   map[string]time.Time{},
+		// An unwritten file is stale: the first update writes it, even
+		// with nothing open, over a dead host's.
+		wrote:    "\x01",
+		instance: status.NewHostInstance(),
 	}
 }
 
@@ -226,6 +242,7 @@ func Run(ctx context.Context, id string, kinds []agent.Kind) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	_ = status.WriteAsks(id, nil)                    // a host killed hard left its requests
 	defer func() { _ = status.WriteAsks(id, nil) }() // nothing waits on a host that ended
 	go h.serve(ln)
 	go h.heartbeat(ctx)
@@ -289,14 +306,14 @@ func (h *Host) writeAsks(now time.Time) {
 		return
 	}
 	h.wrote = ids.String()
-	_ = status.WriteAsks(h.agent, asksOf(h.st.Requests, h.asked))
+	_ = status.WriteAsks(h.agent, asksOf(h.st.Requests, h.asked, h.instance))
 }
 
 // asksOf is what reqs say, in the deck's words.
-func asksOf(reqs []Request, asked map[string]time.Time) []status.Ask {
+func asksOf(reqs []Request, asked map[string]time.Time, instance string) []status.Ask {
 	var out []status.Ask
 	for _, r := range reqs {
-		a := status.Ask{ID: r.ID, Title: r.Title, At: asked[r.ID]}
+		a := status.Ask{ID: r.ID, Host: instance, Title: r.Title, At: asked[r.ID]}
 		switch r.Kind {
 		case "question":
 			a.Kind = status.AskQuestion
@@ -483,6 +500,9 @@ func (h *Host) do(c Command) error {
 	case "answer":
 		if c.Answer == nil {
 			return errors.New("no answer")
+		}
+		if c.Answer.Instance != "" && c.Answer.Instance != h.instance {
+			return errors.New(staleAnswer)
 		}
 		return h.d.answer(*c.Answer)
 	case "model":

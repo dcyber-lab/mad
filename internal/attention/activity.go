@@ -48,8 +48,8 @@ func activityOf(a Agent) Activity {
 			act.Todo = t
 		}
 	}
-	if a.Shown == status.Finished && a.Report.Turn != nil {
-		act.Reply = firstLine(a.Report.Turn.Reply, replyRunes)
+	if a.Shown == status.Finished {
+		act.Reply = firstLine(replyOf(a), replyRunes)
 	}
 	return act
 }
@@ -117,4 +117,15 @@ func firstLine(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s
+}
+
+// replyOf is a's last reply, if it is of the turn that ended into this
+// finished state: the turn file keeps the last turn that reported, and
+// an agent finished by its screen alone may not have reported this one.
+func replyOf(a Agent) string {
+	t := a.Report.Turn
+	if t == nil || t.At.Before(a.Since) {
+		return ""
+	}
+	return t.Reply
 }

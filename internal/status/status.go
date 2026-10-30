@@ -83,6 +83,7 @@ func RemoveHook(id string) {
 	os.Remove(sentPath(id))
 	os.Remove(digestPath(id))
 	os.Remove(asksPath(id))
+	os.Remove(sincePath(id))
 }
 
 // Turn is how the agent's last turn ended, stored as StatusDir/<agent
@@ -158,6 +159,10 @@ func SentAt(id string) time.Time {
 
 // Tracker follows one agent across polls.
 type Tracker struct {
+	// ID is the agent's id: with it, Since is kept in a record every
+	// process tracking the agent shares (see sinceRecord). Empty: none.
+	ID string
+
 	hash       uint64
 	seen       bool
 	lastChange time.Time
@@ -174,7 +179,7 @@ type Tracker struct {
 func (t *Tracker) Observe(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook, screen string, onStage bool, now time.Time) string {
 	s := t.compute(k, pane, hasPane, hook, screen, now)
 	if s != t.Status {
-		t.since = sinceOf(s, t.since, hook, now)
+		t.since = t.began(s, hook, now)
 	}
 	switch {
 	case onStage:
@@ -202,6 +207,35 @@ func (t *Tracker) Observe(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 func sinceOf(s string, prev time.Time, hook *Hook, now time.Time) time.Time {
 	if hook != nil && s != Running && hook.State == s && hook.At.After(prev) && !hook.At.After(now) {
 		return hook.At
+	}
+	return now
+}
+
+// began is when status s began, s being new to this tracker at now. The
+// deck, the window and `mad board` track an agent apart, and a process
+// started later would date a hookless state by its own first look: the
+// hook's time is what they all read alike, then the record of the state
+// the first of them saw, and only then now.
+func (t *Tracker) began(s string, hook *Hook, now time.Time) time.Time {
+	at := sinceOf(s, t.since, hook, now)
+	if t.ID == "" {
+		return at
+	}
+	rec, ok := readSince(t.ID)
+	same := ok && rec.State == s
+	if !at.Equal(now) { // the hook's
+		if !same || !rec.At.Equal(at) {
+			writeSince(t.ID, sinceRecord{State: s, At: at})
+		}
+		return at
+	}
+	if same && !rec.At.After(now) {
+		return rec.At
+	}
+	// A tracker's first look guesses (it cannot tell a busy screen from a
+	// quiet one until it changes): it does not overwrite what another saw.
+	if t.Status != "" || !ok {
+		writeSince(t.ID, sinceRecord{State: s, At: now})
 	}
 	return now
 }
@@ -273,4 +307,29 @@ func tailLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// sinceRecord is <id>.since.json: the state an agent's trackers last saw
+// begin, and when. Whichever process sees a state begin first writes it;
+// the others, finding their own state in it, take its time.
+type sinceRecord struct {
+	State string    `json:"state"`
+	At    time.Time `json:"at"`
+}
+
+func sincePath(id string) string { return filepath.Join(paths.StatusDir(), id+".since.json") }
+
+func readSince(id string) (sinceRecord, bool) {
+	var r sinceRecord
+	data, err := os.ReadFile(sincePath(id))
+	if err != nil || json.Unmarshal(data, &r) != nil || r.State == "" {
+		return r, false
+	}
+	return r, true
+}
+
+func writeSince(id string, r sinceRecord) {
+	if data, err := json.Marshal(r); err == nil {
+		_ = paths.WriteFileAtomic(sincePath(id), data)
+	}
 }

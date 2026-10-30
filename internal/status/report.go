@@ -6,6 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -45,7 +48,11 @@ const (
 // the inbox shows and what an answer names. The host turns its own
 // Request into this; nothing outside package host sees a Request.
 type Ask struct {
-	ID   string `json:"id"` // the host's request id; an answer names it
+	ID string `json:"id"` // the host's request id; an answer names it
+	// Host is the instance of the host that wrote it (NewHostInstance).
+	// Request ids are only unique within one host (codex's restart at 0
+	// in each app-server), so an answer names both.
+	Host string `json:"host"`
 	Kind string `json:"kind"`
 	// Tool and Target say what a permission is for: "Bash", "run the
 	// tests"; Command is the shell command it would run, if it is one.
@@ -87,14 +94,33 @@ func WriteAsks(id string, asks []Ask) error {
 	return paths.WriteFileAtomic(asksPath(id), data)
 }
 
-// ReadAsks is what agent id's host has open, or nil.
+// NewHostInstance names this process as a host: its pid, to tell it
+// lives, and its start time, to tell it from the next with the same pid.
+func NewHostInstance() string {
+	return strconv.Itoa(os.Getpid()) + "." + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
+// hostAlive tells whether the host instance's process still runs: a host
+// killed hard leaves its file behind. Not knowing is not alive.
+func hostAlive(instance string) bool {
+	pid, _, _ := strings.Cut(instance, ".")
+	n, err := strconv.Atoi(pid)
+	if err != nil || n <= 0 {
+		return false
+	}
+	err = syscall.Kill(n, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+// ReadAsks is what agent id's host has open, or nil. A file whose host is
+// gone (or that names none) is no one's request: nothing waits on it.
 func ReadAsks(id string) []Ask {
 	data, err := os.ReadFile(asksPath(id))
 	if err != nil {
 		return nil
 	}
 	var asks []Ask
-	if json.Unmarshal(data, &asks) != nil {
+	if json.Unmarshal(data, &asks) != nil || len(asks) == 0 || !hostAlive(asks[0].Host) {
 		return nil
 	}
 	return asks
