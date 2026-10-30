@@ -814,6 +814,58 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .dl.d { background: color-mix(in srgb, var(--stopped) 12%, transparent); }
 .dl.h { color: var(--text-3); background: var(--raise); }
 
+/* ---- the bus: channels in the sidebar, a channel's conversation ---- */
+
+.busgroup { margin: 2px 0 10px; }
+.chead { display: flex; align-items: center; gap: 6px; padding: 6px 8px; color: var(--text-3); font-size: 12px; }
+.chead > .i { width: 13px; height: 13px; }
+.chead b { color: var(--text); font-weight: 600; font-size: 12.5px; }
+.chead .icon-btn { width: 24px; height: 24px; border-radius: 7px; }
+.chead .icon-btn .i { width: 14px; height: 14px; }
+.chan {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 1px 0; border-radius: 9px;
+  cursor: pointer; font-size: 13.5px; color: var(--text-2);
+}
+.chan:hover { background: var(--raise); }
+.chan.sel { background: var(--raise-2); color: var(--text); }
+.chan.unread { color: var(--text); font-weight: 600; }
+.chan .ch { width: 16px; flex: none; text-align: center; color: var(--text-3); font-weight: 600; }
+.chan .cn { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chan .cnt {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 600; color: var(--primary-fg); background: var(--accent);
+}
+.chan.none { color: var(--text-3); font-size: 12.5px; }
+.chan.theirs.unread { font-weight: 400; color: var(--text-2); }
+.chan.theirs .cnt { color: var(--text-2); background: var(--raise-2); }
+
+#chanview { position: absolute; inset: 0; display: flex; flex-direction: column; }
+#chanview[hidden] { display: none; }
+#chanhead {
+  flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+  border-bottom: 1px solid var(--border); min-height: 52px;
+}
+#chanhead .cwhat { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+#chanhead .cwhat b { font-size: 15px; }
+#chanhead .cwhat .muted { font-size: 12.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#chanhead .cwho { display: flex; gap: 4px; }
+#chanhead .cwho .avatar { cursor: pointer; }
+#chanscroll { flex: 1; overflow-y: auto; min-height: 0; }
+#chanlog { max-width: var(--column); margin: 0 auto; padding: 22px 28px 40px; display: flex; flex-direction: column; gap: 14px; }
+.bmsg { display: flex; gap: 10px; align-items: flex-start; animation: rise 0.18s ease-out; }
+.bmsg > .avatar { margin-top: 2px; cursor: pointer; }
+.bmsg .bbody { min-width: 0; flex: 1; }
+.bmsg .bmeta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 12.5px; margin-bottom: 2px; }
+.bmsg .bmeta b { font-size: 13.5px; }
+.bmsg .btext { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.bmsg.mine { justify-content: flex-end; }
+.bmsg.mine .bbody { flex: none; max-width: 78%; padding: 8px 14px; border-radius: 18px; background: var(--raise); }
+.bmsg.mine .bmeta b { display: none; }
+.bmsg.card .bbody { padding: 10px 14px; border-radius: 14px; border: 1px solid var(--border-2); background: var(--card); }
+.bsys { align-self: center; max-width: 80%; text-align: center; font-size: 12.5px; color: var(--text-3); }
+.pickrow { cursor: pointer; }
+.pickrow input { margin: 0 4px 0 0; }
+
 /* ---- a phone: the list, or what is open, a screen each ---- */
 
 @media (max-width: 640px) {
@@ -847,6 +899,11 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #changes .i { width: 16px; height: 16px; }
 
   .chat .log { padding: 18px 14px 28px; }
+  #chanlog { padding: 16px 14px 28px; }
+  #chanhead { padding: 8px 14px; }
+  #chanhead .cwho { display: none; }
+  #chanhead .cwhat b { display: none; }
+  #chanhead.bare { display: none; }
   .msg { font-size: 15.5px; }
   .msg.from-user { max-width: 88%; margin-top: 20px; }
   .mcopy { display: none; }

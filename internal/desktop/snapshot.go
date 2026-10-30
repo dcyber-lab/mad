@@ -20,6 +20,7 @@ import (
 type Snapshot struct {
 	Projects []Project      `json:"projects"`
 	Quota    map[string]any `json:"quota,omitempty"` // by kind: claude, codex
+	Bus      []BusChannel   `json:"bus"`             // the channels and DMs (bus.go)
 	At       time.Time      `json:"at"`
 }
 
@@ -204,6 +205,7 @@ func (p *poller) Poll(now time.Time) {
 			snap.Quota[kind] = q.Expire(now)
 		}
 	}
+	snap.Bus = busChannels(st)
 
 	p.mu.Lock()
 	p.snap = snap
