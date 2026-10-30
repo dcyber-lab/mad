@@ -183,6 +183,7 @@ function drawList() {
     // On a phone the inbox folds earlier, so Working shows on the first screen.
     const [limit, keep] = phoneList() ? [4, 3] : [8, 6];
     nodes.push(group("inbox g-needs", ghead("Needs you", shownNeeds.length, "needs", next), capped("needs", shownNeeds, limit, keep, (it) => {
+      if (ib.expanded.has(it.key)) return itemCard(it, false, "side");
       const r = itemRow(it);
       return ib.reply?.key === it.key && ib.reply.where === "side" ? [r, replyBox(it, ib.reply)].filter(Boolean) : r;
     }, "need you", (it) => ib.reply?.key === it.key)));
@@ -220,6 +221,7 @@ function drawList() {
     nodes.push(box);
   }
   nav.replaceChildren(...nodes);
+  fitRows(nav);
   nav.scrollTop = keep;
   $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;
 }

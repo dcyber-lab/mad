@@ -15,6 +15,7 @@ const ib = {
   // its buttons disabled, until a snapshot no longer has it. Nothing slides
   // under the finger that tapped it.
   pending: new Map(),
+  expanded: new Set(), // keys of rows opened in place as cards (Review)
   down: null,        // the act button the pointer last went down on: {id, ok}
   layoutAt: 0,       // when the inbox's layout last changed (ms)
   sig: "",           // what that layout was
@@ -48,12 +49,13 @@ function pruneGone() {
     if (!inboxItem(k) || (p.done && Date.now() - p.done > pendingMs)) ib.pending.delete(k);
   }
   if (ib.reply && !inboxItem(ib.reply.key)) ib.reply = null;
+  for (const k of ib.expanded) if (!inboxItem(k)) ib.expanded.delete(k);
 }
 
 // settleLayout notes when the inbox's rows changed, so that a tap aimed at
 // the old layout is not taken for one at the new.
 function settleLayout() {
-  const sig = JSON.stringify([...needsYou(), ...finishedItems()].map((it) => it.key)) + JSON.stringify(ib.reply);
+  const sig = JSON.stringify([...needsYou(), ...finishedItems()].map((it) => it.key)) + JSON.stringify(ib.reply) + [...ib.expanded];
   if (sig !== ib.sig) {
     ib.sig = sig;
     ib.layoutAt = Date.now();
@@ -84,6 +86,7 @@ function tickText(s) {
 }
 setInterval(() => {
   for (const s of document.querySelectorAll(".t[data-at]")) tickText(s);
+  fitRows(document.getElementById("projects")); // an age that grew may cut a command
 }, 15000);
 
 // ---- the parts ----
@@ -139,13 +142,15 @@ function itemLead(it) {
   return avatar(a || { id: it.agent, kind: "?" });
 }
 
-// itemLine is what an item says under its name: its text (code when it is
-// a command), then how long it has waited.
+// itemLine is what an item says under its name: how long it has waited,
+// then its text (code when it is a command). The age is first: a narrow
+// row cuts the end, and the end is what matters least.
 function itemLine(it) {
   const out = [];
   if (it.part != null) out.push(meter(it.part), " ");
-  if (it.text) out.push(it.mono ? el("span", "tgt", it.text) : it.text);
-  if (it.since) out.push(it.text ? " · " : "", tick(it.since));
+  const aged = short(it.since) !== "";
+  if (aged) out.push(tick(it.since));
+  if (it.text) out.push(aged ? " · " : "", it.mono ? el("span", "tgt", it.text) : it.text);
   return out;
 }
 
@@ -182,8 +187,24 @@ function row(o) {
   return r;
 }
 
+// An act that lets something through (allow, always, approve) is not
+// offered in a row beside a line the row had to cut: there it is Review,
+// which opens the item as a card with the whole of it. fitRows decides,
+// once the row is laid out; until then (and wherever it cannot measure) the
+// row says Review.
+const letsThrough = new Set(["allow", "always", "approve"]);
+
 function itemRow(it) {
-  const acts = it.acts.filter((a) => a.row).map((a) => actButton(it, a, "side"));
+  const acts = [];
+  for (const a of it.acts.filter((x) => x.row)) {
+    const b = actButton(it, a, "side");
+    acts.push(b);
+    if (it.text && letsThrough.has(a.verb) && !ib.pending.has(it.key)) {
+      b.hidden = true;
+      b.classList.add("guard");
+      acts.push(rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`));
+    }
+  }
   const r = row({
     key: it.key, cls: `${ib.nextKey === it.key ? "sel" : ""}${ib.pending.has(it.key) ? " pending" : ""}`, lead: itemLead(it), name: it.title, ctx: it.context,
     line: itemLine(it), right: acts, onclick: () => openItem(it),
@@ -191,6 +212,26 @@ function itemRow(it) {
   const a = it.agent && agents.get(it.agent);
   r.title = [it.title, it.context, it.text].filter(Boolean).join(" · ") + (a ? `\n${a.id}` : "");
   return r;
+}
+
+// fitRows shows each guarded act whose row shows its whole line, and Review
+// where the line is cut or cannot be measured (a hidden list is 0 wide).
+function fitRows(root) {
+  for (const b of root.querySelectorAll(".row .guard")) {
+    const row = b.closest(".row");
+    const rv = row.querySelector(".review");
+    const t2 = row.querySelector(".t2");
+    b.hidden = false;
+    if (rv) rv.hidden = true;
+    const fits = !!t2 && t2.clientWidth > 0 && t2.scrollWidth <= t2.clientWidth;
+    b.hidden = !fits;
+    if (rv) rv.hidden = fits;
+  }
+}
+{
+  const list = document.getElementById("projects");
+  if (list) new ResizeObserver(() => fitRows(list)).observe(list);
+  document.fonts?.ready.then(() => list && fitRows(list));
 }
 
 // ---- acts ----
@@ -360,7 +401,7 @@ function nextItem() {
 
 // itemCard is an item as a card: its words in full, every act. compact
 // (the board's column) keeps the text to two lines.
-function itemCard(it, compact) {
+function itemCard(it, compact, where = "main") {
   const done = it.kind === "finished";
   const c = el("div", `icard ${done ? "k-finished" : "k-needs"}${compact ? " compact" : ""}${ib.pending.has(it.key) ? " pending" : ""}${ib.nextKey === it.key ? " sel" : ""}`);
   c.dataset.key = it.key;
@@ -378,7 +419,8 @@ function itemCard(it, compact) {
       if (it.where) cmd.append(el("span", "pr", `   in ${it.where}`));
       c.append(cmd);
     } else {
-      c.append(el("div", "body", it.text));
+      // what an allow sits beside is shown whole
+      c.append(el("div", it.acts.some((a) => letsThrough.has(a.verb)) ? "body full" : "body", it.text));
     }
   }
   if (it.part != null) {
@@ -391,9 +433,10 @@ function itemCard(it, compact) {
   if (!done) {
     // an answer's options are one tap each; "Reply" and the like follow
     const acts = el("div", "acts");
-    for (const x of it.acts) acts.append(actButton(it, x, "main"));
+    for (const x of it.acts) acts.append(actButton(it, x, where));
+    if (where === "side") acts.append(rowButton("Less", "ghost", () => { ib.expanded.delete(it.key); redraw(); }, "Back to the row"));
     c.append(acts);
-    if (ib.reply?.key === it.key && ib.reply.where === "main") c.append(replyBox(it, ib.reply) || "");
+    if (ib.reply?.key === it.key && ib.reply.where === where) c.append(replyBox(it, ib.reply) || "");
   }
   c.onclick = () => openItem(it);
   return c;
@@ -408,19 +451,23 @@ function itemCard(it, compact) {
 //   finished  Finished 3m ago · Tests pass
 //   quiet     Idle 12m
 function activityLine(a) {
-  const todo = a.todo ? ` · ${a.todo.done}/${a.todo.total}` : "";
+  const todo = a.todo ? `${a.todo.done}/${a.todo.total}` : "";
+  const aged = short(a.since) !== "";
   if (a.tool) {
-    const out = [el("span", "tool", a.tool)];
-    if (a.target) out.push(" · ", el("span", "tgt", a.target));
-    if (a.since) out.push(" · ", tick(a.since));
-    out.push(todo);
+    // age and todo first: a narrow row cuts the end, which says least
+    const out = [];
+    const put = (x) => { if (x) out.push(out.length ? " · " : "", x); };
+    put(aged && tick(a.since));
+    put(todo);
+    put(el("span", "tool", a.tool));
+    put(a.target && el("span", "tgt", a.target));
     return out;
   }
   const st = shownStatus(a);
   const word = look(st).word;
-  const out = [el("span", st === "finished" ? "fin" : "word", `${word}${a.since ? " " : ""}`)];
-  if (a.since) out[0].append(tick(a.since, st === "finished" ? " ago" : ""));
-  out.push(todo);
+  const out = [el("span", st === "finished" ? "fin" : "word", `${word}${aged ? " " : ""}`)];
+  if (aged) out[0].append(tick(a.since, st === "finished" ? " ago" : ""));
+  if (todo) out.push(" · ", todo);
   if (a.reply) out.push(" · ", a.reply);
   return out;
 }
