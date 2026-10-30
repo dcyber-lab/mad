@@ -277,3 +277,20 @@ func TestSpendStaleEntrySettles(t *testing.T) {
 		t.Errorf("open = %+v", l.Open)
 	}
 }
+
+func TestStartedByMadOutlivesSettling(t *testing.T) {
+	spendSetup(t, 10, 100)
+	if StartedByMad(idBuild, time.Now()) {
+		t.Fatal("nothing sent yet")
+	}
+	at := time.Now()
+	if err := SpendSent(idBuild, 0, at); err != nil {
+		t.Fatal(err)
+	}
+	if !StartedByMad(idBuild, at.Add(5*time.Second)) { // seen running a moment after the send
+		t.Error("a turn mad started was not told")
+	}
+	if StartedByMad(idBuild, at.Add(10*time.Minute)) { // a later turn is the person's
+		t.Error("a later turn counted as mad's")
+	}
+}

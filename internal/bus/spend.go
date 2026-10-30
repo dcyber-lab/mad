@@ -63,8 +63,11 @@ type Spend struct {
 	ExtraTurns int         `json:"extra_turns,omitempty"`
 	OpenToday  bool        `json:"open_today"`
 	Open       []SpendOpen `json:"open,omitempty"`
-	ClosedAt   time.Time   `json:"closed_at,omitzero"`
-	ToldAt     time.Time   `json:"told_at,omitzero"`
+	// Last is when mad last started a turn for each agent; it outlives
+	// the open entry, so a turn's end can still be told as mad's.
+	Last     map[string]time.Time `json:"last,omitempty"`
+	ClosedAt time.Time            `json:"closed_at,omitzero"`
+	ToldAt   time.Time            `json:"told_at,omitzero"`
 }
 
 // SpendState is the ledger against the budget, for the window and the CLI.
@@ -91,7 +94,7 @@ func loadSpend(at time.Time) Spend {
 		_ = json.Unmarshal(data, &s)
 	}
 	if s.Day != dayOf(at) {
-		s = Spend{Day: dayOf(at), Open: s.Open}
+		s = Spend{Day: dayOf(at), Open: s.Open, Last: s.Last}
 	}
 	return s
 }
@@ -144,7 +147,19 @@ func SpendSent(id string, costBefore float64, at time.Time) error {
 			}
 		}
 		s.Open = append(s.Open, SpendOpen{Agent: id, SentAt: at, CostBefore: costBefore})
+		if s.Last == nil {
+			s.Last = map[string]time.Time{}
+		}
+		s.Last[id] = at
 	})
+}
+
+// StartedByMad tells whether agent id's turn that began at since (give or
+// take a little: the send precedes the first sight of the work) is one mad
+// started by itself. A person's message in the turn blends in; accepted.
+func StartedByMad(id string, since time.Time) bool {
+	at, ok := loadSpend(time.Now()).Last[id]
+	return ok && !at.Before(since.Add(-30*time.Second))
 }
 
 // SpendSettle closes the turns mad started whose agent has ended its turn
