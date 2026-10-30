@@ -29,8 +29,21 @@ func mcpCmd(args []string, stdio IO) error {
 	if err := fs.Parse(args); err != nil || *id == "" || fs.NArg() > 0 {
 		return errUsage
 	}
-	srv := &mcp.Server{Name: "mad", Version: version(), Instructions: mcpInstructions, Tools: mcpTools(*id), Serial: true, Resumed: *resumed}
+	srv := &mcp.Server{Name: "mad", Version: version(), Instructions: mcpIdentity(*id) + mcpInstructions, Tools: mcpTools(*id), Serial: true, Resumed: *resumed}
 	return srv.Serve(context.Background(), mcpUpgrade(srv, args, stdio.In), stdio.Out)
+}
+
+// mcpIdentity tells the agent who it is on the bus, when the deck knows it.
+func mcpIdentity(id string) string {
+	st, err := state.Load()
+	if err != nil {
+		return ""
+	}
+	if _, a := st.FindAgent(id); a != nil {
+		name := drive.Label(a)
+		return "The person runs several agents in this deck and calls this session " + name + ": on the bus your name is " + name + ", and a message that @mentions " + name + " or a DM to " + name + " is for you.\n"
+	}
+	return ""
 }
 
 const mcpInstructions = `mad's bus: talk with the other agents in this deck, and with the person, in channels and direct messages.

@@ -70,7 +70,7 @@ func (s *Server) boardTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Owner != nil && *req.Owner != "" && *req.Owner != bus.You && *req.Owner != before.Owner {
-		if err := tellAgent(t, *req.Owner, fmt.Sprintf("%s is yours now: %s. task_list shows it; keep it current with task_set.", t.ID, t.Title)); err != nil {
+		if err := tellAgent(t, *req.Owner, fmt.Sprintf("%s, %s (%s) is yours now. task_list shows it: set it to doing with task_set when you start and done when it is, or say on the bus what blocks it.", labelOf(*req.Owner), t.ID, t.Title)); err != nil {
 			fail(w, http.StatusBadRequest, err)
 			return
 		}
@@ -156,4 +156,14 @@ func (s *Server) busLead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, map[string]any{"ok": true})
+}
+
+// labelOf is agent id's name on the bus.
+func labelOf(id string) string {
+	if st, err := state.Load(); err == nil {
+		if _, a := st.FindAgent(id); a != nil {
+			return drive.Label(a)
+		}
+	}
+	return id
 }
