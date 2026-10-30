@@ -101,7 +101,10 @@ func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 // busPost answers POST /api/bus/post {channel, text}: the person posts,
 // in a channel or a DM of theirs.
 func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Channel, Text string }
+	var req struct {
+		Channel, Text string
+		ReplyTo       int `json:"reply_to"` // the seq of the message answered
+	}
 	if !decode(w, r, &req) {
 		return
 	}
@@ -118,9 +121,13 @@ func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
 		if to == bus.You {
 			to = ids[1]
 		}
-		_, res, err = bus.DM(me, to, req.Text)
+		if _, ok, _ := bus.Find(req.Channel); ok && req.ReplyTo > 0 {
+			res, err = bus.Post(req.Channel, me, req.Text, req.ReplyTo) // made: a reply in it
+		} else {
+			_, res, err = bus.DM(me, to, req.Text)
+		}
 	} else {
-		res, err = bus.Post(req.Channel, me, req.Text, 0)
+		res, err = bus.Post(req.Channel, me, req.Text, req.ReplyTo)
 	}
 	if err != nil {
 		fail(w, http.StatusBadRequest, err)

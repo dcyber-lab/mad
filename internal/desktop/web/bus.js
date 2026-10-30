@@ -3,8 +3,9 @@
 // posting in it, @mentioning the agents to wake.
 "use strict";
 
-// cv is the channel shown: its id, the last message drawn.
-const cv = { open: null, last: 0, seq: 0, timer: null, paused: false };
+// cv is the channel shown: its id, the last message drawn, the message
+// being answered.
+const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null };
 
 function busChannel(id) {
   return (deck.bus || []).find((c) => c.id === id);
@@ -70,6 +71,7 @@ function openChannel(id) {
   if (fresh) {
     cv.last = 0;
     cv.paused = false;
+    replyTo(null);
     $("#chanlog").replaceChildren();
   }
   inMain(true);
@@ -87,6 +89,39 @@ function closeChannel() {
   cv.open = null;
   clearInterval(cv.timer);
   $("#chanview").hidden = true;
+  replyTo(null);
+}
+
+// replyTo makes what is typed next an answer to message m (null: to none).
+function replyTo(m) {
+  cv.reply = m;
+  const bar = $("#qreply");
+  bar.hidden = !m;
+  if (!m) return bar.replaceChildren();
+  const x = el("button", "icon-btn");
+  x.type = "button";
+  x.title = "not a reply (Esc)";
+  x.append(icon("x"));
+  x.onclick = () => replyTo(null);
+  const what = el("span", "rq");
+  what.append(el("b", "", "Replying to " + (m.from.id === "you" ? "yourself" : m.from.label)), " ", snippet(m.text));
+  bar.replaceChildren(icon("chat"), what, x);
+  if (!phone.matches) $("#qinput").focus();
+}
+
+function snippet(text) {
+  const line = (text || "").split("\n").find((l) => l.trim()) || "";
+  return line.length > 120 ? line.slice(0, 119) + "…" : line;
+}
+
+// jumpTo scrolls to message seq in the channel shown, and marks it a moment.
+function jumpTo(seq) {
+  const t = $(`#chanlog [data-seq="${seq}"]`);
+  if (!t) return toast(`#${seq} is further back`);
+  t.scrollIntoView({ block: "center", behavior: "smooth" });
+  t.classList.remove("flash");
+  void t.offsetWidth;
+  t.classList.add("flash");
 }
 
 // dmWith is the person's DM with agent id, as the bus names it.
@@ -229,13 +264,19 @@ async function loadChannel(first) {
 // with its avatar, a handoff or its result as a card, the bus's own
 // lines in the middle.
 function busMessage(m) {
-  if (m.kind === "system") return el("div", "bsys", m.text);
+  if (m.kind === "system") {
+    const s = el("div", "bsys", m.text);
+    s.dataset.seq = m.seq;
+    return s;
+  }
   $("#chanlog .note")?.remove();
   const mine = m.from.id === "you";
   const card = m.kind === "handoff" || m.kind === "done";
   const row = el("div", `bmsg${mine ? " mine" : ""}${card ? " card" : ""}`);
+  row.dataset.seq = m.seq;
   if (!mine) {
-    const a = agents.get(m.from.id) || { kind: m.from.kind || "?", id: m.from.id };
+    // mad itself (a nudge) is m, not its kind's s.
+    const a = agents.get(m.from.id) || { kind: m.from.kind || "?", id: m.from.id, icon: m.from.id === "mad" ? "m" : "" };
     const v = avatar(a, true);
     if (agents.has(m.from.id)) {
       v.title = "open it";
@@ -246,15 +287,56 @@ function busMessage(m) {
   const body = el("div", "bbody");
   const meta = el("div", "bmeta");
   meta.append(el("b", "", mine ? "You" : m.from.label), el("span", "muted", `#${m.seq} · ${clock(m.at)}`));
-  if (m.reply_to) meta.append(el("span", "muted", `↩ #${m.reply_to}`));
+  const re = el("button", "breply");
+  re.type = "button";
+  re.title = "reply to this";
+  re.append(icon("chat"), "Reply");
+  re.onclick = () => replyTo(m);
+  meta.append(re);
   const h = m.handoff;
   if (m.kind === "handoff") meta.append(el("span", "pill working", `hands ${h ? h.id + " " : ""}to ${agentLabel(h && h.to)}`));
   if (m.kind === "done") meta.append(el("span", `pill ${h && h.status === "declined" ? "needs" : "done"}`, `${h ? h.id + " " : ""}${(h && h.status) || "done"}`));
   const text = el("div", "btext");
   text.append(md(mentionsBold(m.text || "")));
-  body.append(meta, text);
+  body.append(meta);
+  if (m.reply_to) {
+    row.dataset.reply = m.reply_to;
+    body.append(quoteOf(m.reply_to));
+  }
+  body.append(text);
   row.append(body);
   return row;
+}
+
+// quoteOf is what a reply answers: the message, quoted, which a click
+// shows; and the message counts its replies.
+function quoteOf(seq) {
+  const q = el("button", "bquote");
+  q.type = "button";
+  const parent = $(`#chanlog [data-seq="${seq}"]`);
+  if (parent) {
+    const who = parent.querySelector(".bmeta b")?.textContent || "";
+    const said = parent.querySelector(".btext")?.textContent || parent.textContent;
+    q.append(el("b", "", who || `#${seq}`), " ", snippet(said));
+    let n = parent.querySelector(".bcount");
+    if (!n) {
+      n = el("button", "bcount");
+      n.type = "button";
+      n.dataset.n = "0";
+      n.onclick = () => {
+        const replies = $("#chanlog").querySelectorAll(`[data-reply="${seq}"]`);
+        if (replies.length) jumpTo(replies[replies.length - 1].dataset.seq);
+      };
+      (parent.querySelector(".bbody") || parent).append(n);
+    }
+    n.dataset.n = String(+n.dataset.n + 1);
+    n.textContent = `${n.dataset.n} repl${n.dataset.n === "1" ? "y" : "ies"}`;
+  } else {
+    q.append(`↩ #${seq}`);
+  }
+  q.title = "show what it answers";
+  q.onclick = () => jumpTo(seq);
+  return q;
 }
 
 function agentLabel(id) {
@@ -284,7 +366,8 @@ async function postChannel(text) {
   t.value = "";
   fitInput();
   try {
-    const r = await api("POST", "/api/bus/post", {}, { channel: id, text });
+    const r = await api("POST", "/api/bus/post", {}, cv.reply ? { channel: id, text, reply_to: cv.reply.seq } : { channel: id, text });
+    replyTo(null);
     if (r && r.warning) toast(r.warning, "err");
     $("#qerr").textContent = "";
   } catch (e) {
