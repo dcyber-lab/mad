@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/status"
 )
 
 // The test binary stands in for claude when MAD_FAKE_CLAUDE is set: it
@@ -232,6 +234,71 @@ func TestClaudeImagesAndPermission(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("claude was not sent %s:\n%s", want, got)
 		}
+	}
+}
+
+// The host is the one writer of <id>.asks.json: what it holds open is
+// there while it does, and gone once answered.
+func TestHostWritesAsks(t *testing.T) {
+	h, _ := fakeHost(t)
+	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
+	if status.ReadAsks("agent-1") != nil {
+		t.Fatal("asks before any request")
+	}
+	before := time.Now()
+	if err := h.d.send("hi", nil); err != nil {
+		t.Fatal(err)
+	}
+	s := waitState(t, h, "a permission request", func(s State) bool { return len(s.Requests) == 1 })
+	asks := status.ReadAsks("agent-1")
+	if len(asks) != 1 {
+		t.Fatalf("asks = %+v", asks)
+	}
+	if a := asks[0]; a.ID != s.Requests[0].ID || a.Kind != status.AskPermission || a.Tool != "Write" || a.Target != "a.txt" || !a.Always || a.At.Before(before) {
+		t.Errorf("ask = %+v", a)
+	}
+	at := asks[0].At
+	h.update(func(*State) {}) // another change keeps the file and the time
+	if a := status.ReadAsks("agent-1"); len(a) != 1 || !a[0].At.Equal(at) {
+		t.Errorf("after a change: %+v", a)
+	}
+	if err := h.d.answer(Answer{ID: s.Requests[0].ID, Allow: true}); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, h, "the turn's end", func(s State) bool { return len(s.Requests) == 0 })
+	if a := status.ReadAsks("agent-1"); a != nil {
+		t.Errorf("answered, still asks %+v", a)
+	}
+
+	if err := h.d.send("again", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, h, "a question", func(s State) bool { return len(s.Requests) == 1 })
+	if a := status.ReadAsks("agent-1"); len(a) != 1 || a[0].Kind != status.AskQuestion || a[0].Question != "Which?" ||
+		a[0].Header != "Pick" || len(a[0].Options) != 2 || !a[0].OneTap {
+		t.Errorf("question asks %+v", a)
+	}
+}
+
+func TestAsksOf(t *testing.T) {
+	at := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
+	got := asksOf([]Request{
+		{ID: "1", Kind: "tool", Tool: "Bash", Label: "Run the tests", Input: "$ go test ./...\n(more)", Title: "Claude wants to run"},
+		{ID: "2", Kind: "tool", Tool: "shell", Label: "make build", Input: "make build"},
+		{ID: "3", Kind: "plan", Plan: "Do it\nthen more"},
+		{ID: "4", Kind: "question", Questions: []Question{{Question: "A?", Multi: true}, {Question: "B?"}}},
+	}, map[string]time.Time{"1": at})
+	if a := got[0]; a.Command != "go test ./..." || a.Target != "Run the tests" || a.Title != "Claude wants to run" || !a.At.Equal(at) {
+		t.Errorf("bash: %+v", a)
+	}
+	if a := got[1]; a.Command != "make build" || a.Tool != "shell" {
+		t.Errorf("shell: %+v", a)
+	}
+	if a := got[2]; a.Kind != status.AskPlan || a.Plan != "Do it" {
+		t.Errorf("plan: %+v", a)
+	}
+	if a := got[3]; a.Kind != status.AskQuestion || a.Question != "A?" || a.OneTap {
+		t.Errorf("questions: %+v", a)
 	}
 }
 
