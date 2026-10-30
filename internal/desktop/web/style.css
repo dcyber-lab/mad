@@ -166,7 +166,7 @@ kbd {
   display: grid; grid-template-columns: 30px 1fr auto; column-gap: 10px; align-items: center;
   padding: 7px 8px; margin: 1px 0; border-radius: 10px; cursor: pointer;
 }
-.agent:hover { --row: var(--raise); background: var(--raise); }
+@media (hover: hover) { .agent:hover { --row: var(--raise); background: var(--raise); } }
 .agent.sel { --row: var(--raise-2); background: var(--raise-2); }
 .avatar {
   --kc: var(--text-3);
@@ -182,19 +182,21 @@ kbd {
   position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%;
   border: 2.5px solid var(--row, var(--surface)); background: var(--idle);
 }
+/* The state classes (s-<shown state>) sit on a row, a tab or the avatar
+   itself, so a dot is colored wherever the avatar is drawn. */
 .s-running .dot { background: var(--running); }
-.s-running .avatar .dot::after {
+.s-running .avatar .dot::after, .avatar.s-running .dot::after {
   content: ""; position: absolute; inset: -2.5px; border-radius: 50%; border: 1.5px solid var(--running);
   animation: pulse 1.4s ease-in-out infinite;
 }
 .s-waiting .dot { background: var(--waiting); }
-.s-done .dot { background: var(--done); }
-.s-exited .dot { background: var(--stopped); }
+.s-finished .dot { background: var(--done); }
 .s-asleep .dot { background: var(--row, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--idle); }
-.s-stopped .avatar .dot { display: none; }
+.s-stopped .avatar .dot, .avatar.s-stopped .dot { display: none; }
 .s-asleep .name, .s-stopped .name { color: var(--text-2); }
-.s-stopped .avatar { opacity: 0.6; }
+.s-stopped .avatar, .avatar.s-stopped { opacity: 0.6; }
 .agent .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13.5px; font-weight: 500; }
+.agent .side { display: inline-flex; align-items: center; gap: 7px; justify-self: end; }
 .agent .meta { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .agent .detail {
   grid-column: 2 / 4; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
@@ -206,8 +208,9 @@ kbd {
 }
 .pill.needs { color: var(--waiting); background: color-mix(in srgb, var(--waiting) 15%, transparent); }
 .pill.working { color: var(--running); background: color-mix(in srgb, var(--running) 13%, transparent); }
-.pill.done { color: var(--done); background: color-mix(in srgb, var(--done) 13%, transparent); }
+.pill.finished, .pill.done { color: var(--done); background: color-mix(in srgb, var(--done) 13%, transparent); }
 .pill.quiet { color: var(--text-3); background: var(--raise); }
+.pill.error { color: var(--stopped); background: color-mix(in srgb, var(--stopped) 13%, transparent); }
 .qn {
   margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
   color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); vertical-align: 1px;
@@ -248,7 +251,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; background:
 .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--idle); flex: none; }
 .tab.s-running .dot { background: var(--running); animation: pulse 1.4s ease-in-out infinite; }
 .tab.s-waiting .dot { background: var(--waiting); }
-.tab.s-done .dot { background: var(--done); }
+.tab.s-finished .dot { background: var(--done); }
 .tab .x { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; opacity: 0; flex: none; }
 .tab .x .i { width: 13px; height: 13px; }
 .tab:hover .x, .tab.on .x { opacity: 0.55; }
@@ -643,8 +646,11 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   position: absolute; right: 6px; top: 8px; width: 26px; height: 26px; border-radius: 8px;
   display: none; background: var(--row);
 }
-.agent:hover .more { display: grid; }
-.agent:hover .meta, .agent:hover .pill { visibility: hidden; }
+@media (hover: hover) {
+  /* The more button has a slot to itself: it never covers the pill. */
+  .agent { padding-right: 38px; }
+  .agent:hover .more { display: grid; }
+}
 .agent .more .i { width: 15px; height: 15px; }
 
 #back, #ptitle { display: none; }
@@ -826,7 +832,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 1px 0; border-radius: 9px;
   cursor: pointer; font-size: 13.5px; color: var(--text-2);
 }
-.chan:hover { background: var(--raise); }
+@media (hover: hover) { .chan:hover { background: var(--raise); } }
 .chan.sel { background: var(--raise-2); color: var(--text); }
 .chan.unread { color: var(--text); font-weight: 600; }
 .chan .ch { width: 16px; flex: none; text-align: center; color: var(--text-3); font-weight: 600; }
@@ -903,8 +909,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #filterKey { display: none; }
   .search input { font-size: 16px; }
   .agent { padding-top: 10px; padding-bottom: 10px; }
+  .agent, .agent:hover { padding-right: 8px; }
   .agent .more, .agent:hover .more { display: none; }
-  .agent:hover .meta, .agent:hover .pill { visibility: visible; }
   .project > .head .hacts { display: inline-flex; }
   .project > .head .cost { display: none; }
   #sidebar footer { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
