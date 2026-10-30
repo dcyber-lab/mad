@@ -30,7 +30,7 @@ func benchModel(b *testing.B, n int) (*model, pollMsg) {
 	b.Setenv("XDG_STATE_HOME", b.TempDir())
 	b.Setenv("HOME", b.TempDir())
 	st := &state.State{}
-	msg := pollMsg{screens: map[string]string{}, hooks: map[string]*status.Hook{}}
+	msg := pollMsg{screens: map[string]string{}, reports: map[string]status.Report{}}
 	screen := strings.Repeat(strings.Repeat("x", 120)+"\n", 40)
 	for i := 0; i < n; i++ {
 		if i%5 == 0 {
@@ -41,7 +41,7 @@ func benchModel(b *testing.B, n int) (*model, pollMsg) {
 		p.Agents = append(p.Agents, &state.Agent{ID: id, Kind: "claude"})
 		msg.panes = append(msg.panes, tmux.Pane{ID: fmt.Sprintf("%%%d", i+10), MadID: id, Session: tmux.PoolSession, Index: -1})
 		msg.screens[id] = fmt.Sprintf("%d\n%s", i, screen)
-		msg.hooks[id] = &status.Hook{State: []string{status.Running, status.Idle, status.Waiting}[i%3], At: time.Now()}
+		msg.reports[id] = status.Report{Hook: &status.Hook{State: []string{status.Running, status.Idle, status.Waiting}[i%3], At: time.Now()}}
 	}
 	m := newModel(st, agent.Builtin())
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 60})

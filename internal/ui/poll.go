@@ -115,7 +115,7 @@ func (m *model) pollCmd() tea.Cmd {
 			return pollMsg{err: err, epoch: epoch}
 		}
 		_ = deck.EnsureStage(panes) // no-op unless the stage pane went away
-		msg := pollMsg{panes: panes, screens: map[string]string{}, hooks: map[string]*status.Hook{}, quota: map[string]status.Quota{}, epoch: epoch}
+		msg := pollMsg{panes: panes, screens: map[string]string{}, reports: map[string]status.Report{}, quota: map[string]status.Quota{}, epoch: epoch}
 		for _, k := range kinds {
 			if q, ok := status.ReadQuota(k); ok {
 				msg.quota[k] = q
@@ -140,7 +140,7 @@ func (m *model) pollCmd() tea.Cmd {
 			}
 		}
 		for _, id := range ids {
-			msg.hooks[id] = status.ReadHook(id)
+			msg.reports[id] = status.ReadReport(id)
 		}
 		return msg
 	}
@@ -234,7 +234,7 @@ func (m *model) applyPoll(msg pollMsg, now time.Time) []alert {
 	if m.stageID != prevStage && tmux.IsAgentID(m.stageID) {
 		m.selectAgent(m.stageID)
 	}
-	m.screens, m.hooks = msg.screens, msg.hooks
+	m.screens, m.reports = msg.screens, msg.reports
 	m.readRuns()
 	for k, q := range msg.quota {
 		m.noteQuota(k, q)
@@ -257,9 +257,11 @@ func (m *model) onStage(id string) bool {
 }
 
 // seen reports whether agent id is in front of someone: on stage, or in
-// a desktop window (mad desktop).
+// a desktop window (mad desktop), as the window's poller tells it
+// (tmux.Seen); or its diff is on stage.
 func (m *model) seen(id string) bool {
-	return m.onStage(id) || m.panes[id].Viewed
+	p, ok := m.panes[id]
+	return ok && tmux.Seen(p) || m.shown[tmux.IDTask] && id == m.taskFor
 }
 
 // alert is a notification to send; one about the agent on stage is
@@ -285,7 +287,7 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 				tr = &status.Tracker{}
 				m.trackers[a.ID] = tr
 			}
-			hook := m.hooks[a.ID]
+			hook := m.reports[a.ID].Hook
 			pane, ok := m.panes[a.ID]
 			prev := tr.Status
 			tr.Observe(agent.ByName(m.kinds, a.Kind), pane, ok, hook, m.screens[a.ID], m.seen(a.ID), now)
@@ -305,6 +307,7 @@ func (m *model) observe(only map[string]bool, now time.Time) []alert {
 	if dirty {
 		m.save()
 	}
+	m.look(now)
 	return alerts
 }
 

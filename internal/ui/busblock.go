@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -11,106 +10,97 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
-// The bus block tops the list: the board, and the channels with something
-// new for you. The bus is files, so a look is cheap when nothing changed:
-// the files' sizes and times are compared first, and the messages are read
-// only when one moved (or now and then, for what depends on the clock).
+// The bus block tops the list: what needs you (the inbox, as the window
+// has it), what finished unseen, the board, and the channels with
+// something new for you. The bus is files, so a look is cheap when
+// nothing changed: bus.Source reads the messages again only when a file
+// moved (or now and then, for what depends on the clock).
 
 const (
 	// busEvery: how often the bus files are looked at.
 	busEvery = 2 * time.Second
-	// busFullEvery: how often the board is derived again whatever the
-	// files say (a task stalls with time, an agent's status changes).
-	busFullEvery = 15 * time.Second
 	// busRowsMax: channels listed in the block; the rest are counted.
 	busRowsMax = 6
+	// inboxRowsMax: items listed under "Needs you"; the rest are counted.
+	inboxRowsMax = 6
 )
 
-// busRow is a row of the bus block: the board, a channel, or the count of
-// channels left out.
+// busRow is a row of the bus block: the inbox's head, one of its items,
+// the finished count, the board, a channel, or a count of rows left out.
 type busRow struct {
+	needs int             // the "Needs you" head, with the count
+	item  *attention.Item // an item of the inbox
+	// moreItems is the "+N more" row of the inbox; finished the count of
+	// agents finished unseen (item is the newest of them).
+	moreItems int
+	finished  int
+
 	board  bool
 	ch     string // channel id
 	title  string // #name, @agent
 	unread int
 	paused bool
-	// For the board: cards waiting for you, and open ones in all.
+	// For the board: what waits for you (the inbox), and open cards.
 	waiting, open int
-	more          int // the "+N more" row
+	more          int // the channels' "+N more" row
 }
 
-// busSnap is what the bus block shows: every channel with news or paused,
-// in the order they are listed, and the board's counts.
+// same tells whether a and b are the same row, for the cursor to stay on.
+func (b *busRow) same(o *busRow) bool {
+	switch {
+	case b.item != nil || o.item != nil:
+		return b.item != nil && o.item != nil && b.item.Key == o.item.Key && (b.finished > 0) == (o.finished > 0)
+	case b.needs > 0 || o.needs > 0:
+		return b.needs > 0 && o.needs > 0
+	case b.moreItems > 0 || o.moreItems > 0:
+		return b.moreItems > 0 && o.moreItems > 0
+	}
+	return b.board == o.board && b.ch == o.ch && b.more == o.more
+}
+
+// busSnap is what the bus block shows of the bus: every listed channel,
+// in the order they are listed, and the board's open cards.
 type busSnap struct {
-	waiting, open int
-	chans         []busRow
+	open  int
+	chans []busRow
 }
 
-// busMsg is one look at the bus. A look that found the files as they were
-// has same set.
+// busMsg is one look at the bus: what the inbox takes from it, and the
+// block's channels.
 type busMsg struct {
-	same bool
-	sig  string
-	snap busSnap
-	full bool
+	cards  []bus.Card
+	skills []skill.Pending
+	snap   busSnap
 }
 
-// busSignature is the sizes and times of the bus's files, and of your
-// read cursor: what any change to the channels, tasks or handoffs moves.
-func busSignature() string {
-	dir := filepath.Join(paths.StateDir(), "bus")
-	var b strings.Builder
-	add := func(path string) {
-		if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
-			fmt.Fprintf(&b, "%s:%d:%d;", filepath.Base(path), fi.Size(), fi.ModTime().UnixNano())
-		}
-	}
-	if es, err := os.ReadDir(dir); err == nil {
-		for _, e := range es {
-			if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				add(filepath.Join(dir, e.Name()))
-			}
-		}
-	}
-	add(filepath.Join(dir, "cursors", bus.You+".json"))
-	return b.String()
-}
-
-// loadBus reads the bus into what the block shows. statuses are the
-// agents' (nil before the first poll: the board is left out then).
-func loadBus(st *state.State, statuses map[string]string, now time.Time, open string) busSnap {
+// busSnapOf is what the block shows of look; open is the channel whose
+// chat is on stage, which stays listed: its row closes it.
+func busSnapOf(st *state.State, look bus.Look, open string) busSnap {
 	var s busSnap
-	if statuses != nil {
-		if cards, err := bus.Board(st, statuses, now); err == nil {
-			for _, c := range cards {
-				if c.Column == bus.ColDone {
-					continue
-				}
-				s.open++
-				if c.Column == bus.ColWaitingYou {
-					s.waiting++
-				}
-			}
+	for _, c := range look.Cards {
+		if c.Column != bus.ColDone {
+			s.open++
 		}
 	}
-	chans, err := bus.Channels()
-	if err != nil {
-		return s
-	}
-	yours, _ := bus.YourChannels()
-	for _, c := range chans {
+	for _, c := range look.Channels {
+		if c.Archived {
+			continue
+		}
 		isDM := strings.HasPrefix(c.ID, "dm.")
-		y := yours[c.ID]
-		// The channel whose chat is open stays: its row closes it.
-		if isDM && !yourDM(c.ID) || y.Unread == 0 && !c.Paused && c.ID != open {
+		y := look.Yours[c.ID]
+		if isDM && !yourDM(c.ID) || !y.Listed && c.ID != open {
 			continue
 		}
 		r := busRow{ch: c.ID, title: "#" + c.ID, unread: y.Unread, paused: c.Paused}
@@ -128,6 +118,14 @@ func loadBus(st *state.State, statuses map[string]string, now time.Time, open st
 		return !strings.HasPrefix(a.ch, "dm.") && strings.HasPrefix(b.ch, "dm.")
 	})
 	return s
+}
+
+// loadBus reads the bus into what the block shows, afresh. statuses are
+// the agents' (nil before the first poll: the board is left out then).
+func loadBus(st *state.State, statuses map[string]string, now time.Time, open string) busSnap {
+	var src bus.Source
+	look, _ := src.Look(st, statuses, now)
+	return busSnapOf(st, look, open)
 }
 
 func yourDM(ch string) bool {
@@ -158,12 +156,27 @@ func dmName(st *state.State, c bus.Channel) string {
 	return strings.Join(names, ", ")
 }
 
-// busRows are the rows of the block: the board, then the channels up to
-// busRowsMax, then how many were left out.
-func (s busSnap) busRows() []busRow {
+// busRows are the rows of the block: what needs you and its items (up to
+// inboxRowsMax), what finished, the board, then the channels up to
+// busRowsMax and how many were left out.
+func (m *model) busRows() []busRow {
 	var out []busRow
-	if s.open > 0 || s.waiting > 0 {
-		out = append(out, busRow{board: true, title: "Board", waiting: s.waiting, open: s.open})
+	in := m.view.Inbox
+	if needs := in.NeedsYou(); len(needs) > 0 {
+		out = append(out, busRow{needs: len(needs)})
+		for i := range needs[:min(len(needs), inboxRowsMax)] {
+			out = append(out, busRow{item: &needs[i]})
+		}
+		if n := len(needs) - inboxRowsMax; n > 0 {
+			out = append(out, busRow{moreItems: n})
+		}
+	}
+	if fin := in.Finished(); len(fin) > 0 {
+		out = append(out, busRow{finished: len(fin), item: &fin[0]})
+	}
+	s := m.bus
+	if s.open > 0 || in.Needs > 0 {
+		out = append(out, busRow{board: true, title: "Board", waiting: in.Needs, open: s.open})
 	}
 	out = append(out, s.chans[:min(len(s.chans), busRowsMax)]...)
 	if n := len(s.chans) - busRowsMax; n > 0 {
@@ -175,8 +188,6 @@ func (s busSnap) busRows() []busRow {
 // busCmd looks at the bus off the UI goroutine.
 func (m *model) busCmd(now time.Time) tea.Cmd {
 	m.busBusy, m.lastBus = true, now
-	full := now.Sub(m.busFull) >= busFullEvery
-	sig := m.busSig
 	open := "" // the channel whose chat is on stage
 	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && strings.HasPrefix(m.taskTag, "chat:") {
 		open = strings.TrimPrefix(m.taskTag, "chat:")
@@ -191,27 +202,20 @@ func (m *model) busCmd(now time.Time) tea.Cmd {
 			}
 		}
 	}
+	src := m.busSrc
 	return func() tea.Msg {
-		now := time.Now()
-		cur := busSignature() + "|" + open
-		if cur == sig && !full {
-			return busMsg{same: true}
-		}
-		return busMsg{sig: cur, snap: loadBus(st, statuses, now, open), full: full}
+		look, _ := src.Look(st, statuses, time.Now())
+		skills, _ := skill.PendingList()
+		return busMsg{cards: look.Cards, skills: skills, snap: busSnapOf(st, look, open)}
 	}
 }
 
 // applyBus takes a look at the bus in; the rows change only when it did.
 func (m *model) applyBus(msg busMsg) {
 	m.busBusy = false
-	if msg.same {
-		return
-	}
-	m.busSig = msg.sig
-	if msg.full {
-		m.busFull = time.Now()
-	}
+	m.cards, m.skills = msg.cards, msg.skills
 	m.setBus(msg.snap)
+	m.look(time.Now())
 }
 
 func (m *model) setBus(s busSnap) {
@@ -225,6 +229,28 @@ func (m *model) setBus(s busSnap) {
 // busRowSegs lays out a row of the block.
 func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 	switch {
+	case b.needs > 0:
+		l := status.LookOf(status.Waiting)
+		left = []seg{{stPlain, " "}, {stNeeds, m.glyph(l) + " "}, {stNeeds, l.Word}}
+		right = []seg{{stNeeds, fmt.Sprint(b.needs)}, {stPlain, " "}}
+	case b.finished > 0:
+		l := status.LookOf(status.Finished)
+		left = []seg{{stPlain, " "}, m.shownSeg(status.Finished), {stPlain, " "}, {toneStyle(l.Tone), l.Word}}
+		right = []seg{{toneStyle(l.Tone), fmt.Sprint(b.finished)}, {stPlain, " "}}
+	case b.item != nil:
+		it := b.item
+		left = []seg{{stPlain, "   "}, {stName, it.Title}}
+		if it.Context != "" {
+			left = append(left, seg{stPlain, "  "}, seg{stDim, it.Context})
+		}
+		if it.Text != "" {
+			left = append(left, seg{stFaint, " · " + it.Text})
+		}
+		if !it.Since.IsZero() {
+			right = []seg{{stFaint, textutil.AgeAt(it.Since, time.Now())}, {stPlain, " "}}
+		}
+	case b.moreItems > 0:
+		left = []seg{{stPlain, "   "}, {stDim, fmt.Sprintf("+%d more", b.moreItems)}}
 	case b.board:
 		left = []seg{{stPlain, " "}, {stDim, "▤ "}, {stProject, "Board"}}
 		switch {
@@ -247,24 +273,41 @@ func (m *model) busRowSegs(b *busRow) (left, right []seg) {
 	return left, right
 }
 
-// openBus opens a row of the block on stage: a channel's chat, or the
-// board; again, it closes.
+// openBus opens a row of the block on stage: an item where it is settled,
+// a channel's chat, or the board; again, a chat or the board closes.
 func (m *model) openBus(b *busRow) tea.Cmd {
 	switch {
+	case b.item != nil:
+		m.nextKey = b.item.Key
+		return m.openItem(*b.item)
+	case b.needs > 0:
+		return m.jumpNext()
+	case b.moreItems > 0:
+		return m.showBusView("board", deck.SelfCommand("board -w"))
 	case b.board:
 		return m.toggleBusView("board", deck.SelfCommand("board -w"))
 	case b.more > 0:
 		m.setFlash("mad bus ls lists them all")
 		return nil
 	}
-	return m.toggleBusView("chat:"+b.ch, deck.SelfCommand("bus chat "+paths.ShellQuote(b.ch)))
+	return m.toggleBusView("chat:"+b.ch, chatCommand(b.ch))
 }
+
+func chatCommand(ch string) string { return deck.SelfCommand("bus chat " + paths.ShellQuote(ch)) }
 
 // toggleBusView shows cmd in the task pane, as the diff view is, or takes
 // it down when it is up already.
 func (m *model) toggleBusView(tag, cmd string) tea.Cmd {
 	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && m.taskTag == tag {
 		return m.closeTask(false)
+	}
+	return m.showBusView(tag, cmd)
+}
+
+// showBusView shows cmd in the task pane, unless it shows it already.
+func (m *model) showBusView(tag, cmd string) tea.Cmd {
+	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && m.taskTag == tag {
+		return nil
 	}
 	m.taskFor, m.taskTag = "", tag
 	dir, _ := os.UserHomeDir()

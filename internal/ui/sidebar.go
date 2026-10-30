@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
@@ -22,6 +23,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
 	madrun "github.com/dcyber-lab/mad/internal/run"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -50,7 +52,7 @@ type (
 	pollMsg struct {
 		panes   []tmux.Pane
 		screens map[string]string
-		hooks   map[string]*status.Hook
+		reports map[string]status.Report
 		quota   map[string]status.Quota // kind → limits reported through `mad hook`
 		epoch   int                     // model.epoch when the poll started
 		err     error
@@ -123,12 +125,12 @@ type model struct {
 	kinds    []agent.Kind
 	trackers map[string]*status.Tracker
 	panes    map[string]tmux.Pane
-	hooks    map[string]*status.Hook // latest report per agent
-	screens  map[string]string       // latest screen per agent
-	lastFull time.Time               // when the last full poll started
-	fullDue  bool                    // a full poll is wanted as soon as the one in flight lands
-	stageID  string                  // the view in use on stage
-	shown    map[string]bool         // every view on stage
+	reports  map[string]status.Report // latest report per agent: hook, turn, host asks
+	screens  map[string]string        // latest screen per agent
+	lastFull time.Time                // when the last full poll started
+	fullDue  bool                     // a full poll is wanted as soon as the one in flight lands
+	stageID  string                   // the view in use on stage
+	shown    map[string]bool          // every view on stage
 	focused  bool
 	polling  bool
 	// epoch counts actions started and finished. A poll that began in
@@ -171,22 +173,28 @@ type model struct {
 	readDue     bool // read at the next tick: a turn ended
 	lastRead    time.Time
 	taskFor     string  // agent the diff view was opened for ("" for a project)
-	taskTag     string  // what the task pane shows when it is the bus block's (chat:name, board)
+	taskTag     string  // what the task pane shows when it is the bus block's (chat:name, board, skills)
 	bus         busSnap // the bus block as last read
-	busSig      string  // the bus files as that read found them
+	busSrc      *bus.Source
 	busBusy     bool
 	lastBus     time.Time
-	busFull     time.Time           // when the board was last derived anew
-	wt          *state.Project      // project a worktree is being named for
-	wtBranch    string              // branch chosen; the kind menu comes next
-	renameID    string              // agent being named
-	noteRun     *state.Run          // run a note is being written for
-	fin         []deck.FinishAction // the finish menu being shown
-	finCursor   int
-	finTitle    string
-	finCo       deck.Checkout     // what the menu works on
-	finID       string            // agent the menu is for ("" for a project)
-	baseOf      map[string]string // repo → default branch, looked up once
+	// The inbox, as the window has it: desk builds view from the trackers,
+	// the reports and what the last look at the bus found.
+	desk      *attention.Desk
+	view      attention.View
+	cards     []bus.Card          // bus.Board's, as of the last look at the bus
+	skills    []skill.Pending     // likewise
+	nextKey   attention.Key       // where d last went
+	wt        *state.Project      // project a worktree is being named for
+	wtBranch  string              // branch chosen; the kind menu comes next
+	renameID  string              // agent being named
+	noteRun   *state.Run          // run a note is being written for
+	fin       []deck.FinishAction // the finish menu being shown
+	finCursor int
+	finTitle  string
+	finCo     deck.Checkout     // what the menu works on
+	finID     string            // agent the menu is for ("" for a project)
+	baseOf    map[string]string // repo → default branch, looked up once
 
 	cfg      deck.Config
 	cfgMod   time.Time            // config.json's mtime when cfg was read
@@ -271,7 +279,9 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		kinds:         kinds,
 		trackers:      map[string]*status.Tracker{},
 		panes:         map[string]tmux.Pane{},
-		hooks:         map[string]*status.Hook{},
+		reports:       map[string]status.Report{},
+		desk:          attention.NewDesk(),
+		busSrc:        &bus.Source{},
 		screens:       map[string]string{},
 		input:         ti,
 		cfg:           deck.DefaultConfig(),
@@ -366,6 +376,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lapsing = false
 	case followedMsg:
 		m.following, m.spend = false, msg.spend
+		m.look(time.Now())
 	case busMsg:
 		m.applyBus(msg)
 	case dispatchedMsg:
@@ -381,6 +392,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.noteQuota(a.Kind, msg[a.ID].Quota)
 			}
 		}
+		m.look(time.Now())
 	case screensMsg:
 		m.polling = false
 		if msg.err != nil {
@@ -400,7 +412,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch cmd {
 		case poke.Hook: // an agent reported through `mad hook`
 			if _, a := m.st.FindAgent(arg); a != nil {
-				m.hooks[arg] = status.ReadHook(arg)
+				m.reports[arg] = status.ReadReport(arg)
 				return m, m.notifyCmd(m.observe(map[string]bool{arg: true}, time.Now()))
 			}
 		case poke.Jump:

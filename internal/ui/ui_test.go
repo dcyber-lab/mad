@@ -189,7 +189,7 @@ func TestPollTracksStageStatusAndSessions(t *testing.T) {
 			{ID: "%3", MadID: "a1", Session: tmux.PoolSession, Index: -1},
 		},
 		screens: map[string]string{"a1": "x", "a2": "y"},
-		hooks:   map[string]*status.Hook{"a1": {State: status.Waiting, SessionID: "forked", At: now}},
+		reports: map[string]status.Report{"a1": {Hook: &status.Hook{State: status.Waiting, SessionID: "forked", At: now}}},
 	}, now)
 
 	if m.stageID != "a2" || !m.focused {
@@ -599,6 +599,7 @@ func TestSidebarHeaderCounts(t *testing.T) {
 	m.trackers["w"] = &status.Tracker{Status: status.Waiting}
 	m.trackers["d"] = &status.Tracker{Status: status.Idle, Attention: true}
 	m.trackers["i"] = &status.Tracker{Status: status.Idle}
+	m.look(time.Now())
 	top := strings.Split(m.View(), "\n")[0]
 	if !strings.Contains(top, "?1") || !strings.Contains(top, "●1") || strings.Contains(top, "agents") {
 		t.Errorf("header = %q", top)
@@ -625,7 +626,7 @@ func TestNotifyEvents(t *testing.T) {
 				{ID: "%2", MadID: "st", Session: tmux.MainSession, Index: 1},
 			},
 			screens: map[string]string{},
-			hooks:   hooks,
+			reports: reportsOf(hooks),
 		}, now)
 	}
 	hook := func(state string) *status.Hook { return &status.Hook{State: state} }
@@ -706,7 +707,10 @@ func TestJumpNext(t *testing.T) {
 	st.Projects[1].Agents = []*state.Agent{b1}
 	st.Projects[1].Collapsed = true
 	m.rebuildRows()
-	set := func(id, s string, attention bool) { m.trackers[id] = &status.Tracker{Status: s, Attention: attention} }
+	set := func(id, s string, attention bool) {
+		m.trackers[id] = &status.Tracker{Status: s, Attention: attention}
+		m.look(time.Now())
+	}
 	set("a1", status.Waiting, false)
 	set("a2", status.Idle, false)
 	set("b1", status.Idle, true)
@@ -754,6 +758,7 @@ func TestStalePollIsDropped(t *testing.T) {
 	m.Update(stageIs("o", m.epoch))
 	m.trackers["x"] = &status.Tracker{Status: status.Waiting}
 	m.trackers["y"] = &status.Tracker{Status: status.Waiting}
+	m.look(time.Now())
 
 	// d twice, fast: o → x → y. The first swap finishes, then a poll starts
 	// (it will see x on stage) while the second swap is still running.
@@ -780,6 +785,7 @@ func TestPokes(t *testing.T) {
 	st.Projects[0].Agents = []*state.Agent{{ID: "x", Kind: "claude"}, {ID: "y", Kind: "claude"}}
 	m.rebuildRows()
 	m.trackers["y"] = &status.Tracker{Status: status.Waiting}
+	m.look(time.Now())
 
 	// `mad jump` (Alt-n) works whatever mode the sidebar is in.
 	press(m, "a")
@@ -1554,7 +1560,7 @@ func TestSleepIdleAgents(t *testing.T) {
 
 	t0 := time.Now()
 	poll := func(now time.Time, hooks map[string]*status.Hook) {
-		msg := pollMsg{screens: map[string]string{}, hooks: hooks}
+		msg := pollMsg{screens: map[string]string{}, reports: reportsOf(hooks)}
 		for i, id := range ids {
 			p := tmux.Pane{ID: fmt.Sprint("%", i+10), MadID: id, Session: tmux.PoolSession, Index: -1}
 			if id == "stage" {
@@ -1676,7 +1682,8 @@ func TestAsleepInSidebar(t *testing.T) {
 	if _, label := m.statusGlyph(status.Asleep, true); label.s != "Finished" {
 		t.Errorf("asleep and done reads %q", label.s)
 	}
-	if !m.needsYou(st.Projects[0].Agents[0]) || !strings.Contains(ansi.Strip(m.renderHeader()), "●1") {
+	m.look(time.Now())
+	if it, ok := m.view.Inbox.After(""); !ok || it.Open.Agent != "c1" || !strings.Contains(ansi.Strip(m.renderHeader()), "●1") {
 		t.Error("done agent asleep not counted")
 	}
 }

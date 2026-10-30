@@ -198,40 +198,6 @@ func (m *model) closeAgent(i int) tea.Cmd {
 	return m.killAgent(p, a)
 }
 
-// needsYou: waiting for input, or finished while you were elsewhere.
-func (m *model) needsYou(a *state.Agent) bool {
-	tr := m.trackers[a.ID]
-	return tr != nil && (tr.Status == status.Waiting || tr.Done())
-}
-
-// jumpNext opens the next agent after the cursor that needs you, wrapping
-// around; opening it clears its mark, so pressing again moves on.
-func (m *model) jumpNext() tea.Cmd {
-	agents := m.st.OrderedAgents()
-	start := 0 // index into agents to search from: the one after the cursor
-	if r, ok := m.current(); ok {
-		for i, a := range agents {
-			p, _ := m.st.FindAgent(a.ID)
-			if r.agent != nil && a == r.agent {
-				start = i + 1
-				break
-			}
-			if r.agent == nil && p == r.proj {
-				start = i
-				break
-			}
-		}
-	}
-	for k := range agents {
-		if a := agents[(start+k)%len(agents)]; m.needsYou(a) {
-			m.selectAgent(a.ID)
-			return m.openCmd(a)
-		}
-	}
-	m.setFlash("nothing waiting or done")
-	return nil
-}
-
 func (m *model) confirm(msg string, yes func() tea.Cmd) {
 	m.mode, m.confirmMsg, m.confirmYes = modeConfirm, msg, yes
 }

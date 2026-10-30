@@ -6,9 +6,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 )
+
+// reportsOf is what a poll read of hooks alone.
+func reportsOf(hooks map[string]*status.Hook) map[string]status.Report {
+	out := map[string]status.Report{}
+	for id, h := range hooks {
+		out[id] = status.Report{Hook: h}
+	}
+	return out
+}
 
 const (
 	idArch  = "aaaa1111-0000-0000-0000-000000000001"
@@ -32,9 +44,12 @@ func busDeck(t *testing.T) (*model, *state.State) {
 	return m, st
 }
 
-// look reads the bus into the block, as a tick does.
+// look reads the bus into the block and the inbox, as a tick does.
 func look(m *model, st *state.State) {
-	m.setBus(loadBus(st, map[string]string{}, time.Now(), ""))
+	var src bus.Source
+	l, _ := src.Look(st, map[string]string{}, time.Now())
+	skills, _ := skill.PendingList()
+	m.applyBus(busMsg{cards: l.Cards, skills: skills, snap: busSnapOf(st, l, "")})
 }
 
 func busNames(m *model) []string {
@@ -120,8 +135,15 @@ func TestBusBlockChannelsWithNews(t *testing.T) {
 	}
 	look(m, st)
 	names := busNames(m)
-	// The board has the paused channel for you; unread channels, DMs, then the paused.
-	if len(names) != 4 || !strings.HasPrefix(names[0], "▤ Board") || names[1] != "#quiet 1" || names[2] != "@architect 1" || names[3] != "#ops paused" {
+	// The ask in your DM and the paused channel need you, oldest first;
+	// then unread channels, DMs, then the paused.
+	want := []string{
+		"? Needs you 2",
+		"architect in your DM · can you decide about the schema please 0m",
+		"#ops paused · its agents' messages wait for you 0m",
+		"▤ Board 2 for you", "#quiet 1", "@architect 1", "#ops paused",
+	}
+	if strings.Join(names, "|") != strings.Join(want, "|") {
 		t.Errorf("block = %q", names)
 	}
 }
@@ -152,22 +174,29 @@ func TestBusBlockMoreAndOrder(t *testing.T) {
 	}
 }
 
+// The board row counts what waits for you from the inbox, as the
+// window's board column does.
 func TestBusBlockBoardRow(t *testing.T) {
 	m, _ := busDeck(t)
-	rows := busSnap{waiting: 2, open: 5}.busRows()
-	if len(rows) != 1 || !rows[0].board {
+	m.bus = busSnap{open: 5}
+	m.view.Inbox = attention.Inbox{Items: []attention.Item{{Key: "a", Title: "x"}, {Key: "b", Title: "y"}}, Needs: 2}
+	rows := m.busRows()
+	if len(rows) != 4 || rows[0].needs != 2 || rows[1].item == nil || !rows[3].board {
 		t.Fatalf("rows = %+v", rows)
 	}
-	l, r := m.busRowSegs(&rows[0])
+	l, r := m.busRowSegs(&rows[3])
 	if l[len(l)-1].s != "Board" || r[0].s != "2 for you" {
 		t.Errorf("board row = %+v %+v", l, r)
 	}
 	// Nothing waiting: the open count; nothing open: no row.
-	rows = busSnap{open: 3}.busRows()
+	m.view.Inbox = attention.Inbox{}
+	m.bus = busSnap{open: 3}
+	rows = m.busRows()
 	if _, r = m.busRowSegs(&rows[0]); r[0].s != "3 open" {
 		t.Errorf("open row = %+v", r)
 	}
-	if rows = (busSnap{}).busRows(); len(rows) != 0 {
+	m.bus = busSnap{}
+	if rows = m.busRows(); len(rows) != 0 {
 		t.Errorf("empty bus has rows %+v", rows)
 	}
 }
@@ -177,7 +206,7 @@ func TestBusBlockBoardCountsWaitingYou(t *testing.T) {
 	mkChannel(t, "ops")
 	say(t, "ops", "@you should the release go out today or wait")
 	look(m, st)
-	if got := strings.Join(busNames(m), "|"); got != "▤ Board 1 for you|#ops 1" {
+	if got := strings.Join(busNames(m), "|"); got != "? Needs you 1|architect in #ops · @you should the release go out today or wait 0m|▤ Board 1 for you|#ops 1" {
 		t.Errorf("block = %q", got)
 	}
 }

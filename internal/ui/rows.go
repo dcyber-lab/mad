@@ -14,7 +14,7 @@ import (
 func (m *model) rebuildRows() {
 	prev, hadPrev := m.current()
 	m.rows = m.rows[:0]
-	for _, b := range m.bus.busRows() {
+	for _, b := range m.busRows() {
 		b := b
 		m.rows = append(m.rows, row{bus: &b})
 	}
@@ -62,7 +62,7 @@ func (m *model) rebuildRows() {
 			same := r.proj != nil && prev.proj != nil && r.proj.Path == prev.proj.Path
 			switch {
 			case prev.bus != nil:
-				same = r.bus != nil && r.bus.board == prev.bus.board && r.bus.ch == prev.bus.ch && r.bus.more == prev.bus.more
+				same = r.bus != nil && r.bus.same(prev.bus)
 			case prev.agent != nil:
 				same = r.agent != nil && r.agent.ID == prev.agent.ID
 			case prev.run != nil:
