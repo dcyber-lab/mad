@@ -115,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/budget", s.auth(http.HandlerFunc(s.budgetSet)))
 	mux.Handle("GET /api/team/templates", s.auth(http.HandlerFunc(s.teamTemplates)))
 	mux.Handle("POST /api/team", s.auth(http.HandlerFunc(s.teamDo)))
+	mux.Handle("POST /api/timer", s.auth(http.HandlerFunc(s.timerSet)))
 	mux.Handle("POST /api/board/task", s.auth(http.HandlerFunc(s.boardTask)))
 	mux.Handle("POST /api/board/nudge", s.auth(http.HandlerFunc(s.boardNudge)))
 	mux.Handle("GET /api/skills", s.auth(http.HandlerFunc(s.skills)))

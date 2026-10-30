@@ -52,6 +52,7 @@ const mcpInstructions = `mad's bus: talk with the other agents in this deck, and
 Messages for you arrive as a turn that starts with [mad bus]. Only agents you @mention are interrupted; the rest read when they look.
 Post results, questions and decisions; never acknowledgments or progress chatter. If you ask something, end your turn: the answer arrives as a new message.
 To give work to another agent use bus_handoff, then end your turn; when you receive a handoff, finish it with bus_done.
+To look at something later (CI, a deploy, a flaky test) book bus_checkin with a note for yourself, then end your turn; mad wakes you then.
 The person is told about @you in a channel and a DM to "you": use them for what needs the person (a decision, an approval), not for updates.`
 
 func mcpTools(id string) []mcp.Tool {
@@ -203,6 +204,18 @@ func mcpTools(id string) []mcp.Tool {
 			},
 		},
 		{
+			Name:        "bus_checkin",
+			Description: "Book a check-in for yourself: mad wakes you at that time with your note (CI to look at, a flaky test to rerun, a deploy to verify). Then end your turn. At most 3 open; cancel one you no longer need. in is a length from now (5m to 24h), at a time of day (15:00); the note should say what to check and why, as you will have forgotten the rest.",
+			InputSchema: obj([]string{"action"}, `"action":{"type":"string","enum":["book","cancel","list"]},"in":{"type":"string","description":"book: how long from now, such as 20m or 2h"},"at":{"type":"string","description":"book: a time of day such as 15:00, or 2026-11-02 09:00"},"note":{"type":"string","description":"book: what to check and why"},"channel":{"type":"string","description":"book: where mad posts it; your DM with the person by default"},"id":{"type":"string","description":"cancel: the check-in, r-xxxxxxxx"}`),
+			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
+				var a struct{ Action, In, At, Note, Channel, ID string }
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpCheckin(id, a.Action, a.In, a.At, a.Note, a.Channel, a.ID)
+			},
+		},
+		{
 			Name:        "task_list",
 			Description: "The deck's task board: who owns what and how it stands. mine (default) is what you own, including handoffs you received. Call it when you start a turn with several things open, or before taking new work. Reading needs no reply.",
 			InputSchema: obj([]string{}, `"scope":{"type":"string","enum":["mine","channel","all"],"description":"mine by default"},"channel":{"type":"string","description":"for scope channel"}`),
@@ -312,6 +325,60 @@ func mcpTaskList(id, scope, channel string) (string, error) {
 	}
 	b, err := json.Marshal(rows)
 	return string(b), err
+}
+
+// mcpCheckinRow is an open check-in as an agent sees it.
+type mcpCheckinRow struct {
+	ID      string `json:"id"`
+	At      string `json:"at"`
+	In      string `json:"in"`
+	Channel string `json:"channel"`
+	Note    string `json:"note"`
+	Held    string `json:"held,omitempty"`
+}
+
+func mcpCheckins(id string) []mcpCheckinRow {
+	ts, _ := bus.Checkins(id)
+	rows := []mcpCheckinRow{}
+	for _, t := range ts {
+		rows = append(rows, mcpCheckinRow{t.ID, t.NextAt.Format(time.RFC3339), mcpAge(max(0, time.Until(t.NextAt))), t.Channel, t.Note, t.Why})
+	}
+	return rows
+}
+
+// mcpCheckin books, cancels or lists the check-ins of agent id.
+func mcpCheckin(id, action, in, at, note, channel, ref string) (string, error) {
+	if _, _, err := mcpMe(id); err != nil {
+		return "", err
+	}
+	switch action {
+	case "list":
+		return mcpJSON(mcpCheckins(id))
+	case "cancel":
+		if err := bus.RemoveTimer(strings.TrimSpace(ref), id); err != nil {
+			return "", err
+		}
+		return mcpJSON(map[string]any{"cancelled": ref, "open": mcpCheckins(id)})
+	case "book":
+		in, at = strings.TrimSpace(in), strings.TrimSpace(at)
+		spec := ""
+		switch {
+		case in != "" && at != "":
+			return "", errors.New("give in or at, not both")
+		case in != "":
+			spec = "in " + in
+		case at != "":
+			spec = "at " + at
+		default:
+			return "", errors.New("when? give in (20m) or at (15:00)")
+		}
+		t, err := bus.AddCheckin(id, spec, channel, note, time.Now())
+		if err != nil {
+			return "", err
+		}
+		return mcpJSON(map[string]any{"id": t.ID, "at": t.NextAt.Format(time.RFC3339), "channel": t.Channel})
+	}
+	return "", fmt.Errorf("no action %q: book, cancel or list", action)
 }
 
 // mcpAge is a duration in the largest unit that fits: 5m, 3h, 2d.
@@ -550,7 +617,7 @@ func mcpWho(id string) (string, error) {
 		}
 	}
 	sort.SliceStable(agents, func(i, j int) bool { return agents[i].Label < agents[j].Label })
-	return mcpJSON(map[string]any{"me": map[string]string{"id": me.ID, "label": me.Label}, "agents": agents, "channels": outCh, "skills": mcpSkillNames(st, id)})
+	return mcpJSON(map[string]any{"me": map[string]string{"id": me.ID, "label": me.Label}, "agents": agents, "channels": outCh, "checkins": mcpCheckins(id), "skills": mcpSkillNames(st, id)})
 }
 
 func mcpRead(id, channel string, since, limit int) (string, error) {

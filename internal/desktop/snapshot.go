@@ -24,6 +24,7 @@ type Snapshot struct {
 	Bus      []BusChannel   `json:"bus"`             // the channels and DMs (bus.go)
 	Board    []bus.Card     `json:"board"`           // the task board (board.go)
 	Spend    bus.SpendState `json:"spend"`           // the day's budget for mad's own work
+	Timers   []bus.Timer    `json:"timers"`          // check-ins and routines (timer.go)
 	At       time.Time      `json:"at"`
 }
 
@@ -212,6 +213,7 @@ func (p *poller) Poll(now time.Time) {
 	}
 	snap.Bus = busChannels(st)
 	snap.Spend = bus.SpendNow(now)
+	snap.Timers = timersOf()
 	snap.Board = boardCards(st, snap)
 
 	p.mu.Lock()

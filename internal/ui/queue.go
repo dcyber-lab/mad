@@ -70,6 +70,7 @@ var (
 	checkFollowUps = bus.CheckFollowUps
 	deckWatched    = tmux.Watched
 	checkReport    = bus.CheckReport
+	checkTimers    = bus.CheckTimers
 	settleSpend    = bus.SpendSettle
 )
 
@@ -103,6 +104,7 @@ func (m *model) followCmd(now time.Time) tea.Cmd {
 		}
 		_ = settleSpend(now, costs) // before the nudges: they ask whether the day's budget is spent
 		_ = checkFollowUps(now, statuses)
+		_ = checkTimers(now, statuses) // check-ins and routines: orders, not guesses
 		_ = checkReport(st, statuses, now, clock)
 		return followedMsg{spend: bus.SpendNow(now)}
 	}

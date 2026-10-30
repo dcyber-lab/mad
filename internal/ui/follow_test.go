@@ -17,10 +17,10 @@ func TestFollowCmd(t *testing.T) {
 	m.rebuildRows()
 
 	oldF, oldOn, oldAt := bus.FollowUp, bus.NudgesOn, bus.PersonAt
-	oldFU, oldRep, oldW := checkFollowUps, checkReport, deckWatched
+	oldFU, oldRep, oldW, oldTm := checkFollowUps, checkReport, deckWatched, checkTimers
 	t.Cleanup(func() {
 		bus.FollowUp, bus.NudgesOn, bus.PersonAt = oldF, oldOn, oldAt
-		checkFollowUps, checkReport, deckWatched = oldFU, oldRep, oldW
+		checkFollowUps, checkReport, deckWatched, checkTimers = oldFU, oldRep, oldW, oldTm
 	})
 	watched := false
 	deckWatched = func() bool { return watched }
@@ -29,6 +29,8 @@ func TestFollowCmd(t *testing.T) {
 	var gotAt time.Time
 	var clock string
 	var reported bool
+	var timersAt time.Time
+	checkTimers = func(at time.Time, _ map[string]string) error { timersAt = at; return nil }
 	checkFollowUps = func(at time.Time, s map[string]string) error { gotAt, gotStatuses = at, s; return nil }
 	checkReport = func(_ *state.State, _ map[string]string, _ time.Time, c string) error {
 		reported, clock = true, c
@@ -53,6 +55,9 @@ func TestFollowCmd(t *testing.T) {
 	}
 	if !gotAt.Equal(at) || gotStatuses["one"] != status.Idle || gotStatuses["two"] != status.Running || !reported || clock != "08:30" {
 		t.Errorf("follow-ups: at=%v statuses=%v reported=%v clock=%q", gotAt, gotStatuses, reported, clock)
+	}
+	if !timersAt.Equal(at) {
+		t.Errorf("timers checked at %v, want %v", timersAt, at)
 	}
 	if bus.FollowUp != 45*time.Minute || !bus.NudgesOn {
 		t.Errorf("bus.FollowUp=%v NudgesOn=%v, want 45m on", bus.FollowUp, bus.NudgesOn)

@@ -787,7 +787,7 @@ and pi agent the deck starts has mad's tools for it (an MCP server, `mad
 mcp`; pi has no MCP client, so it runs the server through an extension of
 mad's and offers the tools as its own): `bus_who` (who is in the deck, which channels there are),
 `bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff`,
-`bus_done`, `task_list` and `task_set`. When mad is rebuilt, an agent's
+`bus_done`, `bus_checkin`, `task_list` and `task_set`. When mad is rebuilt, an agent's
 `mad mcp` notices and runs on as the new mad, on the same connection, and
 tells the agent its tools changed: a long-running agent gets new tools
 without a restart. You take part with `mad bus`:
@@ -906,6 +906,27 @@ mad bus handoffs                    # work agents gave each other, as chains
   share of the turns), `mad bus budget open` lifts it for today; what
   waited then goes on, with the quiet limits above still in force. An
   agent cannot change it.
+- Scheduling: one timer file (`bus/timers.jsonl`), two owners. An agent
+  books a **check-in** for itself with `bus_checkin` ("wake me in 20m", or
+  at 15:00, with a note: CI to look at, a deploy to verify) and ends its
+  turn; at most 3 open, 5 minutes to 24 hours ahead. You set **routines**:
+  `mad routine add "weekdays 09:00" standup "@all what did you do
+  yesterday?"` posts that text in the channel (an `@agent` in it is
+  woken), `--report` posts the channel's progress report instead.
+  Schedules are `daily|weekdays|weekends|mon,wed HH:MM` or `every 30m
+  [08:00-18:00]` (at least every 15 minutes, at most 20 routines), in the
+  sidebar's local time. `mad routine ls|rm|pause|resume|fire|checkins`
+  manage them; the Board page has a Scheduled strip (check-ins with
+  cancel; routines with pause, fire now and delete), a "+ Routine" button,
+  and a channel's menu has "Routine here…". The sidebar fires what is
+  due every minute, as a post from mad that is held back like a nudge: not
+  in a paused channel, not with the day's budget spent (a check-in waits
+  for it, a routine counts a miss), and the agent is woken at most once a
+  minute. With the deck down, a check-in fires late and says so; a routine
+  more than an hour late is skipped once. A check-in for a stopped agent
+  waits, and after a day shows as a card on the Board; a removed agent's
+  check-ins go, and a routine that names a removed agent pauses itself.
+  Agents cannot make routines; `bus_who` lists an agent's open check-ins.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
