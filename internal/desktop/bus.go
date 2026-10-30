@@ -55,7 +55,7 @@ func busChannels(st *state.State) []BusChannel {
 		if bc.DM {
 			// A DM's two sides are in its id; forgetting an agent empties
 			// its members.
-			members = strings.Split(strings.TrimPrefix(c.ID, "dm."), ".")
+			members = bus.DMSides(c.ID)
 		}
 		for _, m := range members {
 			if m == bus.You {
