@@ -192,6 +192,9 @@ type model struct {
 	cfgMod   time.Time            // config.json's mtime when cfg was read
 	kindsMod time.Time            // agents.json's mtime when kinds were read
 	runSince map[string]time.Time // agent id → when its current run started
+	runSeen  map[string]bool      // agent id → its current turn was seen starting
+	runByMad map[string]bool      // agent id → its current turn is one mad started
+	madNext  madMarks             // delivered by mad, the agent's next turn not yet seen
 	notified map[string]time.Time // agent id + event kind → last notification
 
 	sleeping       bool      // idle agents are being put to sleep
@@ -282,6 +285,8 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		runs:          map[string]*madrun.File{},
 		runnerStarted: map[string]time.Time{},
 		runnerMissing: map[string]int{},
+		runSeen:       map[string]bool{},
+		runByMad:      map[string]bool{},
 		notified:      map[string]time.Time{},
 		queued:        map[string]int{},
 		queueAt:       map[string]time.Time{},

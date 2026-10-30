@@ -116,6 +116,9 @@ func TestDispatchSpendGate(t *testing.T) {
 	if msg := run(later.Add(time.Minute)); msg.spent || len(sent) != 2 || !strings.Contains(sent[1], "and the tests too") {
 		t.Fatalf("the person's digest was held: %+v sent=%q", msg, sent)
 	}
+	if m.madNext.take(to, time.Now()) {
+		t.Error("the person's digest marked the next turn as mad's")
+	}
 	// It was not counted: no turn is open for the builder.
 	if err := status.WriteTurn(to, &status.Turn{Reply: "ok"}, now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -157,6 +160,9 @@ func TestDispatchSpendCounted(t *testing.T) {
 	}
 	if msg := cmd().(dispatchedMsg); msg.err != nil || msg.spent {
 		t.Fatalf("dispatched: %+v", msg)
+	}
+	if !m.madNext.take(to, time.Now()) {
+		t.Error("a delivery mad started did not mark the agent's next turn as mad's")
 	}
 	// Its turn ends later: the settle adds it, with no cost for no cost data.
 	if err := status.WriteTurn(to, &status.Turn{Reply: "ok"}, time.Now().Add(time.Minute)); err != nil {

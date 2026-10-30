@@ -8,13 +8,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dcyber-lab/mad/internal/agent"
-	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
 	"github.com/dcyber-lab/mad/internal/transcript"
 )
@@ -319,8 +319,14 @@ const (
 // event turns a status change into a notification: a run that ended, or
 // an agent that started waiting for you.
 func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *status.Hook, now time.Time) (notify.Event, bool) {
-	if cur == status.Running && prev != status.Running {
-		m.runSince[a.ID] = now
+	switch {
+	case (cur == status.Running || cur == status.Waiting) && resting(prev):
+		// A new turn, seen from its start: whose it is was marked when
+		// mad delivered, or not at all.
+		m.runSince[a.ID], m.runSeen[a.ID] = now, true
+		m.runByMad[a.ID] = m.madNext.take(a.ID, now)
+	case (cur == status.Running || cur == status.Waiting) && prev == "":
+		delete(m.runSeen, a.ID) // the deck came in mid-turn: whose it is, is not known
 	}
 	if inRun(p, a) && m.runActive(a.Run) {
 		return notify.Event{}, false // its run tells you when it needs you
@@ -328,8 +334,8 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 	var kind string
 	switch {
 	case prev == status.Running && cur == status.Idle && now.Sub(m.runSince[a.ID]) >= notifyMinRun:
-		if startedByMad(a.ID, m.runSince[a.ID]) {
-			return notify.Event{}, false // you did not start it: no news worth a push
+		if !m.runSeen[a.ID] || m.runByMad[a.ID] {
+			return notify.Event{}, false // not seen starting, or not started by you
 		}
 		kind = notify.Done
 	case prev != "" && prev != status.Waiting && cur == status.Waiting:
@@ -342,7 +348,7 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 		return notify.Event{}, false
 	}
 	m.notified[key] = now
-	e := notify.Event{Kind: kind, Project: p.Name, Agent: m.agentTitle(p, a), AgentID: a.ID} // its name in the sidebar, not claude#7
+	e := notify.Event{Kind: kind, Project: p.Name, Agent: textutil.Truncate(m.agentTitle(p, a), 32), AgentID: a.ID} // its name in the sidebar, not claude#7
 	if kind == notify.Waiting && hook != nil && hook.State == status.Waiting {
 		e.Message = hook.Message
 	}
@@ -354,20 +360,14 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 	return e, true
 }
 
-// startedByMad is bus.StartedByMad, replaceable in tests.
-var startedByMad = bus.StartedByMad
-
-// firstLine is the first non-empty line of s, cut to 120 runes.
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.Join(strings.Fields(l), " "); l != "" {
-			if r := []rune(l); len(r) > 120 {
-				l = string(r[:119]) + "…"
-			}
-			return l
-		}
+// resting: a state a turn can start from (a permission answered
+// continues its turn).
+func resting(st string) bool {
+	switch st {
+	case status.Idle, status.Asleep, status.Stopped, status.Exited:
+		return true
 	}
-	return ""
+	return false
 }
 
 // watched is replaceable in tests.

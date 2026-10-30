@@ -209,6 +209,11 @@ func (m *model) dispatchCmd(now time.Time) tea.Cmd {
 					_ = bus.SpendSent(id, costs[id], now)
 				}
 			}
+			if it.Bus && !yours {
+				m.madNext.mark(id, time.Now())
+			} else {
+				m.madNext.clear(id)
+			}
 			return dispatchedMsg{id: id}
 		}
 	}
