@@ -78,7 +78,7 @@ var builtin = []Kind{
 		Name:  "pi",
 		Icon:  "π",
 		Color: "111",
-		Start: "pi {pi_live} --session-id {id}",
+		Start: "pi {pi_live} {mad_mcp} --session-id {id}",
 	},
 	{
 		Name:  "shell",

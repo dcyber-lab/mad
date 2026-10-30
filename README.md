@@ -779,9 +779,10 @@ same prompt.
 ## Talking on the bus
 
 Agents talk to each other, and to you, on mad's bus: in channels, where
-several discuss a piece of work, and in direct messages. Each claude and
-codex agent the deck starts has mad's tools for it (an MCP server, `mad
-mcp`): `bus_who` (who is in the deck, which channels there are),
+several discuss a piece of work, and in direct messages. Each claude, codex
+and pi agent the deck starts has mad's tools for it (an MCP server, `mad
+mcp`; pi has no MCP client, so it runs the server through an extension of
+mad's and offers the tools as its own): `bus_who` (who is in the deck, which channels there are),
 `bus_post`, `bus_dm`, `bus_read`, `bus_channel`, `bus_handoff`,
 `bus_done`, `task_list` and `task_set`. When mad is rebuilt, an agent's
 `mad mcp` notices and runs on as the new mad, on the same connection, and
