@@ -15,8 +15,8 @@ import (
 // The task board in the window (bus.Board): its cards with the snapshot,
 // and what the person does to a task.
 
-// boardCards is the board as of snap, the agents' statuses as it has them.
-func boardCards(st *state.State, snap Snapshot) []bus.Card {
+// statusesOf are the agents' statuses as snap has them, in the bus's words.
+func statusesOf(snap Snapshot) map[string]string {
 	statuses := map[string]string{}
 	for _, p := range snap.Projects {
 		for _, a := range p.Agents {
@@ -27,8 +27,13 @@ func boardCards(st *state.State, snap Snapshot) []bus.Card {
 			statuses[a.ID] = s
 		}
 	}
+	return statuses
+}
+
+// boardCards is the board as of snap, the agents' statuses as it has them.
+func boardCards(st *state.State, snap Snapshot) []bus.Card {
 	now := time.Now()
-	cards, err := bus.Board(st, statuses, now)
+	cards, err := bus.Board(st, statusesOf(snap), now)
 	if err != nil || cards == nil {
 		cards = []bus.Card{}
 	}
@@ -115,4 +120,40 @@ func tellAgent(t bus.Task, id, text string) error {
 	}
 	_, _, err = bus.DM(you, id, text)
 	return err
+}
+
+// busReport answers POST /api/bus/report {channel}: the board's line for
+// the channel, posted in it as a line from mad, which wakes no one.
+func (s *Server) busReport(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Channel string }
+	if !decode(w, r, &req) {
+		return
+	}
+	st, err := state.Load()
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	line := bus.ReportChannel(st, statusesOf(s.poll.Snapshot()), time.Now(), req.Channel)
+	if line != "" {
+		if err := bus.PostSystem(req.Channel, line); err != nil {
+			fail(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+	reply(w, map[string]any{"line": line})
+}
+
+// busLead answers POST /api/bus/lead {channel, agent}: the agent that
+// answers for the channel's work ("" for none).
+func (s *Server) busLead(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Channel, Agent string }
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := bus.SetLead(req.Channel, req.Agent); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	reply(w, map[string]any{"ok": true})
 }

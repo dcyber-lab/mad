@@ -840,6 +840,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .chan.theirs .cnt { color: var(--text-2); background: var(--raise-2); }
 
 #chanview { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.cwho .avatar.lead { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
 #chanview[hidden] { display: none; }
 #chanhead {
   flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 20px;

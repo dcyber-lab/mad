@@ -101,3 +101,60 @@ func TestBoardAPI(t *testing.T) {
 	}
 	post("/api/board/nudge", `{"id":"`+t2.ID+`"}`, 400)
 }
+
+// A channel's lead in the snapshot, made another from the window, and the
+// board's line for the channel posted in it.
+func TestChannelLeadAndReport(t *testing.T) {
+	isolate(t)
+	const a1, a2 = "aaaa1111-0000-0000-0000-000000000001", "bbbb2222-0000-0000-0000-000000000002"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: t.TempDir(), Agents: []*state.Agent{
+		{ID: a1, Kind: "claude", Name: "alice"}, {ID: a2, Kind: "codex", Name: "bob"},
+	}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	alice := bus.From{ID: a1, Label: "alice", Kind: "claude"}
+	if _, err := bus.Create("api", "", []string{a1, a2}, alice); err != nil {
+		t.Fatal(err)
+	}
+	title, doing, ch := "wire the handler", "doing", "api"
+	if _, err := bus.SetTask(alice, bus.TaskChange{Title: &title, Status: &doing, Channel: &ch}); err != nil {
+		t.Fatal(err)
+	}
+	s := New(manageKinds)
+	lead := func() string {
+		t.Helper()
+		s.poll.Poll(time.Now())
+		var snap Snapshot
+		_ = json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap)
+		for _, c := range snap.Bus {
+			if c.ID == "api" {
+				return c.Lead
+			}
+		}
+		t.Fatal("no #api in the snapshot")
+		return ""
+	}
+	if got := lead(); got != a1 {
+		t.Errorf("lead %q, want alice who made it", got)
+	}
+	if w := call(t, s, "POST", "/api/bus/lead", `{"channel":"api","agent":"`+a2+`"}`); w.Code != 200 {
+		t.Fatalf("lead: %d %s", w.Code, w.Body)
+	}
+	if got := lead(); got != a2 {
+		t.Errorf("lead %q, want bob", got)
+	}
+	w := call(t, s, "POST", "/api/bus/report", `{"channel":"api"}`)
+	var r struct{ Line string }
+	_ = json.Unmarshal(w.Body.Bytes(), &r)
+	if w.Code != 200 || !strings.Contains(r.Line, "1 doing") {
+		t.Fatalf("report: %d %s", w.Code, w.Body)
+	}
+	msgs, _, _ := bus.Read("api", 0, 0)
+	if len(msgs) == 0 || msgs[len(msgs)-1].Text != r.Line || msgs[len(msgs)-1].Kind != "system" {
+		t.Errorf("the report in #api: %+v", msgs)
+	}
+	if q, _ := queue.Load(a1); len(q.Items) != 0 {
+		t.Errorf("the report woke alice: %+v", q)
+	}
+}

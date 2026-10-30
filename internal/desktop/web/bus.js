@@ -110,15 +110,26 @@ function drawChanHead() {
   const what = el("div", "cwhat");
   what.append(el("b", "", chanTitle(id)));
   if (c && c.topic) what.append(el("span", "muted", c.topic));
+  const lead = c && c.lead && agents.get(c.lead);
+  if (lead) what.append(el("span", "muted", "lead " + label(lead)));
   const who = el("div", "cwho");
   for (const m of (c && c.members) || []) {
     const a = agents.get(m.id) || { kind: m.kind, id: m.id };
     const v = avatar(a, true);
-    v.title = m.label;
+    v.title = m.id === (c && c.lead) ? m.label + ", the lead" : m.label;
+    if (m.id === (c && c.lead)) v.classList.add("lead");
     v.onclick = () => show(m.id);
     who.append(v);
   }
   const parts = [what, el("span", "grow"), who];
+  if (c && !c.dm) {
+    const more = el("button", "icon-btn");
+    more.type = "button";
+    more.title = "the channel's work";
+    more.append(icon("more"));
+    more.onclick = () => chanMenu(c, more);
+    parts.push(more);
+  }
   if (c && c.paused) {
     const r = button("Resume", "", async () => {
       try {
@@ -131,8 +142,58 @@ function drawChanHead() {
     parts.push(el("span", "pill needs", "paused: waiting for you"), r);
   }
   head.replaceChildren(...parts);
-  // On a phone the top bar names it: the head shows only what more there is.
-  head.classList.toggle("bare", !(c && (c.topic || c.paused)));
+  // On a phone the top bar names it: the head shows only what more there
+  // is (a topic, a pause, a channel's menu).
+  head.classList.toggle("bare", !(c && (c.topic || c.paused || !c.dm)));
+}
+
+// chanMenu offers what the person does about channel c's work: its
+// progress in a line, a summary from its lead, another lead.
+function chanMenu(c, anchor) {
+  const lead = c.lead && agents.get(c.lead);
+  const items = [{
+    label: "Post the progress report", desc: "the board's line for it, from mad: it wakes no one", icon: "todo",
+    onclick: async () => {
+      try {
+        const r = await api("POST", "/api/bus/report", {}, { channel: c.id });
+        if (!r.line) toast(`Nothing open in #${c.id}`);
+        loadChannel(false);
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    },
+  }];
+  if (lead) {
+    items.push({
+      label: `Ask ${label(lead)} for a summary`, desc: "what is done, in progress, blocked, and waits for you", icon: "question",
+      onclick: async () => {
+        try {
+          await api("POST", "/api/bus/post", {}, { channel: c.id, text: `@${label(lead)} please post a short progress summary of #${c.id}: what is done, what is in progress and who has it, what is blocked, and what waits for me. Keep the board current with task_set.` });
+          loadChannel(false);
+        } catch (e) {
+          toast(e.message, "err");
+        }
+      },
+    });
+  }
+  const others = (c.members || []).filter((m) => m.id !== c.lead && agents.has(m.id));
+  if (others.length) {
+    items.push({
+      label: lead ? "Another lead…" : "Make one the lead…", desc: "the agent that answers for its work", icon: "agent",
+      onclick: () => setTimeout(() => popup(anchor, others.map((m) => ({
+        label: m.label, desc: "the lead",
+        onclick: async () => {
+          try {
+            await api("POST", "/api/bus/lead", {}, { channel: c.id, agent: m.id });
+            await refresh();
+          } catch (e) {
+            toast(e.message, "err");
+          }
+        },
+      })), {}), 0),
+    });
+  }
+  popup(anchor, items, {});
 }
 
 async function loadChannel(first) {
