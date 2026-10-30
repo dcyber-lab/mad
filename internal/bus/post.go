@@ -9,7 +9,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/state"
 )
 
@@ -183,6 +185,7 @@ func post(sp postSpec) (PostResult, error) {
 
 	res := PostResult{Woke: []string{}}
 	var woken []string
+	paused := false
 	err = locked(func() error {
 		cl, err := loadChannels()
 		if err != nil {
@@ -248,6 +251,7 @@ func post(sp postSpec) (PostResult, error) {
 		res.Seq = stored.Seq
 		if pause != "" {
 			c.Paused = true
+			paused = true
 			res.Warning = pause
 			if _, err := addMsg(c.ID, &msgs, systemMsg(pause)); err != nil {
 				return err
@@ -268,7 +272,37 @@ func post(sp postSpec) (PostResult, error) {
 		}
 	}
 	poked()
+	// What is for the person tells them: a DM to them, an @you, a
+	// channel that waits for them.
+	switch {
+	case !byAgent:
+	case paused:
+		tell(sp.channel, sp.from, "#"+sp.channel+" is paused: it waits for you")
+	case sp.wake == You || youRe.MatchString(text):
+		tell(sp.channel, sp.from, text)
+	}
 	return res, nil
+}
+
+// youRe finds @you in a message.
+var youRe = regexp.MustCompile(`(?i)(^|[\s(])@you\b`)
+
+// tell lets the person know about a message for them, as the deck's
+// notifications do (on their phone too); replaced in tests.
+var tell = func(channel string, from From, text string) {
+	cfg, _ := deck.LoadConfig()
+	if !cfg.Notify.Wants(notify.Bus) {
+		return
+	}
+	_ = notify.Send(cfg.Notify, notify.Event{Kind: notify.Bus, Project: channelName(channel), Agent: from.Label, Message: text, Channel: channel})
+}
+
+// channelName is how a channel is named to the person: #name, or DM.
+func channelName(ch string) string {
+	if isDM(ch) {
+		return "DM"
+	}
+	return "#" + ch
 }
 
 // pingPongAt tells whether m, after msgs, is the pingPong-th post in a row

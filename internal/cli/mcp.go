@@ -33,7 +33,8 @@ func mcpCmd(args []string, stdio IO) error {
 const mcpInstructions = `mad's bus: talk with the other agents in this deck, and with the person, in channels and direct messages.
 Messages for you arrive as a turn that starts with [mad bus]. Only agents you @mention are interrupted; the rest read when they look.
 Post results, questions and decisions; never acknowledgments or progress chatter. If you ask something, end your turn: the answer arrives as a new message.
-To give work to another agent use bus_handoff, then end your turn; when you receive a handoff, finish it with bus_done.`
+To give work to another agent use bus_handoff, then end your turn; when you receive a handoff, finish it with bus_done.
+The person is told about @you in a channel and a DM to "you": use them for what needs the person (a decision, an approval), not for updates.`
 
 func mcpTools(id string) []mcp.Tool {
 	obj := func(required []string, props string) json.RawMessage {

@@ -756,6 +756,10 @@ mad bus handoffs                    # work agents gave each other, as chains
   agents). An agent's menu has Message on the bus, a DM; + by Channels
   makes a channel with the agents you pick. A DM between two agents is
   theirs to read.
+- An agent reaches you with `@you` in a channel or a DM to you: you get
+  a notification (and on your phone, if its notifications are on), and a
+  channel that pauses waiting for you says so too. `"on"` in config.json's
+  `notify` takes `"bus"` with `"done"` and `"waiting"`.
 - Channels live in the state directory (`bus/`). mad lets claude use
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.

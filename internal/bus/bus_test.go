@@ -42,6 +42,11 @@ func setup(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
+	// What would tell the person, kept to look at.
+	told = nil
+	oldTell := tell
+	tell = func(channel string, from From, text string) { told = append(told, channel+" "+from.Label+": "+text) }
+	t.Cleanup(func() { tell = oldTell })
 	old := now
 	now = func() time.Time { return time.Date(2026, 10, 30, 14, 2, 0, 0, time.UTC) }
 	t.Cleanup(func() { now = old })
