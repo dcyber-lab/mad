@@ -51,7 +51,13 @@ func busChannels(st *state.State) []BusChannel {
 			Last: yours[c.ID].Last, Unread: yours[c.ID].Unread, Paused: c.Paused, Lead: c.Lead, Members: []BusMember{}, Team: teams[c.ID]}
 		var names []string
 		gone := 0 // members no longer in the deck
-		for _, m := range c.Members {
+		members := c.Members
+		if bc.DM {
+			// A DM's two sides are in its id; forgetting an agent empties
+			// its members.
+			members = strings.Split(strings.TrimPrefix(c.ID, "dm."), ".")
+		}
+		for _, m := range members {
 			if m == bus.You {
 				bc.Yours = true
 				continue
