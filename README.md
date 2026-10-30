@@ -300,6 +300,12 @@ its own API: those are not followed.
 - `Alt-n` jumps to the next agent that needs you, `Alt-j` / `Alt-k` to the
   next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-t` switches
   between conversation and terminal, `Alt-w` closes the tab.
+- `/` at the start of a message offers the agent's slash commands: its
+  TUI's own and the skills, prompts and plugins' commands it finds in its
+  directory (claude and pi say which, asked headless with nothing sent to
+  a model). `Tab` completes one, `Enter` sends it. One that brings up a
+  picker or a report, such as `/model`, switches the tab to the terminal,
+  where that shows.
 - An agent is in one place at a time: opening its terminal in the window
   takes it off the terminal deck's stage, and the deck showing it again
   takes it back, closing its terminal in the window.

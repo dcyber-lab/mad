@@ -153,22 +153,179 @@ async function queueCall(method, params, body, path = "/api/queue") {
   return true;
 }
 
-$("#qinput").addEventListener("keydown", async (e) => {
-  if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-  e.preventDefault();
-  const t = e.target;
+async function submit() {
+  const t = $("#qinput");
   const text = t.value;
-  if (!text.trim() || !current) return;
+  const id = current;
+  if (!text.trim() || !id) return;
+  closeMenu();
   // Cleared at once, so what is typed next is a message of its own; put
   // back if it was not queued.
   t.value = "";
   t.style.height = "";
-  if (!(await queueCall("POST", {}, text)) && !t.value) t.value = text;
+  if (!(await queueCall("POST", {}, text))) {
+    if (!t.value) t.value = text;
+    return;
+  }
+  // What one of the TUI's own commands brings up is on its screen only.
+  const name = /^\/(\S+)/.exec(text.trim())?.[1];
+  if (name && findCommand(id, name)?.tui && id === current) setView(id, "term");
+}
+
+$("#qinput").addEventListener("keydown", (e) => {
+  if (e.isComposing) return;
+  if (!$("#qmenu").hidden && menuKey(e)) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key !== "Enter" || e.shiftKey) return;
+  e.preventDefault();
+  submit();
 });
 $("#qinput").addEventListener("input", (e) => {
   e.target.style.height = "";
   e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`;
+  drawMenu();
 });
+$("#qinput").addEventListener("keyup", (e) => {
+  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) drawMenu();
+});
+$("#qinput").addEventListener("click", () => drawMenu());
+$("#qinput").addEventListener("focus", () => current && commandsOf(current));
+$("#qinput").addEventListener("blur", () => closeMenu());
+
+// ---- slash commands, offered as / starts a message ----
+
+// The agent's commands (/api/commands): its TUI's own and what it found
+// where it runs, skills and the like. Asked for again after a minute.
+const commandLists = new Map(); // id → { at, list, pending }
+const menu = { items: [], sel: 0, query: null };
+
+function commandsOf(id) {
+  const c = commandLists.get(id);
+  if (c && Date.now() - c.at < 60000) return c.pending || Promise.resolve(c.list);
+  const pending = fetch(`/api/commands?${new URLSearchParams({ token, id })}`)
+    .then((r) => (r.ok ? r.json() : []))
+    .catch(() => [])
+    .then((list) => {
+      commandLists.set(id, { at: Date.now(), list: list || [] });
+      return list || [];
+    });
+  commandLists.set(id, { at: Date.now(), list: c ? c.list : [], pending });
+  return pending;
+}
+
+function findCommand(id, name) {
+  return (commandLists.get(id)?.list || []).find((c) => c.name === name || (c.aliases || []).includes(name));
+}
+
+// The command being typed: the message's first word, while the cursor is
+// in it; not a path.
+function commandWord(t) {
+  const m = /^\/(\S*)/.exec(t.value);
+  if (!m || m[1].includes("/") || t.selectionStart !== t.selectionEnd || t.selectionEnd > m[0].length) return null;
+  return { query: m[1].toLowerCase(), end: m[0].length };
+}
+
+// rank orders command c for what was typed, q: named so first, then its
+// name starting so, an alias, a name with q in it, its description; -1
+// if none.
+function rank(c, q) {
+  if (!q) return 0;
+  const names = [c.name, ...(c.aliases || [])].map((n) => n.toLowerCase());
+  if (names.includes(q)) return 0;
+  if (names[0].startsWith(q)) return 1;
+  if (names.some((n) => n.startsWith(q))) return 2;
+  if (names.some((n) => n.includes(q))) return 3;
+  if (q.length > 2 && (c.description || "").toLowerCase().includes(q)) return 4;
+  return -1;
+}
+
+async function drawMenu() {
+  const t = $("#qinput");
+  const id = current;
+  const w = id && commandWord(t);
+  if (!w) return closeMenu();
+  const list = await commandsOf(id);
+  const now = commandWord(t);
+  if (id !== current || !now || now.query !== w.query) return; // typed on: drawn for that
+  const items = list.map((c) => [rank(c, w.query), c]).filter(([r]) => r >= 0)
+    .sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).map(([, c]) => c);
+  if (!items.length) return closeMenu();
+  if (menu.query !== w.query) menu.sel = 0;
+  menu.items = items;
+  menu.query = w.query;
+  menu.sel = Math.min(menu.sel, items.length - 1);
+  const box = $("#qmenu");
+  box.replaceChildren(...items.map((c, i) => {
+    const li = el("li");
+    li.append(el("span", "n", `/${c.name}`));
+    if (c.hint) li.append(el("span", "h", c.hint));
+    li.append(el("span", "d", c.description || ""));
+    li.title = c.description || "";
+    li.onmousedown = (e) => {
+      e.preventDefault(); // the box keeps the focus
+      menu.sel = i;
+      pick(false);
+    };
+    return li;
+  }));
+  box.hidden = false;
+  markSel();
+}
+
+function markSel() {
+  const box = $("#qmenu");
+  [...box.children].forEach((li, i) => li.classList.toggle("on", i === menu.sel));
+  box.children[menu.sel]?.scrollIntoView({ block: "nearest" });
+}
+
+function closeMenu() {
+  $("#qmenu").hidden = true;
+  menu.items = [];
+  menu.query = null;
+}
+
+// menuKey moves through the menu, and picks: Tab completes the command,
+// Enter sends it, as in the agents' own TUIs. It reports whether e was
+// the menu's.
+function menuKey(e) {
+  const n = menu.items.length;
+  if (!n) return false;
+  const down = e.key === "ArrowDown" || e.ctrlKey && e.key === "n";
+  if (down || e.key === "ArrowUp" || e.ctrlKey && e.key === "p") {
+    menu.sel = (menu.sel + (down ? 1 : n - 1)) % n;
+    markSel();
+  } else if (e.key === "Tab" && !e.shiftKey) {
+    pick(false);
+  } else if (e.key === "Enter" && !e.shiftKey) {
+    pick(true);
+  } else if (e.key === "Escape") {
+    closeMenu();
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// pick puts the chosen command in place of the one being typed, and with
+// run sends the message.
+function pick(run) {
+  const c = menu.items[menu.sel];
+  const t = $("#qinput");
+  const w = commandWord(t);
+  closeMenu();
+  if (!c || !w) return;
+  const rest = t.value.slice(w.end);
+  if (run) {
+    t.value = `/${c.name}${rest}`;
+    submit();
+    return;
+  }
+  const sep = rest.startsWith(" ") ? "" : " ";
+  t.value = `/${c.name}${sep}${rest}`;
+  t.setSelectionRange(c.name.length + 2, c.name.length + 2);
+}
 $("#qpause").onclick = () => {
   const q = agents.get(current)?.queue;
   queueCall("POST", { paused: q && q.paused ? "0" : "1" }, null, "/api/queue/pause");
@@ -328,6 +485,8 @@ function show(id) {
     }
   }
   current = id;
+  closeMenu();
+  commandsOf(id);
   const o = opened.get(id) || open(id);
   $("#empty").style.display = "none";
   present(id, o);
