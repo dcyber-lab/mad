@@ -130,16 +130,16 @@ func TestPersonsDeliveryClearsTheMark(t *testing.T) {
 func TestFirstLineOfMarkdownReplies(t *testing.T) {
 	for reply, want := range map[string]string{
 		"```go\nfmt.Println(\"ok\")\n```\nAll three tests pass now.": "All three tests pass now.",
-		"## Summary\n\nFixed the race in poll.go; tests pass.":       "Summary",
+		"## Summary\n\nFixed the race in poll.go; tests pass.":       "Fixed the race in poll.go; tests pass.",
 		"---\nDone: PR #7 merged.":                                   "Done: PR #7 merged.",
 		"**Done.** PR #7 merged.":                                    "Done. PR #7 merged.",
-		"## Result\n\n**Tests pass**, PR 42 opened":                  "Result",
+		"## Result\n\n**Tests pass**, PR 42 opened":                  "Tests pass, PR 42 opened",
 		"| file | status |\n|---|---|\n| a.go | ok |":                "file | status",
 		"<details><summary>log</summary>\n…\n</details>\nFixed.":     "…",
 		"<br>\n- [x] `go test` passes":                               "go test passes",
 		"> quoted __bold__ line":                                     "quoted bold line",
 		"1. first step":                                              "first step",
-		"```\nonly code\n```":                                        "",
+		"# Only a heading\n```\ncode\n```":                           "Only a heading",
 	} {
 		if got := firstLine(reply); got != want {
 			t.Errorf("firstLine(%q) = %q, want %q", reply, got, want)

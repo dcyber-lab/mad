@@ -9,9 +9,10 @@ import (
 )
 
 // firstLine is the first line of a reply that says something, as plain
-// text, cut to 120 runes without splitting a character.
+// text, cut to 120 runes without splitting a character. A heading only
+// labels what follows, so it is used only when nothing else says anything.
 func firstLine(s string) string {
-	fence := ""
+	fence, heading := "", ""
 	for _, l := range strings.Split(s, "\n") {
 		l = strings.TrimSpace(l)
 		if f := fenceOf(l); f != "" {
@@ -26,11 +27,17 @@ func firstLine(s string) string {
 		if fence != "" {
 			continue
 		}
+		isHeading := strings.HasPrefix(l, "#")
 		if l = plainLine(l); l != "" {
-			return cutRunes(l, 120)
+			if !isHeading {
+				return cutRunes(l, 120)
+			}
+			if heading == "" {
+				heading = l
+			}
 		}
 	}
-	return ""
+	return cutRunes(heading, 120)
 }
 
 func fenceOf(l string) string {
