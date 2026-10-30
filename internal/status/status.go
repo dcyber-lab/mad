@@ -82,6 +82,7 @@ func RemoveHook(id string) {
 	os.Remove(turnPath(id))
 	os.Remove(sentPath(id))
 	os.Remove(digestPath(id))
+	os.Remove(asksPath(id))
 }
 
 // Turn is how the agent's last turn ended, stored as StatusDir/<agent
@@ -161,6 +162,7 @@ type Tracker struct {
 	seen       bool
 	lastChange time.Time
 	quiet      time.Time
+	since      time.Time
 
 	Status string
 	// Attention: the agent finished or got blocked while not on stage.
@@ -171,6 +173,9 @@ type Tracker struct {
 // hook report, and updates the attention flag.
 func (t *Tracker) Observe(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook, screen string, onStage bool, now time.Time) string {
 	s := t.compute(k, pane, hasPane, hook, screen, now)
+	if s != t.Status {
+		t.since = sinceOf(s, t.since, hook, now)
+	}
 	switch {
 	case onStage:
 		t.Attention = false
@@ -189,6 +194,21 @@ func (t *Tracker) Observe(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 	}
 	return s
 }
+
+// sinceOf is when status s began, s being new at now: when the hook says
+// so, its time, which every process polling the same file reads alike;
+// else now. A running hook is rewritten by every tool call and the host's
+// heartbeat, so its time says "recently", not "since".
+func sinceOf(s string, prev time.Time, hook *Hook, now time.Time) time.Time {
+	if hook != nil && s != Running && hook.State == s && hook.At.After(prev) && !hook.At.After(now) {
+		return hook.At
+	}
+	return now
+}
+
+// Since is when the agent's tracked status began: its raw status, so one
+// that finished at 10:00 and was looked at at 10:05 is idle since 10:00.
+func (t *Tracker) Since() time.Time { return t.since }
 
 // QuietSince is when the agent last did or showed anything: ran, waited,
 // reported through a hook, changed its screen or was on stage. It is

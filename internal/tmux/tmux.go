@@ -166,6 +166,11 @@ func FindPane(panes []Pane, madID string) (Pane, bool) {
 // OnStage reports whether p is one of the views right of the sidebar.
 func OnStage(p Pane) bool { return p.Session == MainSession && p.Index >= 1 }
 
+// Seen tells whether pane p is in front of the person: on the deck's
+// stage, or shown by a desktop window lately (MarkSeen). Every tracker is
+// told this, so what finished clears on every surface at once.
+func Seen(p Pane) bool { return OnStage(p) || p.Viewed }
+
 // Views are the panes on stage, right of the sidebar, in order.
 func Views(panes []Pane) []Pane {
 	var out []Pane
