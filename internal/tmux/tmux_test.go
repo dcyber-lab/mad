@@ -329,3 +329,19 @@ func TestCaptureAll(t *testing.T) {
 		t.Errorf("empty: %v %v", got, err)
 	}
 }
+
+func TestSeen(t *testing.T) {
+	for _, c := range []struct {
+		p    Pane
+		want bool
+	}{
+		{Pane{Session: MainSession, Index: 1}, true},
+		{Pane{Session: MainSession, Index: 0}, false},
+		{Pane{Session: "_mad_back", Index: -1, Viewed: true}, true},
+		{Pane{Session: "_mad_back", Index: -1}, false},
+	} {
+		if got := Seen(c.p); got != c.want {
+			t.Errorf("Seen(%+v) = %v", c.p, got)
+		}
+	}
+}

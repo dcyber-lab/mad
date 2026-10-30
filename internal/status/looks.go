@@ -77,3 +77,37 @@ func LookOf(s string) Look {
 	}
 	return Looks[len(Looks)-1]
 }
+
+// Count is how many agents are shown in one state.
+type Count struct {
+	State string `json:"state"`
+	N     int    `json:"n"`
+}
+
+// Rollup is how a group of agents (a project, a team) stands: a count per
+// shown state, most urgent first as Looks orders them, states with none
+// left out. Its first entry is what a collapsed group shows.
+type Rollup []Count
+
+// Roll counts shown states into a Rollup.
+func Roll(shown []string) Rollup {
+	n := map[string]int{}
+	for _, s := range shown {
+		n[LookOf(s).State]++
+	}
+	r := Rollup{}
+	for _, l := range Looks {
+		if n[l.State] > 0 {
+			r = append(r, Count{State: l.State, N: n[l.State]})
+		}
+	}
+	return r
+}
+
+// Top is the most urgent state of r, "" for none.
+func (r Rollup) Top() string {
+	if len(r) == 0 {
+		return ""
+	}
+	return r[0].State
+}
