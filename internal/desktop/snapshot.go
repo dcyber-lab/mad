@@ -25,7 +25,10 @@ type Snapshot struct {
 	Board    []bus.Card     `json:"board"`           // the task board (board.go)
 	Spend    bus.SpendState `json:"spend"`           // the day's budget for mad's own work
 	Timers   []bus.Timer    `json:"timers"`          // check-ins and routines (timer.go)
-	At       time.Time      `json:"at"`
+	// States is how each shown state reads: the page draws every status
+	// word, dot and color from it, as the deck does.
+	States []status.Look `json:"states"`
+	At     time.Time     `json:"at"`
 }
 
 type Project struct {
@@ -46,6 +49,9 @@ type Agent struct {
 	Title  string `json:"title,omitempty"` // the conversation's
 	Detail string `json:"detail,omitempty"`
 	Status string `json:"status"`
+	// Shown is the state to draw (status.Shown): Status, with a finished
+	// unseen run told apart and Exited folded into Stopped.
+	Shown string `json:"shown"`
 	// Done: it finished while no window was looking at it.
 	Done bool    `json:"done,omitempty"`
 	Cost float64 `json:"cost,omitempty"`
@@ -60,6 +66,16 @@ type Agent struct {
 	// (package host).
 	Headless bool   `json:"headless,omitempty"`
 	Mode     string `json:"mode,omitempty"`
+}
+
+// detailOf is the line under an agent's name: the tool it calls while it
+// works or waits, else the prompt it is on. The tool stays in the
+// transcript after its turn ends, so it would mislead then.
+func detailOf(s string, info transcript.Info) string {
+	if (s == status.Running || s == status.Waiting) && info.Tool != "" {
+		return info.Tool
+	}
+	return info.Prompt
 }
 
 // How often each part of the snapshot is brought up to date. Screens are
@@ -93,7 +109,7 @@ func newPoller(kinds []agent.Kind, l *looks) *poller {
 		reader:   transcript.NewReader(),
 		infos:    map[string]transcript.Info{},
 		gits:     map[string]git.Info{},
-		snap:     Snapshot{Projects: []Project{}},
+		snap:     Snapshot{Projects: []Project{}, States: status.Looks},
 	}
 }
 
@@ -161,7 +177,7 @@ func (p *poller) Poll(now time.Time) {
 	}
 
 	queues, _ := queue.All()
-	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}}
+	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}, States: status.Looks}
 	seen := map[string]bool{}
 	for _, pr := range st.Projects {
 		g := p.gits[pr.Path]
@@ -179,14 +195,11 @@ func (p *poller) Poll(now time.Time) {
 			// what finished there was seen.
 			s := tr.Observe(k, pn, ok, status.ReadHook(a.ID), screens[pn.ID], p.looks.Focused(a.ID), now)
 			info := p.infos[a.ID]
-			detail := info.Tool
-			if detail == "" {
-				detail = info.Prompt
-			}
+			detail := detailOf(s, info)
 			ag := Agent{
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
 				Name: a.Name, Title: info.Title, Detail: detail,
-				Status: s, Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role, Team: a.Team,
+				Status: s, Shown: status.Shown(s, tr.Done()), Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role, Team: a.Team,
 			}
 			if q, ok := queues[a.ID]; ok {
 				ag.Queue = &q

@@ -17,7 +17,9 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
+	"github.com/dcyber-lab/mad/internal/transcript"
 )
 
 func isolate(t *testing.T) string {
@@ -79,6 +81,35 @@ func TestSnapshot(t *testing.T) {
 	a := snap.Projects[0].Agents[0]
 	if a.Name != "impl" || a.Status != "stopped" || a.Icon == "" {
 		t.Errorf("agent = %+v", a)
+	}
+	if a.Shown != "stopped" {
+		t.Errorf("shown = %q", a.Shown)
+	}
+	// The table rides along once, and the page reads it from the JSON.
+	data, _ := json.Marshal(snap)
+	var back struct {
+		States []status.Look `json:"states"`
+	}
+	if err := json.Unmarshal(data, &back); err != nil || len(back.States) != len(status.Looks) {
+		t.Fatalf("states in the snapshot = %v, %v", back.States, err)
+	}
+	if back.States[0].Word == "" || back.States[0].Tone == "" {
+		t.Errorf("state without a look: %+v", back.States[0])
+	}
+}
+
+func TestDetailOf(t *testing.T) {
+	info := transcript.Info{Tool: "Bash · go test", Prompt: "fix the build"}
+	for s, want := range map[string]string{
+		status.Running: "Bash · go test", status.Waiting: "Bash · go test",
+		status.Idle: "fix the build", status.Asleep: "fix the build", status.Stopped: "fix the build",
+	} {
+		if got := detailOf(s, info); got != want {
+			t.Errorf("detailOf(%s) = %q, want %q", s, got, want)
+		}
+	}
+	if got := detailOf(status.Running, transcript.Info{Prompt: "p"}); got != "p" {
+		t.Errorf("running without a tool = %q", got)
 	}
 }
 
