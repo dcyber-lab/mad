@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/dcyber-lab/mad/internal/deck"
@@ -124,11 +126,57 @@ func Get(ctx context.Context) Status {
 	return s
 }
 
-// serveCommand keeps the server alive as the stream's is.
+// serveCommand keeps the server alive as the stream's is. On a Mac it
+// keeps the Mac from sleeping while it runs, as a sleeping one serves no
+// phone: its screen may go dark and lock, on battery too (caffeinate -i);
+// a closed lid still puts it to sleep.
 func serveCommand(host string) string {
 	sub := fmt.Sprintf("desktop -serve -addr 127.0.0.1:%d -origin %s", Port, paths.ShellQuote(Origin(host)))
-	return fmt.Sprintf("while :; do %s 2>>%s; sleep 1; done", deck.SelfCommand(sub), paths.ShellQuote(paths.PhoneLog()))
+	run := deck.SelfCommand(sub)
+	if awake != "" {
+		run = awake + " " + run
+	}
+	return fmt.Sprintf("while :; do %s 2>>%s; sleep 1; done", run, paths.ShellQuote(paths.PhoneLog()))
 }
+
+// awake runs a command keeping the machine awake; "" where there is no
+// such thing. Tests replace it.
+var awake = func() string {
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+	if _, err := exec.LookPath("caffeinate"); err != nil {
+		return ""
+	}
+	return "caffeinate -i"
+}()
+
+// Refresh starts the phone's server again, if it runs: on the mad just
+// built, its page as that mad has it. The deck does it as it opens.
+func Refresh() error {
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return err
+	}
+	p, ok := tmux.FindPane(panes, tmux.IDPhone)
+	if !ok {
+		return nil
+	}
+	host, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_phone_host")
+	if host == "" {
+		// Started by a mad that kept only its command.
+		cmd, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd")
+		if m := originRe.FindStringSubmatch(cmd); m != nil {
+			host = m[1]
+		}
+	}
+	if host == "" {
+		return nil
+	}
+	return respawn(p.ID, serveCommand(host), host)
+}
+
+var originRe = regexp.MustCompile(`-origin '?([\w.-]+):\d+`)
 
 // On starts the server, unless it runs, and has tailscale serve it.
 func On(ctx context.Context) (Status, error) {
@@ -140,7 +188,7 @@ func On(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	if err := ensurePane(serveCommand(h)); err != nil {
+	if err := ensurePane(serveCommand(h), h); err != nil {
 		return Status{}, err
 	}
 	out, err := exec.CommandContext(ctx, tailscale, "serve", "--bg", fmt.Sprintf("--https=%d", HTTPSPort),
@@ -164,9 +212,9 @@ func Off(ctx context.Context) error {
 	return nil
 }
 
-// ensurePane runs cmd in the phone's pool pane, restarting it when it
-// ran something else (another mad, another name).
-func ensurePane(cmd string) error {
+// ensurePane runs cmd, the server for host, in the phone's pool pane,
+// restarting it when it ran something else (another mad, another name).
+func ensurePane(cmd, host string) error {
 	panes, err := tmux.ListPanes()
 	if err != nil || !tmux.HasSession(tmux.PoolSession) {
 		return errors.New("the deck is not running: open it first (mad)")
@@ -175,17 +223,29 @@ func ensurePane(cmd string) error {
 		if had, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd"); had == cmd && !p.Dead {
 			return nil
 		}
-		if err := tmux.Run("respawn-pane", "-k", "-t", p.ID, cmd); err != nil {
-			return err
-		}
-		return tmux.Run("set-option", "-p", "-t", p.ID, "@mad_cmd", cmd)
+		return respawn(p.ID, cmd, host)
 	}
 	id, err := tmux.Out("new-window", "-d", "-t", tmux.PoolSession+":", "-n", "phone", "-P", "-F", "#{pane_id}", cmd)
 	if err != nil {
 		return err
 	}
-	if err := tmux.Run("set-option", "-p", "-t", id, "@mad_cmd", cmd); err != nil {
+	if err := note(id, cmd, host); err != nil {
 		return err
 	}
 	return tmux.Tag(id, tmux.IDPhone)
+}
+
+func respawn(id, cmd, host string) error {
+	if err := tmux.Run("respawn-pane", "-k", "-t", id, cmd); err != nil {
+		return err
+	}
+	return note(id, cmd, host)
+}
+
+// note keeps on the pane what it runs, and for which name.
+func note(id, cmd, host string) error {
+	if err := tmux.Run("set-option", "-p", "-t", id, "@mad_cmd", cmd); err != nil {
+		return err
+	}
+	return tmux.Run("set-option", "-p", "-t", id, "@mad_phone_host", host)
 }

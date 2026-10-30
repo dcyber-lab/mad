@@ -349,6 +349,11 @@ Home Screen keeps it at hand as an app.
   out; the next `mad phone on` makes a new one.
 - It needs HTTPS certificates turned on in your tailnet (the Tailscale
   admin console, DNS page). mad says so if they are off.
+- While it serves the phone, a Mac stays awake (`caffeinate -i`): its
+  screen may go dark and lock, on battery too, and agents and the phone go
+  on. Closing the lid still puts it to sleep, unless a display is attached.
+- Opening the deck (a rebuilt mad, say) starts its server again on the
+  mad it was opened with.
 - `mad phone off` closes the way in and stops the server; `mad phone`
   shows how it stands, with the QR code again.
 
