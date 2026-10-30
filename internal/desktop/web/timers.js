@@ -193,7 +193,7 @@ async function routineDialog(channel) {
     sug.replaceChildren();
     if (!m) return;
     const q = m[2].toLowerCase();
-    const names = [...agents.values()].filter((a) => a.chat && !a.role).map((a) => label(a)).concat(["all"])
+    const names = [...agents.values()].filter((a) => a.chat && (!a.role || a.team)).map((a) => label(a)).concat(["all"])
       .filter((n) => n.toLowerCase().startsWith(q)).slice(0, 6);
     for (const n of names) {
       const r = el("button", "srow", "");
