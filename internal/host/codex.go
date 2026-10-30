@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -82,8 +81,7 @@ var codexBin = "codex"
 
 func (c *codex) run(ctx context.Context) error {
 	defer c.forgetImages()
-	cmd := exec.CommandContext(ctx, codexBin, "app-server")
-	cmd.Dir = c.dir
+	cmd := agentCmd(ctx, c.dir, codexBin, "app-server")
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err

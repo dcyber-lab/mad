@@ -599,6 +599,11 @@ func Wait(a *state.Agent, kinds []agent.Kind, o WaitOptions) (*status.Turn, erro
 			return turn, nil
 		}
 		if hook != nil && (hook.Event == "Stop" || hook.Event == "agent-turn-complete") && hook.At.After(sent) && !sent.IsZero() {
+			// The reply is written before the report: one written between
+			// the two reads above is there now.
+			if turn = status.ReadTurn(a.ID); !pending(turn, hook, sent) {
+				return turn, nil
+			}
 			// Done since the message, yet no reply kept: the report came
 			// through a mad from before replies were (WriteTurn comes first).
 			return nil, fmt.Errorf("%s is done, but its hooks run a mad that keeps no replies; open the deck with this mad (and restart the agent) first", Label(a))

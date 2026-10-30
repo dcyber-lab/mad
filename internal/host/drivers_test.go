@@ -298,3 +298,36 @@ func TestPi(t *testing.T) {
 	}
 	t.Error("no abort sent")
 }
+
+// An agent's process is ended with whatever it started, when the host
+// is done with it: a shell that does not exec its command (dash) holds
+// the agent's output open otherwise, and the host waits on it for good.
+func TestAgentCmdEndsGroup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := agentCmd(ctx, t.TempDir(), "sh", "-c", "sleep 60 & echo started; wait")
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	sc := bufio.NewScanner(out)
+	if !sc.Scan() || sc.Text() != "started" {
+		t.Fatalf("first line %q", sc.Text())
+	}
+	cancel()
+	ended := make(chan struct{})
+	go func() {
+		for sc.Scan() {
+		}
+		_ = cmd.Wait()
+		close(ended)
+	}()
+	select {
+	case <-ended:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent's output is still open: its sleep was left running")
+	}
+}
