@@ -2,6 +2,7 @@ package bus
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -46,6 +47,58 @@ func TestSourceReadsOnlyOnChange(t *testing.T) {
 	if _, read := s.Look(st, map[string]string{idArch: status.Waiting}, at.Add(3*time.Second+FullEvery)); !read {
 		t.Error("not read again after FullEvery")
 	}
+}
+
+// BenchmarkWindowPollBus is the bus part of one window poll, on a bus of
+// 30 channels with 500 messages each and 30 tasks: as the poller did it
+// (Board, Channels and YourChannels every poll) and through a Source
+// when nothing moved.
+//
+//	go test -run '^$' -bench WindowPollBus -benchtime 20x ./internal/bus
+func BenchmarkWindowPollBus(b *testing.B) {
+	b.Setenv("XDG_STATE_HOME", b.TempDir())
+	b.Setenv("HOME", b.TempDir())
+	st := &state.State{}
+	p, _ := st.AddProject("/code/a")
+	p.Agents = []*state.Agent{{ID: idArch, Kind: "claude", Name: "architect"}, {ID: idBuild, Kind: "claude", Name: "builder"}}
+	if err := st.Save(); err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < 30; i++ {
+		n := fmt.Sprintf("c%d", i)
+		if _, err := Create(n, "", []string{idArch, idBuild}, me); err != nil {
+			b.Fatal(err)
+		}
+		for j := 0; j < 500; j++ {
+			if err := PostSystem(n, fmt.Sprintf("line %d of the report with some words to fill it out a little", j)); err != nil {
+				b.Fatal(err)
+			}
+		}
+		if _, err := SetTask(arch, TaskChange{Title: sp("task " + n), Owner: sp(idBuild), Channel: sp(n)}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	statuses := map[string]string{idArch: status.Running, idBuild: status.Idle}
+	at := time.Now()
+	b.Run("derive", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			if _, err := Board(st, statuses, at); err != nil {
+				b.Fatal(err)
+			}
+			_, _ = Channels()
+			_, _ = YourChannels()
+		}
+	})
+	b.Run("cached", func(b *testing.B) {
+		var s Source
+		s.Look(st, statuses, at)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, read := s.Look(st, statuses, at); read {
+				b.Fatal("read with nothing moved")
+			}
+		}
+	})
 }
 
 func TestReply(t *testing.T) {
