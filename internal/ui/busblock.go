@@ -86,7 +86,7 @@ func busSignature() string {
 
 // loadBus reads the bus into what the block shows. statuses are the
 // agents' (nil before the first poll: the board is left out then).
-func loadBus(st *state.State, statuses map[string]string, now time.Time) busSnap {
+func loadBus(st *state.State, statuses map[string]string, now time.Time, open string) busSnap {
 	var s busSnap
 	if statuses != nil {
 		if cards, err := bus.Board(st, statuses, now); err == nil {
@@ -109,7 +109,8 @@ func loadBus(st *state.State, statuses map[string]string, now time.Time) busSnap
 	for _, c := range chans {
 		isDM := strings.HasPrefix(c.ID, "dm.")
 		y := yours[c.ID]
-		if isDM && !yourDM(c.ID) || y.Unread == 0 && !c.Paused {
+		// The channel whose chat is open stays: its row closes it.
+		if isDM && !yourDM(c.ID) || y.Unread == 0 && !c.Paused && c.ID != open {
 			continue
 		}
 		r := busRow{ch: c.ID, title: "#" + c.ID, unread: y.Unread, paused: c.Paused}
@@ -174,6 +175,10 @@ func (m *model) busCmd(now time.Time) tea.Cmd {
 	m.busBusy, m.lastBus = true, now
 	full := now.Sub(m.busFull) >= busFullEvery
 	sig := m.busSig
+	open := "" // the channel whose chat is on stage
+	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && strings.HasPrefix(m.taskTag, "chat:") {
+		open = strings.TrimPrefix(m.taskTag, "chat:")
+	}
 	st := m.st.Clone()
 	var statuses map[string]string
 	if len(m.trackers) > 0 || len(st.OrderedAgents()) == 0 {
@@ -186,11 +191,11 @@ func (m *model) busCmd(now time.Time) tea.Cmd {
 	}
 	return func() tea.Msg {
 		now := time.Now()
-		cur := busSignature()
+		cur := busSignature() + "|" + open
 		if cur == sig && !full {
 			return busMsg{same: true}
 		}
-		return busMsg{sig: cur, snap: loadBus(st, statuses, now), full: full}
+		return busMsg{sig: cur, snap: loadBus(st, statuses, now, open), full: full}
 	}
 }
 
