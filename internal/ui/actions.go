@@ -30,6 +30,8 @@ func (m *model) openCmd(a *state.Agent) tea.Cmd {
 
 func (m *model) activate(r row) tea.Cmd {
 	switch {
+	case r.bus != nil:
+		return m.openBus(r.bus)
 	case r.run != nil:
 		return m.openRun(r.run)
 	case r.agent != nil:
@@ -117,10 +119,10 @@ func dirInUse(p *state.Project, dir string) bool {
 // toggleDiff shows the changes in dir (of agent id, or a project when id
 // is empty) on stage, or takes them down again when they are up already.
 func (m *model) toggleDiff(id, dir string, focusStage bool) tea.Cmd {
-	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && m.taskFor == id {
+	if d, ok := m.panes[tmux.IDTask]; ok && !d.Dead && m.shown[tmux.IDTask] && m.taskFor == id && m.taskTag == "" {
 		return m.closeTask(focusStage)
 	}
-	m.taskFor = id
+	m.taskFor, m.taskTag = id, ""
 	cmd := deck.DiffCommand(m.cfg.Diff, dir)
 	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
@@ -248,7 +250,7 @@ func (m *model) keyPickFinish(k tea.KeyMsg) tea.Cmd {
 func (m *model) runFinish(i int) tea.Cmd {
 	m.mode = modeNormal
 	dir, cmd := m.finCo.Dir, deck.HoldCommand(m.fin[i].Command)
-	m.taskFor = m.finID
+	m.taskFor, m.taskTag = m.finID, ""
 	return m.action("", func() error { return deck.OpenTask(dir, cmd) })
 }
 

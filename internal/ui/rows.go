@@ -12,6 +12,10 @@ import (
 func (m *model) rebuildRows() {
 	prev, hadPrev := m.current()
 	m.rows = m.rows[:0]
+	for _, b := range m.bus.busRows() {
+		b := b
+		m.rows = append(m.rows, row{bus: &b})
+	}
 	for _, p := range m.st.Projects {
 		m.rows = append(m.rows, row{proj: p})
 		if p.Collapsed {
@@ -53,8 +57,10 @@ func (m *model) rebuildRows() {
 	// Keep the cursor on the same item when possible.
 	if hadPrev {
 		for i, r := range m.rows {
-			same := r.proj.Path == prev.proj.Path
+			same := r.proj != nil && prev.proj != nil && r.proj.Path == prev.proj.Path
 			switch {
+			case prev.bus != nil:
+				same = r.bus != nil && r.bus.board == prev.bus.board && r.bus.ch == prev.bus.ch && r.bus.more == prev.bus.more
 			case prev.agent != nil:
 				same = r.agent != nil && r.agent.ID == prev.agent.ID
 			case prev.run != nil:

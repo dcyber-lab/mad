@@ -17,6 +17,9 @@ import (
 
 func (m *model) keyNormal(k tea.KeyMsg) tea.Cmd {
 	r, ok := m.current()
+	if ok && r.bus != nil && !busKeys[k.String()] {
+		return nil // the rest is about projects and agents
+	}
 	switch k.String() {
 	case "up", "k":
 		m.move(-1)

@@ -49,7 +49,7 @@ func (m *model) sidebarView() string {
 
 	h := m.listHeight()
 	lines := 0
-	if len(m.rows) == 0 {
+	if len(m.st.Projects) == 0 {
 		b.WriteString(stDim.Render(" no projects yet") + "\n")
 		lines++
 		if lines < h {
@@ -231,6 +231,8 @@ func quotaStyle(used float64) lipgloss.Style {
 // (status, count, tty) is right-aligned and dropped when too narrow.
 func (m *model) rowSegs(r row) (left, right []seg) {
 	switch {
+	case r.bus != nil:
+		return m.busRowSegs(r.bus)
 	case r.ext != nil:
 		return []seg{{stPlain, "     "}, {stDim, "↗ "}, {stDim, r.ext.Kind}},
 			[]seg{{stFaint, r.ext.TTY + " "}}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/buschat"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -23,6 +24,7 @@ const busUsage = `usage:
   mad bus post CHANNEL [TEXT...|-]    say something; @agent wakes it, @all everyone
   mad bus read CHANNEL [-n N]         the last N messages (default 30)
   mad bus log CHANNEL                 all of them
+  mad bus chat CHANNEL                read and write in a channel (or @agent for a DM), live
   mad bus dm AGENT [TEXT...|-]        a private message that wakes the agent
   mad bus resume CHANNEL              let a paused channel go on
   mad bus lead CHANNEL AGENT          make AGENT the channel's lead (who hears when work stalls)
@@ -153,6 +155,23 @@ func busCmd(args []string, stdio IO) error {
 			}
 		}
 		return busRead(target, n, sub == "log", stdio)
+	case "chat":
+		if strings.HasPrefix(target, "@") {
+			var refs []string
+			for len(args) > 0 && strings.HasPrefix(args[0], "@") {
+				refs, args = append(refs, args[0]), args[1:]
+			}
+			ch, err := busDM(target, refs)
+			if err != nil {
+				return err
+			}
+			target = ch
+		}
+		if len(args) > 0 {
+			fmt.Fprint(stdio.Err, busUsage)
+			return errUsage
+		}
+		return buschat.Run(target)
 	case "resume":
 		return bus.Resume(target)
 	case "lead":

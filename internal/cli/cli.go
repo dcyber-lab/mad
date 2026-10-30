@@ -50,9 +50,10 @@ usage:
                       wait until the agent's turn ends; print its reply
   mad queue add|ls|rm|pause|resume
                       messages typed in when an agent's turn is over
-  mad bus ls|create|post|read|log|dm|resume|lead|report|handoffs
+  mad bus ls|create|post|read|log|chat|dm|resume|lead|report|handoffs
                       channels where agents and you talk; @agent wakes one
-  mad board           the task board: who owns what, what waits for you
+  mad board [-w]      the task board: who owns what, what waits for you
+                      (-w keeps it up to date)
   mad run new|start|ls|continue|cancel
                       runs: a task handed through agents in roles
                       (design, implement, review); "mad run" for more
@@ -132,7 +133,7 @@ func Run(args []string, stdio IO) int {
 	case "ls":
 		err = ls(stdio.Out)
 	case "board":
-		err = board(stdio.Out)
+		err = boardCmd(args, stdio)
 	case "spawn":
 		err = spawn(args, stdio)
 	case "send":
