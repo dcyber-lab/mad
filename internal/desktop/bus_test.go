@@ -148,7 +148,9 @@ func TestBusRemovedAgents(t *testing.T) {
 	bus.Forget(a1)
 	bus.Forget(a2)
 	got := map[string]string{}
-	for _, c := range busChannels(st) {
+	var src bus.Source
+	look, _ := src.Look(st, nil, time.Now())
+	for _, c := range busChannels(st, look) {
 		got[c.ID] = c.Title
 	}
 	if _, ok := got[bus.DMChannel(a1, a2)]; ok {

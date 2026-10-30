@@ -32,23 +32,29 @@ type BusChannel struct {
 	Members []BusMember `json:"members"`
 	Last    int         `json:"last"`
 	Unread  int         `json:"unread,omitempty"`
-	Paused  bool        `json:"paused,omitempty"`
-	Lead    string      `json:"lead,omitempty"` // the agent that answers for its work
-	Team    *BusTeam    `json:"team,omitempty"` // the team it is the channel of (team.go)
+	// Mention: an unread message in it asks you; Listed: it is in the
+	// short list (bus.Yours).
+	Mention bool     `json:"mention,omitempty"`
+	Listed  bool     `json:"listed,omitempty"`
+	Paused  bool     `json:"paused,omitempty"`
+	Lead    string   `json:"lead,omitempty"` // the agent that answers for its work
+	Team    *BusTeam `json:"team,omitempty"` // the team it is the channel of (team.go)
 }
 
-// busChannels lists the channels, then the DMs, for the snapshot.
-func busChannels(st *state.State) []BusChannel {
+// busChannels lists the channels, then the DMs, for the snapshot, as of
+// the poller's last look at the bus.
+func busChannels(st *state.State, look bus.Look) []BusChannel {
 	out := []BusChannel{}
-	chans, err := bus.Channels()
-	if err != nil || len(chans) == 0 {
+	chans, yours := look.Channels, look.Yours
+	if len(chans) == 0 {
 		return out
 	}
-	yours, _ := bus.YourChannels()
 	teams := busTeams(st)
 	for _, c := range chans {
+		y := yours[c.ID]
 		bc := BusChannel{ID: c.ID, Title: "#" + c.ID, Topic: c.Topic, DM: strings.HasPrefix(c.ID, "dm."),
-			Last: yours[c.ID].Last, Unread: yours[c.ID].Unread, Paused: c.Paused, Lead: c.Lead, Members: []BusMember{}, Team: teams[c.ID]}
+			Last: y.Last, Unread: y.Unread, Mention: y.Mention, Listed: y.Listed, Paused: c.Paused, Lead: c.Lead,
+			Members: []BusMember{}, Team: teams[c.ID]}
 		var names []string
 		gone := 0 // members no longer in the deck
 		members := c.Members
