@@ -144,6 +144,9 @@ func TestBusRemovedAgents(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
+	// As removing them does: the bus forgets them, emptying the DMs' members.
+	bus.Forget(a1)
+	bus.Forget(a2)
 	got := map[string]string{}
 	for _, c := range busChannels(st) {
 		got[c.ID] = c.Title
