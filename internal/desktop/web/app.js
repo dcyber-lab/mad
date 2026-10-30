@@ -156,6 +156,7 @@ function drawList() {
     }
   }
   pruneGone();
+  settleLayout();
   const q = $("#filter").value.trim().toLowerCase();
   const has = (...s) => !q || s.some((x) => (x || "").toLowerCase().includes(q));
   const agentHas = (a) => a && has(label(a), a.title, a.kind, a.tool, a.target, a.project.name);
@@ -179,10 +180,12 @@ function drawList() {
     const next = button("Next", "ghost ga nexthead", nextItem);
     next.append(el("kbd", "", "⌥N"));
     next.title = "open the next thing that needs you (Alt-N)";
-    nodes.push(group("inbox g-needs", ghead("Needs you", shownNeeds.length, "needs", next), capped("needs", shownNeeds, 8, 6, (it) => {
+    // On a phone the inbox folds earlier, so Working shows on the first screen.
+    const [limit, keep] = phoneList() ? [4, 3] : [8, 6];
+    nodes.push(group("inbox g-needs", ghead("Needs you", shownNeeds.length, "needs", next), capped("needs", shownNeeds, limit, keep, (it) => {
       const r = itemRow(it);
       return ib.reply?.key === it.key && ib.reply.where === "side" ? [r, replyBox(it, ib.reply)].filter(Boolean) : r;
-    }, "need you")));
+    }, "need you", (it) => ib.reply?.key === it.key)));
   }
   const shownWork = work.filter(agentHas);
   if (shownWork.length) {
@@ -207,6 +210,7 @@ function drawList() {
       const inTeam = new Set();
       for (const t of teams) {
         const mem = rest.filter((a) => t.members.includes(a.id));
+        if (!mem.length) continue; // a head with nobody under it would claim the rows below it
         mem.forEach((a) => inTeam.add(a.id));
         box.append(teamHead(t));
         box.append(...mem.map((a) => agentRow(a)));
@@ -241,6 +245,10 @@ function drawChips(nNeeds, nWork, nFin, count) {
   next.classList.toggle("needs", !!nNeeds);
 }
 
+function phoneList() {
+  return window.matchMedia("(max-width: 640px)").matches;
+}
+
 function group(cls, head, rows) {
   const g = el("section", `group ${cls}`);
   g.append(head, ...rows.flat());
@@ -256,13 +264,15 @@ function ghead(text, n, tone, extra) {
 
 // capped draws list, folded past limit to its first keep and a row that
 // unfolds the rest: what is long never pushes the groups below it away.
-function capped(name, list, limit, keep, draw, noun) {
+// A row that must stay (must(x): its reply box is open) is never folded.
+function capped(name, list, limit, keep, draw, noun, must) {
   const all = ib.more[name] || list.length <= limit || !!$("#filter").value.trim();
-  const out = (all ? list : list.slice(0, keep)).map((x) => draw(x));
+  const shown = all ? list : list.filter((x, i) => i < keep || (must && must(x)));
+  const out = shown.map((x) => draw(x));
   if (list.length > limit && !$("#filter").value.trim()) {
     const r = row({
       cls: "one fold", lead: el("span", "chglyph", all ? "−" : "+"),
-      name: all ? "Show fewer" : `${list.length - keep} more ${noun}`,
+      name: all ? "Show fewer" : `${list.length - shown.length} more ${noun}`,
       onclick: () => { ib.more[name] = !all; drawSidebar(); },
     });
     out.push(r);
@@ -402,7 +412,7 @@ function drawWait(o, a) {
 // agents at all it is the hero.
 function drawHome() {
   const root = $("#empty");
-  if (root.style.display === "none") return;
+  if (root.style.display === "none") return $("#home").replaceChildren(); // hidden: no box of its own to take the focus
   const none = !agents.size;
   root.classList.toggle("overview", !none);
   $("#empty .hero").hidden = !none;

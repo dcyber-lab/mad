@@ -45,6 +45,8 @@ function closeBoard() {
   if (!bd.open) return;
   bd.open = false;
   $("#boardview").hidden = true;
+  $("#boardview").replaceChildren();
+  bd.key = "";
   $("#empty").style.display = "";
 }
 

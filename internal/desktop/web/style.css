@@ -1128,6 +1128,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .inbox .row:hover { --row: color-mix(in srgb, var(--waiting) 11%, var(--sidebar)); }
 }
 .row.sel { --row: var(--raise-2); }
+.row.pending, .icard.pending { opacity: 0.8; }
 .row.flash { animation: flash 1.2s ease-out; }
 .row > .avatar { grid-row: 1 / span 2; }
 .row .t1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; font-size: 13.5px; line-height: 18px; }

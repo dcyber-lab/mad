@@ -11,33 +11,60 @@ const ib = {
   drafts: new Map(), // key → text typed, not sent
   nextKey: null,     // where Next last went
   more: {},          // folded groups, unfolded: name → true
-  gone: new Set(),   // keys acted on, hidden until the snapshot catches up
+  // keys acted on → {verb, label, at, done}: the item stays where it is,
+  // its buttons disabled, until a snapshot no longer has it. Nothing slides
+  // under the finger that tapped it.
+  pending: new Map(),
+  down: null,        // the act button the pointer last went down on: {id, ok}
+  layoutAt: 0,       // when the inbox's layout last changed (ms)
+  sig: "",           // what that layout was
   allChans: false,
 };
+
+// A tap that follows a layout change by less than this is not an act: the
+// row under the finger may be another one than the person aimed at.
+const settleMs = 500;
+// An act the snapshot still shows this long after it was sent is not
+// settling: the item is live again.
+const pendingMs = 12000;
 
 // ---- what the snapshot holds ----
 
 function needsYou() {
   const n = deck.inbox?.needs || 0;
-  return (deck.inbox?.items || []).slice(0, n).filter((it) => !ib.gone.has(it.key));
+  return (deck.inbox?.items || []).slice(0, n);
 }
 function finishedItems() {
   const n = deck.inbox?.needs || 0;
-  return (deck.inbox?.items || []).slice(n).filter((it) => !ib.gone.has(it.key));
+  return (deck.inbox?.items || []).slice(n);
 }
 function inboxItem(key) {
   return (deck.inbox?.items || []).find((it) => it.key === key);
 }
-// pruneGone forgets the acted-on keys the snapshot no longer has.
+// pruneGone forgets the acted-on keys the snapshot no longer has (or
+// still has long after: that act did not take).
 function pruneGone() {
-  for (const k of ib.gone) if (!inboxItem(k)) ib.gone.delete(k);
+  for (const [k, p] of ib.pending) {
+    if (!inboxItem(k) || (p.done && Date.now() - p.done > pendingMs)) ib.pending.delete(k);
+  }
+  if (ib.reply && !inboxItem(ib.reply.key)) ib.reply = null;
+}
+
+// settleLayout notes when the inbox's rows changed, so that a tap aimed at
+// the old layout is not taken for one at the new.
+function settleLayout() {
+  const sig = JSON.stringify([...needsYou(), ...finishedItems()].map((it) => it.key)) + JSON.stringify(ib.reply);
+  if (sig !== ib.sig) {
+    ib.sig = sig;
+    ib.layoutAt = Date.now();
+  }
 }
 
 // ---- time ----
 
 function short(at) {
   const m = Math.floor((Date.now() - new Date(at)) / 60000);
-  if (!at || isNaN(m)) return "";
+  if (!at || String(at).startsWith("0001") || isNaN(m)) return ""; // zero: unknown
   if (m < 1) return "now";
   if (m < 60) return `${m}m`;
   if (m < 1440) return `${Math.floor(m / 60)}h`;
@@ -67,10 +94,29 @@ function glyph(tone) {
 }
 
 // rowButton is a small labeled button that does not open its row.
-function rowButton(text, cls, fn, title) {
-  const b = button(text, `sm${cls ? " " + cls : ""}`, (e) => { e.stopPropagation(); fn(e); });
+function rowButton(text, cls, fn, title, tapId) {
+  const b = button(text, `sm${cls ? " " + cls : ""}`, (e) => {
+    e.stopPropagation();
+    if (tapId && !tapped(e, tapId)) return;
+    fn(e);
+  });
   if (title) b.title = title;
+  if (tapId) {
+    b.dataset.tap = tapId;
+    b.addEventListener("pointerdown", () => { ib.down = { id: tapId, ok: Date.now() - ib.layoutAt > settleMs }; });
+  }
   return b;
+}
+
+// tapped says whether click e on the button tapId is an act the person
+// meant: the pointer went down on that very button (not on a row that slid
+// under it), and not just after the layout changed. A key press (detail 0)
+// has no pointer to mislead.
+function tapped(e, tapId) {
+  if (e.detail === 0) return true;
+  const d = ib.down;
+  ib.down = null;
+  return !!d && d.id === tapId && d.ok;
 }
 
 function meter(part, hot) {
@@ -139,7 +185,7 @@ function row(o) {
 function itemRow(it) {
   const acts = it.acts.filter((a) => a.row).map((a) => actButton(it, a, "side"));
   const r = row({
-    key: it.key, cls: ib.nextKey === it.key ? "sel" : "", lead: itemLead(it), name: it.title, ctx: it.context,
+    key: it.key, cls: `${ib.nextKey === it.key ? "sel" : ""}${ib.pending.has(it.key) ? " pending" : ""}`, lead: itemLead(it), name: it.title, ctx: it.context,
     line: itemLine(it), right: acts, onclick: () => openItem(it),
   });
   const a = it.agent && agents.get(it.agent);
@@ -153,21 +199,43 @@ function itemRow(it) {
 // opens the reply box, open goes to the item, the rest are sent.
 function actButton(it, a, where) {
   const cls = a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
-  return rowButton(a.label, cls, () => {
+  const b = rowButton(a.label, cls, () => {
     if (a.verb === "open") openItem(it);
     else if (a.input) openReply(it, a, where);
     else act(it, a);
-  }, a.option && a.option !== a.label ? `${a.label}: ${a.option}` : "");
+  }, a.option && a.option !== a.label ? `${a.label}: ${a.option}` : "", `${it.key}\n${a.verb}\n${a.label}\n${where}`);
+  const p = ib.pending.get(it.key);
+  if (p && a.verb !== "open") {
+    // sent: it stays here, saying so, until the snapshot settles it
+    b.disabled = true;
+    if (p.verb === a.verb && p.label === a.label && p.option === (a.option || "")) b.textContent = pendingWord(a);
+  }
+  return b;
+}
+
+// pendingWord is what the button of an act in flight says.
+function pendingWord(a) {
+  const w = { allow: "Allowing", always: "Allowing", deny: "Denying", answer: "Answering", reply: "Sending", approve: "Approving",
+    discard: "Discarding", seen: "Marking", send: "Sending", drop: "Dropping", resume: "Resuming", raise: "Raising", lift: "Lifting" }[a.verb];
+  return `${w || a.label.replace(/…$/, "")}…`;
 }
 
 function openReply(it, a, where) {
   ib.reply = { key: it.key, verb: a.verb, label: a.label, where };
   redraw();
-  const ta = document.querySelector(`.replybox[data-key="${CSS.escape(it.key)}"][data-where="${where}"] textarea`);
+  const ta = replyArea(it.key, where);
   if (ta) {
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
+}
+
+// replyArea is the textarea of the reply box for key drawn where: the one
+// on show. A view that is hidden (home under the board) may still hold a
+// box of its own from before.
+function replyArea(key, where) {
+  const all = document.querySelectorAll(`.replybox[data-key="${CSS.escape(key)}"][data-where="${where}"] textarea`);
+  return [...all].find((t) => t.getClientRects().length) || null;
 }
 
 function closeReply() {
@@ -190,7 +258,7 @@ function replyBox(it, r) {
   box.append(q);
   const opts = it.acts.filter((x) => x.option && !x.input && x.verb === a.verb);
   if (opts.length) box.append(el("div", "opts", ""));
-  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "Send this answer"));
+  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "Send this answer", `${it.key}\nopt\n${o.option}`));
   const ta = el("textarea");
   ta.placeholder = `${a.label.replace(/…$/, "")}…`;
   ta.rows = 2;
@@ -211,7 +279,7 @@ function replyBox(it, r) {
     if (ta.value.trim()) act(it, a, ta.value.trim());
   };
   const ra = el("div", "ra");
-  ra.append(el("span", "muted", "↵ send · Esc"), rowButton("Cancel", "ghost", closeReply), rowButton("Send", "primary", send));
+  ra.append(el("span", "muted", "↵ send · Esc"), rowButton("Cancel", "ghost", closeReply), rowButton("Send", "primary", send, "", `${it.key}\nsend`));
   box.append(ta, ra);
   return box;
 }
@@ -219,7 +287,8 @@ function replyBox(it, r) {
 // act sends the person's choice: no hold, the agent waits on it. 409: it
 // was handled already (elsewhere, or it stopped waiting); 400: its error.
 async function act(it, a, text) {
-  ib.gone.add(it.key);
+  if (ib.pending.has(it.key)) return; // one act per item: it is already sent
+  ib.pending.set(it.key, { verb: a.verb, label: a.label, option: a.option || "", at: Date.now(), done: 0 });
   if (ib.reply?.key === it.key) ib.reply = null;
   redraw();
   const what = text ? `${a.label}: “${text.length > 40 ? text.slice(0, 39) + "…" : text}”` : a.option && a.option !== a.label ? `${a.label}: ${a.option}` : a.label;
@@ -231,16 +300,18 @@ async function act(it, a, text) {
     if (r.status === 409) {
       toast("Already handled: it is not waiting on you any more");
     } else if (!r.ok) {
-      ib.gone.delete(it.key);
+      ib.pending.delete(it.key);
       toast((await r.text()).trim() || r.statusText, "err");
     } else {
       ib.drafts.delete(it.key);
       toast(`${what} · ${it.title}`);
     }
   } catch (e) {
-    ib.gone.delete(it.key);
+    ib.pending.delete(it.key);
     toast(e.message, "err");
   }
+  const p = ib.pending.get(it.key);
+  if (p) p.done = Date.now();
   redraw();
   refresh();
 }
@@ -291,7 +362,7 @@ function nextItem() {
 // (the board's column) keeps the text to two lines.
 function itemCard(it, compact) {
   const done = it.kind === "finished";
-  const c = el("div", `icard ${done ? "k-finished" : "k-needs"}${compact ? " compact" : ""}${ib.nextKey === it.key ? " sel" : ""}`);
+  const c = el("div", `icard ${done ? "k-finished" : "k-needs"}${compact ? " compact" : ""}${ib.pending.has(it.key) ? " pending" : ""}${ib.nextKey === it.key ? " sel" : ""}`);
   c.dataset.key = it.key;
   const a = it.agent && agents.get(it.agent);
   const ch = el("div", "ch");
@@ -382,7 +453,7 @@ function keepFocus(draw) {
   const at = ta && [box.dataset.key, box.dataset.where, ta.selectionStart, ta.selectionEnd];
   draw();
   if (!at) return;
-  const n = document.querySelector(`.replybox[data-key="${CSS.escape(at[0])}"][data-where="${at[1]}"] textarea`);
+  const n = replyArea(at[0], at[1]);
   if (n) {
     n.focus({ preventScroll: true });
     n.setSelectionRange(at[2], at[3]);
