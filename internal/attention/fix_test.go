@@ -254,3 +254,16 @@ func TestStaleReplyNotShown(t *testing.T) {
 		t.Errorf("this turn's reply hidden: %+v", v.Activity["kim"])
 	}
 }
+
+// An unknown Since is not the longest wait: that agent goes last among
+// the working, and its activity line carries no age.
+func TestWorkingUnknownSinceLast(t *testing.T) {
+	got := working([]Agent{agentAt("u", status.Running, time.Time{}), agentAt("a", status.Running, ago(time.Minute)), agentAt("b", status.Running, ago(time.Hour))})
+	if strings.Join(got, " ") != "b a u" {
+		t.Errorf("working order %v", got)
+	}
+	parts := activityOf(agentAt("u", status.Idle, time.Time{})).Parts("Idle", t0)
+	if len(parts) != 1 || parts[0] != "Idle" {
+		t.Errorf("unknown since shows an age: %q", parts)
+	}
+}
