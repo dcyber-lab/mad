@@ -162,6 +162,37 @@ func (r keysRoute) do(a Answer, _ *Facts) error {
 	return nil
 }
 
+// InterruptPane presses Esc in a TUI-run agent's pane while its screen
+// says Esc interrupts it (claude's and codex's "esc to interrupt"). When
+// it says no such thing (done, or waiting on a prompt, whose Cancel is
+// its item's act) nothing is sent: ErrGone.
+func InterruptPane(pane string) error {
+	if !interruptible(capture(pane)) {
+		return ErrGone
+	}
+	return press(pane, "Escape")
+}
+
+// statusLines is how far up from the bottom a TUI's working line is
+// looked for: under it come its todo list, its input and its footer.
+const statusLines = 15
+
+// interruptible: a TUI's screen says Esc interrupts it, in its last
+// lines: the conversation above may say anything.
+func interruptible(screen string) bool {
+	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
+	for i, n := len(lines)-1, 0; i >= 0 && n < statusLines; i-- {
+		if strings.TrimSpace(lines[i]) == "" {
+			continue
+		}
+		n++
+		if strings.Contains(strings.ToLower(lines[i]), "esc to interrupt") {
+			return true
+		}
+	}
+	return false
+}
+
 // press sends key to pane, if it is one mad sends: a digit that picks an
 // option, Enter, Escape. Nothing typed, nothing to another target.
 func press(pane, key string) error {

@@ -43,6 +43,8 @@ type Server struct {
 	// chat can start on.
 	fileList  fileCache
 	modelList *answers[discover.Model]
+	// interrupts: when each agent was last interrupted (/api/interrupt).
+	interrupts interrupts
 }
 
 // New makes a server with a fresh random token.
@@ -89,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/agents", s.auth(http.HandlerFunc(s.agentRename)))
 	mux.Handle("DELETE /api/agents", s.auth(http.HandlerFunc(s.agentRemove)))
 	mux.Handle("POST /api/agents/stop", s.auth(http.HandlerFunc(s.agentStop)))
+	mux.Handle("POST /api/interrupt", s.auth(http.HandlerFunc(s.interrupt)))
 	mux.Handle("POST /api/terminal", s.auth(http.HandlerFunc(s.terminal)))
 	mux.Handle("GET /api/history", s.auth(http.HandlerFunc(s.history)))
 	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
