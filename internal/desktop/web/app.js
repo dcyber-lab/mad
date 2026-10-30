@@ -41,15 +41,18 @@ function look(state) {
 }
 
 // shownStatus is the state drawn for agent a on every surface: its tab, its
-// row, its avatar and the composer header. Run in window mode, its host
-// knows best, except that a finished run the person has not seen still
-// reads as finished.
+// row, its avatar and the composer header. The snapshot's shown state
+// (Finished, Stopped, ...) is what the deck and the TUI draw; a window-mode
+// host overrides it only for what it alone knows live: working, waiting,
+// starting, or idle. Its "off" (no host running) says nothing the snapshot
+// does not, and an idle host does not hide a finished run not yet seen.
 function shownStatus(a) {
   const o = opened.get(a.id);
   const hs = windowed(a) && o && o.hs;
   if (!hs) return a.shown;
   const s = look(hs.status).state;
-  return s === "idle" && a.shown === "finished" ? "finished" : s;
+  if (s === "idle") return a.shown === "finished" ? "finished" : s;
+  return s === "running" || s === "waiting" || s === "starting" ? s : a.shown;
 }
 
 function money(v) {
