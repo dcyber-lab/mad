@@ -92,11 +92,14 @@ func TestOnOff(t *testing.T) {
 		_ = tmux.Run("kill-server")
 		tmux.Socket, deck.SelfCommand = old, oldSelf
 	})
+	calls := fakeTailscale(t, running)
+	ctx := context.Background()
+	if _, err := On(ctx); err == nil || !strings.Contains(err.Error(), "deck is not running") {
+		t.Errorf("on with no deck: %v", err)
+	}
 	if err := tmux.Run("new-session", "-d", "-s", tmux.PoolSession); err != nil {
 		t.Fatal(err)
 	}
-	calls := fakeTailscale(t, running)
-	ctx := context.Background()
 
 	if s := Get(ctx); s.On || s.Host != "box.tail1.ts.net" || s.URL != "" {
 		t.Errorf("before: %+v", s)

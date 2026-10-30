@@ -168,8 +168,8 @@ func Off(ctx context.Context) error {
 // ran something else (another mad, another name).
 func ensurePane(cmd string) error {
 	panes, err := tmux.ListPanes()
-	if err != nil {
-		return err
+	if err != nil || !tmux.HasSession(tmux.PoolSession) {
+		return errors.New("the deck is not running: open it first (mad)")
 	}
 	if p, ok := tmux.FindPane(panes, tmux.IDPhone); ok {
 		if had, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd"); had == cmd && !p.Dead {
