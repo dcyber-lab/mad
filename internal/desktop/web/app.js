@@ -4,7 +4,15 @@
 // (/api/live).
 "use strict";
 
-const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
+// The token: in the URL's fragment, else the one kept from it (a phone's
+// home screen opens the page without it). Out of sight once read.
+const token = (() => {
+  const t = new URLSearchParams(location.hash.slice(1)).get("token");
+  if (!t) return localStorageGet("mad.token") || "";
+  localStorageSet("mad.token", t);
+  history.replaceState(null, "", location.pathname + location.search);
+  return t;
+})();
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);

@@ -42,6 +42,7 @@ with dependencies pointing downwards in this list:
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
 | `internal/queue`     | Messages waiting for an agent's turn to end (the sidebar sends them) |
 | `internal/host`      | `mad host`: an agent run headless in its pane for the desktop window to draw (window mode) |
+| `internal/phone`     | `mad phone`: the window served to the user's phone over Tailscale (`tailscale serve`), its token and QR code |
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux config              |
 | `internal/live`      | `mad stream`: what agents write as they write it (an API proxy for claude and codex, an extension for pi) |
 | `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |

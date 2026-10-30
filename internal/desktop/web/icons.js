@@ -55,6 +55,7 @@ const ICONS = {
   "circledot": "<circle cx=\"12\" cy=\"12\" r=\"10\"/> <circle cx=\"12\" cy=\"12\" r=\"1\"/>",
   "circlecheck": "<path d=\"M21.801 10A10 10 0 1 1 17 3.335\"/> <path d=\"m9 11 3 3L22 4\"/>",
   "at": "<circle cx=\"12\" cy=\"12\" r=\"4\"/> <path d=\"M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8\"/>",
+  "phone": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/> <path d=\"M12 18h.01\"/>",
 };
 
 // icon returns icon name as an SVG element, sized by CSS (1em by default).

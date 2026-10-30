@@ -333,6 +333,25 @@ not followed.
 - Notifications still come from the deck, which counts the agent shown in
   the focused window as one you are looking at.
 
+### On your phone
+
+`mad phone on` (or the phone button at the foot of the window's sidebar)
+puts the window on your phone over [Tailscale](https://tailscale.com):
+the deck runs a server of its own for it, and `tailscale serve` passes it
+on to your tailnet over HTTPS (port 7443), with a certificate for this
+machine's name there. It prints a QR code to scan with the phone's
+camera; the phone has to be on the same tailnet. On the phone, Add to
+Home Screen keeps it at hand as an app.
+
+- Only your own devices reach it, and they need its token too, which is
+  in the QR code and kept in mad's state directory (`phone_token`), so a
+  phone that has it keeps working. Delete the file to shut such phones
+  out; the next `mad phone on` makes a new one.
+- It needs HTTPS certificates turned on in your tailnet (the Tailscale
+  admin console, DNS page). mad says so if they are off.
+- `mad phone off` closes the way in and stops the server; `mad phone`
+  shows how it stands, with the QR code again.
+
 ## Reading the sidebar
 
 An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
