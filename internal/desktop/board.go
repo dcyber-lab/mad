@@ -30,15 +30,11 @@ func statusesOf(snap Snapshot) map[string]string {
 	return statuses
 }
 
-// boardCards is the board as of snap, the agents' statuses as it has them.
-func boardCards(st *state.State, snap Snapshot) []bus.Card {
-	now := time.Now()
-	cards, err := bus.Board(st, statusesOf(snap), now)
-	if err != nil || cards == nil {
-		cards = []bus.Card{}
-	}
+// boardCards is the board as the page draws it today: bus.Board's cards,
+// and the pending skills and a spent budget as cards waiting for you.
+func boardCards(board []bus.Card, pending []skill.Pending, sp bus.SpendState, now time.Time) []bus.Card {
+	cards := append([]bus.Card{}, board...)
 	// A skill an agent saved waits for the person too.
-	pending, _ := skill.PendingList()
 	for _, p := range pending {
 		cards = append(cards, bus.Card{
 			Kind: "skill", Title: "/" + p.Name, Column: "waiting-you", Why: "approve",
@@ -46,7 +42,7 @@ func boardCards(st *state.State, snap Snapshot) []bus.Card {
 		})
 	}
 	// So does the day's budget for mad's own work, once spent.
-	if sp := snap.Spend; sp.Closed {
+	if sp.Closed {
 		age := time.Duration(0)
 		if !sp.ClosedAt.IsZero() {
 			age = now.Sub(sp.ClosedAt)
