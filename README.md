@@ -310,19 +310,25 @@ screens), its inbox item and the banner over its tab show all that the
 prompt says, with its options and Cancel (Esc); a tap presses that
 option's key in its pane, as you would there. The key goes only while
 the pane still shows that same prompt: one answered in the pane
-meanwhile, or changed, says it was handled already and nothing is sent.
-An option that lets something through is offered only beside the whole
-prompt (a row offers Review, which opens it as a card), and a prompt that
-cannot be read whole (a form of several questions, one taller than the
-screen) offers Open only: answer that one in the terminal deck.
+meanwhile says it was handled already, one another prompt replaced says
+it asks something else now, and nothing is sent. Whether a prompt asks
+leave or asks a question is its screen's to say, not what the agent
+last called: an option that lets something through is offered only
+beside the whole prompt (a row offers Review, which opens it as a card),
+and a prompt that cannot be read whole (a form of several questions, one
+taller than the screen) offers Open only: answer that one in the
+terminal deck.
 
 Interrupt (on a working agent's row and card, in its menu, and the send
 button while it works) stops what it is doing now, as `Esc` does in its
 TUI, run here or in the terminal deck: the turn ends, the agent stays up
-and waits for you. Put to sleep (its menu, `z` in the deck) ends its
-process to free memory, and a message resumes it where it left off; it
-is refused while a command runs under the agent, which it would cut
-short: interrupt it, or let it finish.
+and waits for you. It sends nothing while a prompt is on the agent's
+screen, even one its status does not show yet, as `Esc` would cancel
+that: answer it, or cancel it from its card. Put to sleep (its menu, `z`
+in the deck) ends its process to free memory, and a message resumes it
+where it left off, though not what it was asking you; it is refused
+while a command runs under the agent, which it would cut short:
+interrupt it, or let it finish.
 
 An agent its TUI runs streams in as it writes too: the deck runs
 `mad stream` next to the agents and starts them through it, claude with
