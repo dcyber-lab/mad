@@ -129,6 +129,15 @@ final class LocalServerTests: XCTestCase {
         XCTAssertFalse(l.isRunning)
     }
 
+    func testTheLifelineIsNotInheritedByOtherChildren() async throws {
+        let fake = try script("echo http://127.0.0.1:43210/#token=feedbeef\ncat >/dev/null")
+        let launcher = ServerLauncher()
+        _ = try await launcher.start(binary: fake, arguments: [], timeout: 10)
+        defer { launcher.stop() }
+        let fd = try XCTUnwrap(launcher.lifelineDescriptor)
+        XCTAssertNotEqual(fcntl(fd, F_GETFD) & FD_CLOEXEC, 0, "the write end must close on exec")
+    }
+
     /// The app can be killed without a chance to stop its server: the server must go with it.
     func testTheServerExitsWhenTheAppIsKilled() throws {
         // A server that ends when its stdin does, as `mad desktop -exit-on-stdin-eof` does.

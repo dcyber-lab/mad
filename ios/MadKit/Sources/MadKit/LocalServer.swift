@@ -117,6 +117,10 @@ public final class ServerLauncher: @unchecked Sendable {
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice
         let life = Pipe()
+        // Pipe() leaves both ends inheritable. The write end must not reach any other child, or that
+        // child would keep the pipe open and the server would never see EOF after the app dies.
+        let flags = fcntl(life.fileHandleForWriting.fileDescriptor, F_GETFD)
+        _ = fcntl(life.fileHandleForWriting.fileDescriptor, F_SETFD, flags | FD_CLOEXEC)
         p.standardInput = life.fileHandleForReading
         do { try p.run() } catch { throw LocalServer.LaunchError.failed(error.localizedDescription) }
         // The child has its own copy of the read end; this one would keep the pipe open if it stayed.
@@ -172,6 +176,12 @@ public final class ServerLauncher: @unchecked Sendable {
             guard let nl = data.firstIndex(of: 10) else { return nil }
             return String(decoding: data[..<nl], as: UTF8.self)
         }
+    }
+
+    /// The lifeline's write end (for tests).
+    var lifelineDescriptor: Int32? {
+        lock.lock(); defer { lock.unlock() }
+        return lifeline?.fileDescriptor
     }
 
     /// The server's process id while it runs.
