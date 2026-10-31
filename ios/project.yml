@@ -26,8 +26,11 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSCameraUsageDescription: mad scans the QR code on your Mac to pair with it.
+    # No entitlements file on purpose: a free Apple ID cannot have Push
+    # Notifications (aps-environment), and asking for it makes signing fail.
     settings:
       base:
+        CODE_SIGN_STYLE: Automatic
         PRODUCT_BUNDLE_IDENTIFIER: $(MAD_BUNDLE_ID)
         PRODUCT_NAME: mad
         SWIFT_VERSION: "5.9"

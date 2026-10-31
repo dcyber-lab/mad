@@ -30,4 +30,10 @@ ios:
 	cd ios && xcodegen generate
 	xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
 
-.PHONY: build install test clean demo ios
+# Put the app on your iPhone with a free Apple ID: builds Release for the phone,
+# installs and launches it. DEVICE=<id|name> and TEAM=<id> pick a phone or a
+# team when there are several (see ios/README.md).
+ios-device:
+	TEAM='$(TEAM)' DEVICE='$(DEVICE)' ios/scripts/device.sh
+
+.PHONY: build install test clean demo ios ios-device
