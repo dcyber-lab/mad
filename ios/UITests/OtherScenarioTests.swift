@@ -13,20 +13,27 @@ final class EmptyTests: MadUITestCase {
 
 /// Twelve channels: rows with a red dot first, then newest first (`many-channels`).
 final class ManyChannelsTests: MadUITestCase {
-    func testRedDotRowsComeFirst() {
+    // By the fixture's times: the three with a dot (charlie -20m, foxtrot -40m, india -6h), then the rest, newest first.
+    private let order = ["charlie", "foxtrot", "india", "alpha", "hotel", "juliet", "bravo", "golf", "delta", "kilo", "lima", "echo"]
+
+    func testRedDotRowsComeFirstThenNewest() {
         launch()
         waitForHome()
-        settle(1)
+        // Charlie, foxtrot and india have a red dot; the rest follow by time.
+        let rows = order.map { web.buttons[$0] }
+        wait("not all twelve channels are listed") { rows.allSatisfy { $0.exists } }
         shot("many channels")
-        let rows = web.buttons.allElementsBoundByIndex.filter { $0.frame.height > 40 && $0.frame.minY > 150 }
-            .sorted { $0.frame.minY < $1.frame.minY }
-        XCTAssertGreaterThanOrEqual(rows.count, 6, "too few channel rows to look at")
-        let dots = element("needs you").allElementsBoundByIndex
-        let hasDot = rows.map { row in dots.contains { row.frame.intersects($0.frame) && $0.frame.width < 24 } }
-        var seenPlain = false
-        for (i, dot) in hasDot.enumerated() {
-            if !dot { seenPlain = true }
-            XCTAssertFalse(dot && seenPlain, "row \(i) (“\(rows[i].label)”) has a red dot but comes after a row without one")
+        for (name, row) in zip(order, rows) { XCTAssertTrue(row.exists, "no row named \(name)") }
+        let ys = rows.map { $0.frame.minY }
+        XCTAssertEqual(ys, ys.sorted(), "the order is not \(order.joined(separator: ", ")): \(zip(order, ys).map { "\($0) \(Int($1))" })")
+        func dots(_ row: XCUIElement) -> Int {
+            element("needs you").allElementsBoundByIndex.filter { row.frame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }.count
+        }
+        for name in ["charlie", "foxtrot", "india"] {
+            XCTAssertGreaterThanOrEqual(dots(web.buttons[name]), 1, "the \(name) row has no red dot")
+        }
+        for name in order.dropFirst(3) {
+            XCTAssertEqual(dots(web.buttons[name]), 0, "the \(name) row has a red dot it should not")
         }
     }
 }

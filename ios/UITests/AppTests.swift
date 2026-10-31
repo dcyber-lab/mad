@@ -13,14 +13,12 @@ final class AppTests: MadUITestCase {
         let close = app.buttons["关闭"].firstMatch
         XCTAssertTrue(close.exists, "the banner has no ✕")
         close.tap()
-        settle()
-        XCTAssertFalse(elements(containing: "这个版本").firstMatch.exists, "the banner stayed after ✕")
+        waitUntilGone(elements(containing: "这个版本").firstMatch, "the banner stayed after ✕")
         shot("banner put away")
 
         // Put away for the day: it stays away when the Mac opens again.
         relaunch(extra: ["-profileHoursLeft", "30"])
-        waitForHome()
-        settle()
+        waitForHome() // the page is up, and the banner is decided when the Mac opens, before that
         XCTAssertFalse(elements(containing: "这个版本").firstMatch.exists, "the banner came back the same day")
     }
 

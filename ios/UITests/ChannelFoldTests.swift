@@ -15,20 +15,18 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no “fold” row to open")
         row.tap()
         XCTAssertTrue(element("发消息给 fold").firstMatch.waitForExistence(timeout: 10), "the channel did not open (no composer)")
-        settle(1)
+        wait("the channel's messages did not come") { self.showMore.count == 2 }
     }
 
     func testHandoffAndDoneAreFoldedAndShowMoreExpandsThenShowLessFolds() {
         XCTAssertEqual(showMore.count, 2, "the handoff and the done report should each be folded: \(showMore.count) “Show more”")
         shot("folded")
         showMore.firstMatch.tap()
-        settle()
-        XCTAssertGreaterThanOrEqual(showLess.count, 1, "“Show less” did not appear after Show more")
+        wait("“Show less” did not appear after Show more") { self.showLess.count >= 1 }
         XCTAssertEqual(showMore.count, 1, "Show more should have expanded just that one")
         shot("one expanded")
         showLess.firstMatch.tap()
-        settle()
-        XCTAssertEqual(showMore.count, 2, "Show less did not fold it again")
+        wait("Show less did not fold it again") { self.showMore.count == 2 }
         XCTAssertEqual(showLess.count, 0)
     }
 
@@ -43,24 +41,19 @@ final class ChannelFoldTests: MadUITestCase {
     }
 
     func testPicturesShowAndATapOpensTheLightbox() {
-        // The pictures are not in the accessibility tree (no alt text), so they are found
-        // by where they are: under the message that says “两张截图”.
-        let caption = element("两张截图：左边是修改前，右边是修改后。").firstMatch
-        XCTAssertTrue(caption.waitForExistence(timeout: 10), "no message with the two screenshots")
-        caption.tap() // brings it into view
-        settle(1)
-        shot("pictures")
-        let before = web.descendants(matching: .any).count
-        let spot = web.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 140, dy: caption.frame.maxY + 50))
-        spot.tap()
-        settle(1.5)
+        // Each picture is a button, "图片，来自 <sender>", holding an image with the same alt.
+        let pictures = web.buttons.matching(NSPredicate(format: "label == %@", "图片，来自 reviewer"))
+        XCTAssertTrue(pictures.firstMatch.waitForExistence(timeout: 10), "no picture button")
+        XCTAssertEqual(pictures.count, 2, "the message has two pictures, fx-before and fx-after")
+        let before = web.images.count
+        pictures.firstMatch.tap() // brings it into view and opens it
+        // The lightbox is one more image over the page (hittability cannot tell, so count them).
+        wait("tapping the picture did not open a lightbox (images: \(before), now \(web.images.count))") { self.web.images.count == before + 1 }
         shot("lightbox")
-        let after = web.descendants(matching: .any).count
-        XCTAssertNotEqual(before, after, "tapping the picture changed nothing: no lightbox")
-        // Close it with a tap on the backdrop, and the channel is back.
-        web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        settle()
-        XCTAssertTrue(element("发消息给 fold").firstMatch.waitForExistence(timeout: 5), "the lightbox did not close")
+        // A tap anywhere on the lightbox closes it, and the channel is back.
+        web.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.08)).tap()
+        wait("the lightbox did not close") { self.web.images.count == before }
+        shot("closed again")
     }
 
     func testALongURLDoesNotWidenThePage() {
@@ -78,7 +71,7 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(strip.label.hasSuffix("+2"), "the strip should say +2 for 8 members (6 shown): “\(strip.label)”")
         shot("member strip")
         strip.tap()
-        settle(1)
+        XCTAssertTrue(elements(containing: "tester", in: web).firstMatch.waitForExistence(timeout: 10), "the member list did not open")
         shot("members listed")
         // The list names all eight; four of them speak nowhere else in the channel.
         for name in ["architect", "builder", "reviewer", "designer", "tester", "docs", "ops", "kim"] {

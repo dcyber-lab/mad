@@ -25,6 +25,8 @@ class MadUITestCase: XCTestCase {
         if let run = testRun, run.totalFailureCount > 0, app != nil {
             shot("on failure")
         }
+        // The simulator is shared by every case: whatever a case did to it, it is upright again.
+        XCUIDevice.shared.orientation = .portrait
         super.tearDown()
     }
 
@@ -94,6 +96,21 @@ class MadUITestCase: XCTestCase {
         add(a)
     }
 
-    /// Sleeps a moment for an animation or a render to finish.
-    func settle(_ seconds: TimeInterval = 1) { Thread.sleep(forTimeInterval: seconds) }
+    /// Waits for a state itself, not for time: an expectation on `condition` that fails the test
+    /// with `message` if it does not hold within `timeout` seconds.
+    @discardableResult
+    func wait(_ message: @autoclosure () -> String, timeout: TimeInterval = 10, until condition: @escaping () -> Bool,
+              file: StaticString = #filePath, line: UInt = #line) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition() }, object: nil)
+        let ok = XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        if !ok { XCTFail(message(), file: file, line: line) }
+        return ok
+    }
+
+    /// Waits until `element` is gone.
+    func waitUntilGone(_ element: XCUIElement, _ message: @autoclosure () -> String, timeout: TimeInterval = 10,
+                       file: StaticString = #filePath, line: UInt = #line) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        if XCTWaiter().wait(for: [expectation], timeout: timeout) != .completed { XCTFail(message(), file: file, line: line) }
+    }
 }

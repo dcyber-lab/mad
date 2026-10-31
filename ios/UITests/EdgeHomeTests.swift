@@ -19,21 +19,19 @@ final class EdgeHomeTests: MadUITestCase {
         shot("long Mac name, ▾ stays")
     }
 
-    /// The red dots ("needs you", role img) lying over a row.
-    private func dots(over row: XCUIElement) -> Int {
-        element("needs you").allElementsBoundByIndex.filter { $0.frame.width < 30 && row.frame.intersects($0.frame) }.count
+    /// How many images named "needs you" lie in a row: the red dot, and the character or tile
+    /// when it says so too.
+    private func needsYouImages(in row: XCUIElement) -> Int {
+        element("needs you").allElementsBoundByIndex.filter { row.frame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }.count
     }
 
-    func testTheTeamRowsWithAnAtYouShowANeedsYouDotAndTheOthersDoNot() {
-        for name in ["ios", "five"] {
+    func testTheRowsWithAnAtYouShowANeedsYouDotAndTheOthersDoNot() {
+        // ios and five: one image, the dot (their tiles say "working", since a member works); the
+        // needs-you agent: two (the character says so, and the dot); the others: none.
+        for (name, want) in [("ios", 1), ("five", 1), ("给我绘制一个表格", 2), ("shots", 0), ("pair", 0), ("solo", 0)] {
             let row = element(name).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 10), "no row named \(name)")
-            XCTAssertGreaterThan(dots(over: row), 0, "the \(name) row has no “needs you” dot")
-        }
-        for name in ["shots", "pair", "solo"] {
-            let row = element(name).firstMatch
-            XCTAssertTrue(row.exists, "no row named \(name)")
-            XCTAssertEqual(dots(over: row), 0, "the \(name) row has a dot it should not")
+            XCTAssertEqual(needsYouImages(in: row), want, "the \(name) row has \(needsYouImages(in: row)) “needs you” image(s), expected \(want)")
         }
         shot("the rows with the red dot")
     }
@@ -84,9 +82,8 @@ final class EdgeHomeTests: MadUITestCase {
     func testSearchFindsTheTeamRow() {
         tap("搜索")
         app.typeText("builder")
-        settle()
-        XCTAssertTrue(element("ios").firstMatch.waitForExistence(timeout: 5), "searching “builder” did not find the ios team row")
-        XCTAssertFalse(element("solo").firstMatch.exists, "searching “builder” still lists the solo chat")
+        waitUntilGone(element("solo").firstMatch, "searching “builder” still lists the solo chat")
+        XCTAssertTrue(element("ios").firstMatch.exists, "searching “builder” did not find the ios team row")
         shot("search “builder” finds the team")
     }
 
@@ -109,11 +106,12 @@ final class EdgeHomeTests: MadUITestCase {
 
     func testLandscape() {
         XCUIDevice.shared.orientation = .landscapeLeft
-        settle(2)
+        // Upright again whatever happens below, so a failure cannot leave the shared simulator on its side.
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+        wait("the screen did not turn to landscape") { self.screenFrame.width > self.screenFrame.height }
         let caret = element("切换 Mac").firstMatch
         XCTAssertTrue(caret.waitForExistence(timeout: 10))
         XCTAssertTrue(screenFrame.contains(caret.frame), "▾ is off the screen in landscape")
         shot("landscape")
-        XCUIDevice.shared.orientation = .portrait
     }
 }
