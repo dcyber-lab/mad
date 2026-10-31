@@ -3,7 +3,7 @@ import SwiftUI
 #if DEBUG
 /// A model like the fixture's edge-home scenario (internal/desktop/fixture/testdata/edge-home.json):
 /// the long machine name, tiles of 1, 2, 3 and 5, "[图片]", an untitled agent, long CJK, emoji, a stopped
-/// agent, red dots.
+/// agent, red dots. HomeSampleTests checks it against that file, so it cannot drift.
 public enum SampleHome {
     static func m(_ id: String, _ name: String, _ state: CharacterState = .idle, _ preview: String = "") -> HomeMember {
         HomeMember(id: id, kind: "claude", state: state, name: name, preview: preview)
@@ -26,7 +26,7 @@ public enum SampleHome {
                         state: .working, needsYou: true, members: [arch, builder, reviewer]),
                 HomeRow(id: "solo", kind: .channel, name: "solo", preview: "notes: 好的", members: [notes]),
                 HomeRow(id: "pair", kind: .channel, name: "pair", preview: "长文本测试: 收到", state: .working, members: [work, cjk]),
-                HomeRow(id: "five", kind: .channel, name: "five", preview: "kim: 五个成员的群", members: [arch, builder, reviewer, work, need]),
+                HomeRow(id: "five", kind: .channel, name: "five", preview: "kim: 五个成员的群", needsYou: true, members: [arch, builder, reviewer, work, need]),
                 HomeRow(id: "shots", kind: .channel, name: "shots", preview: "🚀 发布助手: [图片]", members: [emoji]),
             ]),
             HomeSection(id: "mad", title: "mad", kind: .project(name: "mad"), rows: [

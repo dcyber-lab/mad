@@ -173,3 +173,90 @@ final class HomeModelTests: XCTestCase {
         XCTAssertFalse(HomeMenuItem.sidebar.flatMap { $0 }.contains(.switchMac))
     }
 }
+
+final class HomeAccessibilityTests: XCTestCase {
+    func label(_ r: HomeRow) -> String { r.accessibilityLabel }
+
+    func testWorkingAgentSaysItsStateOnce() {
+        let r = HomeRow(id: "a", name: "Sidebar", preview: "正在跑测试…", state: .working)
+        XCTAssertEqual(label(r), "Sidebar, 正在跑测试…, working")
+    }
+
+    func testNeedsYouAgentSaysItOnce() {
+        let r = HomeRow(id: "a", name: "表格", preview: "等你确认", state: .needsYou, needsYou: true)
+        XCTAssertEqual(label(r), "表格, 等你确认, needs you")
+    }
+
+    func testIdleChannelWithADotSaysNeedsYou() {
+        let r = HomeRow(id: "c", kind: .channel, name: "five", preview: "kim: hi", state: .idle, needsYou: true)
+        XCTAssertEqual(label(r), "five, kim: hi, needs you")
+    }
+
+    func testWorkingChannelWithADotSaysBoth() {
+        let r = HomeRow(id: "c", kind: .channel, name: "ios", preview: "a: b", state: .working, needsYou: true)
+        XCTAssertEqual(label(r), "ios, a: b, working, needs you")
+    }
+
+    func testStoppedAndIdle() {
+        XCTAssertEqual(label(HomeRow(id: "s", name: "Mad ideas", preview: "已停止", state: .stopped, dimmed: true)), "Mad ideas, 已停止, stopped")
+        XCTAssertEqual(label(HomeRow(id: "i", name: "notes")), "notes")
+    }
+}
+
+/// SampleHome must say what the fixture (internal/desktop/fixture/testdata/edge-home.json) says.
+final class HomeSampleTests: XCTestCase {
+    func fixture() throws -> [String: Any] {
+        // Tests/MadUITests/MadUITests.swift → the repo root is five levels up
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<5 { url.deleteLastPathComponent() }
+        let data = try Data(contentsOf: url.appendingPathComponent("internal/desktop/fixture/testdata/edge-home.json"))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])["deck"] as! [String: Any]
+    }
+
+    func state(_ shown: String) -> CharacterState {
+        switch shown {
+        case "running": .working
+        case "waiting": .needsYou
+        case "stopped": .stopped
+        default: .idle
+        }
+    }
+
+    func testAgentsAndChannelsMatchTheFixture() throws {
+        let deck = try fixture()
+        XCTAssertEqual(SampleHome.model.machine, deck["machine"] as? String)
+        let inbox = Set(((deck["inbox"] as! [String: Any])["items"] as! [[String: Any]]).compactMap { $0["agent"] as? String })
+        let rows = Dictionary(uniqueKeysWithValues: SampleHome.model.sections.flatMap(\.rows).map { ($0.id, $0) })
+
+        var seen = 0
+        for p in deck["projects"] as! [[String: Any]] {
+            for a in p["agents"] as! [[String: Any]] where a["team"] == nil { // a team's members live in its channel
+                let id = a["id"] as! String
+                let r = try XCTUnwrap(rows[id], "agent \(id)")
+                XCTAssertEqual(r.name, (a["name"] as? String) ?? (a["title"] as? String) ?? "", id)
+                XCTAssertEqual(r.preview, (a["last"] as? String) ?? "", id)
+                XCTAssertEqual(r.state, state(a["shown"] as! String), id)
+                XCTAssertEqual(r.needsYou, inbox.contains(id), "dot of \(id)")
+                XCTAssertEqual(r.dimmed, a["shown"] as? String == "stopped", id)
+                seen += 1
+            }
+        }
+        XCTAssertGreaterThan(seen, 5)
+
+        let agentRows = Dictionary(uniqueKeysWithValues: (deck["projects"] as! [[String: Any]])
+            .flatMap { $0["agents"] as! [[String: Any]] }.map { ($0["id"] as! String, $0) })
+        for c in deck["bus"] as! [[String: Any]] {
+            let id = c["id"] as! String
+            let r = try XCTUnwrap(rows[id], "channel \(id)")
+            let ids = (c["members"] as! [[String: Any]]).map { $0["id"] as! String }
+            XCTAssertEqual(r.kind, .channel)
+            XCTAssertEqual(r.preview, c["last_text"] as? String, id)
+            XCTAssertEqual(r.members.map(\.id), ids, id)
+            for m in r.members { XCTAssertEqual(m.state, state(agentRows[m.id]?["shown"] as? String ?? ""), "\(id)/\(m.id)") }
+            // the page's chanDot: a mention, an unread DM, or a member with an inbox item
+            let dot = (c["mention"] as? Bool) == true || ((c["dm"] != nil && !(c["dm"] is NSNull)) && c["unread"] != nil && !(c["unread"] is NSNull))
+                || ids.contains { inbox.contains($0) }
+            XCTAssertEqual(r.needsYou, dot, "dot of channel \(id)")
+        }
+    }
+}

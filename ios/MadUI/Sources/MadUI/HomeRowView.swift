@@ -31,7 +31,8 @@ struct HomeRowView: View {
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore) // one label, built by the row: the character's and the dot's own would repeat it
+        .accessibilityLabel(row.accessibilityLabel)
     }
 
     @ViewBuilder private var picture: some View {
