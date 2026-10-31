@@ -413,26 +413,49 @@ func (c *claude) setPermission(mode string) error {
 	c.h.mu.Lock()
 	was := c.h.st.Permission
 	c.h.mu.Unlock()
-	// Shown at once, before the request goes: claude's answer (modeAnswer,
-	// on the reader's goroutine) may come before this returns, and has
-	// the last word, a refusal undoing this.
+	// The choice and the request are recorded first: a system init
+	// (the reader's goroutine) that comes at any point after this finds
+	// the person's choice and keeps it, as it does when it comes before.
+	id := c.choose(mode, was)
+	if afterChosen != nil {
+		afterChosen()
+	}
+	// Then shown, before the request goes: claude's answer (modeAnswer)
+	// may come before this returns, and has the last word, a refusal
+	// undoing this.
 	c.h.update(func(s *State) { s.Permission = mode })
-	err := c.switchMode(mode, was)
+	err := c.requestMode(id, mode, was)
 	if err != nil {
 		c.h.update(func(s *State) { s.Permission = was })
 	}
 	return err
 }
 
+// afterChosen is called by setPermission once the choice is recorded and
+// before it is shown; tests deliver a system init there.
+var afterChosen func()
+
 // switchMode asks claude for mode, which stands as the person's choice
 // unless claude refuses; was is what it runs in meanwhile.
 func (c *claude) switchMode(mode, was string) error {
+	return c.requestMode(c.choose(mode, was), mode, was)
+}
+
+// choose records mode as the person's choice and the request to come, and
+// says the request's id.
+func (c *claude) choose(mode, was string) string {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.seq++
 	id := "mad-" + strconv.Itoa(c.seq)
 	c.modes[id] = modeAsk{mode, was}
 	c.chosen = mode
-	c.mu.Unlock()
+	return id
+}
+
+// requestMode sends the request choose recorded; it is undone if it can't
+// be sent.
+func (c *claude) requestMode(id, mode, was string) error {
 	err := c.write(map[string]any{"type": "control_request", "request_id": id,
 		"request": map[string]any{"subtype": "set_permission_mode", "mode": mode}})
 	if err != nil {
