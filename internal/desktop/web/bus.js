@@ -45,6 +45,10 @@ function channelsGroup(q) {
     g.append(hint);
   }
   for (const c of list) {
+    if (c.team && ptypeOn()) {
+      g.append(teamRow(c));
+      continue;
+    }
     const row = el("div", `chan${cv.open === c.id ? " sel" : ""}${c.unread ? " unread" : ""}${c.dm && !c.yours ? " theirs" : ""}`);
     row.title = c.topic || c.title;
     row.append(el("span", "ch", c.dm ? (c.yours ? "@" : "↔") : "#"),
@@ -55,6 +59,31 @@ function channelsGroup(q) {
     g.append(row);
   }
   return g;
+}
+
+// teamRow is a team and its channel as one row, on a phone: its members as
+// a stack of avatars (those that work move), its name, the unread badge, and
+// how its members stand in a word.
+function teamRow(c) {
+  const mem = (c.team.roles || []).map((r) => r.agent && agents.get(r.agent)).filter(Boolean);
+  const rank = (a) => ({ running: 0, waiting: 1 }[shownStatus(a)] ?? 2);
+  const stack = el("span", "tstack");
+  const shown = [...mem].sort((a, b) => rank(a) - rank(b)).slice(0, 3);
+  if (!shown.length) stack.append(el("span", "avatar", "#"));
+  for (const a of shown) stack.append(avatar(a));
+  const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
+  if (n("running")) stack.classList.add("s-running");
+  else if (n("waiting")) stack.classList.add("s-waiting");
+  const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
+  const right = [];
+  if (c.paused) right.push(el("span", "pill needs", "paused"));
+  else if (c.unread) right.push(el("span", `cnt${c.mention ? " at" : ""}`, c.mention ? `@${c.unread}` : String(c.unread)));
+  const r = row({
+    key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}${c.unread ? " unread" : ""}`,
+    lead: stack, name: c.team.name, line: parts.join(" · ") || "idle", right, onclick: () => openChannel(c.id),
+    title: c.topic || c.title,
+  });
+  return r;
 }
 
 // openChannel shows channel id (or a DM of the person's, made with its
