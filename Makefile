@@ -22,4 +22,11 @@ demo:
 	python3 docs/demo/record.py $(DEMO_DIR)
 	python3 docs/demo/render.py $(DEMO_DIR)
 
-.PHONY: build install test clean demo
+# The iOS app: test the core package, generate the Xcode project, build for
+# the simulator unsigned (see ios/README.md).
+ios:
+	cd ios/MadKit && swift test
+	cd ios && xcodegen generate
+	xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+.PHONY: build install test clean demo ios

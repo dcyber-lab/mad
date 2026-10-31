@@ -1,0 +1,7 @@
+// Defaults that build unsigned for the simulator. Local.xcconfig (gitignored)
+// sets your own team and bundle id, e.g.:
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   MAD_BUNDLE_ID = com.example.mad
+MAD_BUNDLE_ID = dev.mad.ios
+DEVELOPMENT_TEAM =
+#include? "Local.xcconfig"

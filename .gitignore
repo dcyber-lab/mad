@@ -15,3 +15,5 @@ coverage.*
 
 # python (docs/demo)
 __pycache__/
+
+# ios (see ios/.gitignore)

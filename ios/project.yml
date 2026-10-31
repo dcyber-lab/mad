@@ -1,0 +1,38 @@
+name: mad
+options:
+  bundleIdPrefix: dev.mad
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+packages:
+  MadKit:
+    path: MadKit
+targets:
+  mad:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: MadKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: mad
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSCameraUsageDescription: mad scans the QR code on your Mac to pair with it.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(MAD_BUNDLE_ID)
+        PRODUCT_NAME: mad
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  mad:
+    build:
+      targets:
+        mad: all
