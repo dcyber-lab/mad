@@ -11,7 +11,10 @@ struct MacsView: View {
     @State private var problem: String?
     @State private var path: [Mac] = []
     @State private var retrying: Set<UUID> = []
-    @State private var expiry: String? = MacsView.expiryNotice()
+    @Environment(\.scenePhase) private var scenePhase
+    /// Looked at again whenever the app appears or comes back, so a build left
+    /// running that crosses the 2-day line shows its note.
+    @State private var expiry: String?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -61,7 +64,13 @@ struct MacsView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            .onAppear(perform: launchHooks)
+            .onAppear {
+                expiry = MacsView.expiryNotice()
+                launchHooks()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { expiry = MacsView.expiryNotice() }
+            }
             .navigationDestination(for: Mac.self) { MacView(mac: $0) }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

@@ -136,7 +136,7 @@ DEVJSON=$(mktemp -t madios)
 trap 'rm -f "$DEVJSON"' EXIT
 xcrun devicectl list devices --json-output "$DEVJSON" >/dev/null 2>&1 || die "Could not list devices." "Open Xcode once and accept its license, then try again."
 
-# One line per iPhone that can be reached: id, name, developer mode.
+# One line per iPhone that can be reached: id, name, developer mode, UDID.
 PHONES=$(WANT="${DEVICE:-}" python3 -I - "$DEVJSON" <<'PY'
 import json, os, sys
 want = os.environ.get("WANT", "")
@@ -154,7 +154,7 @@ for d in devices:
             continue
     elif cp.get("pairingState") != "paired" or cp.get("tunnelState") == "unavailable":
         continue
-    print(f"{ident}\t{name}\t{dp.get('developerModeStatus', '')}")
+    print(f"{ident}\t{name}\t{dp.get('developerModeStatus', '')}\t{udid}")
 PY
 )
 COUNT=$(printf '%s' "$PHONES" | grep -c .)
@@ -173,6 +173,7 @@ elif [ "$COUNT" -gt 1 ]; then
 fi
 PHONE_ID=$(printf '%s' "$PHONES" | cut -f1)
 PHONE_NAME=$(printf '%s' "$PHONES" | cut -f2)
+PHONE_UDID=$(printf '%s' "$PHONES" | cut -f4)
 if [ "$(printf '%s' "$PHONES" | cut -f3)" = "disabled" ]; then
     die "Developer Mode is off on $PHONE_NAME." \
         "On the iPhone: Settings > Privacy & Security > Developer Mode, turn it on, and let it restart." \
@@ -184,9 +185,10 @@ echo "iPhone: $PHONE_NAME   team: $TEAM_ID   bundle id: $BUNDLE"
 
 (cd ios && xcodegen generate -q) || die "xcodegen failed."
 mkdir -p ios/build
-echo "Building (the first build with a new Apple ID makes the provisioning profile)..."
+echo "Building for $PHONE_NAME (the first build makes the provisioning profile and registers the phone with your team)..."
 if ! xcodebuild -project ios/mad.xcodeproj -scheme mad -configuration Release \
-        -destination 'generic/platform=iOS' -derivedDataPath "$OUT" -allowProvisioningUpdates \
+        -destination "id=${PHONE_UDID:-$PHONE_ID}" -derivedDataPath "$OUT" \
+        -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
         DEVELOPMENT_TEAM="$TEAM_ID" MAD_BUNDLE_ID="$BUNDLE" build > "$LOG" 2>&1; then
     echo "make ios-device: the build failed. The log is $LOG." >&2
     if grep -qiE "No Accounts?[: ]|No Account for Team|Add (a new|your) account|not signed in" "$LOG"; then
