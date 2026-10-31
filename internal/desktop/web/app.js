@@ -650,9 +650,7 @@ function drawQueue(fresh) {
   $("#attach").hidden = !takesImages();
   if (cv.open) {
     // A channel: what is typed is posted, as you.
-    $("#qinput").placeholder = document.documentElement.classList.contains("ptype")
-      ? "发消息给 " + chanTitle(cv.open).replace(/^[#@]/, "")
-      : "Message " + chanTitle(cv.open) + ", @ to wake an agent";
+    $("#qinput").placeholder = "发消息给 " + chanTitle(cv.open).replace(/^[#@]/, "");
     $("#qitems").replaceChildren();
     $("#qitems").dataset.key = "";
     $("#qpause").hidden = true;
@@ -1349,9 +1347,7 @@ function drawTitle() {
     if (cv.open && document.documentElement.classList.contains("ptype")) {
       // The channel's tile and its name, as the phone's chat head has them
       // (back, tile, name, the members at the right).
-      const c = busChannel(cv.open);
-      t.replaceChildren(avatar({ kind: "channel", icon: "#", id: cv.open, members: ((c && c.members) || []).map((m) => m.id) }, true),
-        el("span", "pt", chanTitle(cv.open).replace(/^[#@]/, "")));
+      t.replaceChildren(chanTile(cv.open), el("span", "pt", chanTitle(cv.open).replace(/^[#@]/, "")));
       t.className = "chan";
       return;
     }

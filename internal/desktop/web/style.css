@@ -903,7 +903,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .chat .log { padding: 18px 14px 28px; }
   #chanlog { padding: 16px 14px 28px; }
   #chanhead { padding: 8px 14px; }
-  #chanhead .cwhat b { display: none; }
+  #chanhead .cttl > .avatar, #chanhead .cttl > b { display: none; }
   #chanhead .chmore { display: none; }
   #chanhead.bare { display: none; }
   .msg { font-size: 15.5px; }
@@ -1620,30 +1620,33 @@ html:not(.ptype) #ptitle .ps { overflow: hidden; white-space: nowrap; text-overf
 html.ptype .bsum .bsumt { font-size: 16px; }
 html.ptype .bmore, html.ptype .bless { font-size: 15px; min-height: 36px; padding: 6px 0; }
 
-/* The phone's chat, as the approved mockup draws it (screen ②): grey bubbles
-   for the agents, blue for the person, the sender's name over its bubble. */
-html.ptype { --bubble: #f0f0f3; --blue: #1f6bff; }
-:root[data-theme="dark"].ptype { --bubble: #232327; }
-@media (prefers-color-scheme: dark) { :root.ptype:not([data-theme="light"]) { --bubble: #232327; } }
+/* A channel as the approved mockup draws it (screen ② of the phone's, the right pane of the
+   desktop's): grey bubbles for the agents, blue for the person, the sender's name over its
+   bubble, the channel's tile and name and the members' strip in its head, a column of 720px. */
+:root { --bubble: #f0f0f3; --blue: #1f6bff; }
+:root[data-theme="dark"] { --bubble: #232327; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bubble: #232327; } }
+#chanlog { max-width: 720px; }
+#chanhead .cttl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#chanhead .cttl .muted { font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#chanhead .cwho { padding: 3px 8px; background: var(--card); border-radius: 999px; }
+.bmsg { align-items: flex-end; gap: 8px; }
+.bmsg .bcol { flex: 1; min-width: 0; max-width: 92%; display: flex; flex-direction: column; }
+.bmsg .bcol .bmeta { margin: 0 0 2px 4px; min-height: 0; color: var(--text-2); }
+.bmsg .bcol .bmeta b { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.bmsg .bbody { flex: none; padding: 9px 14px; border-radius: 18px; border: 0; background: var(--bubble); }
+.bmsg.card .bbody, .bmsg.card.fold:not(.open) .bbody { padding: 9px 14px; border: 0; background: var(--bubble); }
+.bmsg.mine { justify-content: flex-end; }
+.bmsg.mine .bcol { align-items: flex-end; max-width: 78%; flex: none; }
+.bmsg.mine .bcol .bmeta { display: none; }
+.bmsg.mine .bbody { background: var(--blue); color: #fff; max-width: 100%; border-radius: 20px; }
+.bmsg.mine .bbody a, .bmsg.mine .bbody .md * { color: inherit; }
+.bmsg.mine .bcount { color: rgba(255, 255, 255, 0.85); }
+.bmsg .bcol > .brcpt { margin: 2px 4px 0; }
+.bmsg:not(.mine) .bcol { align-items: flex-start; }
+.bmsg:not(.mine) .bcol > .bmeta, .bmsg.fold .bbody, .bmsg.card .bbody { width: 100%; }
+.bmsg .bbody .md > :first-child { margin-top: 0; }
+.bmsg .bbody .md > :last-child { margin-bottom: 0; }
 html.ptype #ptitle.chan { display: flex; align-items: center; gap: 8px; }
 html.ptype #ptitle.chan .pt { font-weight: 700; }
-html.ptype #bar .cwho { flex: none; background: var(--card); border: 0; border-radius: 999px; padding: 3px 6px; margin-left: auto; display: flex; gap: 2px; align-items: center; cursor: pointer; }
-html.ptype #bar .cwho .avatar { pointer-events: none; }
-html.ptype .bmsg { align-items: flex-end; gap: 8px; }
-html.ptype .bmsg .bcol { flex: 1; min-width: 0; max-width: 92%; display: flex; flex-direction: column; }
-html.ptype .bmsg .bcol .bmeta { margin: 0 0 2px 4px; min-height: 0; color: var(--text-2); }
-html.ptype .bmsg .bcol .bmeta b { font-size: 13px; font-weight: 500; color: var(--text-2); }
-html.ptype .bmsg .bbody { flex: none; padding: 9px 13px; border-radius: 18px; border: 0; background: var(--bubble); }
-html.ptype .bmsg.card .bbody, html.ptype .bmsg.card.fold:not(.open) .bbody { padding: 9px 13px; border: 0; background: var(--bubble); }
-html.ptype .bmsg.mine { justify-content: flex-end; }
-html.ptype .bmsg.mine .bcol { align-items: flex-end; max-width: 80%; flex: none; }
-html.ptype .bmsg.mine .bcol .bmeta { display: none; }
-html.ptype .bmsg.mine .bbody { background: var(--blue); color: #fff; max-width: 100%; border-radius: 20px; }
-html.ptype .bmsg.mine .bbody a, html.ptype .bmsg.mine .bbody .md * { color: inherit; }
-html.ptype .bmsg .bsum { min-width: 0; }
-html.ptype .bmsg.fold .bbody { width: 100%; }
-html.ptype .bmsg.mine .bcount { color: rgba(255, 255, 255, 0.85); }
-html.ptype .bmsg .bcol > .brcpt { margin: 2px 4px 0; }
-html.ptype .bmsg .bbody .md > :first-child { margin-top: 0; }
-html.ptype .bmsg .bbody .md > :last-child { margin-bottom: 0; }
-html.ptype .bmsg .bbody .btext { line-height: 1.5; }
+html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; align-items: center; cursor: pointer; }
