@@ -1448,7 +1448,10 @@ html.ptype .row .t1 .nm { font-weight: 600; }
 html.ptype .row .t2 { font-size: 14px; line-height: 20px; }
 html.ptype .row .t2 .tgt { font-size: 13px; }
 html.ptype .row .btn.sm { font-size: 14px; }
+/* the role and the cost are in the open agent's header (drawTitle) */
 html.ptype .row .tag, html.ptype .row .meta, html.ptype .row .t1 .ctx { display: none; }
+#ptitle .pmeta { display: none; }
+html.ptype #ptitle .pmeta { display: inline; }
 html.ptype .row.fold .t1 { font-size: 14px; }
 html.ptype .ghead { font-size: 13px; padding: 16px 12px 6px; letter-spacing: 0.02em; }
 html.ptype .g-needs .ghead { padding: 16px 12px 6px; }
@@ -1459,7 +1462,6 @@ html.ptype .project > .head { padding: 12px 12px 8px; }
 html.ptype .project > .head b { font-size: 15px; }
 html.ptype .project > .head .branch { display: none; }
 html.ptype .rollup { font-size: 13px; }
-html.ptype .teamhead .th2 { display: none; }
 html.ptype .chan { min-height: 52px; padding: 10px 12px; font-size: 16px; }
 html.ptype .chan .cnt { font-size: 13px; }
 html.ptype .chan.none { font-size: 14px; }

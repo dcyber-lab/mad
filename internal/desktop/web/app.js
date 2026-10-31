@@ -1437,6 +1437,9 @@ function drawTitle() {
   const sub = el("span", "ps");
   sub.append(...(a.tool ? [el("span", "word", look(shownStatus(a)).word), " · "] : []), ...activityLine(a).flat());
   sub.title = `${a.kind} · ${a.project.name}`;
+  // What the phone's rows leave off: the role where the name does not say it, and the cost.
+  const extra = [a.role && a.role !== label(a) ? a.role : "", money(a.cost)].filter(Boolean);
+  if (extra.length) sub.prepend(el("span", "pmeta", `${extra.join(" · ")} · `));
   what.append(el("span", "pt", label(a)), sub);
   t.replaceChildren(avatar(a, true), what);
   t.className = `s-${shownStatus(a)}`;
