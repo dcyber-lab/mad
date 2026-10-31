@@ -378,10 +378,12 @@ machine's name there. It prints a QR code to scan with the phone's
 camera; the phone has to be on the same tailnet. On the phone, Add to
 Home Screen keeps it at hand as an app.
 
-- Only your own devices reach it, and they need its token too, which is
-  in the QR code and kept in mad's state directory (`phone_token`), so a
-  phone that has it keeps working. Delete the file to shut such phones
-  out; the next `mad phone on` makes a new one.
+- Only your own devices reach it over Tailscale, and they need a token
+  too. A phone gets its own by pairing (below). The master token, kept in
+  mad's state directory (`phone_token`), is what the local window uses and
+  what phones paired before devices still hold. To shut those out, run
+  `mad phone off`, delete the file, then `mad phone on`: the running
+  server keeps the old token until it is stopped.
 - It needs HTTPS certificates turned on in your tailnet (the Tailscale
   admin console, DNS page). mad says so if they are off.
 - While it serves the phone, a Mac stays awake (`caffeinate -i`): its
@@ -390,22 +392,29 @@ Home Screen keeps it at hand as an app.
 - Opening the deck (a rebuilt mad, say) starts its server again on the
   mad it was opened with.
 - A second way in is a Cloudflare Tunnel, to reach the Mac from anywhere
-  (`brew install cloudflared`): `mad phone on --cloudflare` needs no
+  (`brew install cloudflared`). `mad phone on --cloudflare` needs no
   account and gets a new `*.trycloudflare.com` name each time the tunnel
-  starts (it keeps it across a rebuilt mad); `mad phone on --cloudflare
-  --tunnel <name> --hostname <host>` uses a tunnel of your own, made with
-  `cloudflared tunnel login`, `create` and `route dns`. `mad phone on
-  --tailscale` goes back. The choice is kept: a plain `mad phone on` and
-  the window's button use the last one. Anyone with the address can reach
-  the server, and the token is what keeps them out: share the QR code
-  with care.
-- The QR code holds a pairing code (`#pair=`), not the token: good for
-  one use within 10 minutes, traded for a token of that phone's own. `mad
-  phone devices` lists the paired phones and `mad phone revoke <id|name>`
-  cuts one off (what it had open closes within seconds), as the Remove
-  button in the window's phone dialog does. Through a Cloudflare Tunnel
-  only paired phones get in; the master token works on this Mac and over
-  Tailscale for phones that had it before.
+  starts (it keeps it across a rebuilt mad). `mad phone on --cloudflare
+  --tunnel <name> --hostname <host>` uses a tunnel of your own, made
+  beforehand with `cloudflared tunnel login`, `cloudflared tunnel create`
+  and `cloudflared tunnel route dns`. `mad phone on --tailscale` goes
+  back. The choice is kept: a plain `mad phone on` and the window's
+  button use the last one.
+- How it is kept safe, in plain words:
+  - The QR code holds a pairing code (`#pair=`), not a token. It works
+    once and only within 10 minutes. The phone trades it for a token of
+    its own; mad keeps only a hash of that token.
+  - Each paired phone can be cut off alone. `mad phone devices` lists
+    them and `mad phone revoke <id|name>` cuts one off (what it had open
+    closes within seconds), as the Remove button in the window's phone
+    dialog does.
+  - Through a Cloudflare Tunnel only paired phones get in: the master
+    token is refused there. It still works on this Mac and over
+    Tailscale.
+  - A tunnel is a public address, and behind the token it is a shell on
+    this Mac. Nothing turns it on but you (`mad phone on`, or the
+    window's phone button), and `mad phone off` closes it. Share the QR
+    code with care until it is used or ten minutes pass.
 - `mad phone off` closes the way in and stops the server and the tunnel; `mad phone`
   shows how it stands, with the QR code again.
 - The bell at the foot of the sidebar turns on notifications for that
@@ -416,6 +425,51 @@ Home Screen keeps it at hand as an app.
   (Apple's, Google's), encrypted for that browser alone (Web Push,
   RFC 8291) and signed with a key of mad's (`push_vapid.json` in its
   state directory).
+
+### The iPhone app
+
+Besides the page in Safari, mad has a native iPhone app (iOS 17 or later),
+in [ios/](ios). It is not on the App Store: you build it yourself.
+
+- **Pairing.** Scan the QR code `mad phone` shows, or paste its link.
+  The app trades the pairing code for a token of its own and keeps it in
+  the iPhone's Keychain. It can hold several Macs, each named after the
+  Mac's own name (rename one by a long press), and a pairing the network
+  cut short can be retried.
+- **Needs you.** What waits on you, as native cards: a permission, a
+  question, a message to answer, a skill to approve, the budget. Each card
+  has the buttons the deck gives it (Allow, Deny, a reply of your own),
+  the tab shows how many wait, and the list refreshes every few seconds.
+- **Deck.** The full window, the same page as in Safari, for everything
+  else: chat, the board, the sidebar.
+
+To build it for the simulator:
+
+```sh
+brew install xcodegen
+make ios         # swift test, xcodegen, and a simulator build
+```
+
+`make ios` builds the app but does not install or launch it: open
+`ios/mad.xcodeproj` in Xcode and run it on a simulator or your phone.
+
+It needs Xcode with the iOS platform installed. `cd ios && xcodegen
+generate && open mad.xcodeproj` opens it in Xcode.
+
+To put it on your iPhone:
+
+1. In Xcode, Settings > Accounts, add your Apple ID.
+2. Copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig`
+   and set `DEVELOPMENT_TEAM` (your team's ID) and `MAD_BUNDLE_ID` (a
+   bundle id of your own, such as `com.example.mad`). The file is not
+   committed.
+3. On the iPhone, turn on Developer Mode (Settings > Privacy & Security),
+   connect it, pick it as the run destination in Xcode and run.
+
+An app installed with a free Apple ID stops opening after 7 days; run it
+from Xcode again to renew it. A paid developer account lasts a year.
+The way in is the one from `mad phone on`: Tailscale (the iPhone needs the
+Tailscale app on the same tailnet) or a Cloudflare Tunnel.
 
 ## Reading the sidebar
 
