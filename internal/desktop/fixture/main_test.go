@@ -111,6 +111,27 @@ func TestMessagesAndImages(t *testing.T) {
 	}
 }
 
+// The channel-fold scenario's done message says "PR" right before the link to the pull
+// request, which the page's folded line must not turn into "PR PR #88" (ChannelFoldTests).
+func TestFoldDoneMessageHasPRBeforeTheLink(t *testing.T) {
+	_, b := get(t, "channel-fold", "/api/bus/messages?channel=fold&since=0")
+	var m struct {
+		Messages []struct{ Kind, Text string }
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range m.Messages {
+		if x.Kind == "done" {
+			if !strings.Contains(x.Text, "PR https://github.com/dcyber-lab/mad/pull/88 ") {
+				t.Errorf("the done message no longer has PR before a pull request link: %q", x.Text)
+			}
+			return
+		}
+	}
+	t.Error("no done message in channel-fold")
+}
+
 func TestPairing(t *testing.T) {
 	h, err := newHandler("pairing", "")
 	if err != nil {
