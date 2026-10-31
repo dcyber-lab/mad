@@ -10,7 +10,7 @@ shows (or pasting its link), check the connection, and open the deck page.
 
 ## Build
 
-    make ios          # swift test, xcodegen generate, unsigned simulator build
+    make ios          # swift test, xcodegen generate, simulator build (ad hoc signed: an unsigned app cannot use the Keychain and forgets its pairings)
 
 Needs Xcode with the iOS platform installed (Xcode > Settings > Components) and
 `brew install xcodegen`. To open it: `cd ios && xcodegen generate && open mad.xcodeproj`.

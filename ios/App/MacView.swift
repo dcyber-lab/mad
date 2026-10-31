@@ -6,9 +6,17 @@ import SwiftUI
 struct MacView: View {
     @StateObject private var model: MacModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab: Tab = .needs
+    @State private var tab: Tab = MacView.firstTab
 
     enum Tab { case needs, deck }
+
+    /// Debug builds only: `-startTab deck` opens on the Deck tab.
+    private static var firstTab: Tab {
+        #if DEBUG
+        if UserDefaults.standard.string(forKey: "startTab") == "deck" { return .deck }
+        #endif
+        return .needs
+    }
 
     init(mac: Mac) { _model = StateObject(wrappedValue: MacModel(mac: mac)) }
 
