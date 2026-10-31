@@ -207,7 +207,7 @@ async function saveAsSkill(a) {
   try {
     if (windowed(a)) await sendTo(a.id, SAVE_AS_SKILL, []);
     else {
-      const r = await fetch(`/api/queue?${new URLSearchParams({ token, id: a.id })}`, { method: "POST", body: SAVE_AS_SKILL });
+      const r = await authFetch(`/api/queue?${new URLSearchParams({ id: a.id })}`, { method: "POST", body: SAVE_AS_SKILL });
       if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
     }
     toast(`Asked ${label(a)} to save a skill: you approve it under Skills`);

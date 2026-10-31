@@ -137,7 +137,7 @@ async function api(method, path, params = {}, body) {
     opts.body = JSON.stringify(body);
     opts.headers = { "Content-Type": "application/json" };
   }
-  const r = await fetch(`${path}?${new URLSearchParams({ token, ...params })}`, opts);
+  const r = await authFetch(`${path}?${new URLSearchParams(params)}`, opts);
   const text = await r.text();
   if (!r.ok) throw new Error(text.trim() || r.statusText);
   return text ? JSON.parse(text) : null;
@@ -335,7 +335,7 @@ const modelLists = new Map(); // kind → its models, once asked
 function knownModels(kind) {
   const got = modelLists.get(kind);
   if (got) return Array.isArray(got) ? got : savedModels(kind);
-  modelLists.set(kind, fetch(`/api/models?${new URLSearchParams({ token, kind, project: nc.project || "" })}`)
+  modelLists.set(kind, authFetch(`/api/models?${new URLSearchParams({ kind, project: nc.project || "" })}`)
     .then((r) => (r.ok ? r.json() : []))
     .catch(() => [])
     .then((list) => {
@@ -387,7 +387,7 @@ async function newSubmit(text) {
 
 // sendTo gives agent id run here a message, images and all.
 async function sendTo(id, text, imgs) {
-  const r = await fetch(`/api/send?${new URLSearchParams({ token, id })}`, {
+  const r = await authFetch(`/api/send?${new URLSearchParams({ id })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, images: (imgs || []).map(({ mime, data }) => ({ mime, data })) }),
@@ -900,7 +900,7 @@ async function phoneDialog() {
   } else {
     const img = el("img", "qr");
     img.alt = "QR code";
-    img.src = `/api/phone/qr?${new URLSearchParams({ token, t: Date.now() })}`;
+    loadImage(img, `/api/phone/qr?${new URLSearchParams({ t: Date.now() })}`);
     const url = el("div", "purl");
     const copy = el("button", "icon-btn");
     copy.type = "button";

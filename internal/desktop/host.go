@@ -201,7 +201,7 @@ var hostOff = []byte(`{"type":"state","state":{"status":"off","requests":[]}}`)
 // so, and the host is looked for again each second.
 func (s *Server) hostWS(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.Origins})
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.Origins, Subprotocols: wsSubprotocols})
 	if err != nil {
 		return
 	}

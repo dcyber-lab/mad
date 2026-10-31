@@ -55,7 +55,7 @@ func (s *Server) window(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no id", http.StatusBadRequest)
 		return
 	}
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.Origins})
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.Origins, Subprotocols: wsSubprotocols})
 	if err != nil {
 		return
 	}

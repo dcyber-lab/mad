@@ -149,9 +149,13 @@ func (s *Server) Handler() http.Handler {
 // revoked meanwhile has its requests in flight cancelled.
 func (s *Server) auth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := r.URL.Query().Get("token")
-		if b, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
-			got = b
+		got, inURL := requestToken(r)
+		// A token in a URL is for direct local requests (old pages, the
+		// window, the app's first way): through a tunnel it would be in
+		// its logs, so there it is refused, as the master token is.
+		if inURL && viaCloudflare(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) == 1 && !viaCloudflare(r) {
 			h.ServeHTTP(w, r)
@@ -186,6 +190,28 @@ func deviceOf(r *http.Request) string {
 	return id
 }
 
+// requestToken is the token a request carries, and says whether it came
+// in the URL: an Authorization: Bearer header first, else the websocket
+// subprotocol "mad.token.<token>" (a browser can't set headers there; the
+// server selects "mad" and never echoes it), else ?token=.
+func requestToken(r *http.Request) (token string, inURL bool) {
+	if b, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		return b, false
+	}
+	for _, h := range r.Header.Values("Sec-WebSocket-Protocol") {
+		for _, p := range strings.Split(h, ",") {
+			if t, ok := strings.CutPrefix(strings.TrimSpace(p), "mad.token."); ok {
+				return t, false
+			}
+		}
+	}
+	return r.URL.Query().Get("token"), true
+}
+
+// wsSubprotocols are what a websocket accept selects from: "mad" only, so
+// the subprotocol that carries the token is not echoed back.
+var wsSubprotocols = []string{"mad"}
+
 // viaCloudflare says whether the request came through a Cloudflare
 // Tunnel: cloudflared's edge adds these, and a caller can only add them
 // to be refused.
@@ -217,7 +243,7 @@ func watchDevice(ctx context.Context, cancel context.CancelFunc, token string, t
 // csp lets the page run its own scripts and nothing else. It draws what
 // agents wrote, and a script slipped in there would have the token: a
 // shell on this machine. Its markdown is sanitized too (app.js).
-const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
 	"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // headers: nothing is cached, and the page is held to csp.
