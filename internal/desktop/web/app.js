@@ -270,8 +270,22 @@ function drawList() {
     .map((id) => agents.get(id)).filter(Boolean);
   // Drawn above, so not again in their projects: what works, what
   // finished, and what is blocked on you (its row is its item).
-  const placed = new Set([...work.map((a) => a.id), ...fin.map((it) => it.agent)]);
-  for (const it of needs) if (it.blocks && it.agent) placed.add(it.agent);
+  // On a phone Working has no group (the avatar moves), and in the app
+  // neither have Needs you and Finished: those agents stay in their rows.
+  const pt = ptypeOn(), inApp = pt && embed;
+  const placed = new Set();
+  if (!pt) work.forEach((a) => placed.add(a.id));
+  if (!inApp) {
+    fin.forEach((it) => placed.add(it.agent));
+    for (const it of needs) if (it.blocks && it.agent) placed.add(it.agent);
+  }
+  // A team with a channel is one row of Channels on a phone: its members are not listed again.
+  const teamed = new Set();
+  if (pt) {
+    for (const c of deck.bus || []) {
+      if (c.team) for (const r of c.team.roles || []) if (r.agent) teamed.add(r.agent);
+    }
+  }
 
   const nodes = [];
   drawChips(needs.length, work.length, fin.length, count);
@@ -281,7 +295,7 @@ function drawList() {
     nodes.push(p);
   }
 
-  const shownNeeds = needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
+  const shownNeeds = inApp ? [] : needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
   if (shownNeeds.length) {
     const next = button("Next", "ghost ga nexthead", nextItem);
     next.append(el("kbd", "", "⌥N"));
@@ -294,12 +308,12 @@ function drawList() {
       return ib.reply?.key === it.key && ib.reply.where === "side" ? [r, replyBox(it, ib.reply)].filter(Boolean) : r;
     }, "need you", (it) => ib.reply?.key === it.key)));
   }
-  const shownWork = work.filter(agentHas);
+  const shownWork = pt ? [] : work.filter(agentHas);
   if (shownWork.length) {
     // A team's working agents are one unit under its head; the rest are rows.
     nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", workUnits(shownWork), 5, 5, (u) => u.t ? teamBlock(u.t, u.mem) : agentRow(u.a), "working")));
   }
-  const shownFin = fin.filter((it) => agentHas(agents.get(it.agent)));
+  const shownFin = inApp ? [] : fin.filter((it) => agentHas(agents.get(it.agent)));
   if (shownFin.length) {
     const all = seenActs().length ? button("Mark all seen", "ghost ga", markAllSeen) : null;
     nodes.push(group("g-finished", ghead("Finished", shownFin.length, "finished", all),
@@ -308,7 +322,7 @@ function drawList() {
   nodes.push(channelsGroup(q));
 
   for (const p of deck.projects) {
-    const rest = p.agents.filter((a) => !placed.has(a.id) && agentHas(a));
+    const rest = p.agents.filter((a) => !placed.has(a.id) && !teamed.has(a.id) && agentHas(a));
     const teams = (deck.teams || []).filter((t) => t.project === p.name && (!q || t.members.some((id) => rest.some((a) => a.id === id))));
     if (q && !rest.length) continue;
     const folded = !q && collapsed.has(p.path);
@@ -321,7 +335,7 @@ function drawList() {
         if (!mem.length) continue; // a head with nobody under it would claim the rows below it
         mem.forEach((a) => inTeam.add(a.id));
         const team = el("div", "team");
-        team.append(teamHead(t), ...mem.map((a) => agentRow(a)));
+        team.append(...(pt ? [] : [teamHead(t)]), ...mem.map((a) => agentRow(a)));
         box.append(team);
       }
       box.append(...rest.filter((a) => !inTeam.has(a.id)).map((a) => agentRow(a)));
@@ -350,7 +364,7 @@ function drawList() {
 // click goes to its group. On a phone the footer's Next says them too.
 function drawChips(nNeeds, nWork, nFin, count) {
   const box = $("#chips");
-  box.hidden = !count;
+  box.hidden = !count || ptypeOn();
   const jump = (k) => () => document.querySelector(`#projects .g-${k}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
   const chip = (tone, n, text, k) => {
     const b = el("button", `cchip ${tone}${n ? "" : " zero"}`);
@@ -361,10 +375,18 @@ function drawChips(nNeeds, nWork, nFin, count) {
   };
   box.replaceChildren(chip("needs", nNeeds, "need you", "needs"), chip("working", nWork, "working", "working"), chip("finished", nFin, "finished", "finished"));
   const next = $("#next");
-  const n = nNeeds || nFin;
+  // The phone's Next is for what needs you; the app has a tab for that.
+  const n = ptypeOn() ? (embed ? 0 : nNeeds) : nNeeds || nFin;
   next.hidden = !n;
   next.replaceChildren(icon("right"), `Next · ${n} ${nNeeds ? "need you" : "finished"}`);
   next.classList.toggle("needs", !!nNeeds);
+}
+
+// ptypeOn: the phone's list, which is calmer: no chips, no Working group, a
+// team and its channel one row (see drawList). In the app it also leaves out
+// what the app's own Needs you tab shows.
+function ptypeOn() {
+  return document.documentElement.classList.contains("ptype");
 }
 
 function phoneList() {
@@ -442,7 +464,7 @@ function agentRow(a, key) {
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
-    line: activityLine(a), right, onclick: () => show(a.id),
+    line: ptypeOn() ? look(st).word : activityLine(a), right, onclick: () => show(a.id),
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;

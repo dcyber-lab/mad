@@ -1512,3 +1512,37 @@ html.ptype .phonebox .pdev { font-size: 14px; }
 .bmsg .imgs { margin: 6px 0 2px; }
 .bmsg .cimg { max-width: min(100%, 280px); max-height: 240px; }
 .bmsg.mine .imgs { justify-content: flex-end; }
+
+/* ---- the calm list: a working avatar moves, a team is one row ---- */
+
+html.ptype .avatar.s-running { animation: breathe 2.6s ease-in-out infinite; }
+html.ptype .avatar.s-waiting { box-shadow: 0 0 0 2px var(--waiting); }
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--kc) 70%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--kc) 14%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.ptype .avatar.s-running { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--kc) 70%, transparent); }
+}
+html.ptype .row .avatar .dot { display: none; }
+html.ptype .row:has(.tstack) { grid-template-columns: auto minmax(0, 1fr) auto; }
+html.ptype .tstack { grid-row: 1 / span 2; display: flex; align-items: center; flex: none; padding: 3px; border-radius: 14px; }
+html.ptype .tstack .avatar {
+  width: 28px; height: 28px; border-radius: 9px; font-size: 13px; border: 2px solid var(--row, var(--bg)); box-sizing: content-box;
+  background: color-mix(in srgb, var(--kc) 18%, var(--row, var(--bg))); animation: none; box-shadow: none;
+}
+html.ptype .tstack .avatar + .avatar { margin-left: -10px; }
+html.ptype .tstack .avatar:nth-child(1) { z-index: 3; }
+html.ptype .tstack .avatar:nth-child(2) { z-index: 2; }
+html.ptype .tstack .avatar:nth-child(3) { z-index: 1; }
+/* the team's ring: it breathes while a member works, orange and still when one needs you */
+html.ptype .tstack.s-running { --kc: var(--running); animation: breathe 2.6s ease-in-out infinite; }
+html.ptype .tstack.s-waiting { box-shadow: 0 0 0 2px var(--waiting); }
+@media (prefers-reduced-motion: reduce) {
+  html.ptype .tstack.s-running { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--running) 70%, transparent); }
+}
+html.ptype .row .rt .cnt {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; color: var(--primary-fg); background: var(--accent);
+}
+html.ptype .teamrow.unread .nm { font-weight: 700; }
