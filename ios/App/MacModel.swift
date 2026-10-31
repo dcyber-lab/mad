@@ -51,7 +51,8 @@ final class MacModel: ObservableObject {
     }
 
     func perform(_ item: DeckSnapshot.InboxItem, _ act: DeckSnapshot.Act, text: String? = nil) async {
-        busy.insert(item.key)
+        // A second tap on the same item while one is in flight does nothing.
+        guard busy.insert(item.key).inserted else { return }
         defer { busy.remove(item.key) }
         do {
             try await client.act(key: item.key, verb: act.verb, option: act.option, text: text)
