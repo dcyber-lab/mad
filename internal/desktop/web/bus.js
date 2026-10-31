@@ -31,7 +31,7 @@ function channelsGroup(q) {
   };
   const all = deck.bus || [];
   head.append(el("span", "grow"));
-  if (all.length) {
+  if (all.length && !ptypeOn()) {
     const more = button(ib.allChans ? "Fewer" : `All ${all.length}`, "ghost ga", () => { ib.allChans = !ib.allChans; drawSidebar(); });
     more.title = "every channel and DM";
     head.append(more);
