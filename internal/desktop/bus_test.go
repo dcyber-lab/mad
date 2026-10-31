@@ -61,10 +61,10 @@ func TestBusAPI(t *testing.T) {
 	for _, b := range snap.Bus {
 		got[b.Title] = b
 	}
-	if r := got["#review"]; r.LastSeq != 2 || r.Last != "alice: the handler returns 500 for an unknown id" || r.Unread != 1 || len(r.Members) != 2 || r.Topic != "the API" {
+	if r := got["#review"]; r.Last != 2 || r.LastText != "alice: the handler returns 500 for an unknown id" || r.Unread != 1 || len(r.Members) != 2 || r.Topic != "the API" {
 		t.Errorf("#review: %+v", r)
 	}
-	if b := got["@bob"]; !b.DM || !b.Yours || b.LastSeq != 2 {
+	if b := got["@bob"]; !b.DM || !b.Yours || b.Last != 2 {
 		t.Errorf("@bob: %+v (all: %v)", b, got)
 	}
 	if b := got["alice ↔ bob"]; !b.DM || b.Yours {
@@ -205,10 +205,10 @@ func TestSnapshotLastLines(t *testing.T) {
 			}
 		}
 		Bus []struct {
-			ID      string
-			Last    string `json:"last"`
-			LastSeq int    `json:"last_seq"`
-			LastAt  string `json:"last_at"`
+			ID       string
+			Last     int    `json:"last"`
+			LastText string `json:"last_text"`
+			LastAt   string `json:"last_at"`
 		}
 	}
 	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
@@ -225,7 +225,7 @@ func TestSnapshotLastLines(t *testing.T) {
 	if got[a1] != "Tests pass, PR is up" || got[a2] != "" {
 		t.Errorf("agents' last: %q", got)
 	}
-	if len(snap.Bus) != 1 || snap.Bus[0].Last != "alice: the handler returns 500 for an unknown id" || snap.Bus[0].LastSeq != 1 {
+	if len(snap.Bus) != 1 || snap.Bus[0].LastText != "alice: the handler returns 500 for an unknown id" || snap.Bus[0].Last != 1 {
 		t.Errorf("channels: %+v", snap.Bus)
 	}
 	// When it was said, as RFC 3339.
