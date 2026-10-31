@@ -102,7 +102,10 @@ func phoneCmd(args []string, stdio IO) error {
 
 // listDevices says which phones are paired.
 func listDevices(stdio IO) error {
-	devs := phone.Devices()
+	devs, err := phone.Devices()
+	if err != nil {
+		return err
+	}
 	if len(devs) == 0 {
 		fmt.Fprintln(stdio.Out, "mad: no phone is paired; mad phone on shows the QR code to pair one")
 		return nil

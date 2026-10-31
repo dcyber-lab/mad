@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/push"
 )
 
 // A phone gets in with a pairing code, shown once in the QR and good for
@@ -77,10 +78,20 @@ func locked(f func() error) error {
 	return f()
 }
 
-func readJSON(path string, v any) {
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, v)
+// readJSON loads path into v; a file not there is empty, anything else
+// that goes wrong is an error, and the caller fails closed.
+func readJSON(path string, v any) error {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(b, v); err != nil {
+		return fmt.Errorf("%s: %v", filepath.Base(path), err)
+	}
+	return nil
 }
 
 // writeJSON replaces path whole, so a reader never sees half of it.
@@ -108,10 +119,44 @@ func writeJSON(path string, v any) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-func loadDevices() []Device {
+func loadDevices() ([]Device, error) {
 	var d []Device
-	readJSON(paths.PhoneDevices(), &d)
-	return d
+	return d, readJSON(paths.PhoneDevices(), &d)
+}
+
+// livePairs are the codes not yet expired, and the code shown for the
+// QR if it is one of them. An expired hash, or a shown code that is no
+// longer good, is removed here, whenever the files are read; the lock is held.
+func livePairs(now time.Time) (live []pairEntry, shown string, err error) {
+	var pairs []pairEntry
+	if err := readJSON(paths.PhonePairs(), &pairs); err != nil {
+		return nil, "", err
+	}
+	for _, p := range pairs {
+		if p.Expires.After(now) {
+			live = append(live, p)
+		}
+	}
+	if len(live) != len(pairs) {
+		if err := writeJSON(paths.PhonePairs(), live); err != nil {
+			return nil, "", err
+		}
+	}
+	var sh struct {
+		Code string `json:"code"`
+	}
+	if err := readJSON(paths.PhonePairShown(), &sh); err != nil {
+		return nil, "", err
+	}
+	for _, p := range live {
+		if sh.Code != "" && p.Hash == sum(sh.Code) {
+			return live, sh.Code, nil
+		}
+	}
+	if err := os.Remove(paths.PhonePairShown()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, "", err
+	}
+	return live, "", nil
 }
 
 // PairCode is a code to put in the QR: the last one if it is still good
@@ -121,25 +166,13 @@ func PairCode() (string, error) {
 	var code string
 	err := locked(func() error {
 		now := time.Now()
-		var pairs, live []pairEntry
-		readJSON(paths.PhonePairs(), &pairs)
-		for _, p := range pairs {
-			if p.Expires.After(now) {
-				live = append(live, p)
-			}
+		live, shown, err := livePairs(now)
+		if err != nil {
+			return err
 		}
-		var shown struct {
-			Code string `json:"code"`
-		}
-		readJSON(paths.PhonePairShown(), &shown)
-		if shown.Code != "" {
-			h := sum(shown.Code)
-			for _, p := range live {
-				if p.Hash == h {
-					code = shown.Code
-					return nil
-				}
-			}
+		if shown != "" {
+			code = shown
+			return nil
 		}
 		c, err := randHex()
 		if err != nil {
@@ -158,7 +191,9 @@ func PairCode() (string, error) {
 	return code, err
 }
 
-// Pair takes a pairing code, once, and gives the device its token.
+// Pair takes a pairing code, once, and gives the device its token. The
+// code is used up before the device is made: a failure between the two
+// costs a new scan, never a code that works twice.
 func Pair(code, name string) (token, id string, err error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -169,20 +204,30 @@ func Pair(code, name string) (token, id string, err error) {
 	}
 	err = locked(func() error {
 		now := time.Now()
-		var pairs, rest []pairEntry
-		readJSON(paths.PhonePairs(), &pairs)
+		live, shown, err := livePairs(now)
+		if err != nil {
+			return err
+		}
 		h := sum(code)
+		var rest []pairEntry
 		found := false
-		for _, p := range pairs {
-			switch {
-			case p.Hash == h && p.Expires.After(now) && !found:
+		for _, p := range live {
+			if p.Hash == h && !found {
 				found = true
-			case p.Expires.After(now):
+			} else {
 				rest = append(rest, p)
 			}
 		}
 		if !found {
 			return ErrBadCode
+		}
+		if err := writeJSON(paths.PhonePairs(), rest); err != nil {
+			return err
+		}
+		if shown == code {
+			if err := os.Remove(paths.PhonePairShown()); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 		}
 		if token, err = randHex(); err != nil {
 			return err
@@ -191,21 +236,11 @@ func Pair(code, name string) (token, id string, err error) {
 			return err
 		}
 		id = id[:8]
-		devs := append(loadDevices(), Device{ID: id, Name: name, TokenHash: sum(token), Created: now, LastSeen: now})
-		if err := writeJSON(paths.PhoneDevices(), devs); err != nil {
+		devs, err := loadDevices()
+		if err != nil {
 			return err
 		}
-		if err := writeJSON(paths.PhonePairs(), rest); err != nil {
-			return err
-		}
-		var shown struct {
-			Code string `json:"code"`
-		}
-		readJSON(paths.PhonePairShown(), &shown)
-		if shown.Code == code {
-			_ = os.Remove(paths.PhonePairShown())
-		}
-		return nil
+		return writeJSON(paths.PhoneDevices(), append(devs, Device{ID: id, Name: name, TokenHash: sum(token), Created: now, LastSeen: now}))
 	})
 	if err != nil {
 		return "", "", err
@@ -214,14 +249,17 @@ func Pair(code, name string) (token, id string, err error) {
 }
 
 // Devices are the paired phones, oldest first.
-func Devices() []Device { return loadDevices() }
+func Devices() ([]Device, error) { return loadDevices() }
 
 // Revoke removes the device with this id, or this name when it is only
-// one's, and says which it was.
+// one's, and says which it was. Its Web Push subscriptions go with it.
 func Revoke(idOrName string) (Device, error) {
 	var gone Device
 	err := locked(func() error {
-		devs := loadDevices()
+		devs, err := loadDevices()
+		if err != nil {
+			return err
+		}
 		at := -1
 		for i, d := range devs {
 			if d.ID == idOrName {
@@ -245,32 +283,45 @@ func Revoke(idOrName string) (Device, error) {
 		gone = devs[at]
 		return writeJSON(paths.PhoneDevices(), append(devs[:at:at], devs[at+1:]...))
 	})
-	return gone, err
+	if err != nil {
+		return gone, err
+	}
+	// Notifications carry what agents wrote: not to a device cut off.
+	return gone, push.UnsubscribeDevice(gone.ID)
 }
 
 // The devices as the server last read them: the file is read again when
 // its mtime or size moves, which is how another process's revoke is seen.
 var (
 	cacheMu   sync.Mutex
-	cacheMod  time.Time
-	cacheSize int64             = -1
+	cacheInfo os.FileInfo
 	cacheDevs map[string]Device // by token hash
 )
 
+// byHash is the devices by token hash. The file is read again when it is
+// another file (devices are written by rename, so that is a new inode),
+// or its mtime or size moved: an equal-size replacement in the same
+// timestamp tick is still seen. A file that can't be read holds nobody.
 func byHash() map[string]Device {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 	fi, err := os.Stat(paths.PhoneDevices())
 	if err != nil {
-		cacheMod, cacheSize, cacheDevs = time.Time{}, -1, nil
+		cacheInfo, cacheDevs = nil, nil
 		return nil
 	}
-	if !fi.ModTime().Equal(cacheMod) || fi.Size() != cacheSize || cacheDevs == nil {
+	if cacheDevs == nil || cacheInfo == nil || !os.SameFile(cacheInfo, fi) ||
+		!fi.ModTime().Equal(cacheInfo.ModTime()) || fi.Size() != cacheInfo.Size() {
 		m := map[string]Device{}
-		for _, d := range loadDevices() {
+		devs, err := loadDevices()
+		if err != nil {
+			cacheInfo, cacheDevs = nil, nil
+			return nil
+		}
+		for _, d := range devs {
 			m[d.TokenHash] = d
 		}
-		cacheMod, cacheSize, cacheDevs = fi.ModTime(), fi.Size(), m
+		cacheInfo, cacheDevs = fi, m
 	}
 	return cacheDevs
 }
@@ -285,7 +336,10 @@ func DeviceFor(token string) (Device, bool) {
 	d, ok := byHash()[h]
 	if ok && time.Since(d.LastSeen) >= seenEvery {
 		_ = locked(func() error {
-			devs := loadDevices()
+			devs, err := loadDevices()
+			if err != nil {
+				return err
+			}
 			for i := range devs {
 				if devs[i].TokenHash == h {
 					devs[i].LastSeen = time.Now()

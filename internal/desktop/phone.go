@@ -94,7 +94,12 @@ func (s *Server) phoneDevices(w http.ResponseWriter, r *http.Request) {
 		LastSeen time.Time `json:"last_seen"`
 	}
 	out := []dev{}
-	for _, d := range phone.Devices() {
+	devs, err := phone.Devices()
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	for _, d := range devs {
 		out = append(out, dev{d.ID, d.Name, d.Created, d.LastSeen})
 	}
 	reply(w, out)

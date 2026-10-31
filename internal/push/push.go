@@ -43,6 +43,9 @@ type Subscription struct {
 		Auth   string `json:"auth"`
 	} `json:"keys"`
 	Added time.Time `json:"added,omitempty"`
+	// Device is the paired phone's id that registered it (package phone);
+	// "" for the master token's, and for those from before devices.
+	Device string `json:"device,omitempty"`
 }
 
 // Message is what a notification says; Agent is the id of the agent to
@@ -190,6 +193,22 @@ func Subscribe(s Subscription) error {
 // Unsubscribe forgets endpoint's subscription.
 func Unsubscribe(endpoint string) error {
 	return change(func(subs []Subscription) []Subscription { return without(subs, endpoint) })
+}
+
+// UnsubscribeDevice forgets every subscription the device registered.
+func UnsubscribeDevice(id string) error {
+	if id == "" {
+		return nil
+	}
+	return change(func(subs []Subscription) []Subscription {
+		out := []Subscription{}
+		for _, s := range subs {
+			if s.Device != id {
+				out = append(out, s)
+			}
+		}
+		return out
+	})
 }
 
 func without(subs []Subscription, endpoint string) []Subscription {

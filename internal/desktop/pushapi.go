@@ -34,6 +34,9 @@ func (s *Server) pushSubscribe(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &sub) {
 		return
 	}
+	// Bound to the device that asks, whatever the body says: revoking it
+	// ends its notifications too.
+	sub.Device = deviceOf(r)
 	if err := push.Subscribe(sub); err != nil {
 		fail(w, http.StatusBadRequest, err)
 		return
