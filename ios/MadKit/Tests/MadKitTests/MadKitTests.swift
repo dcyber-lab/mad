@@ -104,13 +104,13 @@ final class SnapshotTests: XCTestCase {
         {"machine": " Heng’s MacBook Pro ", "projects": [{"name": "mad", "agents": []}],
          "inbox": {"items": [], "needs": 0}, "future": {"a": 1}}
         """
-        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(json.utf8))
+        let s = try JSONDecoder().decode(Deck.self, from: Data(json.utf8))
         XCTAssertEqual(s.machine, "Heng’s MacBook Pro")
     }
 
     func testNoOrBlankMachineIsNil() throws {
-        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data("{}".utf8)).machine)
-        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine": "  "}"#.utf8)).machine)
+        XCTAssertNil(try JSONDecoder().decode(Deck.self, from: Data("{}".utf8)).machine)
+        XCTAssertNil(try JSONDecoder().decode(Deck.self, from: Data(#"{"machine": "  "}"#.utf8)).machine)
     }
 }
 

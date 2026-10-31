@@ -5,3 +5,4 @@ build/
 .build/
 DerivedData/
 xcuserdata/
+MacApp/Info.plist
