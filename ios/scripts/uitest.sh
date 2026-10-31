@@ -126,7 +126,7 @@ wanted() {
 
 # a test class and the scenario its server serves
 for pair in "EdgeHomeTests edge-home" "EmptyTests empty" "ManyChannelsTests many-channels" \
-            "ChannelFoldTests channel-fold" "UsageTests usage" "AppTests edge-home" "PairingTests pairing" "PairingRetryTests pairing"; do
+            "ChannelFoldTests channel-fold" "UsageTests usage" "AppTests edge-home" "NativeFeelTests empty" "PairingTests pairing" "PairingRetryTests pairing"; do
     set -- $pair
     wanted "$1" || continue
     start_server "$2" 0 || { FAILED=$((FAILED + 1)); continue; }
