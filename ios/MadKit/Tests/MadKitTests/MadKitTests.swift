@@ -30,6 +30,8 @@ final class PairingTests: XCTestCase {
             ("https://box.ts.net/?token=\(tok)", .noToken),
             ("https://box.ts.net/#token=abc", .badToken),
             ("https://box.ts.net/#token=\(String(repeating: "g", count: 32))", .badToken),
+            ("https://box.ts.net/#token=\(String(repeating: "Ｆ", count: 32))", .badToken),
+            ("https://box.ts.net/#token=\(String(repeating: "０", count: 32))", .badToken),
         ]
         for (text, want) in cases {
             XCTAssertThrowsError(try Pairing.parse(text), text) { XCTAssertEqual($0 as? PairingError, want, text) }
@@ -42,10 +44,12 @@ final class ClientTests: XCTestCase {
         HTTPURLResponse(url: URL(string: "https://x")!, statusCode: code, httpVersion: nil, headerFields: nil)!
     }
 
-    func testRequestCarriesToken() throws {
+    func testRequestCarriesTokenInHeaderOnly() throws {
         let mac = try Pairing.parse("https://box.ts.net:7443/#token=\(tok)")
         let r = MadClient(mac: mac).request("/api/deck")
-        XCTAssertEqual(r.url?.absoluteString, "https://box.ts.net:7443/api/deck?token=\(tok)")
+        XCTAssertEqual(r.url?.absoluteString, "https://box.ts.net:7443/api/deck")
+        XCTAssertFalse(r.url?.absoluteString.contains(tok) ?? true)
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Authorization"), "Bearer \(tok)")
     }
 
     func testForbiddenIsRefused() {
