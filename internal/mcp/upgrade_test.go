@@ -57,10 +57,12 @@ func TestReexecBetweenRequests(t *testing.T) {
 
 func TestReexecWaitsForCalls(t *testing.T) {
 	release := make(chan struct{})
+	entered := make(chan struct{})
 	var answered, stale atomic.Bool
 	reexec := make(chan bool, 1)
 	s := &Server{Tools: []Tool{{Name: "slow", Handler: func(context.Context, json.RawMessage) (string, error) {
 		stale.Store(true)
+		close(entered)
 		<-release
 		answered.Store(true)
 		return "done", nil
@@ -69,6 +71,14 @@ func TestReexecWaitsForCalls(t *testing.T) {
 	s.Reexec = func(string) error { reexec <- answered.Load(); return errors.New("no") }
 	c := start(t, s)
 	c.send(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"slow"}}`)
+	// The server looks for a newer one between requests only (a pipe has no
+	// read deadline): the call must be under way, and so the server stale,
+	// by the time it looks after the ping.
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call never started")
+	}
 	c.send(`{"jsonrpc":"2.0","id":2,"method":"ping"}`)
 	// The ping is answered; the call is not, so no exec yet.
 	if m := c.recv(); string(m["id"]) != "2" {

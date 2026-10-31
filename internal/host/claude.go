@@ -413,9 +413,13 @@ func (c *claude) setPermission(mode string) error {
 	c.h.mu.Lock()
 	was := c.h.st.Permission
 	c.h.mu.Unlock()
+	// Shown at once, before the request goes: claude's answer (modeAnswer,
+	// on the reader's goroutine) may come before this returns, and has
+	// the last word, a refusal undoing this.
+	c.h.update(func(s *State) { s.Permission = mode })
 	err := c.switchMode(mode, was)
-	if err == nil {
-		c.h.update(func(s *State) { s.Permission = mode })
+	if err != nil {
+		c.h.update(func(s *State) { s.Permission = was })
 	}
 	return err
 }
