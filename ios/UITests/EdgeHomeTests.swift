@@ -1,0 +1,120 @@
+import XCTest
+
+/// The home page's edge cases, against the fixture server's `edge-home` scenario.
+final class EdgeHomeTests: MadUITestCase {
+    override func setUp() {
+        super.setUp()
+        launch()
+        waitForHome()
+    }
+
+    func testLongMacNameEllipsizesAndTheCaretStaysHittableOnScreen() {
+        let caret = element("切换 Mac").firstMatch
+        XCTAssertTrue(caret.isHittable, "▾ 切换 Mac is not hittable")
+        XCTAssertTrue(screenFrame.contains(caret.frame), "▾ is outside the screen: \(caret.frame) in \(screenFrame)")
+        // The name is the longest text in the header; it must end before the ▾ starts.
+        let header = web.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY < 200 && $0.label.count >= 40 }
+        XCTAssertFalse(header.isEmpty, "no long Mac name in the header")
+        if let name = header.first { XCTAssertLessThanOrEqual(name.frame.maxX, caret.frame.minX + 1, "the name runs under the ▾") }
+        shot("long Mac name, ▾ stays")
+    }
+
+    /// The red dots ("needs you", role img) lying over a row.
+    private func dots(over row: XCUIElement) -> Int {
+        element("needs you").allElementsBoundByIndex.filter { $0.frame.width < 30 && row.frame.intersects($0.frame) }.count
+    }
+
+    func testTheTeamRowsWithAnAtYouShowANeedsYouDotAndTheOthersDoNot() {
+        for name in ["ios", "five"] {
+            let row = element(name).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "no row named \(name)")
+            XCTAssertGreaterThan(dots(over: row), 0, "the \(name) row has no “needs you” dot")
+        }
+        for name in ["shots", "pair", "solo"] {
+            let row = element(name).firstMatch
+            XCTAssertTrue(row.exists, "no row named \(name)")
+            XCTAssertEqual(dots(over: row), 0, "the \(name) row has a dot it should not")
+        }
+        shot("the rows with the red dot")
+    }
+
+    func testChatsAreOrderedRedDotsFirstThenNewest() {
+        let names = ["ios", "five", "shots", "pair", "solo"]
+        let ys = names.map { element($0).firstMatch.frame.minY }
+        XCTAssertEqual(ys, ys.sorted(), "the chat order is not ios, five, shots, pair, solo: \(zip(names, ys).map { "\($0) \(Int($1))" })")
+    }
+
+    func testTilesOfOneTwoAndFiveMembersAreDrawn() {
+        // The tile sits at the row's left: something is drawn there for each of the three.
+        for name in ["solo", "pair", "five"] {
+            let row = element(name).firstMatch
+            XCTAssertTrue(row.exists, "no row named \(name)")
+            let tile = web.images.allElementsBoundByIndex.filter { $0.frame.minX < 100 && $0.frame.midY > row.frame.minY && $0.frame.midY < row.frame.maxY && $0.frame.width >= 30 }
+            XCTAssertFalse(tile.isEmpty, "the \(name) row has no tile at its left")
+        }
+        shot("tiles of 1, 2 and 5 members")
+    }
+
+    func testCharactersHaveTheirStatesAsLabels() {
+        for state in ["working", "needs you", "stopped"] {
+            XCTAssertTrue(element(state).firstMatch.waitForExistence(timeout: 5), "no character labelled “\(state)”")
+        }
+        shot("working, needs-you and stopped characters")
+    }
+
+    func testAnUntitledAgentReadsKindAndTheStartOfItsId() {
+        let untitled = web.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES %@", "[a-z]+ [0-9a-z]{8}")).firstMatch
+        XCTAssertTrue(untitled.waitForExistence(timeout: 5), "no untitled agent reads “kind xxxxxxxx”")
+        XCTAssertTrue(element("codex unti0001").firstMatch.exists, "the untitled agent is not “codex unti0001”")
+    }
+
+    func testPicturesOnlyChannelPreviewsAsImage() {
+        XCTAssertTrue(elements(containing: "发布助手: [图片]").firstMatch.waitForExistence(timeout: 5), "no “发布助手: [图片]” preview on the shots row")
+    }
+
+    func testALongCJKLineStaysOnOneLine() {
+        let long = web.staticTexts.allElementsBoundByIndex.filter { $0.label.count >= 40 && $0.frame.minY > 200 }
+        XCTAssertFalse(long.isEmpty, "no long preview line to look at")
+        for line in long {
+            XCTAssertLessThanOrEqual(line.frame.height, 40, "a long line wrapped: “\(line.label.prefix(30))…” is \(line.frame.height) high")
+            XCTAssertTrue(screenFrame.insetBy(dx: -1, dy: 0).contains(CGRect(x: line.frame.minX, y: line.frame.minY, width: 0, height: 0)))
+            XCTAssertLessThanOrEqual(line.frame.maxX, screenFrame.maxX + 1, "a long line runs off the screen")
+        }
+    }
+
+    func testSearchFindsTheTeamRow() {
+        tap("搜索")
+        app.typeText("builder")
+        settle()
+        XCTAssertTrue(element("ios").firstMatch.waitForExistence(timeout: 5), "searching “builder” did not find the ios team row")
+        XCTAssertFalse(element("solo").firstMatch.exists, "searching “builder” still lists the solo chat")
+        shot("search “builder” finds the team")
+    }
+
+    func testTheMoreMenuListsItsItemsAndNotTheFullPage() {
+        tap("更多")
+        for item in ["用量", "看板", "技能", "手机和已配对设备", "添加项目"] {
+            XCTAssertTrue(element(item).firstMatch.waitForExistence(timeout: 5), "the ⋯ menu has no “\(item)”")
+        }
+        XCTAssertTrue(elements(containing: "主题").firstMatch.exists, "the ⋯ menu has no 主题")
+        XCTAssertGreaterThanOrEqual(element("切换 Mac").count, 2, "the ⋯ menu has no 切换 Mac (only the title's ▾)")
+        XCTAssertFalse(element("显示完整页面").firstMatch.exists, "the ⋯ menu still offers 显示完整页面")
+        shot("the ⋯ menu")
+    }
+
+    func testDarkMode() {
+        relaunch(extra: ["-AppleInterfaceStyle", "Dark"])
+        waitForHome()
+        shot("dark mode")
+    }
+
+    func testLandscape() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        settle(2)
+        let caret = element("切换 Mac").firstMatch
+        XCTAssertTrue(caret.waitForExistence(timeout: 10))
+        XCTAssertTrue(screenFrame.contains(caret.frame), "▾ is off the screen in landscape")
+        shot("landscape")
+        XCUIDevice.shared.orientation = .portrait
+    }
+}
