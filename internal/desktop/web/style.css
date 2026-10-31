@@ -259,9 +259,9 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; background:
 #terms { flex: 1; position: relative; min-height: 0; }
 /* ---- the conversation ---- */
 
-.chat { position: absolute; inset: 0; overflow-y: auto; display: none; }
+.chat { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; display: none; } /* nothing in a chat pans sideways; wide code and tables scroll inside their own box */
 .chat.on { display: block; }
-.chat .log { max-width: var(--column); margin: 0 auto; padding: 36px 28px 48px; display: flex; flex-direction: column; gap: 2px; }
+.chat .log { max-width: var(--column); min-width: 0; margin: 0 auto; padding: 36px 28px 48px; display: flex; flex-direction: column; gap: 2px; }
 .chat .note { color: var(--text-3); text-align: center; font-size: 12.5px; padding: 10px; }
 .log > .msg, .log > .call, .log > .cmd { animation: rise 0.18s ease-out; }
 .msg { font-size: 15px; line-height: 1.72; overflow-wrap: anywhere; }
@@ -340,7 +340,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; background:
 .call summary:hover { color: var(--text); }
 .call summary:hover .label { color: var(--text-2); }
 .call .ti { width: 15px; height: 15px; color: var(--text-3); }
-.call .tool { flex: none; font-weight: 600; color: var(--text); }
+.call .tool { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
 .call .label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-3); }
 .call .st { flex: none; width: 16px; height: 16px; display: grid; place-items: center; color: var(--text-3); }
 .call .st > * { display: none; }
@@ -838,7 +838,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 #chanhead .cwhat .muted { font-size: 12.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #chanhead .cwho { display: flex; gap: 4px; }
 #chanhead .cwho .avatar { cursor: pointer; }
-#chanscroll { flex: 1; overflow-y: auto; min-height: 0; }
+#chanscroll { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; min-height: 0; }
 #chanlog { max-width: var(--column); margin: 0 auto; padding: 22px 28px 40px; display: flex; flex-direction: column; gap: 14px; }
 .bmsg { display: flex; gap: 10px; align-items: flex-start; animation: rise 0.18s ease-out; }
 .bmsg > .avatar { margin-top: 2px; cursor: pointer; }
@@ -879,7 +879,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 /* ---- a phone: the list, or what is open, a screen each ---- */
 
 @media (max-width: 640px) {
-  html, body { -webkit-tap-highlight-color: transparent; }
+  html, body { -webkit-tap-highlight-color: transparent; overscroll-behavior-x: none; }
   #app { height: 100dvh; }
   #sidebar { width: 100% !important; min-width: 0; max-width: none; padding-top: env(safe-area-inset-top); }
   #resizer, main { display: none; }
