@@ -20,45 +20,18 @@ function holdWindow() {
   // The server went away or restarted: say so again when it is back.
   ws.onclose = () => setTimeout(holdWindow, 1000);
 }
-// The token: a pairing code in the URL's fragment (#pair=) is traded for
-// this device's own, kept from then on; else the master token there
-// (#token=, the local window's), else the one kept (a phone's home screen
-// opens the page without it). Out of sight once read. The trade is
-// synchronous: nothing below runs without the token.
-let pairError = "";
+// The token: the one in the URL's fragment (#token=, the local window's),
+// else the one kept (the device's own, got by pair.js; a phone's home
+// screen opens the page without it). Out of sight once read.
 const token = (() => {
-  const h = new URLSearchParams(location.hash.slice(1));
-  const code = h.get("pair");
-  const t = h.get("token");
-  if (!code && !t) return localStorageGet("mad.token") || "";
-  history.replaceState(null, "", location.pathname + location.search);
-  if (code) {
-    try {
-      const x = new XMLHttpRequest();
-      x.open("POST", "/api/pair", false);
-      x.setRequestHeader("Content-Type", "application/json");
-      x.send(JSON.stringify({ code, name: deviceName() }));
-      if (x.status === 200) {
-        const d = JSON.parse(x.responseText);
-        localStorageSet("mad.token", d.token);
-        return d.token;
-      }
-      pairError = x.status === 403 ? "That pairing code was used or has expired: mad phone shows a new one." : `Pairing failed (${x.status}).`;
-    } catch (e) {
-      pairError = `Pairing failed: ${e.message || e}`;
-    }
-    return localStorageGet("mad.token") || "";
-  }
+  const t = new URLSearchParams(location.hash.slice(1)).get("token");
+  if (!t) return localStorageGet("mad.token") || "";
   localStorageSet("mad.token", t);
+  history.replaceState(null, "", location.pathname + location.search);
   return t;
 })();
-// deviceName is a readable name for this browser, from its user agent.
-function deviceName() {
-  const ua = navigator.userAgent;
-  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "device";
-  const br = /Edg\//.test(ua) ? "Edge" : /(Chrome|CriOS)\//.test(ua) ? "Chrome" : /(Firefox|FxiOS)\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "browser";
-  return `${os} ${br}`;
-}
+// Why pairing failed, as pair.js saw it.
+const pairError = window.madPairError || "";
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);

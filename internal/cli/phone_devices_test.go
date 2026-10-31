@@ -27,7 +27,7 @@ func TestPhoneDevicesAndRevoke(t *testing.T) {
 	if code, out, _ := run(t, "", "phone", "revoke", "Ann's iPhone"); code != 0 || !strings.Contains(out, "no longer paired") {
 		t.Errorf("revoke: %d %q", code, out)
 	}
-	if len(phone.Devices()) != 0 {
+	if d, _ := phone.Devices(); len(d) != 0 {
 		t.Error("still paired")
 	}
 }

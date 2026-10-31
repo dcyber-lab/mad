@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/phone"
+	"github.com/dcyber-lab/mad/internal/push"
 )
 
 func TestPhoneAPI(t *testing.T) {
@@ -195,5 +197,37 @@ func TestRevokeClosesWebsocket(t *testing.T) {
 	}
 	if _, _, err := websocket.Dial(context.Background(), ws, nil); err == nil {
 		t.Error("a revoked device opened a websocket")
+	}
+}
+
+// A push subscription is bound to the device that registered it, the
+// master token's to none, whatever the body says.
+func TestPushBoundToDevice(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	h := s.Handler()
+	dev := pairedDevice(t)
+	devs, _ := phone.Devices()
+	body := func(ep string) string {
+		k := base64.RawURLEncoding.EncodeToString(append([]byte{4}, make([]byte, 64)...))
+		a := base64.RawURLEncoding.EncodeToString(make([]byte, 16))
+		return `{"endpoint":"` + ep + `","keys":{"p256dh":"` + k + `","auth":"` + a + `"},"device":"forged"}`
+	}
+	for ep, token := range map[string]string{"https://push.example/dev": dev, "https://push.example/master": s.Token} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/push?token="+token, strings.NewReader(body(ep))))
+		if w.Code != 200 {
+			t.Fatalf("subscribe: %d %s", w.Code, w.Body)
+		}
+	}
+	subs, _ := push.List()
+	for _, sub := range subs {
+		want := ""
+		if strings.HasSuffix(sub.Endpoint, "/dev") {
+			want = devs[0].ID
+		}
+		if sub.Device != want {
+			t.Errorf("%s bound to %q, want %q", sub.Endpoint, sub.Device, want)
+		}
 	}
 }

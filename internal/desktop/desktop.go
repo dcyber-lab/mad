@@ -157,11 +157,12 @@ func (s *Server) auth(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		if _, ok := phone.DeviceFor(got); !ok {
+		dev, ok := phone.DeviceFor(got)
+		if !ok {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		ctx, cancel := context.WithCancel(r.Context())
+		ctx, cancel := context.WithCancel(context.WithValue(r.Context(), deviceKey{}, dev.ID))
 		watched := make(chan struct{})
 		go func() {
 			defer close(watched)
@@ -174,6 +175,15 @@ func (s *Server) auth(h http.Handler) http.Handler {
 		}()
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// deviceKey carries the id of the paired device a request came from; the
+// master token's requests have none.
+type deviceKey struct{}
+
+func deviceOf(r *http.Request) string {
+	id, _ := r.Context().Value(deviceKey{}).(string)
+	return id
 }
 
 // viaCloudflare says whether the request came through a Cloudflare
