@@ -103,18 +103,46 @@ func tunnelCommand(c Choice) string {
 	return fmt.Sprintf("while :; do %s 2>>%s; sleep 1; done", run, paths.ShellQuote(paths.PhoneTunnelLog()))
 }
 
-// tunnelHost is the name the running tunnel is reached at, "" if none.
-func tunnelHost() string {
+// storedTunnelHost is the pane running the tunnel and the name noted on
+// it, "" if none runs.
+func storedTunnelHost() (id, host string) {
 	panes, err := tmux.ListPanes()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	p, ok := tmux.FindPane(panes, tmux.IDPhoneTunnel)
 	if !ok || p.Dead {
-		return ""
+		return "", ""
 	}
 	h, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_phone_host")
-	return h
+	return p.ID, h
+}
+
+// tunnelHost is the name the running tunnel is reached at, "" if none.
+// A quick tunnel's name changes whenever its cloudflared starts again (the
+// pane's loop does that when it exits), so cloudflared's own word is the
+// truth, and the name noted on the pane only a fallback while it does not
+// answer. When the name moved, the note and the server's origin follow it.
+func tunnelHost() string {
+	id, stored := storedTunnelHost()
+	if stored == "" || LoadChoice().Tunnel != "" {
+		return stored
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	live := fromMetrics(ctx, &http.Client{Timeout: time.Second})
+	if live == "" || live == stored {
+		return stored
+	}
+	if err := tmux.Run("set-option", "-p", "-t", id, "@mad_phone_host", live); err != nil {
+		return stored
+	}
+	if panes, err := tmux.ListPanes(); err == nil {
+		if p, ok := tmux.FindPane(panes, tmux.IDPhone); ok {
+			_ = respawn(p.ID, serveCommand(live), live)
+		}
+	}
+	return live
 }
 
 var quickRe = regexp.MustCompile(`https://([a-z0-9-]+(?:\.[a-z0-9-]+)*\.trycloudflare\.com)`)
@@ -180,9 +208,10 @@ func ensureTunnel(ctx context.Context, c Choice) (string, error) {
 		return "", errors.New("the deck is not running: open it first (mad)")
 	}
 	if p, ok := tmux.FindPane(panes, tmux.IDPhoneTunnel); ok && !p.Dead {
-		had, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd")
-		if h, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_phone_host"); had == cmd && h != "" {
-			return h, nil
+		if had, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd"); had == cmd {
+			if h := tunnelHost(); h != "" {
+				return h, nil
+			}
 		}
 	}
 	_ = os.MkdirAll(paths.StateDir(), 0o755)

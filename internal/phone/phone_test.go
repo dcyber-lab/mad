@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -445,5 +446,82 @@ func TestNoCloudflared(t *testing.T) {
 	s, err := On(context.Background())
 	if !errors.Is(err, ErrNoCloudflared) || !strings.Contains(s.Problem, "brew install cloudflared") {
 		t.Errorf("%+v, %v", s, err)
+	}
+}
+
+// A quick tunnel whose cloudflared started again has a new name: Status,
+// Refresh and the server's origin follow it.
+func TestQuickTunnelNameMoves(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("MAD_SOCKET", "")
+	old, oldSelf := tmux.Socket, deck.SelfCommand
+	tmux.Socket = fmt.Sprintf("mad-phone-test-%d", time.Now().UnixNano())
+	deck.SelfCommand = func(sub string) string { return "sleep 600; : mad " + sub }
+	oldAwake, oldAddr := awake, metricsAddr
+	awake = ": awake;"
+	var mu sync.Mutex
+	name := "first-one.trycloudflare.com"
+	setName := func(n string) { mu.Lock(); name = n; mu.Unlock() }
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		fmt.Fprintf(w, `{"hostname":%q}`, name)
+	}))
+	metricsAddr = strings.TrimPrefix(srv.URL, "http://")
+	t.Cleanup(func() {
+		srv.Close()
+		awake, metricsAddr = oldAwake, oldAddr
+		_ = tmux.Run("kill-server")
+		tmux.Socket, deck.SelfCommand = old, oldSelf
+	})
+	fakeCloudflared(t)
+	ctx := context.Background()
+	if err := Choose(Choice{Via: ViaCloudflare}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.Run("new-session", "-d", "-s", tmux.PoolSession); err != nil {
+		t.Fatal(err)
+	}
+	s, err := On(ctx)
+	if err != nil || s.Host != "first-one.trycloudflare.com" {
+		t.Fatalf("on: %+v, %v", s, err)
+	}
+
+	serverOrigin := func() string {
+		panes, _ := tmux.ListPanes()
+		p, _ := tmux.FindPane(panes, tmux.IDPhone)
+		c, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd")
+		return c
+	}
+	setName("second-one.trycloudflare.com")
+	g := Get(ctx)
+	if g.Host != "second-one.trycloudflare.com" || !strings.Contains(g.URL, "https://second-one.trycloudflare.com/#token=") {
+		t.Errorf("get after the name moved: %+v", g)
+	}
+	if c := serverOrigin(); !strings.Contains(c, "-origin 'second-one.trycloudflare.com'") {
+		t.Errorf("server still runs with the old origin: %q", c)
+	}
+	if id, h := storedTunnelHost(); id == "" || h != "second-one.trycloudflare.com" {
+		t.Errorf("pane's note %q", h)
+	}
+
+	// On again and Refresh agree, and a silent cloudflared leaves the note.
+	setName("third-one.trycloudflare.com")
+	if s, err := On(ctx); err != nil || s.Host != "third-one.trycloudflare.com" {
+		t.Fatalf("on again: %+v, %v", s, err)
+	}
+	setName("fourth-one.trycloudflare.com")
+	if err := Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if c := serverOrigin(); !strings.Contains(c, "-origin 'fourth-one.trycloudflare.com'") {
+		t.Errorf("refreshed with %q", c)
+	}
+	srv.Close()
+	if h := tunnelHost(); h != "fourth-one.trycloudflare.com" {
+		t.Errorf("without metrics: %q", h)
 	}
 }
