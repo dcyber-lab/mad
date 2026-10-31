@@ -25,4 +25,12 @@ public enum CharacterState: String, CaseIterable, Sendable {
         default: self = .idle
         }
     }
+
+    /// What a group of characters says: working, else needs you, else starting, else idle (a stopped member is idle).
+    public static func group(_ states: [CharacterState]) -> CharacterState {
+        if states.contains(.working) { return .working }
+        if states.contains(.needsYou) { return .needsYou }
+        if states.contains(.starting) { return .starting }
+        return .idle
+    }
 }

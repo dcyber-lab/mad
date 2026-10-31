@@ -193,8 +193,30 @@ final class HomeAccessibilityTests: XCTestCase {
     }
 
     func testWorkingChannelWithADotSaysBoth() {
-        let r = HomeRow(id: "c", kind: .channel, name: "ios", preview: "a: b", state: .working, needsYou: true)
+        let r = HomeRow(id: "c", kind: .channel, name: "ios", preview: "a: b", needsYou: true,
+                        members: [HomeMember(id: "x", state: .working, name: "x")])
         XCTAssertEqual(label(r), "ios, a: b, working, needs you")
+    }
+
+    func testFiveIsWorkingAndNeedsYou() {
+        let five = SampleHome.model.sections[0].rows.first { $0.id == "five" }!
+        XCTAssertEqual(five.displayState, .working)
+        XCTAssertEqual(five.accessibilityLabel, "five, kim: 五个成员的群, working, needs you")
+    }
+
+    func testChannelStateComesFromItsMembersAndAgreesWithItsTile() {
+        func ch(_ s: [CharacterState]) -> HomeRow {
+            HomeRow(id: "c", kind: .channel, name: "c", state: .stopped,
+                    members: s.enumerated().map { HomeMember(id: "m\($0.offset)", state: $0.element, name: "m") })
+        }
+        for states in [[CharacterState.idle, .needsYou], [.needsYou, .working, .idle], [.starting, .idle], [.stopped], []] {
+            let r = ch(states)
+            XCTAssertEqual(r.displayState.word, GroupTile(members: r.tile, size: 40).word, "\(states)")
+        }
+        XCTAssertEqual(ch([.idle, .needsYou, .working]).displayState, .working)
+        XCTAssertEqual(ch([.starting, .needsYou]).displayState, .needsYou)
+        XCTAssertEqual(ch([.stopped]).displayState, .idle)
+        XCTAssertEqual(HomeRow(id: "a", name: "a", state: .stopped).displayState, .stopped)
     }
 
     func testStoppedAndIdle() {

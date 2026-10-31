@@ -67,7 +67,7 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public var name: String
     /// The last line; one line, cut at the end by the view.
     public var preview: String
-    /// An agent's state; a channel's is drawn from its members.
+    /// An agent's state. A channel's is drawn from its members (see `displayState`); this is not read for it.
     public var state: CharacterState
     /// Something waits on the person here (the agent asks, a mention, an unread DM): a red dot on the character.
     public var needsYou: Bool
@@ -96,13 +96,19 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
         return "\(kind) \(id.prefix(8))"
     }
 
+    /// The state the row shows and says: an agent's own; a channel's from its members (working, else
+    /// needs you, else starting, else idle), as its tile draws it.
+    public var displayState: CharacterState {
+        kind == .agent ? state : CharacterState.group(members.map(\.state))
+    }
+
     /// What VoiceOver reads for the row, as one label: the name, the preview, the state word once (not
     /// for idle), and "needs you" only when the dot says it and the state does not already.
     public var accessibilityLabel: String {
         var parts = [title]
         if !preview.isEmpty { parts.append(preview) }
-        if state != .idle { parts.append(state.word) }
-        if needsYou && state != .needsYou { parts.append("needs you") }
+        if displayState != .idle { parts.append(displayState.word) }
+        if needsYou && displayState != .needsYou { parts.append("needs you") }
         return parts.joined(separator: ", ")
     }
 
