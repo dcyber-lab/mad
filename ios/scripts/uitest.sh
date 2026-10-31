@@ -6,6 +6,7 @@
 #
 #   ONLY="UsageTests AppTests"   run only these test classes
 #   FIXTURE_ROOT=<dir>           a checkout that has internal/desktop/fixture (default: this one)
+#   SIM_NAME=<name>              the simulator to use or make (default: "mad UITest")
 #
 # One simulator, one xcodebuild, one server at a time: nothing runs in parallel.
 set -u
@@ -14,7 +15,8 @@ ROOT=$PWD
 FIXTURE_ROOT=${FIXTURE_ROOT:-$ROOT}
 RESULTS=ios/build/uitest-results
 REPORT=ios/build/uitest-report
-SIM_NAME="mad UITest"
+# The dedicated simulator. SIM_NAME=<name> uses (and makes) another, so two runs never share one.
+SIM_NAME="${SIM_NAME:-mad UITest}"
 SERVER_BIN=ios/build/fixture-server
 
 die() { printf 'make ios-uitest: %s\n' "$1" >&2; exit 1; }
