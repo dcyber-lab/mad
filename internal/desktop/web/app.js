@@ -153,28 +153,19 @@ function drawMachine() {
   }
 }
 
-function switchMac() {
-  window.webkit?.messageHandlers?.mad?.postMessage({ type: "switchMac" });
+// drawUsageLine is the one quiet line at the sidebar's bottom; it opens the usage page.
+function drawUsageLine() {
+  const b = $("#usageline");
+  const kind = (deck.quota || {}).claude ? "claude" : Object.keys(deck.quota || {})[0];
+  const w = kind && deck.quota[kind];
+  const pct = (x) => (x && (x.used || x.reset_at) ? `${Math.round(x.used || 0)}%` : "");
+  const parts = w ? [["5 小时", pct(w.five_hour)], ["本周", pct(w.seven_day)]].filter((p) => p[1]) : [];
+  b.hidden = !parts.length;
+  if (parts.length) b.textContent = `${kind[0].toUpperCase()}${kind.slice(1)} ${parts.map((p) => p.join(" ")).join(" · ")}`;
 }
 
-function drawQuota(q) {
-  const box = $("#quota");
-  box.replaceChildren();
-  for (const [kind, w] of Object.entries(q || {})) {
-    for (const [key, name] of [["five_hour", "5h"], ["seven_day", "wk"]]) {
-      const win = w[key];
-      if (!win || (!win.used && !win.reset_at)) continue;
-      const row = el("div", "q");
-      row.append(el("span", "", `${kind} ${name}`));
-      const bar = el("div", "bar");
-      const fill = el("i", win.used >= 100 ? "over" : win.used >= 80 ? "hot" : "");
-      fill.style.width = `${Math.min(100, win.used)}%`;
-      bar.append(fill);
-      row.append(bar, el("span", "", `${Math.round(win.used)}%`));
-      if (win.reset_at) row.title = `resets ${new Date(win.reset_at).toLocaleString()}`;
-      box.append(row);
-    }
-  }
+function switchMac() {
+  window.webkit?.messageHandlers?.mad?.postMessage({ type: "switchMac" });
 }
 
 // avatar is agent a's kind as a tile in its color, with its status as a
@@ -224,20 +215,11 @@ function charSVG(key, box) {
 }
 
 function avatar(a, small) {
-  if (ptypeOn()) {
-    // a channel's own tile (the channel view's header): its members huddled, as in the chat list
-    if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
-    const live = a.id && agents.get(a.id);
-    const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
-    v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
-    return v;
-  }
-  const glyph = a.icon || (a.kind || "?")[0];
+  // a channel's own tile (the channel view's header): its members huddled, as in the chat list
+  if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
-  const st = live ? ` s-${shownStatus(live)}` : "";
-  const v = el("span", `avatar${small ? " small" : ""}${[...glyph].length > 1 ? " wide" : ""}${st}`, glyph);
-  if (a.color) v.style.setProperty("--kc", /^#/.test(a.color) ? a.color : xtermColor(a.color));
-  v.append(el("span", "dot"));
+  const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
+  v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
   return v;
 }
 
@@ -255,12 +237,6 @@ document.addEventListener("compositionend", () => {
   composing = false;
   setTimeout(() => !composing && drawSidebar(), 0); // after the box has taken its text
 }, true);
-
-// workHold keeps an agent in Working for a few seconds after its turn
-// ends, by id: agents flip between a turn and idle, and a row that
-// leaves and returns on every flip moves everything below it.
-const workHold = new Map();
-const holdMs = 6000;
 
 // Projects folded away, by path.
 const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.collapsed") || "[]"); } catch (_) { return []; } })());
@@ -326,72 +302,23 @@ function drawList() {
   const q = $("#filter").value.trim().toLowerCase();
   const has = (...s) => !q || s.some((x) => (x || "").toLowerCase().includes(q));
   const agentHas = (a) => a && has(label(a), a.title, a.kind, a.tool, a.target, a.project.name);
-  const needs = needsYou(), fin = finishedItems();
-  const finIDs = new Set(fin.map((it) => it.agent));
-  const blocked = new Set(needs.filter((it) => it.blocks && it.agent).map((it) => it.agent));
-  const now = Date.now();
-  const live = new Set(deck.working || []);
-  for (const id of live) workHold.set(id, now);
-  for (const [id, at] of workHold) if (!agents.has(id) || (!live.has(id) && now - at > holdMs)) workHold.delete(id);
-  const work = [...live, ...[...workHold.keys()].filter((id) => !live.has(id) && !finIDs.has(id) && !blocked.has(id))]
-    .map((id) => agents.get(id)).filter(Boolean);
-  // Drawn above, so not again in their projects: what works, what
-  // finished, and what is blocked on you (its row is its item).
-  // On a phone there is no Working, Needs you or Finished group: the
-  // avatar moves while it works, a red dot says where something waits on
-  // you, and those agents stay in their rows.
-  const pt = ptypeOn();
-  needAgents = new Set(needs.map((it) => it.agent).filter(Boolean));
-  const placed = new Set();
-  if (!pt) {
-    work.forEach((a) => placed.add(a.id));
-    fin.forEach((it) => placed.add(it.agent));
-    for (const it of needs) if (it.blocks && it.agent) placed.add(it.agent);
-  }
-  // A team with a channel is one row of Channels on a phone: its members are not listed again.
+  needAgents = new Set(needsYou().map((it) => it.agent).filter(Boolean));
+  // A team with a channel is one row of the chats: its members are not listed again.
   const teamed = new Set();
-  if (pt) {
-    for (const c of deck.bus || []) {
-      if (c.team) for (const r of c.team.roles || []) if (r.agent) teamed.add(r.agent);
-    }
+  for (const c of deck.bus || []) {
+    if (c.team) for (const r of c.team.roles || []) if (r.agent) teamed.add(r.agent);
   }
 
   const nodes = [];
-  drawChips(needs.length, work.length, fin.length, count);
   if (!deck.projects.length) {
     const p = el("div", "none");
     p.innerHTML = "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.";
     nodes.push(p);
   }
-
-  const shownNeeds = pt ? [] : needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
-  if (shownNeeds.length) {
-    const next = button("Next", "ghost ga nexthead", nextItem);
-    next.append(el("kbd", "", "⌥N"));
-    next.title = "open the next thing that needs you (Alt-N)";
-    // On a phone the inbox folds earlier, so Working shows on the first screen.
-    const [limit, keep] = phoneList() ? [4, 3] : [8, 6];
-    nodes.push(group("inbox g-needs", ghead("Needs you", shownNeeds.length, "needs", next), capped("needs", shownNeeds, limit, keep, (it) => {
-      if (ib.expanded.has(it.key)) return itemCard(it, false, "side");
-      const r = itemRow(it);
-      return ib.reply?.key === it.key && ib.reply.where === "side" ? [r, replyBox(it, ib.reply)].filter(Boolean) : r;
-    }, "need you", (it) => ib.reply?.key === it.key)));
-  }
-  const shownWork = pt ? [] : work.filter(agentHas);
-  if (shownWork.length) {
-    // A team's working agents are one unit under its head; the rest are rows.
-    nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", workUnits(shownWork), 5, 5, (u) => u.t ? teamBlock(u.t, u.mem) : agentRow(u.a), "working")));
-  }
-  const shownFin = pt ? [] : fin.filter((it) => agentHas(agents.get(it.agent)));
-  if (shownFin.length) {
-    const all = seenActs().length ? button("Mark all seen", "ghost ga", markAllSeen) : null;
-    nodes.push(group("g-finished", ghead("Finished", shownFin.length, "finished", all),
-      capped("finished", shownFin, 5, 5, (it) => agentRow(agents.get(it.agent), it.key), "finished")));
-  }
   nodes.push(channelsGroup(q));
 
   for (const p of deck.projects) {
-    const rest = p.agents.filter((a) => !placed.has(a.id) && !teamed.has(a.id) && agentHas(a));
+    const rest = p.agents.filter((a) => !teamed.has(a.id) && agentHas(a));
     const teams = (deck.teams || []).filter((t) => t.project === p.name && (!q || t.members.some((id) => rest.some((a) => a.id === id))));
     if (q && !rest.length) continue;
     const folded = !q && collapsed.has(p.path);
@@ -404,7 +331,7 @@ function drawList() {
         if (!mem.length) continue; // a head with nobody under it would claim the rows below it
         mem.forEach((a) => inTeam.add(a.id));
         const team = el("div", "team");
-        team.append(...(pt ? [] : [teamHead(t)]), ...mem.map((a) => agentRow(a)));
+        team.append(...mem.map((a) => agentRow(a)));
         box.append(team);
       }
       box.append(...rest.filter((a) => !inTeam.has(a.id)).map((a) => agentRow(a)));
@@ -429,102 +356,16 @@ function drawList() {
   $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;
 }
 
-// drawChips: the counts of the three groups above, as they are there; a
-// click goes to its group. On a phone the footer's Next says them too.
-function drawChips(nNeeds, nWork, nFin, count) {
-  const box = $("#chips");
-  box.hidden = !count || ptypeOn();
-  const jump = (k) => () => document.querySelector(`#projects .g-${k}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
-  const chip = (tone, n, text, k) => {
-    const b = el("button", `cchip ${tone}${n ? "" : " zero"}`);
-    b.type = "button";
-    b.onclick = jump(k);
-    b.append(glyph(tone), el("b", "", String(n)), ` ${text}`);
-    return b;
-  };
-  box.replaceChildren(chip("needs", nNeeds, "need you", "needs"), chip("working", nWork, "working", "working"), chip("finished", nFin, "finished", "finished"));
-  const next = $("#next");
-  // A phone has no Next: a red dot says where something waits.
-  const n = ptypeOn() ? 0 : nNeeds || nFin;
-  next.hidden = !n;
-  next.replaceChildren(icon("right"), `Next · ${n} ${nNeeds ? "need you" : "finished"}`);
-  next.classList.toggle("needs", !!nNeeds);
-}
-
 // needAgents: the agents with an item in the inbox, as of the last drawList.
 let needAgents = new Set();
 
-// ptypeOn: the phone's list, which is calmer: no chips, no Working group, a
-// team and its channel one row (see drawList). In the app it also leaves out
-// what the app's own Needs you tab shows.
-function ptypeOn() {
-  return document.documentElement.classList.contains("ptype");
-}
-
-function phoneList() {
-  return window.matchMedia("(max-width: 640px)").matches;
-}
-
-function group(cls, head, rows) {
-  const g = el("section", `group ${cls}`);
-  g.append(head, ...rows.flat());
-  return g;
-}
-
-function ghead(text, n, tone, extra) {
-  const h = el("div", "ghead");
-  h.append(glyph(tone), el("span", "", text), el("span", "n", String(n)));
-  if (extra) h.append(extra);
-  return h;
-}
-
-// capped draws list, folded past limit to its first keep and a row that
-// unfolds the rest: what is long never pushes the groups below it away.
-// A row that must stay (must(x): its reply box is open) is never folded.
-function capped(name, list, limit, keep, draw, noun, must) {
-  const all = ib.more[name] || list.length <= limit || !!$("#filter").value.trim();
-  const shown = all ? list : list.filter((x, i) => i < keep || (must && must(x)));
-  const out = shown.map((x) => draw(x));
-  if (list.length > limit && !$("#filter").value.trim()) {
-    const r = row({
-      cls: "one fold", lead: el("span", "chglyph", all ? "−" : "+"),
-      name: all ? "Show fewer" : `${list.length - shown.length} more ${noun}`,
-      onclick: () => { ib.more[name] = !all; drawSidebar(); },
-    });
-    out.push(r);
-  }
-  return out;
-}
-
-// workUnits groups working agents: one unit per team (its working members),
-// one per agent that is in none.
-function workUnits(list) {
-  const units = [];
-  const at = new Map();
-  for (const a of list) {
-    const t = a.team && (deck.teams || []).find((x) => x.name === a.team && x.project === a.project.name);
-    if (!t) { units.push({ a }); continue; }
-    if (!at.has(t)) { const u = { t, mem: [] }; at.set(t, u); units.push(u); }
-    at.get(t).mem.push(a);
-  }
-  return units;
-}
-
-// teamBlock is a team in Working: its head, then its working members.
-function teamBlock(t, working) {
-  const box = el("div", "team wteam");
-  box.append(teamHead(t, working), ...working.map((a) => agentRow(a)));
-  return box;
-}
-
-// agentRow is an agent as a row: its avatar with its live dot, its name,
-// and its activity line; its team or role, else its cost, on the right.
-// lastLine is a phone row's one line: what the agent said last, else what it is doing, else how it stands.
+// lastLine is a row's one line: what the agent said last, else what it is doing, else how it stands.
 function lastLine(a, st) {
   const one = (s) => String(s || "").replace(/\s+/g, " ").trim();
   return one(a.last) || one(a.reply) || (a.tool ? one(`${a.tool}${a.target ? ` · ${a.target}` : ""}`) : "") || look(st).word;
 }
 
+// agentRow is an agent as a row: its character, its name and its last line.
 function agentRow(a, key) {
   const st = shownStatus(a);
   const name = el("span", "");
@@ -542,7 +383,7 @@ function agentRow(a, key) {
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
-    line: ptypeOn() ? lastLine(a, st) : activityLine(a), right, onclick: () => show(a.id),
+    line: lastLine(a, st), right, onclick: () => show(a.id),
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;
@@ -593,45 +434,6 @@ function projectHead(p, quiet) {
   hacts.append(plus, pmore);
   head.append(hacts);
   return head;
-}
-
-// teamHead is a team in its project: its name and how its members stand.
-function teamHead(t, working) {
-  const ch = (deck.bus || []).find((c) => c.team && c.team.name === t.name);
-  const h = el("div", `teamhead${ch ? " link" : ""}${working ? " tall" : ""}`);
-  const top = el("div", "th1");
-  top.append(icon("users"), el("b", "", t.name));
-  if (ch && ch.topic) top.append(el("span", "goal", ch.topic));
-  top.append(el("span", "grow"));
-  if (working) top.append(el("span", "wn", `${working.filter((a) => shownStatus(a) === "running").length}/${t.members.length} working`));
-  else top.append(rollupNode(t.rollup));
-  const runs = working ? working.filter((a) => shownStatus(a) === "running" && a.chat && !interruptSent(a)) : [];
-  if (runs.length) {
-    const b = el("button", "icon-btn tstop");
-    b.type = "button";
-    b.title = `interrupt the ${runs.length} working in ${t.name}`;
-    b.append(icon("stop"));
-    b.onclick = (e) => { e.stopPropagation(); runs.forEach((a) => interruptAgent(a)); };
-    top.append(b);
-  }
-  h.append(top);
-  if (working) {
-    // every role of the team, by how it stands: the ones not shown below too
-    const chips = el("div", "th2");
-    for (const id of t.members) {
-      const a = agents.get(id);
-      if (!a) continue;
-      const c = el("span", `rchip s-${shownStatus(a)}`);
-      c.append(glyph(look(shownStatus(a)).tone), a.role || label(a));
-      chips.append(c);
-    }
-    h.append(chips);
-  }
-  if (ch) {
-    h.title = `${ch.title}${ch.topic ? ": " + ch.topic : ""}\nopen its channel`;
-    h.onclick = () => openChannel(ch.id);
-  }
-  return h;
 }
 
 // goHome shows the overview: nothing open.
@@ -1329,9 +1131,9 @@ async function refresh() {
     $("#conn").classList.add("ok");
     $("#conn").title = "connected";
     setOffline(false);
-    drawQuota(deck.quota);
     drawUsage();
     drawMachine();
+    drawUsageLine();
     drawSidebar();
     openWanted();
     if (cv.open) drawChanHead();
@@ -1543,19 +1345,25 @@ function drawTitle() {
   if (!a) {
     t.replaceChildren(el("span", "pt", bd.open ? "Board" : us.open ? "Usage" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
     t.className = "";
+    t.dataset.agent = "";
     return;
   }
   const what = el("span", "pw");
   // the row's own line under the name: the state word, then what it is on
   const sub = el("span", "ps");
-  sub.append(...(a.tool ? [el("span", "word", look(shownStatus(a)).word), " · "] : []), ...activityLine(a).flat());
-  sub.title = `${a.kind} · ${a.project.name}`;
-  // What the phone's rows leave off: the role where the name does not say it, and the cost.
+  // What the rows leave off: the role where the name does not say it, and the cost.
   const extra = [a.role && a.role !== label(a) ? a.role : "", money(a.cost)].filter(Boolean);
-  if (extra.length) sub.prepend(el("span", "pmeta", `${extra.join(" · ")} · `));
+  if (phone.matches) {
+    sub.append(...(a.tool ? [el("span", "word", look(shownStatus(a)).word), " · "] : []), ...activityLine(a).flat());
+    if (extra.length) sub.prepend(el("span", "pmeta", `${extra.join(" · ")} · `));
+  } else {
+    sub.append([a.kind, a.project.name, ...extra].join(" · "));
+  }
+  sub.title = `${a.kind} · ${a.project.name}`;
   what.append(el("span", "pt", label(a)), sub);
   t.replaceChildren(avatar(a, true), what);
   t.className = `s-${shownStatus(a)}`;
+  t.dataset.agent = "1";
 }
 
 // seen tells mad which agent is in front of you, while the window has the

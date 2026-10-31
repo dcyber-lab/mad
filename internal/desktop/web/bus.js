@@ -17,7 +17,7 @@ function busChannel(id) {
 function channelsGroup(q) {
   const g = el("div", "busgroup");
   const head = el("div", "chead");
-  head.append(icon("chat"), el("b", "", ptypeOn() ? "群聊" : "Channels"));
+  head.append(icon("chat"), el("b", "", "群聊"));
   const plus = el("button", "icon-btn");
   plus.type = "button";
   plus.title = "a new channel or team";
@@ -31,41 +31,20 @@ function channelsGroup(q) {
   };
   const all = deck.bus || [];
   head.append(el("span", "grow"));
-  if (all.length && !ptypeOn()) {
-    const more = button(ib.allChans ? "Fewer" : `All ${all.length}`, "ghost ga", () => { ib.allChans = !ib.allChans; drawSidebar(); });
-    more.title = "every channel and DM";
-    head.append(more);
-  }
   head.append(plus);
   g.append(head);
-  let list = all.filter((c) => q ? `${c.title} ${c.topic || ""}`.toLowerCase().includes(q) : ib.allChans || c.listed || c.id === cv.open);
+  // Every channel and team chat (the server leaves out the archived) and the person's DMs, the ones
+  // with a red dot first, then the newest message first (c.last_at, as the server gives it).
   const hit = new Map(all.map((c) => [c.id, chanMatch(c, q)]));
-  if (ptypeOn()) {
-    // A phone lists every channel and team chat (the server leaves out the archived) and the person's
-    // DMs, the ones with a red dot first, then the newest message first (c.last_at, as the server gives it).
-    list = all.filter((c) => (!c.dm || c.yours) && hit.get(c.id));
-    const at = (c) => Date.parse(c.last_at) || 0;
-    list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
-  }
+  const list = all.filter((c) => (!c.dm || c.yours) && hit.get(c.id));
+  const at = (c) => Date.parse(c.last_at) || 0;
+  list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
   if (!all.length) {
     const hint = el("div", "chan none", "Talk with your agents: + makes a channel or a team.");
     hint.onclick = () => createChannel();
     g.append(hint);
   }
-  for (const c of list) {
-    if (ptypeOn()) {
-      g.append(teamRow(c, q && hit.get(c.id) !== true ? hit.get(c.id) : null));
-      continue;
-    }
-    const row = el("div", `chan${cv.open === c.id ? " sel" : ""}${c.unread ? " unread" : ""}${c.dm && !c.yours ? " theirs" : ""}`);
-    row.title = c.topic || c.title;
-    row.append(el("span", "ch", c.dm ? (c.yours ? "@" : "↔") : "#"),
-      el("span", "cn", c.dm ? c.title.replace(/^@/, "") : c.id));
-    if (c.paused) row.append(el("span", "pill needs", "paused"));
-    else if (c.unread) row.append(el("span", `cnt${c.mention ? " at" : ""}`, c.mention ? `@${c.unread}` : String(c.unread)));
-    row.onclick = () => openChannel(c.id);
-    g.append(row);
-  }
+  for (const c of list) g.append(teamRow(c, q && hit.get(c.id) !== true ? hit.get(c.id) : null));
   return g;
 }
 

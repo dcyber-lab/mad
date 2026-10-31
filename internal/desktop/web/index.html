@@ -24,7 +24,7 @@
       <button id="boardbtn" type="button" class="icon-btn" title="the task board (Alt-B)"><span data-icon="todo"></span></button>
       <button id="searchbtn" type="button" class="icon-btn" title="search agents"><span data-icon="search"></span></button>
       <button id="newchat" type="button" class="icon-btn" title="a new conversation (⌘N)"><span data-icon="compose"></span></button>
-      <button id="embed-menu" type="button" class="icon-btn" title="more" hidden><span data-icon="more"></span></button>
+      <button id="embed-menu" type="button" class="icon-btn" title="more"><span data-icon="more"></span></button>
     </header>
     <label class="search">
       <span class="ico" data-icon="search"></span>
@@ -35,7 +35,7 @@
     <nav id="projects"></nav>
     <footer>
       <button id="next" type="button" class="nextbtn" hidden></button>
-      <div id="quota"></div>
+      <button id="usageline" type="button" class="usageline" hidden></button>
       <div class="foot">
         <span class="muted" id="summary"></span>
         <button id="addproject" type="button" class="icon-btn" title="add a project"><span data-icon="folderplus"></span></button>
@@ -53,6 +53,11 @@
       <div id="ptitle"></div>
       <div id="tabs"></div>
       <div id="acts" hidden>
+        <div id="seg" class="seg" hidden>
+          <button type="button" data-v="chat">对话</button>
+          <button type="button" data-v="term">终端</button>
+          <button type="button" data-v="diff">改动</button>
+        </div>
         <button id="changes" type="button" class="bar-btn" title="what it changed in its directory"><span data-icon="diff"></span>Changes</button>
         <button id="more" type="button" class="icon-btn" title="more"><span data-icon="more"></span></button>
       </div>
