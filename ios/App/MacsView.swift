@@ -65,8 +65,17 @@ struct MacsView: View {
         }
     }
 
+    /// Debug builds only: pair with a local `mad desktop -serve` over http.
+    private static var allowLocalHTTP: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     private func pair(_ text: String) {
-        do { store.add(try Pairing.parse(text)) }
+        do { store.add(try Pairing.parse(text, allowLocalHTTP: Self.allowLocalHTTP)) }
         catch { problem = error.localizedDescription }
     }
 }

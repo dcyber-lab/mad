@@ -1,85 +1,78 @@
 import MadKit
 import SwiftUI
 
+/// An opened Mac: the native "Needs you" list and the deck page, side by
+/// side as two tabs.
 struct MacView: View {
-    let mac: Mac
-    @State private var phase: Phase = .loading
-    @State private var showDeck = false
+    @StateObject private var model: MacModel
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var tab: Tab = .needs
 
-    enum Phase {
-        case loading
-        case ok(DeckSnapshot)
-        case failed(ConnectionError)
-    }
+    enum Tab { case needs, deck }
+
+    init(mac: Mac) { _model = StateObject(wrappedValue: MacModel(mac: mac)) }
 
     var body: some View {
-        List {
-            Section("Connection") { connection }
-            if case .ok(let snap) = phase {
-                Section("Waiting for you (\(snap.waiting.count))") {
-                    if snap.waiting.isEmpty {
-                        Text("Nothing waits on you.").foregroundStyle(.secondary)
-                    }
-                    ForEach(snap.waiting) { item in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.title).font(.headline)
-                            if let c = item.context { Text(c).font(.caption).foregroundStyle(.secondary) }
-                            if let t = item.text { Text(t).font(.callout).lineLimit(3) }
-                        }
-                    }
-                }
-                ForEach(snap.projects) { p in
-                    Section(p.name) {
-                        ForEach(p.agents) { a in
-                            HStack {
-                                Text(a.label)
-                                Spacer()
-                                Text(a.state).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            Section {
-                Button("Open deck", systemImage: "safari") { showDeck = true }
-            }
+        TabView(selection: $tab) {
+            NeedsView(model: model, openDeck: { tab = .deck })
+                .tabItem { Label("Needs you", systemImage: "tray") }
+                .badge(model.needs)
+                .tag(Tab.needs)
+            DeckTab(model: model)
+                .tabItem { Label("Deck", systemImage: "square.grid.2x2") }
+                .tag(Tab.deck)
         }
-        .navigationTitle(mac.name)
-        .refreshable { await load() }
-        .task { await load() }
-        .fullScreenCover(isPresented: $showDeck) {
-            NavigationStack {
-                DeckWebView(url: mac.deckURL)
-                    .ignoresSafeArea(edges: .bottom)
-                    .navigationTitle(mac.name)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showDeck = false } } }
-            }
+        .navigationTitle(model.mac.name)
+        .navigationBarTitleDisplayMode(.inline)
+        // Polls while this screen is shown and the app is active; the task
+        // restarts on every return to the foreground, so it looks at once.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await model.poll()
         }
+        .alert("mad", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(model.notice ?? "") }
     }
+}
 
-    @ViewBuilder private var connection: some View {
-        switch phase {
-        case .loading:
-            HStack { ProgressView(); Text("Connecting…") }
-        case .ok(let snap):
-            Label("Reachable", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            Text("\(snap.agentCount) agents in \(snap.projects.count) projects")
+/// A thin banner for offline and refused tokens, on both tabs.
+struct LinkBanner: View {
+    let link: MacModel.Link
+
+    var body: some View {
+        switch link {
         case .failed(.refused):
-            Label("Token refused", systemImage: "key.slash").foregroundStyle(.red)
-            Text("Run `mad phone` on the Mac and pair again.").font(.caption)
+            banner("Token refused, re-pair this Mac.", "key.slash", .red)
         case .failed(.offline):
-            Label("Offline", systemImage: "wifi.slash").foregroundStyle(.orange)
-            Text("The Mac cannot be reached. Is it awake and `mad phone` on?").font(.caption)
+            banner("Offline: the Mac cannot be reached.", "wifi.slash", .orange)
         case .failed(let e):
-            Label("Unexpected answer", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-            Text(e.localizedDescription).font(.caption)
+            banner(e.localizedDescription, "exclamationmark.triangle", .orange)
+        case .connecting, .ok:
+            EmptyView()
         }
     }
 
-    private func load() async {
-        do { phase = .ok(try await MadClient(mac: mac).deck()) }
-        catch let e as ConnectionError { phase = .failed(e) }
-        catch { phase = .failed(.offline) }
+    private func banner(_ text: String, _ icon: String, _ color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.footnote)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(color.opacity(0.18))
+            .foregroundStyle(color)
+    }
+}
+
+struct DeckTab: View {
+    @ObservedObject var model: MacModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinkBanner(link: model.link)
+            // Edge to edge; the keyboard still shrinks the page, so its
+            // composer stays in view.
+            DeckWebView(host: model.web)
+                .ignoresSafeArea(.container, edges: [.horizontal, .top])
+        }
     }
 }

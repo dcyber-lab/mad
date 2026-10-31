@@ -23,6 +23,8 @@ targets:
         CFBundleDisplayName: mad
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSCameraUsageDescription: mad scans the QR code on your Mac to pair with it.
     settings:
       base:

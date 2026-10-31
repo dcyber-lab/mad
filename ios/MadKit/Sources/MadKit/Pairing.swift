@@ -43,25 +43,36 @@ public enum PairingError: Error, Equatable, LocalizedError {
 public enum Pairing {
     /// Parses what `mad phone` shows: https://<host>[:port]/#token=<32 hex>.
     /// Surrounding whitespace is ignored; anything else is rejected.
-    public static func parse(_ text: String) throws -> Mac {
+    ///
+    /// allowLocalHTTP also accepts http://127.0.0.1[:port] and
+    /// http://localhost[:port], for running against a local `mad desktop
+    /// -serve`. The caller decides (debug builds only); Release passes false.
+    public static func parse(_ text: String, allowLocalHTTP: Bool = false) throws -> Mac {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty { throw PairingError.empty }
         guard let c = URLComponents(string: s), c.scheme != nil, !s.contains(" ") else {
             throw PairingError.notURL
         }
-        guard c.scheme?.lowercased() == "https" else { throw PairingError.notHTTPS }
-        guard let host = c.host, !host.isEmpty else { throw PairingError.noHost }
+        let scheme = c.scheme?.lowercased() ?? ""
+        guard let host = c.host, !host.isEmpty else {
+            throw scheme == "https" || (allowLocalHTTP && scheme == "http") ? PairingError.noHost : PairingError.notHTTPS
+        }
+        let local = ["127.0.0.1", "localhost"].contains(host.lowercased())
+        guard scheme == "https" || (allowLocalHTTP && scheme == "http" && local) else {
+            throw PairingError.notHTTPS
+        }
         guard let frag = c.fragment, frag.hasPrefix("token=") else { throw PairingError.noToken }
         let token = String(frag.dropFirst("token=".count)).lowercased()
         guard token.count == 32, token.allSatisfy({ $0.isASCII && $0.isHexDigit }) else {
             throw PairingError.badToken
         }
         var base = URLComponents()
-        base.scheme = "https"
+        base.scheme = scheme
         base.host = host
         base.port = c.port
         guard let url = base.url else { throw PairingError.notURL }
-        let label = host.split(separator: ".").first.map(String.init) ?? host
+        let isIP = host.allSatisfy { $0.isNumber || $0 == "." }
+        let label = isIP ? host : (host.split(separator: ".").first.map(String.init) ?? host)
         return Mac(name: label, baseURL: url, token: token)
     }
 }

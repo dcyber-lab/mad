@@ -133,3 +133,91 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(s.waiting.count, 1)
     }
 }
+
+final class InboxTests: XCTestCase {
+    let sample = """
+    {"inbox": {"needs": 2, "items": [
+      {"key": "perm:1", "kind": "permission", "agent": "claude-1", "title": "kim", "context": "Bash",
+       "text": "go test ./...", "mono": true, "where": "/x", "since": "2026-10-31T13:00:00.123456+08:00",
+       "blocks": true, "part": 0.5, "tasks": [{"id": "t1", "title": "x"}],
+       "acts": [{"verb": "allow", "label": "Allow", "primary": true, "row": true},
+                {"verb": "always", "label": "Always"},
+                {"verb": "deny", "label": "Deny", "input": true}],
+       "open": {"agent": "claude-1"}},
+      {"key": "q:2", "kind": "question", "title": "gus", "body": "pick one", "full": true,
+       "since": "2026-10-31T13:01:00Z",
+       "acts": [{"verb": "answer", "label": "Yes", "option": "yes"}, {"verb": "open", "label": "Open"}],
+       "open": {"channel": "plan"}},
+      {"key": "n:3", "kind": "from-the-future", "title": "?", "acts": [], "open": {"page": "board"}, "extra": 1}
+    ]},
+    "projects": [{"name": "p", "agents": [{"id": "claude-1", "name": "ios", "status": "working"}]}]}
+    """
+
+    func testDecodesEveryKindTolerantly() throws {
+        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(sample.utf8))
+        XCTAssertEqual(s.inbox.map(\.kind), ["permission", "question", "from-the-future"])
+        XCTAssertEqual(s.waiting.map(\.key), ["perm:1", "q:2"])
+        XCTAssertEqual(s.finished.map(\.key), ["n:3"])
+        let p = s.inbox[0]
+        XCTAssertTrue(p.mono)
+        XCTAssertTrue(p.blocks)
+        XCTAssertNotNil(p.since)
+        XCTAssertEqual(p.acts.map(\.verb), ["allow", "always", "deny"])
+        XCTAssertTrue(p.acts[0].primary)
+        XCTAssertTrue(p.acts[2].input)
+        XCTAssertEqual(p.open.agent, "claude-1")
+        XCTAssertEqual(s.agent(id: p.agent)?.label, "ios")
+        XCTAssertNil(s.agent(id: "nobody"))
+        XCTAssertTrue(s.inbox[1].full)
+        XCTAssertNotNil(s.inbox[1].since)
+        XCTAssertEqual(s.inbox[1].acts[0].option, "yes")
+        XCTAssertTrue(s.inbox[1].acts[1].isOpen)
+        XCTAssertEqual(s.inbox[2].open.page, "board")
+    }
+
+    func testActRequest() throws {
+        let mac = try Pairing.parse("https://box.ts.net/#token=\(tok)")
+        let r = MadClient(mac: mac).actRequest(key: "perm:1", verb: "deny", option: nil, text: "not now")
+        XCTAssertEqual(r.httpMethod, "POST")
+        XCTAssertEqual(r.url?.absoluteString, "https://box.ts.net/api/inbox")
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Authorization"), "Bearer \(tok)")
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(String(data: r.httpBody ?? Data(), encoding: .utf8),
+                       #"{"key":"perm:1","text":"not now","verb":"deny"}"#)
+    }
+
+    private func response(_ code: Int) -> URLResponse {
+        HTTPURLResponse(url: URL(string: "https://x")!, statusCode: code, httpVersion: nil, headerFields: nil)!
+    }
+
+    func testActStatusMapping() {
+        XCTAssertNoThrow(try MadClient.checkAct(Data(), response(204)))
+        XCTAssertThrowsError(try MadClient.checkAct(Data("Already handled\n".utf8), response(409))) {
+            XCTAssertEqual($0 as? ConnectionError, .conflict("Already handled"))
+        }
+        XCTAssertThrowsError(try MadClient.checkAct(Data(), response(403))) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
+        XCTAssertThrowsError(try MadClient.checkAct(Data("bad verb".utf8), response(400))) {
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("bad verb"))
+        }
+    }
+}
+
+final class LocalPairingTests: XCTestCase {
+    func testLocalHTTPOnlyWhenAllowed() throws {
+        let url = "http://127.0.0.1:8123/#token=\(tok)"
+        XCTAssertThrowsError(try Pairing.parse(url)) { XCTAssertEqual($0 as? PairingError, .notHTTPS) }
+        let m = try Pairing.parse(url, allowLocalHTTP: true)
+        XCTAssertEqual(m.baseURL.absoluteString, "http://127.0.0.1:8123")
+        XCTAssertEqual(m.name, "127.0.0.1")
+        XCTAssertEqual(try Pairing.parse("http://localhost:1/#token=\(tok)", allowLocalHTTP: true).name, "localhost")
+    }
+
+    func testAllowedFlagStillRejectsRemoteHTTP() {
+        XCTAssertThrowsError(try Pairing.parse("http://box.ts.net/#token=\(tok)", allowLocalHTTP: true)) {
+            XCTAssertEqual($0 as? PairingError, .notHTTPS)
+        }
+        XCTAssertThrowsError(try Pairing.parse("http://127.0.0.1.evil.com/#token=\(tok)", allowLocalHTTP: true))
+    }
+}
