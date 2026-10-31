@@ -5,6 +5,9 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
     case refused
     /// The Mac could not be reached at all.
     case offline
+    /// 409: the item was answered already or asks something else now; the
+    /// message is the server's, for the person.
+    case conflict(String)
     /// Reached, but it did not answer as mad does.
     case unexpected(String)
 
@@ -12,7 +15,7 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
         switch self {
         case .refused: return "Token refused, re-pair."
         case .offline: return "Offline: the Mac cannot be reached."
-        case .unexpected(let why): return why
+        case .conflict(let why), .unexpected(let why): return why
         }
     }
 }
@@ -36,6 +39,43 @@ public struct MadClient: Sendable {
         r.setValue("Bearer " + mac.token, forHTTPHeaderField: "Authorization")
         r.timeoutInterval = 10
         return r
+    }
+
+    /// POST /api/inbox: the person acts on an inbox item. Sends the item's
+    /// key and the act it chose; "open" acts are never sent.
+    public func actRequest(key: String, verb: String, option: String?, text: String?) -> URLRequest {
+        var r = request("/api/inbox")
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: String] = ["key": key, "verb": verb]
+        if let option, !option.isEmpty { body["option"] = option }
+        if let text, !text.isEmpty { body["text"] = text }
+        r.httpBody = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return r
+    }
+
+    public func act(key: String, verb: String, option: String? = nil, text: String? = nil) async throws {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: actRequest(key: key, verb: verb, option: option, text: text))
+        } catch {
+            throw ConnectionError.offline
+        }
+        try Self.checkAct(data, response)
+    }
+
+    /// 204 is done; 409 carries the server's message; 403 is a refused token.
+    public static func checkAct(_ data: Data, _ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw ConnectionError.unexpected("Not an HTTP answer.")
+        }
+        let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch http.statusCode {
+        case 204, 200: return
+        case 403: throw ConnectionError.refused
+        case 409: throw ConnectionError.conflict(message.isEmpty ? "It is not waiting on you any more." : message)
+        default: throw ConnectionError.unexpected(message.isEmpty ? "The Mac answered HTTP \(http.statusCode)." : message)
+        }
     }
 
     public func deck() async throws -> DeckSnapshot {
