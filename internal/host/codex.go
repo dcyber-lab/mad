@@ -31,6 +31,7 @@ type codex struct {
 	mode  string   // the approval policy picked since, for its next turns
 	files []string // images written for the person's messages
 
+	wmu     sync.Mutex // one write at a time; the reader never waits on it
 	started chan struct{}
 	ready   chan struct{} // closed once its thread is open, or failed to
 	mu      sync.Mutex
@@ -472,11 +473,18 @@ func (c *codex) forget(id string) {
 	_, had := c.asks[id]
 	delete(c.asks, id)
 	delete(c.quest, id)
+	c.mu.Unlock()
+	if had {
+		c.unlist(id)
+	}
+}
+
+// unlist takes request id off the state, and the agent off waiting when it
+// was the last.
+func (c *codex) unlist(id string) {
+	c.mu.Lock()
 	open := len(c.asks)
 	c.mu.Unlock()
-	if !had {
-		return
-	}
 	c.h.update(func(s *State) {
 		kept := s.Requests[:0]
 		for _, r := range s.Requests {
@@ -495,6 +503,10 @@ func (c *codex) answer(a Answer) error {
 	c.mu.Lock()
 	q, ok := c.asks[a.ID]
 	ids := c.quest[a.ID]
+	// Answered from here on: the server may end the turn the moment it has
+	// the answer, and that end must not find the request still open.
+	delete(c.asks, a.ID)
+	delete(c.quest, a.ID)
 	c.mu.Unlock()
 	if !ok {
 		return errors.New("that was answered already")
@@ -536,9 +548,12 @@ func (c *codex) answer(a Answer) error {
 		result = map[string]any{"decision": decision}
 	}
 	if err := c.write(map[string]any{"id": q.id, "result": result}); err != nil {
+		c.mu.Lock()
+		c.asks[a.ID], c.quest[a.ID] = q, ids
+		c.mu.Unlock()
 		return err
 	}
-	c.forget(a.ID)
+	c.unlist(a.ID)
 	// codex takes no word on a refusal: what to do instead is a message.
 	if !a.Allow && a.Message != "" {
 		return c.send(a.Message, nil)
@@ -692,7 +707,10 @@ func (c *codex) write(v any) error {
 		return errors.New("codex has not started")
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, err = c.in.Write(append(data, '\n'))
+	in := c.in
+	c.mu.Unlock()
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_, err = in.Write(append(data, '\n'))
 	return err
 }

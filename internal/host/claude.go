@@ -27,6 +27,7 @@ type claude struct {
 	cmd string // its TUI's command line
 	dir string
 
+	wmu     sync.Mutex    // one write at a time; the reader never waits on it
 	started chan struct{} // closed once in is set
 	mu      sync.Mutex
 	in      io.Writer
@@ -243,6 +244,14 @@ func (c *claude) ask(id string, raw json.RawMessage) {
 func (c *claude) forget(id string) {
 	c.mu.Lock()
 	delete(c.asks, id)
+	c.mu.Unlock()
+	c.unlist(id)
+}
+
+// unlist takes request id off the state, and the agent off waiting when it
+// was the last.
+func (c *claude) unlist(id string) {
+	c.mu.Lock()
 	open := len(c.asks)
 	c.mu.Unlock()
 	c.h.update(func(s *State) {
@@ -262,6 +271,9 @@ func (c *claude) forget(id string) {
 func (c *claude) answer(a Answer) error {
 	c.mu.Lock()
 	q, ok := c.asks[a.ID]
+	// Answered from here on: claude may end the turn the moment it has the
+	// answer, and that end must not find the request still open.
+	delete(c.asks, a.ID)
 	c.mu.Unlock()
 	if !ok {
 		return errors.New("that was answered already")
@@ -290,10 +302,14 @@ func (c *claude) answer(a Answer) error {
 	}
 	err := c.write(map[string]any{"type": "control_response", "response": map[string]any{
 		"subtype": "success", "request_id": a.ID, "response": resp}})
-	if err == nil {
-		c.forget(a.ID)
+	if err != nil {
+		c.mu.Lock()
+		c.asks[a.ID] = q
+		c.mu.Unlock()
+		return err
 	}
-	return err
+	c.unlist(a.ID)
+	return nil
 }
 
 // send gives claude a message: its text, as a string, or with images as
@@ -363,8 +379,11 @@ func (c *claude) write(v any) error {
 		return errors.New("claude has not started")
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, err = c.in.Write(append(data, '\n'))
+	in := c.in
+	c.mu.Unlock()
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_, err = in.Write(append(data, '\n'))
 	return err
 }
 
