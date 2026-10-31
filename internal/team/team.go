@@ -366,7 +366,7 @@ func teamName(name, goal string, teams []Record) (string, error) {
 		_, exists, _ := bus.Find(n)
 		return exists
 	}
-	if name = strings.TrimSpace(name); name != "" {
+	if name = normalName(name); name != "" {
 		if !nameRe.MatchString(name) {
 			return "", fmt.Errorf("team name %q: lowercase letters, digits and dashes", name)
 		}
@@ -384,6 +384,13 @@ func teamName(name, goal string, teams []Record) (string, error) {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
 	return name, nil
+}
+
+// normalName is a typed team name as names go: lowercase, with spaces
+// and underscores as dashes. A phone capitalizes the first letter.
+func normalName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return strings.Join(strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '_' || r == '\t' }), "-")
 }
 
 // setAgent records the agent of a team's role.
