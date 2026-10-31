@@ -86,6 +86,48 @@ class MadUITestCase: XCTestCase {
 
     var screenFrame: CGRect { app.windows.firstMatch.frame }
 
+    // MARK: Bounds
+
+    /// The parts of the page that cross the screen's left or right edge, as one line each. A frame
+    /// is the layout's, not what is drawn, so text that a clipped box cuts off at the screen's edge
+    /// still shows here, where a screenshot hides it. Read in one snapshot of the whole tree.
+    /// Scroll bars and the page's own full-size containers are not parts of the content.
+    func partsPastTheScreenEdge(in root: XCUIElement? = nil, tolerance: CGFloat = 1) -> [String] {
+        let window = screenFrame
+        guard let tree = try? (root ?? web).snapshot() else { return ["the page's accessibility tree could not be read"] }
+        var found: [String] = []
+        func walk(_ s: XCUIElementSnapshot) {
+            let f = s.frame
+            let skipped = s.elementType == .webView || s.elementType == .scrollBar || s.label.contains("scroll bar")
+            if !skipped, f.width > 0, f.height > 0, f.maxX > window.maxX + tolerance || f.minX < window.minX - tolerance {
+                let name = s.label.isEmpty ? "(no label)" : "“" + String(s.label.prefix(60)) + (s.label.count > 60 ? "…" : "") + "”"
+                found.append("\(Self.typeName(s.elementType)) \(name) spans x \(Int(f.minX))–\(Int(f.maxX)) on a screen \(Int(window.width)) wide")
+            }
+            s.children.forEach(walk)
+        }
+        walk(tree)
+        return found
+    }
+
+    private static func typeName(_ t: XCUIElement.ElementType) -> String {
+        switch t {
+        case .staticText: return "text"
+        case .button: return "button"
+        case .link: return "link"
+        case .image: return "image"
+        case .textView, .textField: return "field"
+        case .other: return "box"
+        default: return "element(\(t.rawValue))"
+        }
+    }
+
+    /// Turns the screen to landscape and waits for it, restoring portrait however the case ends.
+    func rotateToLandscape() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+        wait("the screen did not turn to landscape") { self.screenFrame.width > self.screenFrame.height }
+    }
+
     // MARK: Screenshots
 
     /// A named screenshot of the whole screen, kept for the report.
