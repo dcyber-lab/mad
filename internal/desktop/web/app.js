@@ -213,8 +213,9 @@ function drawList() {
         const mem = rest.filter((a) => t.members.includes(a.id));
         if (!mem.length) continue; // a head with nobody under it would claim the rows below it
         mem.forEach((a) => inTeam.add(a.id));
-        box.append(teamHead(t));
-        box.append(...mem.map((a) => agentRow(a)));
+        const team = el("div", "team");
+        team.append(teamHead(t), ...mem.map((a) => agentRow(a)));
+        box.append(team);
       }
       box.append(...rest.filter((a) => !inTeam.has(a.id)).map((a) => agentRow(a)));
     }

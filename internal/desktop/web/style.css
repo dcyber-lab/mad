@@ -1213,6 +1213,9 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .teamhead b { font-weight: 600; color: var(--text-2); font-size: 12.5px; }
 .teamhead .grow { flex: 1; }
 .teamhead.link { cursor: pointer; }
+/* a team's agents sit under its head, in a block of their own: the head names the team, so the rows do not */
+.team { margin: 2px 0 4px 12px; border-left: 2px solid var(--border-2); }
+.team .row .ctx { display: none; }
 @media (hover: hover) { .teamhead.link:hover b { color: var(--text); } }
 .chan .cnt.at { background: var(--waiting); color: var(--primary-fg); }
 
