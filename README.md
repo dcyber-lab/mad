@@ -462,18 +462,46 @@ make ios         # swift test, xcodegen, and a simulator build
 It needs Xcode with the iOS platform installed. `cd ios && xcodegen
 generate && open mad.xcodeproj` opens it in Xcode.
 
-To put it on your iPhone:
+#### Putting it on your iPhone
 
-1. In Xcode, Settings > Accounts, add your Apple ID.
-2. Copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig`
-   and set `DEVELOPMENT_TEAM` (your team's ID) and `MAD_BUNDLE_ID` (a
-   bundle id of your own, such as `com.example.mad`). The file is not
-   committed.
-3. On the iPhone, turn on Developer Mode (Settings > Privacy & Security),
-   connect it, pick it as the run destination in Xcode and run.
+A free Apple ID is enough; there is no App Store step. Once, on the Mac and
+the iPhone:
 
-An app installed with a free Apple ID stops opening after 7 days; run it
-from Xcode again to renew it. A paid developer account lasts a year.
+1. In Xcode, Settings > Accounts, press +, and sign in with your Apple ID.
+   Xcode makes you a Personal Team.
+2. On the iPhone, turn on Developer Mode (Settings > Privacy & Security >
+   Developer Mode; it restarts), connect it to the Mac with a cable, unlock
+   it and tap Trust.
+
+Then, from the repository:
+
+```sh
+make ios-device
+```
+
+It finds your Personal Team and writes `ios/Config/Local.xcconfig` with it
+(and a bundle id made from it, `com.<team id>.mad`, since a free team needs
+one no one else has), builds the Release app for the phone, installs it and
+launches it. With more than one phone connected it lists them: pick one with
+`make ios-device DEVICE=<id>`, and a team with `TEAM=<id>`. When something is
+missing it says what to do next.
+
+The first time, the iPhone does not trust you yet, and mad will not open:
+Settings > General > VPN & Device Management, tap your Apple ID under
+Developer App, and Trust. Then open mad from the Home Screen.
+
+A build signed with a free Apple ID stops opening after **7 days**. Two days
+before, the app shows a note on its Macs list; run `make ios-device` again
+with the iPhone connected and it renews (your Macs stay paired). A free ID is
+also limited to 3 apps on a phone and 10 new App IDs a week; a paid developer
+account has neither limit and lasts a year.
+
+A free account cannot have Push Notifications, so the native app gets no
+"needs you" alerts. They come from the page added to the Home Screen
+instead: open `mad phone`'s link in Safari, Add to Home Screen, and turn on
+the bell in the sidebar (see above). The native app is for reading and
+answering; the Home Screen page is what tells you when to look.
+
 The way in is the one from `mad phone on`: Tailscale (the iPhone needs the
 Tailscale app on the same tailnet) or a Cloudflare Tunnel.
 

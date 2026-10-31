@@ -27,9 +27,23 @@ mad.xcodeproj`.
 The simulator build is ad hoc signed (`CODE_SIGN_IDENTITY=-`), not unsigned: an
 unsigned app has no Keychain access, so it would forget every pairing.
 
-To run on a device, copy `Config/Local.xcconfig.example` to
-`Config/Local.xcconfig` (gitignored) and set `DEVELOPMENT_TEAM` and
-`MAD_BUNDLE_ID`.
+To put it on a phone with a free Apple ID, run `make ios-device` (the
+README at the top of the repository has the steps). `ios/scripts/device.sh` is
+what it runs: it finds your Personal Team (from Xcode's accounts, the profiles
+Xcode made, or your signing certificates) and writes `Config/Local.xcconfig`,
+picks the one connected iPhone (`DEVICE=<id>` otherwise), builds Release with
+`-allowProvisioningUpdates`, installs with `devicectl` and launches. With a team
+you already know, write `Config/Local.xcconfig` yourself (see
+`Config/Local.xcconfig.example`): `DEVELOPMENT_TEAM` and `MAD_BUNDLE_ID`.
+
+The project has no entitlements file, on purpose: a free account has no Push
+Notifications (`aps-environment`), and asking for it fails signing.
+
+A free account's provisioning profile lasts 7 days. The app reads the
+`embedded.mobileprovision` it carries (`ProvisioningProfile` in MadKit) and,
+with 2 days or fewer left, shows a note on the Macs list. The profile is not in
+the simulator, so nothing shows there; Debug builds take `-profileHoursLeft N`
+to see the note.
 
 ## How pairing works
 
@@ -67,6 +81,7 @@ Debug builds only (none of this is compiled into Release):
   `http://localhost…`, to run against a local `mad desktop -serve` (the
   Info.plist allows local networking; Release takes https only).
 - Launch arguments, e.g. `xcrun simctl launch <device> dev.mad.ios -openMac YES`:
+  - `-profileHoursLeft N` shows the note for a profile with N hours left,
   - `-pairLink <url>` pairs when no Mac is stored yet,
   - `-openMac YES` opens the first Mac,
   - `-startTab deck` starts on the Deck tab,

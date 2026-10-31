@@ -11,6 +11,7 @@ struct MacsView: View {
     @State private var problem: String?
     @State private var path: [Mac] = []
     @State private var retrying: Set<UUID> = []
+    @State private var expiry: String? = MacsView.expiryNotice()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -50,6 +51,16 @@ struct MacsView: View {
                 }
             }
             .navigationTitle("mad")
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let expiry {
+                    Label(expiry, systemImage: "clock.badge.exclamationmark")
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(.orange)
+                }
+            }
             .onAppear(perform: launchHooks)
             .navigationDestination(for: Mac.self) { MacView(mac: $0) }
             .toolbar {
@@ -90,6 +101,22 @@ struct MacsView: View {
         #else
         false
         #endif
+    }
+
+    /// The quiet notice for a build whose provisioning profile is about to run
+    /// out (a free Apple ID's lasts 7 days). The profile is not in the simulator
+    /// or in an App Store build, so nothing shows there.
+    static func expiryNotice(now: Date = Date()) -> String? {
+        #if DEBUG
+        // `-profileHoursLeft N` pretends the profile has N hours left, to see the notice.
+        if let h = UserDefaults.standard.string(forKey: "profileHoursLeft").flatMap(Double.init) {
+            return ProvisioningProfile.expiryNotice(expiration: now.addingTimeInterval(h * 3600), now: now)
+        }
+        #endif
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let date = ProvisioningProfile.expirationDate(in: data) else { return nil }
+        return ProvisioningProfile.expiryNotice(expiration: date, now: now)
     }
 
     /// Debug builds only, for driving the app from the command line:
