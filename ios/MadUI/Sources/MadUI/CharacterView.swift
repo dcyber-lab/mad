@@ -35,7 +35,7 @@ public struct CharacterView: View {
         }
         .frame(width: size * (1 + 2 * Self.margin), height: size * (1 + 2 * Self.margin))
         .frame(width: size, height: size)
-        .opacity(state == .stopped ? 0.45 : 1)
+        .opacity(state == .stopped ? 0.5 : 1)
         .accessibilityElement()
         .accessibilityLabel(state.word)
         .accessibilityAddTraits(.isImage)
