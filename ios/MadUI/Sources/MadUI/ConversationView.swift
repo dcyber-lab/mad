@@ -28,6 +28,7 @@ public struct ConversationView: View {
             composer
         }
         .background(.background)
+        .environment(\.convImageLoader, actions.loadImage)
     }
 
     // MARK: messages
@@ -208,7 +209,7 @@ struct EntryView: View {
     let entry: ConvEntry
     let model: AgentConversation
     let avatar: CGFloat
-    let loadEarlier: () -> Void
+    let loadEarlier: (() -> Void)?
 
     var body: some View {
         Group {
@@ -234,14 +235,16 @@ struct EntryView: View {
             case let .image(image):
                 AgentRow(model: model, avatar: avatar) { ImageView(image: image) }
             case let .earlier(note):
-                Button(action: loadEarlier) {
-                    Text(note)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                let label = Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                if let loadEarlier {
+                    Button(action: loadEarlier) { label }.buttonStyle(.plain)
+                } else {
+                    label
                 }
-                .buttonStyle(.plain)
             }
         }
         .modifier(EntryAccessibility(entry: entry, agent: model.title))
@@ -400,12 +403,27 @@ private struct DetailBox: View {
     }
 }
 
+struct ConvImageLoaderKey: EnvironmentKey {
+    static let defaultValue: ((ConvImage) async -> Data?)? = nil
+}
+
+extension EnvironmentValues {
+    var convImageLoader: ((ConvImage) async -> Data?)? {
+        get { self[ConvImageLoaderKey.self] }
+        set { self[ConvImageLoaderKey.self] = newValue }
+    }
+}
+
 struct ImageView: View {
     let image: ConvImage
+    @Environment(\.convImageLoader) private var loader
+    @State private var loaded: Image?
 
     var body: some View {
         Group {
-            if let url = image.url {
+            if let loaded {
+                loaded.resizable().scaledToFit()
+            } else if let url = image.url {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(img): img.resizable().scaledToFit()
@@ -418,6 +436,18 @@ struct ImageView: View {
         }
         .frame(maxWidth: 240, maxHeight: 240)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .task(id: image) {
+            guard !image.source.isEmpty, let loader, let data = await loader(image) else { return }
+            loaded = Self.decode(data)
+        }
+    }
+
+    static func decode(_ data: Data) -> Image? {
+        #if os(iOS)
+        UIImage(data: data).map(Image.init(uiImage:))
+        #else
+        NSImage(data: data).map(Image.init(nsImage:))
+        #endif
     }
 
     private var placeholder: some View {
@@ -442,14 +472,17 @@ struct AskCardView: View {
     let act: (String, String?) -> Void
     @State private var asking: AskAct?
     @State private var text = ""
+    @State private var contentHeight: CGFloat = 0
+    static let maxHeight: CGFloat = 320
 
     var body: some View {
         // at the largest text sizes the card would fill the screen: past a height it scrolls inside itself
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView { content }
+        ScrollView {
+            content.background(GeometryReader { Color.clear.preference(key: AskHeightKey.self, value: $0.size.height) })
         }
-        .frame(maxHeight: 320)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: contentHeight > 0 ? min(contentHeight, Self.maxHeight) : nil)
+        .onPreferenceChange(AskHeightKey.self) { contentHeight = $0 }
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -516,6 +549,11 @@ struct AskCardView: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct AskHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// Lays children left to right and wraps to the next line, so the acts never run past the screen.
