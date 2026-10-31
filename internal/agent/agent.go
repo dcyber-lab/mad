@@ -60,7 +60,7 @@ var builtin = []Kind{
 		Start:   "claude --settings {claude_settings} {mad_mcp} --session-id {id}",
 		Resume:  "claude --settings {claude_settings} {mad_mcp} --resume {sid}",
 		Fork:    "--fork-session",
-		Waiting: []string{`Do you want to`, `❯ 1\. Yes`, `trust this folder`, `Enter to confirm`},
+		Waiting: []string{`Do you want to`, `❯ 1\. Yes`, `trust this folder`, `Enter to confirm`, `Enter to select`},
 		Hooks:   true,
 	},
 	{

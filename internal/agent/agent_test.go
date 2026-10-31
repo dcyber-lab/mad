@@ -203,7 +203,7 @@ func TestLoadMergesAgentsJSON(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 	// Merging never touches the built-ins themselves.
-	if b := ByName(Builtin(), "claude"); b.Start == claude.Start || len(b.Waiting) != 4 || b.Waiting[0] != "Do you want to" {
+	if b := ByName(Builtin(), "claude"); b.Start == claude.Start || len(b.Waiting) != 5 || b.Waiting[0] != "Do you want to" {
 		t.Errorf("built-in changed: %+v", b)
 	}
 }
