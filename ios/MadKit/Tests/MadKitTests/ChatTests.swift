@@ -75,7 +75,7 @@ final class ChatDecodingTests: XCTestCase {
                     {"state": "asleep", "word": "Asleep", "tone": "quiet"}]}
         """)
         let a = s.projects[0].agents
-        XCTAssertEqual(a.map(\.label), ["ios", "fix tests", "pi", "a4"], "name, else title, else kind, else id")
+        XCTAssertEqual(a.map(\.label), ["ios", "fix tests", "pi a3", "a4"], "name, else title, else kind and the id's first 8, else the id")
         XCTAssertTrue(a[0].inWindowMode)
         XCTAssertTrue(a[0].headless)
         XCTAssertEqual(a[1].team, "pay")
@@ -85,6 +85,23 @@ final class ChatDecodingTests: XCTestCase {
         XCTAssertEqual(s.word(for: "mystery"), "Mystery", "an unknown state is shown as it is")
         let order = a.sorted { s.rank(of: $0) < s.rank(of: $1) }.map(\.id)
         XCTAssertEqual(order, ["a1", "a3", "a2", "a4"], "working first, then needs you, then the deck's order")
+    }
+}
+
+final class AgentLabelTests: XCTestCase {
+    func testUntitledAgentsAreToldApartByTheirIdLikeThePage() {
+        let a = DeckSnapshot.Agent(id: "6625f15d-ed6b-4dc7-94ff-e8eb501a6c99", kind: "claude", status: "asleep")
+        let b = DeckSnapshot.Agent(id: "39a28bf3-f828-4ac9-9ceb-72341a6e8e38", kind: "claude", status: "stopped")
+        XCTAssertEqual(a.label, "claude 6625f15d")
+        XCTAssertEqual(b.label, "claude 39a28bf3")
+        XCTAssertFalse(a.isNamed)
+    }
+
+    func testANameOrTitleWinsOverTheKindAndId() {
+        XCTAssertEqual(DeckSnapshot.Agent(id: "abcdef0123456789", kind: "codex", name: "ada", title: "t", status: "idle").label, "ada")
+        XCTAssertEqual(DeckSnapshot.Agent(id: "abcdef0123456789", kind: "codex", title: "fix tests", status: "idle").label, "fix tests")
+        XCTAssertTrue(DeckSnapshot.Agent(id: "abcdef0123456789", kind: "codex", title: "fix tests", status: "idle").isNamed)
+        XCTAssertEqual(DeckSnapshot.Agent(id: "abc", kind: "", status: "idle").label, "abc", "no kind: the id")
     }
 }
 

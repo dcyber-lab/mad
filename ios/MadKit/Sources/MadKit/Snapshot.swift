@@ -17,12 +17,16 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
         public var mode: String?
         public var headless: Bool
 
-        /// What to call it: the user's name, else the conversation's title,
-        /// else its kind, else the id.
+        /// Whether the person or the conversation named it.
+        public var isNamed: Bool { !(name ?? "").isEmpty || !(title ?? "").isEmpty }
+
+        /// What to call it, as the page does: the user's name, else the
+        /// conversation's title, else the kind and the first 8 characters of
+        /// the id ("claude 6625f15d"), so untitled agents tell apart.
         public var label: String {
             if let n = name, !n.isEmpty { return n }
             if let t = title, !t.isEmpty { return t }
-            if let k = kind, !k.isEmpty { return k }
+            if let k = kind, !k.isEmpty { return "\(k) \(id.prefix(8))" }
             return id
         }
 
