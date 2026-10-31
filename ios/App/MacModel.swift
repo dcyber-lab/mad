@@ -21,20 +21,38 @@ final class MacModel: ObservableObject {
     /// A server message to show the person (a 409's text, a failed act).
     @Published var notice: String?
 
+    /// The Mac's own name, from each snapshot: the store adopts it unless the
+    /// person renamed the Mac.
+    var onMachineName: (String?) -> Void = { _ in }
+
     private let client: MadClient
-    private(set) lazy var web: DeckWebHost = DeckWebHost(url: mac.deckURL)
+    private(set) lazy var web: DeckWebHost = DeckWebHost(url: mac.embeddedDeckURL)
+    /// Debug builds only: a sample snapshot instead of a live Mac; acts send nothing.
+    private let fixture: Bool
 
     init(mac: Mac) {
         self.mac = mac
         self.client = MadClient(mac: mac)
+        #if DEBUG
+        let sample = Fixture.snapshot()
+        fixture = sample != nil
+        if let sample {
+            snapshot = sample
+            link = .ok
+        }
+        #else
+        fixture = false
+        #endif
     }
 
     var needs: Int { snapshot?.needs ?? 0 }
 
     func refresh() async {
+        if fixture { return }
         do {
             snapshot = try await client.deck()
             link = .ok
+            onMachineName(snapshot?.machine)
         } catch let e as ConnectionError {
             link = .failed(e)
         } catch {
@@ -54,6 +72,10 @@ final class MacModel: ObservableObject {
         // A second tap on the same item while one is in flight does nothing.
         guard busy.insert(item.key).inserted else { return }
         defer { busy.remove(item.key) }
+        if fixture {
+            notice = "Sample data: nothing was sent."
+            return
+        }
         do {
             try await client.act(key: item.key, verb: act.verb, option: act.option, text: text)
             UINotificationFeedbackGenerator().notificationOccurred(.success)

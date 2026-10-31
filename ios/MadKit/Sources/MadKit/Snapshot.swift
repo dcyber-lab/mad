@@ -153,16 +153,20 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
     }
 
     public var projects: [Project]
+    /// The Mac's friendly name; nil from a server that does not send it.
+    public var machine: String?
     /// The inbox's items: the first `needs` need the person, the rest finished unseen.
     public var inbox: [InboxItem]
     public var needs: Int
 
-    enum CodingKeys: String, CodingKey { case projects, inbox }
+    enum CodingKeys: String, CodingKey { case projects, inbox, machine }
     enum InboxKeys: String, CodingKey { case items, needs }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []
+        let m = try c.decodeIfPresent(String.self, forKey: .machine)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        machine = (m?.isEmpty ?? true) ? nil : m
         if let ib = try? c.nestedContainer(keyedBy: InboxKeys.self, forKey: .inbox) {
             inbox = try ib.decodeIfPresent([InboxItem].self, forKey: .items) ?? []
             needs = try ib.decodeIfPresent(Int.self, forKey: .needs) ?? 0
@@ -172,7 +176,8 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
         }
     }
 
-    public init(projects: [Project], inbox: [InboxItem], needs: Int) {
+    public init(projects: [Project], inbox: [InboxItem], needs: Int, machine: String? = nil) {
+        self.machine = machine
         self.projects = projects; self.inbox = inbox; self.needs = needs
     }
 

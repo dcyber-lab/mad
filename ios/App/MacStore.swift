@@ -34,6 +34,7 @@ final class MacStore: ObservableObject {
         var name: String
         var baseURL: URL
         var deviceID: String?
+        var renamed: Bool?
     }
 
     private struct StoredPending: Codable {
@@ -55,7 +56,8 @@ final class MacStore: ObservableObject {
            let list = try? JSONDecoder().decode([Stored].self, from: data) {
             macs = list.compactMap { s in
                 guard let t = secrets.get(s.id.uuidString) else { return nil }
-                return Mac(id: s.id, name: s.name, baseURL: s.baseURL, token: t, deviceID: s.deviceID)
+                return Mac(id: s.id, name: s.name, baseURL: s.baseURL, token: t, deviceID: s.deviceID,
+                           renamed: s.renamed ?? false)
             }
         }
         if let data = defaults.data(forKey: pendingKey),
@@ -78,6 +80,7 @@ final class MacStore: ObservableObject {
     func complete(_ p: PairingBook.Pending) async throws { try await book.complete(p) }
     func drop(_ p: PairingBook.Pending) { book.drop(p) }
     func rename(_ mac: Mac, to name: String) { book.rename(mac, to: name) }
+    func adoptMachineName(_ name: String?, for mac: Mac) { book.adoptMachineName(name, for: mac) }
 
     func dropPending(at offsets: IndexSet) {
         for p in offsets.map({ pending[$0] }) { book.drop(p) }
@@ -97,7 +100,8 @@ final class MacStore: ObservableObject {
     }
 
     private func persist() {
-        let list = macs.map { Stored(id: $0.id, name: $0.name, baseURL: $0.baseURL, deviceID: $0.deviceID) }
+        let list = macs.map { Stored(id: $0.id, name: $0.name, baseURL: $0.baseURL, deviceID: $0.deviceID,
+                                renamed: $0.renamed) }
         if let data = try? JSONEncoder().encode(list) { defaults.set(data, forKey: key) }
         let waiting = pending.map { StoredPending(id: $0.id, base: $0.base, code: $0.code, name: $0.name) }
         if let data = try? JSONEncoder().encode(waiting) { defaults.set(data, forKey: pendingKey) }

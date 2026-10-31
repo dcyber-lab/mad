@@ -71,13 +71,20 @@ struct ItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
+                if item.blocks {
+                    Circle().fill(.orange).frame(width: 8, height: 8)
+                        .accessibilityLabel("An agent is stopped until you act")
+                }
                 Text(item.title).font(.headline)
                 if let a = agent, a.label != item.title {
                     Text(a.label).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if let since = item.since {
-                    Text(since, style: .relative).font(.caption).foregroundStyle(.secondary)
+                    // Short and quiet ("2m"), re-read every half minute.
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        Text(Age.short(from: since, to: ctx.date)).font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
             if let c = item.context, !c.isEmpty {
@@ -154,5 +161,18 @@ struct WrapLayout: Layout {
             maxW = max(maxW, x - spacing)
         }
         return (CGSize(width: maxW, height: y + rowH), origins)
+    }
+}
+
+enum Age {
+    /// "now", "5m", "3h", "2d": how long ago, in one short word.
+    static func short(from: Date, to now: Date) -> String {
+        let s = max(0, Int(now.timeIntervalSince(from)))
+        switch s {
+        case ..<60: return "now"
+        case ..<3600: return "\(s / 60)m"
+        case ..<86400: return "\(s / 3600)h"
+        default: return "\(s / 86400)d"
+        }
     }
 }

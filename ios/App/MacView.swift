@@ -5,10 +5,18 @@ import SwiftUI
 /// side as two tabs.
 struct MacView: View {
     @StateObject private var model: MacModel
+    @EnvironmentObject private var store: MacStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
     @State private var tab: Tab = MacView.firstTab
+    @State private var lastTab: Tab = MacView.firstTab
 
-    enum Tab { case needs, deck }
+    /// `macs` is not a screen: choosing it goes back to the Macs list, so the
+    /// way back stays obvious while the Deck tab hides the navigation bar.
+    enum Tab { case needs, deck, macs }
+
+    /// The name as it stands now: the store may have renamed it since this screen opened.
+    private var title: String { store.macs.first { $0.id == model.mac.id }?.name ?? model.mac.name }
 
     /// Debug builds only: `-startTab deck` opens on the Deck tab.
     private static var firstTab: Tab {
@@ -29,9 +37,23 @@ struct MacView: View {
             DeckTab(model: model)
                 .tabItem { Label("Deck", systemImage: "square.grid.2x2") }
                 .tag(Tab.deck)
+            Color.clear
+                .tabItem { Label("Macs", systemImage: "list.bullet") }
+                .tag(Tab.macs)
         }
-        .navigationTitle(model.mac.name)
+        .onChange(of: tab) { _, new in
+            if new == .macs {
+                tab = lastTab
+                dismiss()
+            } else {
+                lastTab = new
+            }
+        }
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        // The page's own header is enough on the Deck tab.
+        .toolbar(tab == .deck ? .hidden : .visible, for: .navigationBar)
+        .onAppear { model.onMachineName = { [mac = model.mac] in store.adoptMachineName($0, for: mac) } }
         // Polls while this screen is shown and the app is active; the task
         // restarts on every return to the foreground, so it looks at once.
         .task(id: scenePhase) {
