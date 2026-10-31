@@ -116,6 +116,20 @@ function statusPill(a) {
   return p;
 }
 
+// composing: an IME is composing text, in any box of the page.
+let composing = false;
+document.addEventListener("compositionstart", () => { composing = true; }, true);
+document.addEventListener("compositionend", () => {
+  composing = false;
+  setTimeout(() => !composing && drawSidebar(), 0); // after the box has taken its text
+}, true);
+
+// workHold keeps an agent in Working for a few seconds after its turn
+// ends, by id: agents flip between a turn and idle, and a row that
+// leaves and returns on every flip moves everything below it.
+const workHold = new Map();
+const holdMs = 6000;
+
 // Projects folded away, by path.
 const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.collapsed") || "[]"); } catch (_) { return []; } })());
 
@@ -124,10 +138,14 @@ const collapsed = new Set((() => { try { return JSON.parse(localStorageGet("mad.
 // the agents that are quiet. An agent is drawn once; a project's head
 // rolls up all of its agents.
 function drawSidebar() {
-  keepFocus(() => {
-    drawList();
-    drawHome();
-  });
+  // An IME's composition dies when its page is redrawn around it: the list
+  // waits for compositionend (below) to draw what came in meanwhile.
+  if (!composing) {
+    keepFocus(() => {
+      drawList();
+      drawHome();
+    });
+  }
   drawQueue();
   for (const [id, o] of opened) {
     const a = agents.get(id);
@@ -177,7 +195,14 @@ function drawList() {
   const has = (...s) => !q || s.some((x) => (x || "").toLowerCase().includes(q));
   const agentHas = (a) => a && has(label(a), a.title, a.kind, a.tool, a.target, a.project.name);
   const needs = needsYou(), fin = finishedItems();
-  const work = (deck.working || []).map((id) => agents.get(id)).filter(Boolean);
+  const finIDs = new Set(fin.map((it) => it.agent));
+  const blocked = new Set(needs.filter((it) => it.blocks && it.agent).map((it) => it.agent));
+  const now = Date.now();
+  const live = new Set(deck.working || []);
+  for (const id of live) workHold.set(id, now);
+  for (const [id, at] of workHold) if (!agents.has(id) || (!live.has(id) && now - at > holdMs)) workHold.delete(id);
+  const work = [...live, ...[...workHold.keys()].filter((id) => !live.has(id) && !finIDs.has(id) && !blocked.has(id))]
+    .map((id) => agents.get(id)).filter(Boolean);
   // Drawn above, so not again in their projects: what works, what
   // finished, and what is blocked on you (its row is its item).
   const placed = new Set([...work.map((a) => a.id), ...fin.map((it) => it.agent)]);
@@ -206,7 +231,8 @@ function drawList() {
   }
   const shownWork = work.filter(agentHas);
   if (shownWork.length) {
-    nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", shownWork, 5, 5, agentRow, "working")));
+    // A team's working agents are one unit under its head; the rest are rows.
+    nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", workUnits(shownWork), 5, 5, (u) => u.t ? teamBlock(u.t, u.mem) : agentRow(u.a), "working")));
   }
   const shownFin = fin.filter((it) => agentHas(agents.get(it.agent)));
   if (shownFin.length) {
@@ -237,9 +263,21 @@ function drawList() {
     }
     nodes.push(box);
   }
-  nav.replaceChildren(...nodes);
-  fitRows(nav);
-  nav.scrollTop = keep;
+  // What drew the same as last time stays: the page polls each second, and
+  // a list set again under a hand or a caret is a list that moves.
+  const sig = nodes.map((n) => n.outerHTML).join("");
+  if (sig !== nav.dataset.sig) {
+    const ae = document.activeElement;
+    const own = ae && ae !== document.body && nav.contains(ae) ? ae : null;
+    const rk = own && own.classList.contains("row") ? own.dataset.key : null;
+    const hi = own && own.classList.contains("head") ? [...nav.querySelectorAll(".project > .head")].indexOf(own) : -1;
+    nav.dataset.sig = sig;
+    nav.replaceChildren(...nodes);
+    fitRows(nav);
+    nav.scrollTop = keep;
+    if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"]`)?.focus({ preventScroll: true });
+    else if (hi >= 0) nav.querySelectorAll(".project > .head")[hi]?.focus({ preventScroll: true });
+  }
   $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;
 }
 
@@ -299,6 +337,27 @@ function capped(name, list, limit, keep, draw, noun, must) {
   return out;
 }
 
+// workUnits groups working agents: one unit per team (its working members),
+// one per agent that is in none.
+function workUnits(list) {
+  const units = [];
+  const at = new Map();
+  for (const a of list) {
+    const t = a.team && (deck.teams || []).find((x) => x.name === a.team && x.project === a.project.name);
+    if (!t) { units.push({ a }); continue; }
+    if (!at.has(t)) { const u = { t, mem: [] }; at.set(t, u); units.push(u); }
+    at.get(t).mem.push(a);
+  }
+  return units;
+}
+
+// teamBlock is a team in Working: its head, then its working members.
+function teamBlock(t, working) {
+  const box = el("div", "team wteam");
+  box.append(teamHead(t, working), ...working.map((a) => agentRow(a)));
+  return box;
+}
+
 // agentRow is an agent as a row: its avatar with its live dot, its name,
 // and its activity line; its team or role, else its cost, on the right.
 function agentRow(a, key) {
@@ -311,9 +370,10 @@ function agentRow(a, key) {
     name.append(n);
   }
   const right = [];
-  if (a.role) right.push(el("span", "tag", a.role));
-  else if (st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
-  if (st === "running" && a.chat) right.push(interruptButton(a));
+  // The role only where the name does not say it. Interrupt is in the
+  // row's menu and on its team's head: a button here took the name's room.
+  if (a.role && a.role !== label(a)) right.push(el("span", "tag", a.role));
+  else if (!a.role && st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
@@ -370,12 +430,39 @@ function projectHead(p, quiet) {
 }
 
 // teamHead is a team in its project: its name and how its members stand.
-function teamHead(t) {
+function teamHead(t, working) {
   const ch = (deck.bus || []).find((c) => c.team && c.team.name === t.name);
-  const h = el("div", `teamhead${ch ? " link" : ""}`);
-  h.append(icon("users"), el("b", "", t.name), el("span", "grow"), rollupNode(t.rollup));
+  const h = el("div", `teamhead${ch ? " link" : ""}${working ? " tall" : ""}`);
+  const top = el("div", "th1");
+  top.append(icon("users"), el("b", "", t.name));
+  if (ch && ch.topic) top.append(el("span", "goal", ch.topic));
+  top.append(el("span", "grow"));
+  if (working) top.append(el("span", "wn", `${working.filter((a) => shownStatus(a) === "running").length}/${t.members.length} working`));
+  else top.append(rollupNode(t.rollup));
+  const runs = working ? working.filter((a) => shownStatus(a) === "running" && a.chat && !interruptSent(a)) : [];
+  if (runs.length) {
+    const b = el("button", "icon-btn tstop");
+    b.type = "button";
+    b.title = `interrupt the ${runs.length} working in ${t.name}`;
+    b.append(icon("stop"));
+    b.onclick = (e) => { e.stopPropagation(); runs.forEach((a) => interruptAgent(a)); };
+    top.append(b);
+  }
+  h.append(top);
+  if (working) {
+    // every role of the team, by how it stands: the ones not shown below too
+    const chips = el("div", "th2");
+    for (const id of t.members) {
+      const a = agents.get(id);
+      if (!a) continue;
+      const c = el("span", `rchip s-${shownStatus(a)}`);
+      c.append(glyph(look(shownStatus(a)).tone), a.role || label(a));
+      chips.append(c);
+    }
+    h.append(chips);
+  }
   if (ch) {
-    h.title = `${ch.title}: its channel`;
+    h.title = `${ch.title}${ch.topic ? ": " + ch.topic : ""}\nopen its channel`;
     h.onclick = () => openChannel(ch.id);
   }
   return h;
