@@ -47,6 +47,11 @@ func chatText(_ text: String, mine: Bool) -> AttributedString {
     var a = (try? AttributedString(markdown: text, options: .init(allowsExtendedAttributes: false,
                                                                     interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(text)
+    // a link keeps its underline, and in the blue bubble is as white as the text (blue on blue is not read)
+    for run in a.runs where run.link != nil {
+        a[run.range].underlineStyle = .single
+        if mine { a[run.range].foregroundColor = .white }
+    }
     let plain = String(a.characters)
     guard let re = try? NSRegularExpression(pattern: "@[\\p{L}\\p{N}_-]+") else { return a }
     for m in re.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
