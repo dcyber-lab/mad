@@ -8,13 +8,28 @@ struct MacView: View {
     @StateObject private var model: MacModel
     @EnvironmentObject private var store: MacStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    /// The build's standing when it is about to run out, looked at again when
+    /// the app comes back; nil once put away for the day.
+    @State private var expiry: ProvisioningProfile.Expiry?
+    private static let dismissedKey = "expiryDismissedDay"
 
     init(mac: Mac) { _model = StateObject(wrappedValue: MacModel(mac: mac)) }
 
     var body: some View {
-        DeckWebView(host: model.web)
-            .ignoresSafeArea(.container)
-            .background(Color(.systemBackground).ignoresSafeArea())
+        VStack(spacing: 0) {
+            if let expiry {
+                ExpiryBar(text: expiry.chinese) {
+                    UserDefaults.standard.set(ExpiryDismissal.dayKey(Date()), forKey: Self.dismissedKey)
+                    self.expiry = nil
+                }
+            }
+            // Edge to edge; under a banner the page starts below it, which already clears the status bar.
+            DeckWebView(host: model.web)
+                .ignoresSafeArea(.container, edges: expiry == nil ? .all : [.horizontal, .bottom])
+        }
+        .background(Color(.systemBackground).ignoresSafeArea())
+            .onChange(of: scenePhase) { _, phase in if phase == .active { refreshExpiry() } }
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .onAppear {
@@ -24,6 +39,7 @@ struct MacView: View {
                     }
                 }
                 store.opened(model.mac)
+                refreshExpiry()
             }
             .task {
                 #if DEBUG
@@ -34,5 +50,10 @@ struct MacView: View {
                 #endif
                 if let name = await model.machineName() { store.adoptMachineName(name, for: model.mac) }
             }
+    }
+
+    private func refreshExpiry() {
+        let day = UserDefaults.standard.string(forKey: Self.dismissedKey)
+        expiry = ExpiryDismissal.isDismissed(storedDay: day, now: Date()) ? nil : ProfileExpiry.current()
     }
 }

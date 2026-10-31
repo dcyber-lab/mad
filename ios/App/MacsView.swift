@@ -118,20 +118,9 @@ struct MacsView: View {
         #endif
     }
 
-    /// The quiet notice for a build whose provisioning profile is about to run
-    /// out (a free Apple ID's lasts 7 days). The profile is not in the simulator
-    /// or in an App Store build, so nothing shows there.
+    /// The quiet notice for a build about to run out; nil while there is time.
     static func expiryNotice(now: Date = Date()) -> String? {
-        #if DEBUG
-        // `-profileHoursLeft N` pretends the profile has N hours left, to see the notice.
-        if let h = UserDefaults.standard.string(forKey: "profileHoursLeft").flatMap(Double.init) {
-            return ProvisioningProfile.expiryNotice(expiration: now.addingTimeInterval(h * 3600), now: now)
-        }
-        #endif
-        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url),
-              let date = ProvisioningProfile.expirationDate(in: data) else { return nil }
-        return ProvisioningProfile.expiryNotice(expiration: date, now: now)
+        ProfileExpiry.current(now: now)?.english
     }
 
     /// Debug builds only, for driving the app from the command line:
