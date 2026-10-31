@@ -72,7 +72,7 @@ struct AgentsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(a.label).font(.body).foregroundStyle(.primary)
-                    if let k = a.kind, k != a.label { Text(k).font(.caption).foregroundStyle(.secondary) }
+                    if a.isNamed, let k = a.kind { Text(k).font(.caption).foregroundStyle(.secondary) }
                 }
                 Spacer()
                 Text(snap.word(for: a.state)).font(.footnote)
