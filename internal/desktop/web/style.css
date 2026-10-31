@@ -1534,6 +1534,8 @@ html.ptype .phonebox .pdev { font-size: 14px; }
 }
 .avatar.chara .dot { display: none; }
 .avwrap { position: relative; display: grid; flex: none; }
+/* a group tile keeps the 4px that .group gives it (as it had on its own), so its dot is 4px down to stay on the tile's corner */
+.avwrap.ofgroup > .rdot { top: 4px; }
 .avatar .rdot, .avwrap > .rdot {
   position: absolute; top: 0; right: 0; width: 11px; height: 11px; border-radius: 50%;
   background: #ff3b30; border: 2.5px solid var(--row, var(--bg));

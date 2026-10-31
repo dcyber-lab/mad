@@ -231,7 +231,7 @@ function stateWord(st) {
 // character, not in it: the character is an image, and what is inside an image
 // is not read by a screen reader or found by a test.
 function withDot(v) {
-  const w = el("span", "avwrap");
+  const w = el("span", `avwrap${v.classList.contains("group") ? " ofgroup" : ""}`);
   w.append(v, redDot());
   return w;
 }
