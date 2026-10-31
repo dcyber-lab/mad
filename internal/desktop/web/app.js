@@ -71,29 +71,16 @@ function authSocket(path, params) {
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}?${new URLSearchParams(params)}`;
   return new WebSocket(url, ["mad", `mad.token.${token}`]);
 }
-// loadImage shows what url serves in img: fetched with the token, kept as
-// a blob URL that is let go of once img has left the page.
-const blobs = new Map(); // img → its object URL
+// loadImage shows what url serves in img: fetched with the token, as a blob URL kept by blobCache
+// (blobs.js): a channel's picture shared by its id, the rest let go of with their img.
+const blobCache = new BlobCache({ budget: 40 << 20, shown: (u) => [...document.images].some((i) => i.src === u) });
 function loadImage(img, url) {
-  return authFetch(url)
-    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
-    .then((b) => {
-      const u = URL.createObjectURL(b);
-      blobs.get(img) && URL.revokeObjectURL(blobs.get(img));
-      blobs.set(img, u);
-      img.src = u;
-    })
-    .catch(() => img.removeAttribute("src"));
+  const get = () => authFetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))));
+  const id = url.startsWith("/api/bus/image?") && new URLSearchParams(url.slice(url.indexOf("?"))).get("id");
+  const made = id ? blobCache.fetch(`bus:${id}`, get) : get().then((b) => blobCache.own(img, b));
+  return made.then((u) => { img.src = u; }).catch(() => img.removeAttribute("src"));
 }
-setInterval(() => {
-  const open = document.querySelector("#lightbox img")?.src;
-  for (const [img, u] of blobs) {
-    if (!img.isConnected && u !== open) {
-      URL.revokeObjectURL(u);
-      blobs.delete(img);
-    }
-  }
-}, 20000);
+setInterval(() => blobCache.sweep(), 20000);
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -678,6 +665,7 @@ function drawQueue(fresh) {
     fitInput();
   }
   $("#attach").hidden = !takesImages();
+  box.classList.toggle("inchan", !!cv.open); // a channel's message box is one line
   if (cv.open) {
     // A channel: what is typed is posted, as you.
     $("#qinput").placeholder = "发消息给 " + chanTitle(cv.open).replace(/^[#@]/, "");
@@ -1374,14 +1362,16 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    if (cv.open && document.documentElement.classList.contains("ptype")) {
-      // The channel's tile and its name, as the phone's chat head has them
-      // (back, tile, name, the members at the right).
-      t.replaceChildren(chanTile(cv.open), el("span", "pt", chanTitle(cv.open).replace(/^[#@]/, "")));
-      t.className = "chan";
+    if (cv.open && !bd.open && !us.open && !sk.open && !nc.open) {
+      // a channel: its tile, name and one small line, which open its panel
+      const old = t.querySelector(".chwho");
+      const who = chanHeadWho(cv.open, old);
+      if (who !== old || t.children.length !== 1) t.replaceChildren(who);
+      t.className = "chtitle";
+      t.dataset.agent = "";
       return;
     }
-    t.replaceChildren(el("span", "pt", bd.open ? "Board" : us.open ? "Usage" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", bd.open ? (bd.channel ? `Board · #${bd.channel}` : "Board") : us.open ? "Usage" : sk.open ? "Skills" : nc.open ? "New chat" : ""));
     t.className = "";
     t.dataset.agent = "";
     return;
@@ -1565,18 +1555,21 @@ function addEntry(o, e) {
 function imageRow(urls, who) {
   const row = el("div", "imgs");
   const name = who ? `图片，来自 ${who}` : "图片";
-  for (const u of urls) {
-    // a button named for the picture and who sent it, which opens it large
-    const img = imageNode(u, name);
-    img.onclick = null; // the button opens it
-    const b = el("button", "cimgbtn");
-    b.type = "button";
-    b.setAttribute("aria-label", name);
-    b.onclick = () => img.src && openLightbox(img.src);
-    b.append(img);
-    row.append(b);
-  }
+  for (const u of urls) row.append(imageButton(u, name));
   return row;
+}
+
+// imageButton is a picture as a button named for it (and who sent it), which
+// opens it large.
+function imageButton(u, name) {
+  const img = imageNode(u, name);
+  img.onclick = null; // the button opens it
+  const b = el("button", "cimgbtn");
+  b.type = "button";
+  b.setAttribute("aria-label", name);
+  b.onclick = () => img.src && openLightbox(img.src);
+  b.append(img);
+  return b;
 }
 
 function imageNode(u, alt = "") {
@@ -1623,6 +1616,7 @@ function localImages(m, text, id) {
 }
 
 function openLightbox(src) {
+  const from = document.activeElement;
   const box = el("div", "");
   box.id = "lightbox";
   const img = el("img");
@@ -1631,6 +1625,7 @@ function openLightbox(src) {
   const close = () => {
     box.remove();
     window.removeEventListener("keydown", key, true);
+    if (from?.isConnected) from.focus({ preventScroll: true });
   };
   const key = (e) => {
     if (e.key === "Escape") {

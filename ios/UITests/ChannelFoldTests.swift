@@ -1,10 +1,23 @@
 import XCTest
 
-/// A long channel (`channel-fold` scenario): folded handoffs and reports, whole
-/// @you and own messages, pictures with a lightbox, a long URL, and a member strip.
+/// A long channel (`channel-fold` scenario): folded handoffs and reports as thin lines,
+/// whole @you and own messages, pictures with a lightbox, a long URL, a long quote,
+/// the 群信息 panel, and the long-press menu.
 final class ChannelFoldTests: MadUITestCase {
-    private var showMore: XCUIElementQuery { web.buttons.matching(NSPredicate(format: "label == %@", "Show more")) }
-    private var showLess: XCUIElementQuery { web.buttons.matching(NSPredicate(format: "label == %@", "Show less")) }
+    /// The folded lines: buttons named by their text ("→ builder：…", "完成：…"). Four of the
+    /// scenario's messages fold: the handoff, the done report, and two long ones.
+    private var lines: XCUIElementQuery {
+        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@",
+                                         "→ builder", "完成", "修改在这里", "命令"))
+    }
+    private var handoff: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "→ builder")).firstMatch }
+    private var done: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "完成")).firstMatch }
+
+    /// ⓘ, which opens 群信息 (the dialog it opens has the same label). It and the head's button
+    /// say aria-haspopup, so WebKit makes them pop-up buttons, not buttons: any element will do.
+    private var info: XCUIElement { element("群信息").firstMatch }
+    /// The head: the channel's tile, its name and "空闲", one button that opens 群信息 too.
+    private var head: XCUIElement { element("fold，空闲").firstMatch }
 
     override func setUp() {
         super.setUp()
@@ -14,22 +27,39 @@ final class ChannelFoldTests: MadUITestCase {
         let row = web.buttons["fold"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no “fold” row to open")
         row.tap()
+        // A tap on a page that has only just come up is sometimes lost: once more, then it must have opened.
+        if !element("发消息给 fold").firstMatch.waitForExistence(timeout: 10) { row.tap() }
         XCTAssertTrue(element("发消息给 fold").firstMatch.waitForExistence(timeout: 10), "the channel did not open (no composer)")
-        wait("the channel's messages did not come") { self.showMore.count >= 2 }
+        wait("the channel's messages did not come") { self.lines.count >= 2 }
     }
 
-    func testHandoffAndDoneAreFoldedAndShowMoreExpandsThenShowLessFolds() {
-        // At least the handoff and the done report are folded (the fixture may fold more).
-        let folded = showMore.count
-        XCTAssertGreaterThanOrEqual(folded, 2, "the handoff and the done report should each be folded: \(folded) “Show more”")
+    // MARK: Folded lines
+
+    func testHandoffAndDoneAreThinLinesThatOpenInPlaceAndFoldAgain() {
+        // At least the handoff and the done report are one line each (the fixture has two long messages more).
+        XCTAssertGreaterThanOrEqual(lines.count, 2, "the handoff and the done report should each be one line: \(lines.count)")
+        XCTAssertTrue(handoff.label.contains("Images in bus channels and DMs"), "the handoff line says: “\(handoff.label)”")
+        XCTAssertTrue(done.label.contains("Done: PR #88 adds pictures to channels"), "the done line says: “\(done.label)”")
+        XCTAssertFalse(done.label.contains("PR PR"), "the done line repeats PR: “\(done.label)”")
         shot("folded")
-        showMore.firstMatch.tap()
-        wait("“Show less” did not appear after Show more") { self.showLess.count >= 1 }
-        XCTAssertEqual(showMore.count, folded - 1, "Show more should have expanded just that one")
-        shot("one expanded")
-        showLess.firstMatch.tap()
-        wait("Show less did not fold it again") { self.showMore.count == folded }
-        XCTAssertEqual(showLess.count, 0)
+        // The rest of the report is not on the page until the line is opened, there, and folds again.
+        let rest = elements(containing: "One thing to know")
+        XCTAssertEqual(rest.count, 0, "the done report's text is shown while it is folded")
+        done.tap()
+        XCTAssertTrue(rest.firstMatch.waitForExistence(timeout: 5), "tapping the done line did not open its text")
+        XCTAssertEqual(elements(containing: "Do it on a branch").count, 0, "opening one line opened the handoff too")
+        shot("the done report open")
+        done.tap()
+        waitUntilGone(rest.firstMatch, "tapping the done line again did not fold it")
+        handoff.tap()
+        XCTAssertTrue(elements(containing: "Do it on a branch").firstMatch.waitForExistence(timeout: 5), "tapping the handoff did not open it")
+    }
+
+    func testNoShowMoreAndNoMemberStripAnywhere() {
+        for gone in ["Show more", "Show less", "Reply"] {
+            XCTAssertEqual(element(gone).count, 0, "“\(gone)” is still on the page")
+        }
+        XCTAssertEqual(web.buttons.matching(NSPredicate(format: "label MATCHES %@", ".*\\+[0-9]+")).count, 0, "a +n member strip is still there")
     }
 
     func testAtYouAndOwnMessagesAreWholeAndNotFolded() {
@@ -37,9 +67,19 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(element("请看一下 #88，合并前需要你确认").firstMatch.exists, "the @you message is cut or missing")
         XCTAssertTrue(element("移动端我用了一下，字体太小了，群里也没法发图片").firstMatch.exists, "the person's first message is cut or missing")
         XCTAssertTrue(element("收到，谢谢大家").firstMatch.exists, "the person's second message is cut or missing")
-        // The long reports are folded; the @you and the person's own messages are not (they are whole above).
+        // The long agent messages are lines; neither @you nor the person's own messages are (they are whole above).
         shot("@you and own messages whole")
     }
+
+    // MARK: Quiet messages
+
+    func testNoSequenceNumbersOrClocksOnMessages() {
+        XCTAssertEqual(web.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "#[0-9]+ · .*")).count, 0, "a #seq · time still shows on a message")
+        XCTAssertTrue(elements(containing: "今天").firstMatch.exists || elements(containing: "昨天").firstMatch.exists
+                      || elements(containing: "月").firstMatch.exists, "no centred time line")
+    }
+
+    // MARK: Pictures
 
     func testPicturesShowAndATapOpensTheLightbox() {
         // Each picture is a button, "图片，来自 <sender>", holding an image with the same alt.
@@ -57,6 +97,8 @@ final class ChannelFoldTests: MadUITestCase {
         shot("closed again")
     }
 
+    // MARK: Nothing wider than the screen
+
     func testALongURLDoesNotWidenThePage() {
         let link = web.links.firstMatch
         XCTAssertTrue(link.waitForExistence(timeout: 10), "no link in the channel")
@@ -66,19 +108,77 @@ final class ChannelFoldTests: MadUITestCase {
         shot("long URL, no sideways scroll")
     }
 
-    func testTheMemberStripShowsAPlusNAndATapListsEightMembers() {
-        let strip = web.buttons.matching(NSPredicate(format: "label MATCHES %@", ".*\\+[0-9]+")).firstMatch
-        XCTAssertTrue(strip.waitForExistence(timeout: 10), "no +n in the member strip")
-        XCTAssertTrue(strip.label.hasSuffix("+2"), "the strip should say +2 for 8 members (6 shown): “\(strip.label)”")
-        shot("member strip")
-        strip.tap()
-        XCTAssertTrue(elements(containing: "tester", in: web).firstMatch.waitForExistence(timeout: 10), "the member list did not open")
-        shot("members listed")
-        // The list names all eight; four of them speak nowhere else in the channel.
-        for name in ["architect", "builder", "reviewer", "designer", "tester", "docs", "ops", "kim"] {
-            XCTAssertTrue(elements(containing: name, in: web).firstMatch.waitForExistence(timeout: 5), "the member list lacks “\(name)”")
+    func testLongMessagesAndTheQuoteStayInsideTheScreen() {
+        // The long message of the person, its answer (which quotes it in one line), and the long
+        // unbroken Chinese one: every text of the log ends before the screen does.
+        let long = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@",
+                                                        "我看了一下这条消息", "这是一整段没有任何空格", "好的，我让 builder"))
+        wait("the long messages did not come") { long.count >= 3 }
+        for t in long.allElementsBoundByIndex {
+            XCTAssertLessThanOrEqual(t.frame.maxX, screenFrame.maxX, "“\(t.label.prefix(20))…” runs past the screen: ends at \(t.frame.maxX)")
         }
-        XCTAssertGreaterThanOrEqual(elements(containing: "Idle", in: web).count, 8, "fewer than eight members are listed")
+        // The quote is one line, ellipsized: it is a button that names the person and starts with their words.
+        let quote = web.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "你", "我看了一下这条消息")).firstMatch
+        XCTAssertTrue(quote.waitForExistence(timeout: 5), "the reply has no quote")
+        XCTAssertLessThanOrEqual(quote.frame.maxX, screenFrame.maxX, "the quote runs past the screen: ends at \(quote.frame.maxX)")
+        XCTAssertLessThanOrEqual(quote.frame.height, 40, "the quote is more than one line: \(quote.frame.height) high")
+        shot("long messages and a quote")
+    }
+
+    // MARK: The head and 群信息
+
+    func testTheHeadIsOneLineAndTheInfoButtonOpensGroupInfoWithEightMembers() {
+        XCTAssertTrue(head.waitForExistence(timeout: 5), "the head has no name and “空闲”: \(web.descendants(matching: .any).allElementsBoundByIndex.prefix(60).map { $0.label }.filter { !$0.isEmpty })")
+        XCTAssertTrue(info.exists, "no ⓘ 群信息 button")
+        shot("one-line head")
+        info.tap()
+        let members = element("成员 · 8").firstMatch
+        XCTAssertTrue(members.waitForExistence(timeout: 10), "群信息 did not open with “成员 · 8”")
+        shot("群信息")
+        for name in ["architect", "builder", "reviewer", "designer", "tester", "docs", "ops", "kim"] {
+            let row = web.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", name, "Idle")).firstMatch
+            XCTAssertTrue(row.exists, "群信息 has no member row for “\(name)”")
+        }
+        XCTAssertTrue(elements(containing: "负责人").firstMatch.exists, "the lead has no 负责人 tag")
+        for item in ["任务板", "图片和文件", "关闭"] {
+            XCTAssertTrue(web.buttons.matching(NSPredicate(format: "label CONTAINS %@", item)).firstMatch.exists, "群信息 has no “\(item)”")
+        }
+        XCTAssertTrue(elements(containing: "2 进行中").firstMatch.exists, "任务板 does not count this channel's two tasks in progress")
+        // A swipe to the right closes it.
+        web.swipeRight()
+        waitUntilGone(members, "a swipe to the right did not close 群信息")
+        XCTAssertTrue(info.exists, "ⓘ is gone after closing")
+        shot("closed by a swipe")
+    }
+
+    func testTheHeadOpensGroupInfoAndCloseAndThePicturesPage() {
+        head.tap()
+        XCTAssertTrue(element("成员 · 8").firstMatch.waitForExistence(timeout: 10), "tapping the name did not open 群信息")
+        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "图片和文件")).firstMatch.tap()
+        let grid = web.buttons.matching(NSPredicate(format: "label == %@", "图片，来自 reviewer"))
+        // The panel's grid has the two pictures (the page behind it is hidden from the accessibility tree
+        // while the dialog is modal, so they are not counted twice).
+        wait("the pictures page did not show its two pictures: \(grid.count)") { grid.count >= 2 }
+        shot("图片和文件")
+        web.buttons["关闭"].firstMatch.tap()
+        waitUntilGone(element("成员 · 8").firstMatch, "关闭 did not close 群信息")
+    }
+
+    // MARK: Reply
+
+    func testALongPressOffersReplyAndCopyAndReplyQuotesIt() {
+        // Each message has a 回复 button (clipped on a touch screen, there for a screen reader).
+        XCTAssertGreaterThanOrEqual(web.buttons.matching(NSPredicate(format: "label == %@", "回复")).count, 8, "the messages have no 回复 buttons")
+        let said = element("两张截图：左边是修改前，右边是修改后。").firstMatch
+        XCTAssertTrue(said.waitForExistence(timeout: 5), "no message to press")
+        said.press(forDuration: 1.0)
+        XCTAssertTrue(element("复制").firstMatch.waitForExistence(timeout: 5), "a long press did not open a menu with 复制")
+        shot("long-press menu")
+        // The menu's 回复 is the last of those named so: the menu is the page's last element.
+        let replies = element("回复")
+        replies.element(boundBy: replies.count - 1).tap()
+        XCTAssertTrue(elements(containing: "Replying to reviewer").firstMatch.waitForExistence(timeout: 5), "回复 did not start a reply to reviewer")
+        shot("replying")
     }
 
     // Nothing a message draws may run past the screen's edge. A clipped overflow is invisible in a

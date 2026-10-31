@@ -404,7 +404,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .msg.from-user .cimg { max-width: min(100%, 260px); max-height: 220px; }
 .call .cbody.result .imgs { margin: 0; }
 #lightbox {
-  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px;
   background: rgba(8, 8, 12, 0.86); cursor: zoom-out; animation: fade 0.12s ease-out;
 }
 #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
@@ -687,7 +687,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 
 /* Menus, dialogs, toasts. */
 .popup {
-  position: fixed; z-index: 50; margin: 0; padding: 6px; list-style: none; min-width: 220px; max-width: 360px;
+  position: fixed; z-index: 110; margin: 0; padding: 6px; list-style: none; min-width: 220px; max-width: 360px;
   max-height: min(420px, 70vh); overflow-y: auto; background: var(--surface); border: 1px solid var(--border-2);
   border-radius: 14px; box-shadow: var(--shadow-lg); animation: rise 0.12s ease-out;
 }
@@ -706,7 +706,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .popup li .ok { width: 16px; height: 16px; flex: none; align-self: center; }
 .popup li.rule { height: 1px; padding: 0; margin: 5px 6px; background: var(--border); cursor: default; }
 
-#dialog { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(10, 10, 14, 0.36); animation: fade 0.12s ease-out; }
+#dialog { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(10, 10, 14, 0.36); animation: fade 0.12s ease-out; }
 #dialog[hidden] { display: none; }
 @keyframes fade { from { opacity: 0; } }
 .dlg {
@@ -738,7 +738,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .btn.danger { background: var(--stopped); color: #fff; border-color: transparent; }
 .btn.danger:hover:not(:disabled) { background: var(--stopped); opacity: 0.88; }
 
-#toasts { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+#toasts { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 130; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast {
   display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px; font-size: 13px;
   background: var(--primary-bg); color: var(--primary-fg); box-shadow: var(--shadow-lg); animation: rise 0.16s ease-out;
@@ -820,46 +820,35 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .chan.theirs .cnt { color: var(--text-2); background: var(--raise-2); }
 
 #chanview { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.cwho .avatar.lead { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
+
 #chanview[hidden] { display: none; }
-#chanhead {
-  flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 20px;
-  border-bottom: 1px solid var(--border); min-height: 52px;
-}
-#chanhead .cwhat { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-#chanhead .cwhat b { font-size: 15px; }
-#chanhead .cwhat .muted { font-size: 12.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#chanhead .cwho { display: flex; gap: 4px; }
-#chanhead .cwho .avatar { cursor: pointer; }
+
+
+
+
+
+
 #chanscroll { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; min-height: 0; }
-#chanlog { max-width: var(--column); margin: 0 auto; padding: 22px 28px 40px; display: flex; flex-direction: column; gap: 14px; }
-.bmsg { display: flex; gap: 10px; align-items: flex-start; animation: rise 0.18s ease-out; }
-.bmsg > .avatar { margin-top: 2px; cursor: pointer; }
-.bmsg .bbody { min-width: 0; flex: 1; }
-.bmsg .bmeta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 12.5px; margin-bottom: 2px; }
-.bmsg .bmeta b { font-size: 13.5px; }
-.bmsg .btext { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
-.bmsg.mine { justify-content: flex-end; }
-.bmsg.mine .bbody { flex: none; max-width: 78%; padding: 8px 14px; border-radius: 18px; background: var(--raise); }
-.bmsg.mine .bmeta b { display: none; }
-.bmsg.card .bbody { padding: 10px 14px; border-radius: 14px; border: 1px solid var(--border-2); background: var(--card); }
-.bsys { align-self: center; max-width: 80%; text-align: center; font-size: 12.5px; color: var(--text-3); }
-.breply {
-  margin-left: auto; display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0 2px;
-  font: inherit; font-size: 12px; color: var(--text-3); cursor: pointer; opacity: 0;
-}
-.breply .i { width: 12px; height: 12px; }
-.bmsg:hover .breply, .breply:focus-visible { opacity: 1; }
-.breply:hover { color: var(--text); }
-@media (hover: none) { .breply { opacity: 0.7; } }
-.bquote {
-  display: block; max-width: 100%; margin: 2px 0 4px; padding: 3px 10px; border: 0; border-left: 3px solid var(--border-2);
-  background: none; text-align: left; font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer;
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-}
-.bquote:hover { border-left-color: var(--accent); }
-.bcount { display: inline-block; margin-top: 4px; border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
-.bmsg.flash .bbody, .bsys.flash { animation: flash 1.2s ease-out; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @keyframes flash { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); } to { box-shadow: 0 0 0 3px transparent; } }
 #qreply { display: flex; align-items: center; gap: 8px; padding: 6px 12px 2px; font-size: 12.5px; color: var(--text-2); min-width: 0; }
 #qreply[hidden] { display: none; }
@@ -901,11 +890,11 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #changes .i { width: 16px; height: 16px; }
 
   .chat .log { padding: 18px 14px 28px; }
-  #chanlog { padding: 16px 14px 28px; }
-  #chanhead { padding: 8px 14px; }
-  #chanhead .cttl > .avatar, #chanhead .cttl > b { display: none; }
-  #chanhead .chmore { display: none; }
-  #chanhead.bare { display: none; }
+  
+  
+  
+  
+  
   .msg { font-size: 15.5px; }
   .msg.from-user { max-width: 88%; margin-top: 20px; }
   .mcopy { display: none; }
@@ -1051,7 +1040,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 }
 
 /* teams */
-#chanhead .cteam { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12.5px; margin-top: 2px; }
+
 .trole { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
 .trole .avatar { cursor: pointer; --row: var(--bg); }
 .trole.s-asleep, .trole.s-stopped { color: var(--text-3); }
@@ -1370,24 +1359,24 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .chead .icon-btn { width: 44px; height: 44px; }
   .chead { padding-top: 0; padding-bottom: 0; }
   /* a channel's small taps get their 44px from padding the layout gives back as margin */
-  .bmsg .bmeta { align-items: center; min-height: 44px; margin-bottom: 0; }
-  .breply { padding: 0 8px; margin: 0 -8px 0 auto; min-height: 44px; }
-  .bquote { display: flex; align-items: center; min-height: 44px; margin: 0 0 2px; }
-  .bquote b { flex: none; margin-right: 0.3em; }
-  #chanlog { gap: 6px; }
+  
+  
+  
+  
+  
   /* the 22px tile that opens its agent: its 44px box is padding, taken back as margin */
-  .bmsg > .avatar.small { box-sizing: content-box; padding: 11px; margin: 0 -10px 0 -11px; border-radius: 18px; background-clip: content-box; }
-  .bmsg > .avatar.small .dot { right: 8px; bottom: 8px; }
+  
+  
   #qreply .icon-btn { width: 44px; height: 44px; }
-  .bcount { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; margin: -10px 0 -15px; }
+  
 }
 .dlg .derr { color: var(--stopped); margin: 10px 0 0; white-space: pre-wrap; }
 .dlg .dacts .btn:disabled { opacity: .55; cursor: default; }
 
 @media (max-width: 640px) { .teamhead .tstop { width: 34px; height: 34px; } }
 /* receipts under the person's messages, and the composer's no-wake hint */
-.brcpt { margin-top: 2px; font-size: 11.5px; color: var(--text-3); text-align: right; }
-.brcpt.none { color: var(--warn, var(--text-2)); }
+
+
 #who .nowake { flex: none; font-size: 12px; color: var(--warn, var(--text-2)); white-space: nowrap; }
 
 
@@ -1472,11 +1461,11 @@ html.ptype .call summary { font-size: 14px; padding: 12px 14px; }
 html.ptype .chat .note { font-size: 14px; }
 html.ptype #ptitle .pt { font-size: 17px; }
 html.ptype #ptitle .ps { font-size: 13px; }
-html.ptype #chanlog { gap: 14px; }
-html.ptype .bmsg .btext { font-size: 17px; line-height: 1.55; }
-html.ptype .bmsg .bmeta { font-size: 14px; }
-html.ptype .bmsg .bmeta b { font-size: 16px; }
-html.ptype .brcpt { font-size: 13px; }
+
+
+
+
+
 html.ptype #qinput { font-size: 17px; }
 html.ptype #who .chip, html.ptype #who .model, html.ptype #who .seg button { font-size: 14px; }
 html.ptype #hint { display: none; }
@@ -1500,9 +1489,9 @@ html.ptype .skby { font-size: 13px; }
 html.ptype .phonebox .pdev { font-size: 14px; }
 
 /* Pictures in a bus message (bus.js): fetched with the token, each to open large. */
-.bmsg .imgs { margin: 6px 0 2px; }
-.bmsg .cimg { max-width: min(100%, 280px); max-height: 240px; }
-.bmsg.mine .imgs { justify-content: flex-end; }
+
+
+
 
 /* ---- the calm list: characters, a red dot where something waits ---- */
 
@@ -1606,24 +1595,24 @@ html:not(.ptype) #ptitle .ps { overflow: hidden; white-space: nowrap; text-overf
 #brand { overflow: hidden; }
 
 /* The channel's members as one strip, and a folded agent message (bus.js). */
-#chanhead .cwho { background: none; border: 0; padding: 4px 2px; border-radius: 14px; font: inherit; color: inherit; cursor: pointer; align-items: center; min-height: 36px; }
-#chanhead .cwho:hover { background: var(--raise); }
-#chanhead .cwho .avatar { pointer-events: none; }
-#chanhead .cwho .cmore { font-size: 12px; color: var(--text-3); padding: 0 4px; }
-.bmsg.fold:not(.open) .btext, .bmsg.fold:not(.open) .imgs, .bmsg.fold:not(.open) .bquote { display: none; }
-.bmsg.fold.open .bsum { display: none; }
-.bmsg.fold:not(.open) .bless { display: none; }
-.bmsg.fold:not(.open) .bcount { display: none; }
-.bmsg.fold:not(.open) .bmeta { margin-bottom: 0; }
-.bsum { display: flex; align-items: baseline; gap: 10px; min-width: 0; cursor: pointer; }
-.bsum .bsumt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-2); font-size: 14.5px; }
-.bmore, .bless { flex: none; font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 4px 0; cursor: pointer; }
-.bless { margin-top: 2px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* A handoff or a result is a bordered body beside its avatar: the generic .card (a padded, bordered column) is not also its row. */
-.bmsg.card, .bmsg.card:hover { flex-direction: row; padding: 0; gap: 10px; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; cursor: default; }
-.bmsg.card.fold:not(.open) .bbody { padding: 8px 12px; }
-html.ptype .bsum .bsumt { font-size: 16px; }
-html.ptype .bmore, html.ptype .bless { font-size: 15px; min-height: 36px; padding: 6px 0; }
+
+
+
+
 
 /* A channel as the approved mockup draws it (screen ② of the phone's, the right pane of the
    desktop's): grey bubbles for the agents, blue for the person, the sender's name over its
@@ -1631,32 +1620,32 @@ html.ptype .bmore, html.ptype .bless { font-size: 15px; min-height: 36px; paddin
 :root { --bubble: #f0f0f3; --blue: #1f6bff; }
 :root[data-theme="dark"] { --bubble: #232327; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bubble: #232327; } }
-#chanlog { max-width: 720px; }
-#chanhead .cttl { display: flex; align-items: center; gap: 10px; min-width: 0; }
-#chanhead .cttl .muted { font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#chanhead .cwho { padding: 3px 8px; background: var(--card); border-radius: 999px; }
-.bmsg { align-items: flex-end; gap: 8px; }
-.bmsg .bcol { flex: 1; min-width: 0; max-width: 92%; display: flex; flex-direction: column; }
-.bmsg .bcol .bmeta { margin: 0 0 2px 4px; min-height: 0; color: var(--text-2); }
-.bmsg .bcol .bmeta b { font-size: 13px; font-weight: 500; color: var(--text-2); }
-.bmsg .bbody { flex: none; padding: 9px 14px; border-radius: 18px; border: 0; background: var(--bubble); }
-.bmsg.card .bbody, .bmsg.card.fold:not(.open) .bbody { padding: 9px 14px; border: 0; background: var(--bubble); }
-.bmsg.mine { justify-content: flex-end; }
-.bmsg.mine .bcol { align-items: flex-end; max-width: 78%; flex: none; }
-.bmsg.mine .bcol .bmeta { display: none; }
-.bmsg.mine .bbody { background: var(--blue); color: #fff; max-width: 100%; border-radius: 20px; }
-.bmsg.mine .bbody a, .bmsg.mine .bbody .md * { color: inherit; }
-.bmsg.mine .bcount { color: rgba(255, 255, 255, 0.85); }
-.bmsg .bcol > .brcpt { margin: 2px 4px 0; }
-.bmsg:not(.mine) .bcol { align-items: flex-start; }
-.bmsg:not(.mine) .bcol > .bmeta, .bmsg.fold .bbody, .bmsg.card .bbody { width: 100%; }
-.bmsg .bbody .md > :first-child { margin-top: 0; }
-.bmsg .bbody .md > :last-child { margin-bottom: 0; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 html.ptype #ptitle.chan { display: flex; align-items: center; gap: 8px; }
 html.ptype #ptitle.chan .pt { font-weight: 700; }
-html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; align-items: center; cursor: pointer; }
+
 /* The characters are not boxes: the lead is named in the members' list, not ringed in the strip. */
-#chanhead .cwho .avatar.lead, #bar .cwho .avatar.lead { box-shadow: none; outline: 0; }
+
 
 /* the row's one button covers it; the controls on the row stay above it */
 .rowhit { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; margin: 0; border: none; border-radius: inherit; background: none; cursor: pointer; }
@@ -1667,18 +1656,6 @@ html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; 
 .cimgbtn:focus { outline: none; }
 .cimgbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 
-/* Nothing in a bubble is wider than its column: a quote or a link without a space to break on would
-   otherwise make the bubble as wide as it is (a flex item's width in the cross axis starts from its
-   content), and the page clips what runs off the screen. */
-.bmsg .bcol > * { min-width: 0; max-width: 100%; }
-.bmsg .bbody { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-.bmsg .bbody .bquote { display: flex; align-items: baseline; max-width: 100%; min-width: 0; overflow: hidden; }
-.bmsg .bbody .bquote b { flex: none; margin-right: 0.4em; }
-.bmsg .bbody .bquote .bqt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bmsg .bbody .btext, .bmsg .bbody .btext a, .bmsg .bbody .btext code { overflow-wrap: anywhere; word-break: break-word; }
-.bmsg .bbody .btext pre { max-width: 100%; overflow-x: auto; }
-.bmsg .bbody .bcount { max-width: 100%; }
-
 /* Inside the iOS app (html.embed) the page is not a web page: a double tap does not zoom, a tap does not
    flash, and the chrome (the list, the head, the buttons) cannot be selected or long-pressed, though what
    people wrote still can. An input of 16px or more is not zoomed to on focus. */
@@ -1687,3 +1664,137 @@ html.embed #sidebar, html.embed #bar, html.embed #chanhead, html.embed #tabs, ht
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 html.embed input, html.embed textarea, html.embed select { font-size: max(16px, 1em); }
+/* ---- a channel: one line of head, quiet messages, a panel on its side ---- */
+
+/* the head: its tile, its name and one small line, then ⓘ */
+#chanhead { display: flex; align-items: center; gap: 10px; flex: none; min-width: 0; padding: 10px 18px 8px; }
+html.ptype #chanhead { display: none; } /* the phone's top bar has it */
+.chwho {
+  display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; padding: 2px 6px 2px 4px; margin: -2px 0;
+  border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.chwho:hover { background: var(--raise); }
+.chwho:focus-visible, .cinfo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chwho .avatar.chara { width: 36px; height: 36px; flex: none; }
+.chwhat { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.chwhat b { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chwhat small { font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ptitle.chtitle { flex: 1; min-width: 0; }
+
+/* the messages: a bubble, or one thin line; nothing is wider than the screen */
+#chanlog { max-width: 760px; margin: 0 auto; padding: 8px 18px 20px; display: flex; flex-direction: column; min-width: 0; }
+html.ptype #chanlog { padding: 6px 14px 16px; }
+.ctime { align-self: center; margin: 14px 0 8px; font-size: 12px; color: var(--text-3); }
+.csys { align-self: center; max-width: 80%; margin: 8px 0; text-align: center; font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; }
+.cgrp { display: flex; align-items: flex-end; gap: 8px; align-self: flex-start; min-width: 0; max-width: 88%; margin-top: 10px; animation: rise 0.18s ease-out; }
+.cgrp > .avatar { flex: none; margin-bottom: 2px; cursor: pointer; }
+.cstack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; }
+.cname { margin-left: 4px; font-size: 12px; color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmsg { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; -webkit-touch-callout: none; }
+.cmsg.mine { align-self: flex-end; align-items: flex-end; max-width: 78%; margin-top: 6px; animation: rise 0.18s ease-out; }
+.cbub {
+  min-width: 0; max-width: 100%; padding: 8px 13px; border-radius: 18px; background: var(--raise);
+  font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; word-break: break-word;
+}
+html.ptype .cbub { font-size: 16.5px; }
+.cmsg.mine .cbub { background: var(--accent); color: var(--primary-fg, #fff); }
+.cmsg.mine .cbub a, .cmsg.mine .cbub .md * { color: inherit; }
+.ctext { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.ctext > .md > :first-child { margin-top: 0; }
+.ctext > .md > :last-child { margin-bottom: 0; }
+.ctext img, .ctext .codeblock, .ctext .table, .ctext pre { max-width: 100%; }
+.ctext pre { overflow-x: auto; }
+/* what an agent did or reports: one thin line, opened in place */
+.cline {
+  display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 6px 11px; border: 1px solid var(--border-2);
+  border-radius: 14px; background: none; color: var(--text-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+html.ptype .cline { font-size: 15px; }
+.cline:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.csum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.csum b { color: var(--text); font-weight: 600; }
+.cline .chev { flex: none; color: var(--text-3); transition: transform 0.15s; }
+.cmsg.open .cline .chev { transform: rotate(90deg); }
+.cfull { display: none; min-width: 0; max-width: 100%; margin-left: 6px; padding: 2px 0 2px 10px; border-left: 2px solid var(--border-2); font-size: 14.5px; }
+.cmsg.open .cfull { display: block; }
+.cnote { margin-top: 4px; font-size: 12px; color: var(--text-3); }
+/* what it answers: one line, quoted */
+.cquote {
+  display: block; width: 100%; max-width: 100%; margin: 0 0 4px; padding: 0 0 0 8px; border: 0; border-left: 2px solid var(--border-2);
+  background: none; color: var(--text-3); font: inherit; font-size: 12.5px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+}
+.cquote b { margin-right: 0.3em; font-weight: 600; color: var(--text-2); }
+.cmsg.mine .cquote { color: color-mix(in srgb, var(--primary-fg, #fff) 78%, transparent); border-left-color: color-mix(in srgb, var(--primary-fg, #fff) 45%, transparent); }
+.cmsg.mine .cquote b { color: inherit; }
+.cmsg .imgs { max-width: 100%; margin: 0; }
+.cmsg.mine .imgs { justify-content: flex-end; }
+.cmsg .cimg { max-width: min(100%, 280px); max-height: 240px; height: auto; }
+.cmsg.flash .cbub, .cmsg.flash .cline, .csys.flash { animation: flash 1.2s ease-out; }
+/* reply: on hover or by keyboard; on a touch screen it is a long press (the button stays for a screen reader) */
+.creply {
+  position: absolute; top: 50%; right: -32px; width: 26px; height: 26px; margin-top: -13px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 50%; background: var(--raise); color: var(--text-3); cursor: pointer; opacity: 0;
+}
+.cmsg.mine .creply { right: auto; left: -32px; }
+.creply .i { width: 13px; height: 13px; }
+.cmsg:hover .creply, .creply:focus-visible { opacity: 1; }
+.creply:hover { color: var(--text); }
+@media (hover: none) {
+  .creply { right: auto; left: 0; top: 0; margin: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .creply:focus-visible { width: 28px; height: 28px; clip-path: none; }
+}
+@media (pointer: coarse) {
+  .cgrp > .avatar.chara { box-sizing: content-box; padding: 8px; margin: -8px -8px -6px; }
+}
+
+/* the message box of a channel: one line, a round + , a pill, a round send */
+html.ptype #queue.inchan { padding-inline: 12px; }
+#queue.inchan .composer { width: 100%; max-width: 760px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 6px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#queue.inchan .composer > :is(#qmenu, #qtodo, #qerr, #qreply, #qitems, #qimgs) { flex: 1 0 100%; order: -2; }
+#queue.inchan .cbar { display: contents; }
+#queue.inchan #who { order: -1; flex: 1 0 100%; font-size: 12px; }
+#queue.inchan #who .what, #queue.inchan #hint, #queue.inchan #qpause, #queue.inchan .cbar .grow { display: none; }
+#queue.inchan #attach { order: 0; flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--raise); }
+#queue.inchan #qinput { order: 1; flex: 1; min-width: 0; min-height: 38px; padding: 8px 14px; border-radius: 19px; background: var(--raise); }
+#queue.inchan .send { order: 2; flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--primary-fg, #fff); }
+#queue.inchan .send:disabled { background: color-mix(in srgb, var(--accent) 38%, var(--raise)); color: var(--primary-fg, #fff); opacity: 0.8; }
+
+/* 群信息: a panel from the right, over a scrim */
+/* above the page; the picture, a menu, a dialog and a toast open from it are above it (z-index 100 to 130) */
+#chpanel { position: fixed; inset: 0; z-index: 90; visibility: hidden; pointer-events: none; transition: visibility 0s 0.3s; }
+#chpanel[hidden] { display: none; }
+#chpanel.open { visibility: visible; pointer-events: auto; transition: visibility 0s; }
+.chscrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.25s; }
+#chpanel.open .chscrim { opacity: 1; }
+.chside {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(84%, 380px); display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(40px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom)); background: var(--surface); box-shadow: var(--shadow);
+  transform: translateX(100%); transition: transform 0.28s ease;
+}
+#chpanel.open .chside { transform: none; }
+@media (prefers-reduced-motion: reduce) { .chside, .chscrim { transition: none; } }
+.cpclose { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: 8px; }
+.cptop { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 12px; text-align: center; }
+.cptop b { font-size: 20px; overflow-wrap: anywhere; }
+.cptop .avatar.chara.big { width: 64px; height: 64px; }
+.cptopic { margin: 0; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.cpsec { margin: 16px 4px 6px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
+.cplist { background: var(--raise); border-radius: 14px; overflow: hidden; }
+.cprow, .cpact {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--border);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cprow:last-child, .cpact:last-child { border-bottom: 0; }
+.cprow:focus-visible, .cpact:focus-visible, .cpback:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cprow:disabled { opacity: 0.5; cursor: default; }
+.cprow .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cprow .n { font-size: 15.5px; font-weight: 600; }
+.cprow .s { font-size: 13px; color: var(--text-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cprow .tag { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 999px; background: var(--raise-2); color: var(--text-2); }
+.cpact { font-size: 15.5px; }
+.cpact small { margin-left: auto; font-size: 13px; color: var(--text-3); }
+.cpact .chev { color: var(--text-3); }
+.cpback { align-self: flex-start; display: flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 6px 4px; border: 0; background: none; color: var(--text); font: inherit; font-size: 17px; font-weight: 600; cursor: pointer; }
+.cpgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cpgrid .cimgbtn { width: 100%; aspect-ratio: 1; }
+.cpgrid .cimg { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: 8px; }
