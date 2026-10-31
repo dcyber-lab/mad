@@ -32,6 +32,9 @@ import (
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
+// capture reads a pane's screen; tests replace it.
+var capture = tmux.Capture
+
 // Timing, replaceable in tests.
 var (
 	// tick is how often screens and reports are looked at.
@@ -515,17 +518,23 @@ func up(k agent.Kind, a *state.Agent, paneID string, since time.Time) error {
 // after window is running.
 func settle(k agent.Kind, id, paneID string, window time.Duration) (string, string) {
 	end := now().Add(window)
-	screen, still := tmux.Capture(paneID), now()
+	screen, still := capture(paneID), now()
+	// moved: the screen changed while it was watched. A screen that has not
+	// moved at all is quiet, and only needs the time to show it: the window
+	// bounds how long a screen that keeps moving is waited for, not how
+	// slowly the captures are taken (each is a tmux call, which a loaded
+	// machine delays past the little slack a short window has).
+	moved := false
 	for {
 		time.Sleep(tick)
-		s := tmux.Capture(paneID)
+		s := capture(paneID)
 		if s != screen {
-			screen, still = s, now()
+			screen, still, moved = s, now(), true
 		}
 		if strings.TrimSpace(screen) != "" && now().Sub(still) >= quietFor {
 			break
 		}
-		if now().After(end) {
+		if now().After(end) && (moved || strings.TrimSpace(screen) == "") {
 			return status.Running, ""
 		}
 	}

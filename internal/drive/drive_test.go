@@ -481,3 +481,41 @@ func TestTurnOver(t *testing.T) {
 		t.Error("a message sent after the last reply is under way")
 	}
 }
+
+// A quiet screen is idle, however slowly it is captured: each capture is a
+// tmux call, and a loaded machine takes 100ms and more for one. Here the
+// clock moves 110ms a capture (a fake clock, nothing waited for), which put
+// an iteration just past the end of a short window and short of the quiet
+// time: the agent read as working though its screen never changed. A screen
+// that changes is still working at the end of the window.
+func TestSettleSlowCaptures(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	oldNow, oldCapture, oldTick, oldQuiet := now, capture, tick, quietFor
+	t.Cleanup(func() { now, capture, tick, quietFor = oldNow, oldCapture, oldTick, oldQuiet })
+	tick, quietFor = time.Microsecond, 400*time.Millisecond
+	var clock time.Duration
+	base := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	now = func() time.Time { return base.Add(clock) }
+	k := agent.Kind{Name: "claude", Hooks: true}
+	window := quietFor + tick
+
+	capture = func(string) string { clock += 110 * time.Millisecond; return "Do you want to proceed?\n❯ 1. Yes" }
+	clock = 0
+	if s, _ := settle(k, "a", "%1", window); s != status.Idle {
+		t.Errorf("a quiet screen, slowly captured: %q", s)
+	}
+
+	n := 0
+	capture = func(string) string { clock += 110 * time.Millisecond; n++; return fmt.Sprintf("working %d", n) }
+	clock = 0
+	if s, _ := settle(k, "a", "%1", window); s != status.Running {
+		t.Errorf("a screen that keeps changing: %q", s)
+	}
+
+	// An empty screen is not quiet, it is not up: not waited for forever.
+	capture = func(string) string { clock += 110 * time.Millisecond; return "" }
+	clock = 0
+	if s, _ := settle(k, "a", "%1", window); s != status.Running {
+		t.Errorf("an empty screen: %q", s)
+	}
+}
