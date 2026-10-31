@@ -428,29 +428,21 @@ Home Screen keeps it at hand as an app.
 
 ### The iPhone app
 
-Besides the page in Safari, mad has a native iPhone app (iOS 17 or later),
-in [ios/](ios). It is not on the App Store: you build it yourself.
+The iPhone app is a thin shell around the page you get in Safari (iOS 17 or
+later), in [ios/](ios). It is not on the App Store: you build it yourself.
 
 - **Pairing.** Scan the QR code `mad phone` shows, or paste its link.
   The app trades the pairing code for a token of its own and keeps it in
   the iPhone's Keychain. It can hold several Macs, each named after the
   Mac's own name (rename one by a long press), and a pairing the network
   cut short can be retried.
-- **Needs you.** What waits on you, as native cards: a permission, a
-  question, a message to answer, a skill to approve, the budget. Each card
-  has the buttons the deck gives it (Allow, Deny, a reply of your own),
-  the tab shows how many wait, and the list refreshes every few seconds.
-- **Conversation.** A card about an agent opens its conversation (the
-  Open button): what you said, what it said, each tool call as one row
-  that opens to its input and result, and the reply as it is being written.
-  Agents that can run in window mode you can write to there and
-  interrupt while they work; for the others the conversation shows a hint,
-  and the Deck tab has the terminal.
-- **Usage.** The gauge button in the navigation bar opens how much of
-  your Claude and Codex subscriptions is used: the five-hour and the
-  weekly window, each as a percent, what is left and when it resets.
-- **Deck.** The full window, the same page as in Safari, for everything
-  else: the board, the sidebar, files and diffs.
+- **The page is the app.** Opening a Mac shows the deck page full screen,
+  with no bar of the app's own: the page draws its header, its red dots for
+  what needs you, its conversations and its usage. The page's Mac name with
+  the arrow, and its menu's "switch Mac" (切换 Mac), take you back to the
+  list of Macs.
+- **Opening.** The app opens the Mac you used last when it starts, and the
+  list of Macs when there is none.
 
 To build it for the simulator:
 

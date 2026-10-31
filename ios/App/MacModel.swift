@@ -1,135 +1,59 @@
 import MadKit
 import SwiftUI
-import UIKit
 import WebKit
 
-/// One open Mac: its latest snapshot, how the connection stands, acting on
-/// inbox items, and the deck page's web view, created once so switching tabs
-/// never reloads it.
+/// One open Mac: the deck page in a web view, and nothing else. The page is
+/// the whole app; this only hosts it.
 @MainActor
 final class MacModel: ObservableObject {
-    enum Link: Equatable {
-        case connecting
-        case ok
-        case failed(ConnectionError)
-    }
-
     let mac: Mac
-    @Published private(set) var snapshot: DeckSnapshot?
-    @Published private(set) var link: Link = .connecting
-    @Published private(set) var busy: Set<String> = []
-    /// A server message to show the person (a 409's text, a failed act).
-    @Published var notice: String?
+    private(set) lazy var web = DeckWebHost(url: mac.embeddedDeckURL)
 
-    /// The Mac's own name, from each snapshot: the store adopts it unless the
-    /// person renamed the Mac.
-    var onMachineName: (String?) -> Void = { _ in }
+    init(mac: Mac) { self.mac = mac }
 
-    let client: MadClient
-    private(set) lazy var web: DeckWebHost = DeckWebHost(url: mac.embeddedDeckURL)
-    /// Debug builds only: a sample snapshot instead of a live Mac; acts send nothing.
-    private let fixture: Bool
-
-    init(mac: Mac) {
-        self.mac = mac
-        self.client = MadClient(mac: mac)
-        #if DEBUG
-        let sample = Fixture.snapshot()
-        fixture = sample != nil
-        if let sample {
-            snapshot = sample
-            link = .ok
-        }
-        #else
-        fixture = false
-        #endif
-    }
-
-    var needs: Int { snapshot?.needs ?? 0 }
-
-    /// Debug builds only: a sample conversation to read without a live Mac.
-    func sampleChat(for agentID: String) -> (page: ChatPage, live: LiveMessage?)? {
-        fixture ? Fixture.chat(for: agentID) : nil
-    }
-
-    func refresh() async {
-        if fixture { return }
-        do {
-            snapshot = try await client.deck()
-            link = .ok
-            onMachineName(snapshot?.machine)
-        } catch let e as ConnectionError {
-            link = .failed(e)
-        } catch {
-            link = .failed(.offline)
-        }
-    }
-
-    /// Polls while the calling task lives; cancel it to stop.
-    func poll(every seconds: Double = 3) async {
-        while !Task.isCancelled {
-            await refresh()
-            try? await Task.sleep(for: .seconds(seconds))
-        }
-    }
-
-    func perform(_ item: DeckSnapshot.InboxItem, _ act: DeckSnapshot.Act, text: String? = nil) async {
-        // A second tap on the same item while one is in flight does nothing.
-        guard busy.insert(item.key).inserted else { return }
-        defer { busy.remove(item.key) }
-        if fixture {
-            notice = "Sample data: nothing was sent."
-            return
-        }
-        do {
-            try await client.act(key: item.key, verb: act.verb, option: act.option, text: text)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } catch let e as ConnectionError {
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-            notice = e.localizedDescription
-        } catch {
-            notice = error.localizedDescription
-        }
-        await refresh()
+    /// The Mac's own name, asked once when it is opened, so the Macs list keeps
+    /// up with a Mac that was renamed. nil when it does not say.
+    func machineName() async -> String? {
+        try? await MadClient(mac: mac).deck().machine
     }
 }
 
-/// Owns the deck page's WKWebView. Only the Mac's own origin loads in it;
-/// the data store is not persistent, so the page's copy of the token dies
-/// with the view and the Keychain stays the only durable one.
+/// Owns the deck page's WKWebView. Only the Mac's own origin loads in it and
+/// may speak to the app; every other link opens in the system browser. The
+/// data store is not persistent, so the page's copy of the token dies with the
+/// view and the Keychain stays the only durable one.
+@MainActor
 final class DeckWebHost: NSObject, WKNavigationDelegate, WKUIDelegate {
-    struct Origin: Equatable {
-        let scheme: String?
-        let host: String?
-        let port: Int
-
-        init(_ url: URL) {
-            scheme = url.scheme?.lowercased()
-            host = url.host?.lowercased()
-            port = url.port ?? (scheme == "http" ? 80 : 443)
-        }
-    }
+    /// What the page asked of the app (`window.webkit.messageHandlers.mad`).
+    var onMessage: (DeckMessage) -> Void = { _ in }
 
     let view: WKWebView
-    private let origin: Origin
+    fileprivate let origin: WebOrigin
 
     init(url: URL) {
-        origin = Origin(url)
+        origin = WebOrigin(url)
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         view = WKWebView(frame: .zero, configuration: config)
         super.init()
+        // The content controller keeps its handlers alive, so it gets a go-between
+        // that holds this host weakly.
+        config.userContentController.add(MessageProxy(host: self), name: "mad")
         view.navigationDelegate = self
         view.uiDelegate = self
         view.isOpaque = false
         view.backgroundColor = .systemBackground
+        view.scrollView.backgroundColor = .systemBackground
+        // The page is edge to edge: it keeps clear of the status bar and the home
+        // indicator itself, with env(safe-area-inset-*).
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.load(URLRequest(url: url))
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
-        if Origin(url) == origin {
+        if WebOrigin(url) == origin {
             decisionHandler(.allow)
         } else {
             decisionHandler(.cancel)
@@ -142,13 +66,38 @@ final class DeckWebHost: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = action.request.url {
-            if Origin(url) == origin { webView.load(action.request) } else { openOutside(url) }
+            if WebOrigin(url) == origin { webView.load(action.request) } else { openOutside(url) }
         }
         return nil
     }
 
+    #if DEBUG
+    /// Debug builds only: posts the message the page's menu posts, from the page
+    /// itself, to see the bridge work end to end (`-debugSwitchMac YES`).
+    func debugPostSwitchMac() {
+        view.evaluateJavaScript("window.webkit.messageHandlers.mad.postMessage({type: 'switchMac'})")
+    }
+    #endif
+
     private func openOutside(_ url: URL) {
         guard let s = url.scheme?.lowercased(), s == "https" || s == "http" else { return }
         UIApplication.shared.open(url)
+    }
+}
+
+/// Passes the page's messages to the host: the main frame of the paired Mac's
+/// origin only, and only the types the app knows.
+@MainActor
+private final class MessageProxy: NSObject, WKScriptMessageHandler {
+    weak var host: DeckWebHost?
+
+    init(host: DeckWebHost) { self.host = host }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let host, message.frameInfo.isMainFrame else { return }
+        let o = message.frameInfo.securityOrigin
+        guard WebOrigin(scheme: o.protocol, host: o.host, port: o.port) == host.origin,
+              let m = DeckMessage.parse(message.body) else { return }
+        host.onMessage(m)
     }
 }
