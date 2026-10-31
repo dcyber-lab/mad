@@ -141,6 +141,22 @@ function money(v) {
   return v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v)}`;
 }
 
+// drawMachine: on a phone the title is the Mac's name; in the app a ▾ asks
+// the app for another Mac.
+function drawMachine() {
+  const n = $("#brand .mname");
+  n.replaceChildren(deck.machine || "mad");
+  if (embed) {
+    const c = el("span", "mcaret", "▾");
+    c.onclick = (e) => { e.stopPropagation(); switchMac(); };
+    n.append(" ", c);
+  }
+}
+
+function switchMac() {
+  window.webkit?.messageHandlers?.mad?.postMessage({ type: "switchMac" });
+}
+
 function drawQuota(q) {
   const box = $("#quota");
   box.replaceChildren();
@@ -164,7 +180,56 @@ function drawQuota(q) {
 // avatar is agent a's kind as a tile in its color, with its status as a
 // dot on the corner. It carries the status itself: a card or a message
 // has no row around it to color the dot.
+// On a phone (html.ptype) it is a character instead: one of eight shapes
+// with a face and a color, picked by a stable hash of the agent's id, so an
+// agent looks the same everywhere. It hops and blinks while it works.
+const CHAR_SHAPES = [ // [name, face offset, svg of the body]
+  ["pebble", 0, '<circle class="body" cx="24" cy="26" r="18"/>'],
+  ["toast", 0, '<path class="body" d="M8 20 a10 10 0 0 1 10 -12 h12 a10 10 0 0 1 10 12 v16 a6 6 0 0 1 -6 6 h-20 a6 6 0 0 1 -6 -6 z"/>'],
+  ["bean", 0, '<ellipse class="body" cx="24" cy="27" rx="20" ry="15" transform="rotate(-8 24 27)"/>'],
+  ["drop", 4, '<path class="body" d="M24 5 C33 16 41 23 41 31 a17 17 0 0 1 -34 0 C7 23 15 16 24 5 z"/>'],
+  ["cat", 4, '<path class="body" d="M8 40 V16 L15 8 L20 14 h8 L33 8 L40 16 V40 a4 4 0 0 1 -4 4 h-24 a4 4 0 0 1 -4 -4 z"/>'],
+  ["hex", 0, '<path class="body" d="M24 6 l15 8.6 a4 4 0 0 1 2 3.5 v13.8 a4 4 0 0 1 -2 3.5 L24 44 l-15 -8.6 a4 4 0 0 1 -2 -3.5 V18.1 a4 4 0 0 1 2 -3.5 z"/>'],
+  ["puff", 0, '<path class="body" d="M12 40 a8 8 0 0 1 -3 -15 a10 10 0 0 1 14 -12 a10 10 0 0 1 16 6 a8 8 0 0 1 0 21 z"/>'],
+  ["sprout", 4, '<path d="M24 14 C22 8 16 6 12 8 C14 13 19 14 24 14 Z" fill="#59b85a"/><path d="M24 14 C26 7 32 5 36 7 C34 13 29 14 24 14 Z" fill="#7fd36b"/><rect class="body" x="9" y="14" width="30" height="29" rx="14.5"/>'],
+];
+const CHAR_FACES = [
+  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M21 29 q3 2.6 6 0"/>',
+  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><circle cx="24" cy="30" r="2"/>',
+  '<path class="eye mo" d="M16.5 23 q2.5 -2.6 5 0"/><path class="eye mo" d="M26.5 23 q2.5 -2.6 5 0"/><path class="mo" d="M22 29 h4"/>',
+  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M20 28.5 q2 2 4 0 q2 2 4 0"/>',
+  '<circle class="eye" cx="19" cy="23" r="2.6"/><path class="mo" d="M26.5 23.5 h5"/><path class="mo" d="M21 28.5 q3 3 6 0"/>',
+];
+const CHAR_COLORS = ["#6f9bff", "#ffb36b", "#3dcf9c", "#b48cff", "#ff8fb3", "#ffd34e", "#5fd0e8", "#9be07f"];
+
+function charHash(key) {
+  let h = 2166136261;
+  for (const c of String(key)) h = Math.imul(h ^ c.codePointAt(0), 16777619) >>> 0;
+  return h;
+}
+
+// charLook is what a key looks like: its shape, face and color.
+function charLook(key) {
+  const h = charHash(key);
+  return { shape: CHAR_SHAPES[h % 8], face: CHAR_FACES[(h >>> 6) % 5], color: CHAR_COLORS[(h >>> 3) % 8] };
+}
+
+// charSVG is the character's drawing, 48 by 48; with box, nested at x y w.
+function charSVG(key, box) {
+  const l = charLook(key);
+  const body = `${l.shape[2]}<g transform="translate(0 ${l.shape[1]})" class="face">${l.face}</g>`;
+  return box
+    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`
+    : `<svg viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`;
+}
+
 function avatar(a, small) {
+  if (ptypeOn()) {
+    const live = a.id && agents.get(a.id);
+    const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
+    v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
+    return v;
+  }
   const glyph = a.icon || (a.kind || "?")[0];
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const st = live ? ` s-${shownStatus(live)}` : "";
@@ -270,12 +335,14 @@ function drawList() {
     .map((id) => agents.get(id)).filter(Boolean);
   // Drawn above, so not again in their projects: what works, what
   // finished, and what is blocked on you (its row is its item).
-  // On a phone Working has no group (the avatar moves), and in the app
-  // neither have Needs you and Finished: those agents stay in their rows.
-  const pt = ptypeOn(), inApp = pt && embed;
+  // On a phone there is no Working, Needs you or Finished group: the
+  // avatar moves while it works, a red dot says where something waits on
+  // you, and those agents stay in their rows.
+  const pt = ptypeOn();
+  needAgents = new Set(needs.map((it) => it.agent).filter(Boolean));
   const placed = new Set();
-  if (!pt) work.forEach((a) => placed.add(a.id));
-  if (!inApp) {
+  if (!pt) {
+    work.forEach((a) => placed.add(a.id));
     fin.forEach((it) => placed.add(it.agent));
     for (const it of needs) if (it.blocks && it.agent) placed.add(it.agent);
   }
@@ -295,7 +362,7 @@ function drawList() {
     nodes.push(p);
   }
 
-  const shownNeeds = inApp ? [] : needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
+  const shownNeeds = pt ? [] : needs.filter((it) => !q || has(it.title, it.context, it.text) || agentHas(agents.get(it.agent)));
   if (shownNeeds.length) {
     const next = button("Next", "ghost ga nexthead", nextItem);
     next.append(el("kbd", "", "⌥N"));
@@ -313,7 +380,7 @@ function drawList() {
     // A team's working agents are one unit under its head; the rest are rows.
     nodes.push(group("g-working", ghead("Working", shownWork.length, "working"), capped("working", workUnits(shownWork), 5, 5, (u) => u.t ? teamBlock(u.t, u.mem) : agentRow(u.a), "working")));
   }
-  const shownFin = inApp ? [] : fin.filter((it) => agentHas(agents.get(it.agent)));
+  const shownFin = pt ? [] : fin.filter((it) => agentHas(agents.get(it.agent)));
   if (shownFin.length) {
     const all = seenActs().length ? button("Mark all seen", "ghost ga", markAllSeen) : null;
     nodes.push(group("g-finished", ghead("Finished", shownFin.length, "finished", all),
@@ -375,12 +442,15 @@ function drawChips(nNeeds, nWork, nFin, count) {
   };
   box.replaceChildren(chip("needs", nNeeds, "need you", "needs"), chip("working", nWork, "working", "working"), chip("finished", nFin, "finished", "finished"));
   const next = $("#next");
-  // The phone's Next is for what needs you; the app has a tab for that.
-  const n = ptypeOn() ? (embed ? 0 : nNeeds) : nNeeds || nFin;
+  // A phone has no Next: a red dot says where something waits.
+  const n = ptypeOn() ? 0 : nNeeds || nFin;
   next.hidden = !n;
   next.replaceChildren(icon("right"), `Next · ${n} ${nNeeds ? "need you" : "finished"}`);
   next.classList.toggle("needs", !!nNeeds);
 }
+
+// needAgents: the agents with an item in the inbox, as of the last drawList.
+let needAgents = new Set();
 
 // ptypeOn: the phone's list, which is calmer: no chips, no Working group, a
 // team and its channel one row (see drawList). In the app it also leaves out
@@ -447,6 +517,12 @@ function teamBlock(t, working) {
 
 // agentRow is an agent as a row: its avatar with its live dot, its name,
 // and its activity line; its team or role, else its cost, on the right.
+// lastLine is a phone row's one line: what the agent said last, else what it is doing, else how it stands.
+function lastLine(a, st) {
+  const one = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  return one(a.last) || one(a.reply) || (a.tool ? one(`${a.tool}${a.target ? ` · ${a.target}` : ""}`) : "") || look(st).word;
+}
+
 function agentRow(a, key) {
   const st = shownStatus(a);
   const name = el("span", "");
@@ -464,10 +540,11 @@ function agentRow(a, key) {
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
-    line: ptypeOn() ? look(st).word : activityLine(a), right, onclick: () => show(a.id),
+    line: ptypeOn() ? lastLine(a, st) : activityLine(a), right, onclick: () => show(a.id),
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;
+  if (needAgents.has(a.id)) r.querySelector(".avatar").append(el("span", "rdot"));
   r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
   const more = el("button", "icon-btn more");
   more.type = "button";
@@ -1252,6 +1329,7 @@ async function refresh() {
     setOffline(false);
     drawQuota(deck.quota);
     drawUsage();
+    drawMachine();
     drawSidebar();
     openWanted();
     if (cv.open) drawChanHead();
