@@ -810,6 +810,7 @@ function drawImages() {
     return t;
   }));
   fitInput();
+  drawSend(); // pictures alone can be sent to a channel
 }
 
 function takeImages() {
@@ -823,9 +824,9 @@ function restoreImages(imgs) {
   drawImages();
 }
 
-// Images go to an agent run here, or one about to be.
+// Images go to an agent run here, or one about to be, or a channel.
 function takesImages() {
-  return nc.open || windowed(agents.get(current));
+  return nc.open || cv.open || windowed(agents.get(current));
 }
 
 $("#attach").onclick = () => $("#imgpick").click();

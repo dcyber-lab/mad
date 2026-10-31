@@ -277,6 +277,7 @@ func ComposeCounted(agentID string, at time.Time) (text string, upto map[string]
 			fmt.Fprintf(&b, " — %s %s\n%s\n", ref.ID, ref.Status, e.m.Text)
 		default:
 			b.WriteString("\n" + e.m.Text + "\n")
+			writeImages(&b, e.m)
 		}
 	}
 	if len(rest) > 0 {
@@ -302,6 +303,22 @@ func ComposeCounted(agentID string, at time.Time) (text string, upto map[string]
 		fmt.Fprintf(&b, "\nAlso new, not addressed to you: %s (bus_read to see them).\n", strings.Join(parts, ", "))
 	}
 	return b.String(), upto, yours, true, nil
+}
+
+// writeImages names a message's pictures by their files: an agent opens
+// one with its file-read tool.
+func writeImages(b *strings.Builder, m Message) {
+	if len(m.Images) == 0 {
+		return
+	}
+	b.WriteString("Pictures (files: open them with your file-read tool):\n")
+	for _, im := range m.Images {
+		if p := im.Path(); p != "" {
+			fmt.Fprintf(b, "- %s\n", p)
+		} else {
+			fmt.Fprintf(b, "- (a picture that is gone: %s)\n", im.ID[:8])
+		}
+	}
 }
 
 // writeCard writes the body of a handoff's card: its task (text), context,

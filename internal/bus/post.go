@@ -195,6 +195,8 @@ type postSpec struct {
 	from    From
 	text    string
 	replyTo int
+	// images are the pictures it carries, kept already (StoreImages).
+	images []Image
 	// kind is the message's kind when it is not text (handoff, done or
 	// system); then mentions are the agents it wakes, as given, and ref
 	// the handoff it belongs to.
@@ -238,9 +240,20 @@ func Post(channel string, from From, text string, replyTo int) (PostResult, erro
 	return post(postSpec{channel: channel, from: from, text: text, replyTo: replyTo})
 }
 
+// PostImages is Post with pictures, kept already (StoreImages); a message
+// may be pictures alone.
+func PostImages(channel string, from From, text string, replyTo int, images []Image) (PostResult, error) {
+	return post(postSpec{channel: channel, from: from, text: text, replyTo: replyTo, images: images})
+}
+
 // DM posts text to agent to in the channel between the two, made on the
 // first use; to is always woken. It returns the channel.
 func DM(from From, to, text string) (string, PostResult, error) {
+	return DMImages(from, to, text, nil)
+}
+
+// DMImages is DM with pictures, kept already (StoreImages).
+func DMImages(from From, to, text string, images []Image) (string, PostResult, error) {
 	if to == "" {
 		return "", PostResult{}, errors.New("no one to send to")
 	}
@@ -248,7 +261,7 @@ func DM(from From, to, text string) (string, PostResult, error) {
 		return "", PostResult{}, errors.New("a message to yourself reaches no one")
 	}
 	ch := dmID(from.ID, to)
-	res, err := post(postSpec{channel: ch, dm: []string{from.ID, to}, wake: to, from: from, text: text})
+	res, err := post(postSpec{channel: ch, dm: []string{from.ID, to}, wake: to, from: from, text: text, images: images})
 	return ch, res, err
 }
 
@@ -259,9 +272,14 @@ var ErrTheirDM = errors.New("a DM between two agents is theirs: read it, or post
 // none): in a channel, a post; in a DM of theirs, a post in it, made with
 // the first one. The window's composer and its inbox both post this way.
 func Reply(ch, text string, seq int) (PostResult, error) {
+	return ReplyImages(ch, text, seq, nil)
+}
+
+// ReplyImages is Reply with pictures, kept already (StoreImages).
+func ReplyImages(ch, text string, seq int, images []Image) (PostResult, error) {
 	me := From{ID: You, Label: You}
 	if !isDM(ch) {
-		return Post(ch, me, text, seq)
+		return PostImages(ch, me, text, seq, images)
 	}
 	ids := DMSides(ch)
 	if len(ids) != 2 || (ids[0] != You && ids[1] != You) {
@@ -272,15 +290,15 @@ func Reply(ch, text string, seq int) (PostResult, error) {
 		to = ids[1]
 	}
 	if _, ok, _ := Find(ch); ok && seq > 0 {
-		return Post(ch, me, text, seq)
+		return PostImages(ch, me, text, seq, images)
 	}
-	_, res, err := DM(me, to, text)
+	_, res, err := DMImages(me, to, text, images)
 	return res, err
 }
 
 func post(sp postSpec) (PostResult, error) {
 	text := strings.TrimSpace(sp.text)
-	if text == "" {
+	if text == "" && len(sp.images) == 0 {
 		return PostResult{}, errors.New("nothing to post")
 	}
 	byAgent := sp.from.ID != You
@@ -362,7 +380,7 @@ func post(sp postSpec) (PostResult, error) {
 		if sp.kind != "" {
 			kind = sp.kind
 		}
-		m := Message{From: sp.from, Kind: kind, Text: text, Mentions: mentions, ReplyTo: sp.replyTo, Handoff: sp.ref}
+		m := Message{From: sp.from, Kind: kind, Text: text, Mentions: mentions, ReplyTo: sp.replyTo, Handoff: sp.ref, Images: sp.images}
 		pause := ""
 		switch {
 		case kind == "system" || sp.relay(): // mad's own line, and a relay, count for nothing

@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -166,5 +167,43 @@ func TestMCPHandoff(t *testing.T) {
 	}
 	if got := mcpCall(t, arch, "bus_handoff", `{"to":"not-a-kind","task":"nothing to start"}`); !strings.HasPrefix(got, "ERROR ") || len(specs) != 2 {
 		t.Errorf("unknown kind = %q", got)
+	}
+}
+
+// bus_read lists a message's pictures by their local files, which an agent
+// can open.
+func TestMCPReadNamesPictures(t *testing.T) {
+	isolate(t)
+	const arch = "aaaa1111-0000-0000-0000-000000000001"
+	st := &state.State{}
+	p, _ := st.AddProject("/code/a")
+	p.Agents = []*state.Agent{{ID: arch, Kind: "claude", Name: "architect"}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	im, err := bus.StoreImage(append([]byte("GIF89a"), make([]byte, 40)...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.Create("pics", "", []string{arch}, bus.From{ID: bus.You, Label: bus.You}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.ReplyImages("pics", "@architect what is wrong here", 0, []bus.Image{im}); err != nil {
+		t.Fatal(err)
+	}
+	got := mcpCall(t, arch, "bus_read", `{"channel":"pics"}`)
+	var out struct {
+		Messages []struct{ Images []string }
+	}
+	if err := json.Unmarshal([]byte(got), &out); err != nil || len(out.Messages) != 1 || len(out.Messages[0].Images) != 1 {
+		t.Fatalf("bus_read: %s (%v)", got, err)
+	}
+	path := out.Messages[0].Images[0]
+	if b, err := os.ReadFile(path); err != nil || !strings.HasPrefix(string(b), "GIF89a") {
+		t.Errorf("the named file %q is not readable as the picture: %v", path, err)
+	}
+	_, list, _ := run(t, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`+"\n"+`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n", "mcp", "--agent", arch)
+	if !strings.Contains(list, "file-read tool") {
+		t.Error("bus_read's description does not say how to open the pictures")
 	}
 }

@@ -881,7 +881,7 @@ async function submit() {
   const text = t.value;
   const id = current;
   if (cv.open) {
-    if (text.trim()) postChannel(text);
+    if (text.trim() || pendingImgs.length) postChannel(text);
     return;
   }
   if (nc.open) {
@@ -2014,7 +2014,7 @@ function interruptCurrent() {
 // works and nothing is typed: run here or as its TUI alike.
 function drawSend() {
   const b = $("#qsend");
-  const typed = !!$("#qinput").value.trim();
+  const typed = !!$("#qinput").value.trim() || (!!cv.open && pendingImgs.length > 0);
   const busy = working();
   const stop = !typed && busy;
   if (b.classList.contains("stop") !== stop || !b.firstChild) {

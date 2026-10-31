@@ -324,7 +324,11 @@ function busMessage(m) {
     row.dataset.reply = m.reply_to;
     body.append(quoteOf(m.reply_to));
   }
-  body.append(text);
+  if (m.text) body.append(text);
+  // Pictures, fetched with the token, each to open large.
+  if (m.images && m.images.length) {
+    body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`)));
+  }
   row.append(body);
   return row;
 }
@@ -438,16 +442,20 @@ function mentionsBold(text) {
 async function postChannel(text) {
   const t = $("#qinput");
   const id = cv.open;
+  const imgs = takeImages();
   t.value = "";
   fitInput();
   drawNoWake();
   try {
-    const r = await api("POST", "/api/bus/post", {}, cv.reply ? { channel: id, text, reply_to: cv.reply.seq } : { channel: id, text });
+    const body = { channel: id, text, images: imgs.map(({ mime, data }) => ({ mime, data })) };
+    if (cv.reply) body.reply_to = cv.reply.seq;
+    const r = await api("POST", "/api/bus/post", {}, body);
     replyTo(null);
     if (r && r.warning) toast(r.warning, "err");
     $("#qerr").textContent = "";
   } catch (e) {
     if (!t.value) t.value = text;
+    restoreImages(imgs);
     fitInput();
     $("#qerr").textContent = e.message;
   }

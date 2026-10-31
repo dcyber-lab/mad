@@ -69,7 +69,7 @@ func mcpTools(id string) []mcp.Tool {
 		},
 		{
 			Name:        "bus_read",
-			Description: "Read a channel, or your DM with an agent (give its label), from a sequence number. Use it to catch up before replying, or when a digest said there is more. Reading needs no reply.",
+			Description: "Read a channel, or your DM with an agent (give its label), from a sequence number. Use it to catch up before replying, or when a digest said there is more. Reading needs no reply. A message with pictures lists their local file paths in its images field: open them with your file-read tool to see them.",
 			InputSchema: obj([]string{"channel"}, `"channel":{"type":"string","description":"channel id, or an agent's label for your DM with it"},"since":{"type":"integer","description":"messages after this seq; omit for the last ones"},"limit":{"type":"integer","description":"at most this many (30 by default, 200 at most)"}`),
 			Handler: func(_ context.Context, raw json.RawMessage) (string, error) {
 				var a struct {
@@ -646,6 +646,9 @@ func mcpRead(id, channel string, since, limit int) (string, error) {
 		Kind    string `json:"kind,omitempty"`
 		Text    string `json:"text"`
 		ReplyTo int    `json:"reply_to,omitempty"`
+		// Images are the paths of the message's pictures, files an agent
+		// opens with its file-read tool.
+		Images []string `json:"images,omitempty"`
 	}
 	out := []msg{}
 	for _, m := range msgs {
@@ -653,7 +656,13 @@ func mcpRead(id, channel string, since, limit int) (string, error) {
 		if k == "text" {
 			k = ""
 		}
-		out = append(out, msg{m.Seq, m.At.Local().Format("15:04"), m.From.Label, k, m.Text, m.ReplyTo})
+		var imgs []string
+		for _, im := range m.Images {
+			if p := im.Path(); p != "" {
+				imgs = append(imgs, p)
+			}
+		}
+		out = append(out, msg{m.Seq, m.At.Local().Format("15:04"), m.From.Label, k, m.Text, m.ReplyTo, imgs})
 	}
 	c, _, _ := bus.Find(ch)
 	return mcpJSON(map[string]any{"channel": ch, "messages": out, "last_seq": last, "paused": c.Paused})
