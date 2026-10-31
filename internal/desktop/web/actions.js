@@ -1019,19 +1019,23 @@ $("#addproject").onclick = () => addProject();
 
 // In the app the footer's icon row is not drawn: what was there that suits
 // it (adding a project, Skills, the theme, how many agents) is in this menu.
-$("#more").hidden = !embed;
-$("#more").onclick = async () => {
+$("#embed-menu").hidden = !embed;
+$("#embed-menu").onclick = async () => {
   const v = await dialog({
     title: "mad",
     body: el("p", "dtext muted", $("#summary").textContent),
     actions: [
       { label: "Add project", value: "project" },
       { label: "Skills", value: "skills" },
+      { label: "Phone and paired devices", value: "phone" },
       { label: `Theme: ${theme}`, value: "theme" },
+      { label: "Show full page", value: "full" },
       { label: "Close", cls: "primary", value: null },
     ],
   });
-  if (v) $({ project: "#addproject", skills: "#skills", theme: "#theme" }[v]).click();
+  if (v === "phone") phoneDialog();
+  else if (v === "full") leaveEmbed();
+  else if (v) $({ project: "#addproject", skills: "#skills", theme: "#theme" }[v]).click();
 };
 $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();

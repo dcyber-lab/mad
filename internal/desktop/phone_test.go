@@ -240,20 +240,38 @@ func TestPushBoundToDevice(t *testing.T) {
 	}
 }
 
+func resetMachine(t *testing.T) {
+	t.Helper()
+	old := lookupComputerName
+	machineOnce, machineName = sync.Once{}, ""
+	t.Cleanup(func() {
+		lookupComputerName = old
+		machineOnce, machineName = sync.Once{}, ""
+	})
+}
+
+func waitMachine(t *testing.T, want string) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		if machine() == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("machine = %q, want %q", machine(), want)
+}
+
 // The Mac's friendly name is in the deck's snapshot and in the pair reply,
 // looked up once.
 func TestMachineName(t *testing.T) {
 	isolate(t)
-	oldLookup := lookupMachine
+	resetMachine(t)
+	var mu sync.Mutex
 	calls := 0
-	lookupMachine = func() string { calls++; return "Ann's MacBook Pro" }
-	machineOnce, machineName = sync.Once{}, ""
-	t.Cleanup(func() {
-		lookupMachine = oldLookup
-		machineOnce, machineName = sync.Once{}, ""
-	})
+	lookupComputerName = func(context.Context) string { mu.Lock(); calls++; mu.Unlock(); return "Ann's MacBook Pro" }
 	s := New(agent.Builtin())
 	h := s.Handler()
+	waitMachine(t, "Ann's MacBook Pro")
 	for i := 0; i < 3; i++ {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", "/api/deck?token="+s.Token, nil))
@@ -269,7 +287,30 @@ func TestMachineName(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Machine != "Ann's MacBook Pro" || out.ID == "" {
 		t.Errorf("pair reply: %d %s", w.Code, w.Body)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if calls != 1 {
 		t.Errorf("looked up %d times", calls)
 	}
+}
+
+// A slow scutil does not hold the start: the hostname stands in until the
+// name arrives.
+func TestMachineNameSlowLookup(t *testing.T) {
+	isolate(t)
+	resetMachine(t)
+	release := make(chan struct{})
+	lookupComputerName = func(context.Context) string { <-release; return "Slow Mac" }
+	start := time.Now()
+	s := New(agent.Builtin())
+	_ = s.Handler()
+	host, _ := os.Hostname()
+	if got := machine(); got != strings.TrimSuffix(host, ".local") {
+		t.Errorf("before the lookup answers: %q, want the hostname %q", got, host)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("start took %v with a lookup that never answers", d)
+	}
+	close(release)
+	waitMachine(t, "Slow Mac")
 }

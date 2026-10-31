@@ -48,27 +48,52 @@ type Snapshot struct {
 	Machine string `json:"machine"`
 }
 
-// lookupMachine finds the name; tests replace it.
-var lookupMachine = func() string {
-	if runtime.GOOS == "darwin" {
-		if out, err := exec.Command("scutil", "--get", "ComputerName").Output(); err == nil {
-			if n := strings.TrimSpace(string(out)); n != "" {
-				return n
-			}
-		}
+// lookupComputerName asks the system for the Mac's friendly name ("" if it
+// has none); tests replace it.
+var lookupComputerName = func(ctx context.Context) string {
+	if runtime.GOOS != "darwin" {
+		return ""
 	}
-	h, _ := os.Hostname()
-	return strings.TrimSuffix(h, ".local")
+	out, err := exec.CommandContext(ctx, "scutil", "--get", "ComputerName").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 var (
-	machineOnce sync.Once
+	machineMu   sync.RWMutex
 	machineName string
+	machineOnce sync.Once
 )
 
-// machine is this Mac's friendly name, looked up once per server start.
+// startMachine makes the hostname (without .local) the Mac's name at once
+// and asks the system for its friendly one in the background, for at most
+// 2 seconds, so a slow scutil never holds the server's start; the name is
+// filled in when it arrives. Once per process.
+func startMachine() {
+	machineOnce.Do(func() {
+		h, _ := os.Hostname()
+		machineMu.Lock()
+		machineName = strings.TrimSuffix(h, ".local")
+		machineMu.Unlock()
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if n := lookupComputerName(ctx); n != "" {
+				machineMu.Lock()
+				machineName = n
+				machineMu.Unlock()
+			}
+		}()
+	})
+}
+
+// machine is this Mac's name as far as known.
 func machine() string {
-	machineOnce.Do(func() { machineName = lookupMachine() })
+	startMachine()
+	machineMu.RLock()
+	defer machineMu.RUnlock()
 	return machineName
 }
 
@@ -162,6 +187,8 @@ func newPoller(kinds []agent.Kind, l *looks) *poller {
 func (p *poller) Snapshot() Snapshot {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// The name may arrive between two looks.
+	p.snap.Machine = machine()
 	return p.snap
 }
 
