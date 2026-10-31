@@ -132,6 +132,64 @@ func TestFoldDoneMessageHasPRBeforeTheLink(t *testing.T) {
 	t.Error("no done message in channel-fold")
 }
 
+// The usage scenario's budget is spent; raising it by $10 opens it again (as the real
+// endpoint does), and lifting it for the day does too.
+func TestBudgetRaiseAndOpen(t *testing.T) {
+	h, err := newHandler("usage", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	spend := func() map[string]any {
+		r, err := http.Get(srv.URL + "/api/deck")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		var d struct{ Spend map[string]any }
+		if json.NewDecoder(r.Body).Decode(&d) != nil {
+			t.Fatal("no deck")
+		}
+		return d.Spend
+	}
+	post := func(body string) int {
+		r, err := http.Post(srv.URL+"/api/budget", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		return r.StatusCode
+	}
+	if s := spend(); s["closed"] != true || s["budget_usd"] != 20.0 {
+		t.Fatalf("the usage scenario's budget is not spent: %v", s)
+	}
+	if got := post(`{"op":"nonsense"}`); got != 400 {
+		t.Errorf("a bad op: %d", got)
+	}
+	if got := post(`{"op":"raise","usd":10}`); got != 200 {
+		t.Fatalf("raise: %d", got)
+	}
+	if s := spend(); s["closed"] != false || s["budget_usd"] != 30.0 {
+		t.Errorf("after raising by 10: %v", s)
+	}
+	h2, _ := newHandler("usage", "")
+	srv2 := httptest.NewServer(h2)
+	defer srv2.Close()
+	r, err := http.Post(srv2.URL+"/api/budget", "application/json", strings.NewReader(`{"op":"open"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	g, _ := http.Get(srv2.URL + "/api/deck")
+	var d struct{ Spend map[string]any }
+	_ = json.NewDecoder(g.Body).Decode(&d)
+	g.Body.Close()
+	if d.Spend["closed"] != false || d.Spend["open_today"] != true {
+		t.Errorf("after lifting it for the day: %v", d.Spend)
+	}
+}
+
 func TestPairing(t *testing.T) {
 	h, err := newHandler("pairing", "")
 	if err != nil {

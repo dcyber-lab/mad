@@ -149,12 +149,29 @@ function drawMachine() {
 $("#usageline").onclick = () => openUsage();
 function drawUsageLine() {
   const b = $("#usageline");
+  // the day's budget spent: red, and it says so (the agents wait)
+  const closed = !!(deck.spend && deck.spend.closed);
+  b.classList.toggle("closed", closed);
+  if (closed) {
+    b.hidden = false;
+    b.textContent = "额度用完";
+    return;
+  }
   const kind = (deck.quota || {}).claude ? "claude" : Object.keys(deck.quota || {})[0];
   const w = kind && deck.quota[kind];
   const pct = (x) => (x && (x.used || x.reset_at) ? `${Math.round(x.used || 0)}%` : "");
   const parts = w ? [["5 小时", pct(w.five_hour)], ["本周", pct(w.seven_day)]].filter((p) => p[1]) : [];
   b.hidden = !parts.length;
   if (parts.length) b.textContent = `${kind[0].toUpperCase()}${kind.slice(1)} ${parts.map((p) => p.join(" ")).join(" · ")}`;
+}
+
+// drawSpendDot: a red dot on ⋯ while the day's budget is spent, to lead the person to 用量.
+function drawSpendDot() {
+  const b = $("#embed-menu");
+  const closed = !!(deck.spend && deck.spend.closed);
+  const d = b.querySelector(".rdot");
+  if (closed && !d) b.append(redDot());
+  else if (!closed && d) d.remove();
 }
 
 function switchMac() {
@@ -1153,6 +1170,7 @@ async function refresh() {
     drawUsage();
     drawMachine();
     drawUsageLine();
+    drawSpendDot();
     drawSidebar();
     openWanted();
     if (cv.open) drawChanHead();

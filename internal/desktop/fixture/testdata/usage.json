@@ -43,6 +43,17 @@
           "reset_at": "0001-01-01T00:00:00Z"
         }
       }
+    },
+    "spend": {
+      "day": "2026-11-01",
+      "usd": 20.4,
+      "turns": 150,
+      "budget_usd": 20,
+      "budget_turns": 150,
+      "open_today": false,
+      "closed": true,
+      "part": 1.02,
+      "hot": true
     }
   }
 }

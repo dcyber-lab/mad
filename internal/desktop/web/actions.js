@@ -31,6 +31,7 @@ function popup(anchor, items, opts = {}) {
     t.append(el("span", "l", it.label));
     if (it.desc) t.append(el("span", "d", it.desc));
     li.append(t);
+    if (it.dot) li.append(redDot()); // something there waits on the person
     if (it.checked) li.append(icon("check", "ok"));
     li.onmousedown = (e) => e.preventDefault(); // the focus stays where it was
     li.onclick = (e) => {
@@ -1112,7 +1113,7 @@ $("#addproject").onclick = () => addProject();
 // The header's menu: the pages, and what the footer's icons were.
 $("#embed-menu").onclick = () => {
   popup($("#embed-menu"), [
-    { label: "用量", onclick: () => openUsage() },
+    { label: "用量", dot: !!(deck.spend && deck.spend.closed), onclick: () => openUsage() },
     { label: "看板", onclick: () => openBoard() },
     { label: "技能", onclick: () => $("#skills").click() },
     { label: "手机和已配对设备", onclick: () => phoneDialog() },
