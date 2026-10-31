@@ -388,20 +388,25 @@ func TestKeysRouteUnreadable(t *testing.T) {
 	}
 }
 
-// Esc goes to a working TUI only while its screen says Esc interrupts it.
+// Esc goes to a TUI only while it works: its screen says Esc interrupts
+// it, or its tracker says it runs; never onto a prompt.
 func TestInterruptPane(t *testing.T) {
 	k := newKeyed(t, "", transcript.Info{})
 	for _, c := range []struct {
 		name, screen string
+		working      bool
 		sent         []string
 	}{
-		{"working", fixture(t, "codex-working.txt"), []string{"%7 Escape"}},
-		{"idle", fixture(t, "claude-idle.txt"), nil},
-		{"asking", fixture(t, "claude-bash.txt"), nil},
-		{"said long ago", "press esc to interrupt it\n" + strings.Repeat("a line\n", statusLines) + "❯ ", nil},
+		{"codex says so", fixture(t, "codex-working.txt"), false, []string{"%7 Escape"}},
+		// claude 2.1.312 no longer says "esc to interrupt" while it works
+		{"claude runs", fixture(t, "claude-working.txt"), true, []string{"%7 Escape"}},
+		{"claude, not running", fixture(t, "claude-working.txt"), false, nil},
+		{"idle", fixture(t, "claude-idle.txt"), false, nil},
+		{"asking", fixture(t, "claude-bash.txt"), true, nil},
+		{"said long ago", "press esc to interrupt it\n" + strings.Repeat("a line\n", statusLines) + "❯ ", false, nil},
 	} {
 		k.screen, k.sent = c.screen, nil
-		err := InterruptPane("%7")
+		err := InterruptPane("%7", c.working)
 		if !reflect.DeepEqual(k.sent, c.sent) || (c.sent == nil) != errors.Is(err, ErrGone) {
 			t.Errorf("%s: %v, sent %q", c.name, err, k.sent)
 		}

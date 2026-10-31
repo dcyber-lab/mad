@@ -185,12 +185,15 @@ func (r keysRoute) do(a Answer, _ *Facts) error {
 	return nil
 }
 
-// InterruptPane presses Esc in a TUI-run agent's pane while its screen
-// says Esc interrupts it (claude's and codex's "esc to interrupt"). When
-// it says no such thing (done, or waiting on a prompt, whose Cancel is
-// its item's act) nothing is sent: ErrGone.
-func InterruptPane(pane string) error {
-	if !interruptible(capture(pane)) {
+// InterruptPane presses Esc in a TUI-run agent's pane while it works:
+// its screen says Esc interrupts it (codex's "esc to interrupt"), or its
+// tracker says it runs (working; claude's screen no longer says so). A
+// prompt on the screen is not interrupted (its Cancel is its item's act),
+// nor is an agent that is not working, whom a second Esc would show
+// claude's rewind menu: nothing is sent, ErrGone.
+func InterruptPane(pane string, working bool) error {
+	screen := capture(pane)
+	if _, asks := parsePrompt(screen); asks || !working && !interruptible(screen) {
 		return ErrGone
 	}
 	return press(pane, "Escape")

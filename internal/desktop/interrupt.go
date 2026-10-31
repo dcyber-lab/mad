@@ -9,6 +9,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/host"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
@@ -27,9 +28,10 @@ var (
 )
 
 // interruptGap is how long after an interrupt another to the same agent
-// is refused: a second Esc to claude's TUI, idle by then, opens its
-// rewind menu.
-const interruptGap = 2 * time.Second
+// is refused: as long as its tracker may still say it runs (claude says
+// nothing on Esc), and a second Esc to claude's TUI, idle by then, opens
+// its rewind menu.
+const interruptGap = status.StaleRunning
 
 var errNotWorking = errors.New("it is not working: there is nothing to interrupt")
 
@@ -55,20 +57,20 @@ func (in *interrupts) claim(id string, now time.Time) bool {
 
 // interrupt answers POST /api/interrupt?id=: stop what agent id does now,
 // as Esc does in its TUI, from the window or the phone. In window mode its
-// host interrupts the turn; run as its TUI, its pane gets Esc while the
-// screen says that interrupts it.
+// host interrupts the turn; run as its TUI, its pane gets Esc while it
+// works (attention.InterruptPane).
 //
 //	204: done
 //	404: no such agent
 //	409: it is not working, or was interrupted a moment ago
 func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	var mode string
+	var mode, st string
 	found := false
 	for _, p := range s.poll.Snapshot().Projects {
 		for _, a := range p.Agents {
 			if a.ID == id {
-				mode, found = a.Mode, true
+				mode, st, found = a.Mode, a.Status, true
 			}
 		}
 	}
@@ -84,7 +86,7 @@ func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	if mode == state.ModeWindow {
 		err = hostInterrupt(id)
 	} else if pane, ok := livePane(id); ok {
-		err = paneInterrupt(pane)
+		err = paneInterrupt(pane, st == status.Running)
 	} else {
 		err = errNotWorking
 	}
