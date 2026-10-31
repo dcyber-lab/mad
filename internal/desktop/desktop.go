@@ -19,6 +19,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
@@ -138,6 +139,9 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) auth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.URL.Query().Get("token")
+		if b, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+			got = b
+		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) != 1 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return

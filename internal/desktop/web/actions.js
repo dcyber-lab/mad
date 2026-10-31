@@ -877,7 +877,7 @@ function permissionName(hs) {
   return m ? m.name || m.value : hs.permission || "";
 }
 
-// ---- the phone: this window on it, over Tailscale (/api/phone) ----
+// ---- the phone: this window on it, over Tailscale or a Cloudflare Tunnel (/api/phone) ----
 
 async function phoneDialog() {
   let s;
@@ -888,11 +888,14 @@ async function phoneDialog() {
     return;
   }
   const body = el("div", "phonebox");
+  const cf = s.via === "cloudflare";
   let actions = [{ label: "OK", cls: "primary", value: null }];
   if (s.problem) {
     body.append(el("p", "dtext", s.problem));
   } else if (!s.on) {
-    body.append(el("p", "dtext", `Serve this window to your phone over Tailscale, at ${s.host}: only your own devices reach it, and they need the code it shows to get in.`));
+    body.append(el("p", "dtext", cf
+      ? "Serve this window to your phone through a Cloudflare Tunnel, from anywhere (chosen with mad phone on --cloudflare): anyone with the address can reach it, and they need the code it shows to get in."
+      : `Serve this window to your phone over Tailscale, at ${s.host}: only your own devices reach it, and they need the code it shows to get in.`));
     actions = [{ label: "Cancel", value: null }, { label: "Turn on", cls: "primary", value: "on" }];
   } else {
     const img = el("img", "qr");
@@ -910,7 +913,7 @@ async function phoneDialog() {
       } catch (_) { /* no clipboard here */ }
     };
     url.append(el("span", "", s.url), copy);
-    body.append(img, el("p", "dtext muted", "Scan it with the phone's camera, the phone on your tailnet. There, Add to Home Screen keeps it at hand."), url);
+    body.append(img, el("p", "dtext muted", `Served ${cf ? "through a Cloudflare Tunnel" : "over Tailscale"}. Scan it with the phone's camera${cf ? "" : ", the phone on your tailnet"}. There, Add to Home Screen keeps it at hand.`), url);
     actions = [{ label: "Turn off", value: "off" }, { label: "Done", cls: "primary", value: null }];
   }
   const v = await dialog({ title: "On your phone", body, actions });
