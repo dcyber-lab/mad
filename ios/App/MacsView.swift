@@ -116,7 +116,7 @@ struct MacsView: View {
         } catch { problem = error.localizedDescription }
     }
 
-    private func finish(_ p: MacStore.Pending) async {
+    private func finish(_ p: PairingBook.Pending) async {
         retrying.insert(p.id)
         defer { retrying.remove(p.id) }
         do { try await store.complete(p) } catch { report(error) }
