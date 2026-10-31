@@ -455,14 +455,16 @@ async function removeProject(p) {
 // agentMenu is what can be done with agent a.
 function agentMenu(a, anchor, opts) {
   const off = a.status === "stopped" || a.status === "asleep" || a.status === "exited";
+  const waits = a.status === "waiting";
   popup(anchor, [
     { label: "Rename", icon: "edit", onclick: () => renameAgent(a) },
     { label: "Open in terminal", desc: "the terminal deck, in your terminal app", icon: "external", onclick: () => openTerminal(a) },
     { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
     { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
     { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
-    { label: "Interrupt", desc: a.status === "running" ? "stops what it does now, as Esc in its TUI; it stays up" : "it is not working", icon: "stop", disabled: a.status !== "running" || !a.chat, onclick: () => interruptAgent(a) },
-    { label: "Put to sleep", desc: off ? "it is not running" : "ends its process to free memory; a message wakes it where it left off", icon: "sleep", disabled: off, onclick: () => sleepAgent(a) },
+    { label: "Interrupt", desc: interruptWhy(a), icon: "stop", disabled: a.status !== "running" || !a.chat || interruptSent(a), onclick: () => interruptAgent(a) },
+    { label: "Put to sleep", icon: "sleep", disabled: off, onclick: () => sleepAgent(a),
+      desc: off ? "it is not running" : waits ? "ends its process to free memory: what it asks you now is lost; a message wakes it" : "ends its process to free memory; a message wakes it where it left off" },
     "-",
     { label: "Delete", desc: "out of mad; its conversation stays on disk", icon: "trash", danger: true, onclick: () => deleteAgent(a) },
   ], opts || {});
@@ -501,14 +503,56 @@ async function sleepAgent(a) {
   }
 }
 
+// interrupts are the agents an Interrupt went to → {at, status}: each
+// says so where it is drawn, with no second Interrupt, until the deck's
+// look of it changes, or interruptMs pass: claude says nothing on Esc, so
+// it reads working until its screen has stood still a while (longer than
+// the server's interruptGap, when its status line ticks meanwhile).
+const interrupts = new Map();
+const interruptMs = 20000;
+
+// interruptSent says whether an Interrupt to agent a is in flight or
+// settling.
+function interruptSent(a) {
+  const p = interrupts.get(a.id);
+  if (p && (p.at === 0 || (Date.now() - p.at < interruptMs && a.status === p.status))) return true;
+  interrupts.delete(a.id);
+  return false;
+}
+
+// interruptWhy is what the menu says of Interrupt for agent a.
+function interruptWhy(a) {
+  if (interruptSent(a)) return "sent: it stops in a moment";
+  if (a.status === "running") return "stops what it does now, as Esc in its TUI; it stays up";
+  if (a.status === "waiting") return windowed(a) ? "it waits on you: deny what it asks instead, on its card" : "it waits on you: cancel its prompt instead, with Cancel (Esc) on its card";
+  return "it is not working";
+}
+
+// interruptButton is agent a's Interrupt on a row or a card; sent, it
+// says so.
+function interruptButton(a) {
+  if (interruptSent(a)) {
+    const b = rowButton("Interrupting…", "", () => {}, "sent: it stops in a moment");
+    b.disabled = true;
+    return b;
+  }
+  return rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`);
+}
+
 async function interruptAgent(a) {
+  if (interruptSent(a)) return;
+  interrupts.set(a.id, { at: 0, status: a.status });
+  drawSidebar();
   try {
     await api("POST", "/api/interrupt", { id: a.id });
+    interrupts.set(a.id, { at: Date.now(), status: a.status });
     toast(`Interrupted ${label(a)}`);
-    refresh();
   } catch (e) {
+    interrupts.delete(a.id);
     toast(e.message, "err");
   }
+  drawSidebar();
+  refresh();
 }
 
 async function deleteAgent(a) {
