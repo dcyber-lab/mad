@@ -34,9 +34,9 @@ struct AgentsView: View {
                                         ForEach(members) { row($0, snap) }
                                     } label: {
                                         HStack {
-                                            Label(t.name, systemImage: "person.3").font(.subheadline.weight(.medium))
+                                            Text(t.name).font(.body.weight(.medium))
                                             Spacer()
-                                            Text(summary(members, snap)).font(.footnote).foregroundStyle(.secondary)
+                                            Text(summary(members, snap)).font(.subheadline).foregroundStyle(.secondary)
                                         }
                                     }
                                 }
@@ -70,15 +70,12 @@ struct AgentsView: View {
     private func row(_ a: DeckSnapshot.Agent, _ snap: DeckSnapshot) -> some View {
         Button { open(a) } label: {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(a.label).font(.body).foregroundStyle(.primary)
-                    if a.isNamed, let k = a.kind { Text(k).font(.caption).foregroundStyle(.secondary) }
-                }
-                Spacer()
-                Text(snap.word(for: a.state)).font(.footnote)
+                Text(a.label).font(.body).foregroundStyle(.primary).lineLimit(2)
+                Spacer(minLength: 12)
+                Text(snap.word(for: a.state)).font(.subheadline)
                     .foregroundStyle(Tone.color(snap.tone(for: a.state)))
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
             }
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

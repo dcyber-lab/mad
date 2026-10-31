@@ -22,8 +22,8 @@ struct MacsView: View {
                 ForEach(store.pending) { p in
                     HStack {
                         VStack(alignment: .leading) {
-                            Text(p.title).font(.headline)
-                            Text("Pairing not finished").font(.caption).foregroundStyle(.orange)
+                            Text(p.title).font(.body)
+                            Text("Pairing not finished").font(.subheadline).foregroundStyle(.orange)
                         }
                         Spacer()
                         if retrying.contains(p.id) {
@@ -36,9 +36,9 @@ struct MacsView: View {
                 .onDelete { store.dropPending(at: $0) }
                 ForEach(store.macs) { mac in
                     NavigationLink(value: mac) {
-                        VStack(alignment: .leading) {
-                            Text(mac.name).font(.headline)
-                            Text(mac.baseURL.host ?? "").font(.caption).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mac.name).font(.body)
+                            Text(mac.baseURL.host ?? "").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                     .contextMenu {
@@ -57,9 +57,9 @@ struct MacsView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let expiry {
                     Label(expiry, systemImage: "clock.badge.exclamationmark")
-                        .font(.footnote)
+                        .font(.subheadline)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
                         .background(Color.orange.opacity(0.15))
                         .foregroundStyle(.orange)
                 }

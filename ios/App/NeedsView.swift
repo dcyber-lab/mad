@@ -70,13 +70,9 @@ struct ItemCard: View {
     let act: (DeckSnapshot.Act) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                if item.blocks {
-                    Circle().fill(.orange).frame(width: 8, height: 8)
-                        .accessibilityLabel("An agent is stopped until you act")
-                }
-                Text(item.title).font(.headline)
+                Text(item.title).font(.body.weight(.semibold))
                 if let a = agent, a.label != item.title {
                     Text(a.label).font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -84,32 +80,32 @@ struct ItemCard: View {
                 if let since = item.since {
                     // Short and quiet ("2m"), re-read every half minute.
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        Text(Age.short(from: since, to: ctx.date)).font(.caption).foregroundStyle(.secondary)
+                        Text(Age.short(from: since, to: ctx.date)).font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
             }
             if let c = item.context, !c.isEmpty {
-                Text(c).font(.caption).foregroundStyle(.secondary)
+                Text(c).font(.subheadline).foregroundStyle(.secondary)
             }
             if let t = item.text, !t.isEmpty {
                 Text(t)
-                    .font(item.mono ? .system(.callout, design: .monospaced) : .callout)
+                    .font(item.mono ? .system(.callout, design: .monospaced) : .body)
                     .lineLimit(item.full ? nil : 6)
                     .textSelection(.enabled)
             }
             if let b = item.body, !b.isEmpty {
                 Text(b)
-                    .font(item.mono ? .system(.footnote, design: .monospaced) : .footnote)
+                    .font(item.mono ? .system(.footnote, design: .monospaced) : .callout)
                     .foregroundStyle(item.full ? .primary : .secondary)
                     .lineLimit(item.full ? nil : 4)
                     .textSelection(.enabled)
             }
             if !item.acts.isEmpty {
                 FlowButtons(acts: item.acts, disabled: busy, tap: act)
-                    .padding(.top, 2)
+                    .padding(.top, 6)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 10)
         .overlay(alignment: .topTrailing) { if busy { ProgressView() } }
     }
 }
@@ -121,7 +117,7 @@ struct FlowButtons: View {
     let tap: (DeckSnapshot.Act) -> Void
 
     var body: some View {
-        WrapLayout(spacing: 8) {
+        WrapLayout(spacing: 10) {
             ForEach(acts) { a in
                 if a.primary {
                     Button(a.label) { tap(a) }.buttonStyle(.borderedProminent)
@@ -130,7 +126,7 @@ struct FlowButtons: View {
                 }
             }
         }
-        .controlSize(.small)
+        .controlSize(.regular)
         .disabled(disabled)
     }
 }

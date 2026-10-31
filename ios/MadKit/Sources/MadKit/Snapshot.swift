@@ -203,6 +203,8 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
 
     public var projects: [Project]
     public var teams: [Team]
+    /// How much of each kind's subscription is used, claude first.
+    public var usage: [Usage]
     /// How each shown state is worded, most urgent first.
     public var states: [Look]
     /// The Mac's friendly name; nil from a server that does not send it.
@@ -211,13 +213,14 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
     public var inbox: [InboxItem]
     public var needs: Int
 
-    enum CodingKeys: String, CodingKey { case projects, inbox, machine, teams, states }
+    enum CodingKeys: String, CodingKey { case projects, inbox, machine, teams, states, quota }
     enum InboxKeys: String, CodingKey { case items, needs }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []
         teams = try c.decodeIfPresent([Team].self, forKey: .teams) ?? []
+        usage = (try? c.decodeIfPresent(UsageList.self, forKey: .quota))??.items ?? []
         states = try c.decodeIfPresent([Look].self, forKey: .states) ?? []
         let m = try c.decodeIfPresent(String.self, forKey: .machine)?.trimmingCharacters(in: .whitespacesAndNewlines)
         machine = (m?.isEmpty ?? true) ? nil : m
@@ -231,8 +234,9 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
     }
 
     public init(projects: [Project], inbox: [InboxItem], needs: Int, machine: String? = nil,
-                teams: [Team] = [], states: [Look] = []) {
+                teams: [Team] = [], states: [Look] = [], usage: [Usage] = []) {
         self.machine = machine
+        self.usage = usage
         self.teams = teams
         self.states = states
         self.projects = projects; self.inbox = inbox; self.needs = needs

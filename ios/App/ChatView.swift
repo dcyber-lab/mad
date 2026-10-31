@@ -37,8 +37,8 @@ struct ChatScreen: View {
             if let a = agent, let s = mac.snapshot {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
-                        Text(a.label).font(.headline)
-                        Text(s.word(for: a.state)).font(.caption2).foregroundStyle(Tone.color(s.tone(for: a.state)))
+                        Text(a.label).font(.body.weight(.semibold))
+                        Text(s.word(for: a.state)).font(.caption).foregroundStyle(Tone.color(s.tone(for: a.state)))
                     }
                 }
             }
@@ -55,9 +55,9 @@ struct ChatScreen: View {
 
     private var transcript: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 if chat.transcript.earlier {
-                    Text("Earlier messages are not shown.").font(.caption).foregroundStyle(.secondary)
+                    Text("Earlier messages are not shown.").font(.subheadline).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
                 ForEach(Array(chat.transcript.rows.enumerated()), id: \.offset) { _, row in
@@ -84,7 +84,7 @@ struct ChatScreen: View {
             if working {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Working").font(.footnote).foregroundStyle(.secondary)
+                    Text("Working").font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
                     Button("Interrupt", systemImage: "stop.circle") {
                         Task {
@@ -92,13 +92,13 @@ struct ChatScreen: View {
                             UINotificationFeedbackGenerator().notificationOccurred(chat.notice == nil ? .success : .error)
                         }
                     }
-                        .font(.footnote)
+                        .font(.subheadline)
                 }
-                .padding(.horizontal, 16).padding(.top, 8)
+                .padding(.horizontal, 16).padding(.top, 10)
             }
             if agent?.headless == false {
                 Text("This agent runs in its terminal. Open the Deck tab to talk to it.")
-                    .font(.footnote).foregroundStyle(.secondary).padding(12)
+                    .font(.subheadline).foregroundStyle(.secondary).padding(14)
             } else {
                 HStack(alignment: .bottom, spacing: 8) {
                     TextField("Message", text: $draft, axis: .vertical)
@@ -132,9 +132,9 @@ struct ChatProblem: View {
 
     var body: some View {
         HStack {
-            Label(text, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+            Label(text, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange)
             Spacer()
-            Button("Retry", action: retry).font(.footnote.weight(.semibold))
+            Button("Retry", action: retry).font(.subheadline.weight(.semibold))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.orange.opacity(0.15))
@@ -154,7 +154,7 @@ struct RowView: View {
                     if let t = e.text, !t.isEmpty { Markdown(text: t).foregroundStyle(.white) }
                     if !e.images.isEmpty { ImagePlaceholder(count: e.images.count).foregroundStyle(.white.opacity(0.85)) }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 8)
+                .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18))
             }
         case .text(let e):
@@ -175,9 +175,9 @@ struct Markdown: View {
 
     var body: some View {
         if let a = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-            Text(a).textSelection(.enabled)
+            Text(a).lineSpacing(4).textSelection(.enabled)
         } else {
-            Text(text).textSelection(.enabled)
+            Text(text).lineSpacing(4).textSelection(.enabled)
         }
     }
 }
@@ -185,7 +185,7 @@ struct Markdown: View {
 struct ImagePlaceholder: View {
     let count: Int
     var body: some View {
-        Label(count == 1 ? "Image" : "\(count) images", systemImage: "photo").font(.footnote)
+        Label(count == 1 ? "Image" : "\(count) images", systemImage: "photo").font(.subheadline)
     }
 }
 
@@ -211,9 +211,9 @@ struct ToolRow: View {
         VStack(alignment: .leading, spacing: 6) {
             Button { withAnimation(.easeInOut(duration: 0.15)) { open.toggle() } } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                         .rotationEffect(.degrees(open ? 90 : 0))
-                    Text(title).font(.footnote.weight(.medium)).lineLimit(1)
+                    Text(title).font(.subheadline).lineLimit(1)
                     if failed { Circle().fill(.red).frame(width: 6, height: 6) }
                     else if result == nil { ProgressView().controlSize(.mini) }
                     Spacer(minLength: 0)
@@ -248,7 +248,7 @@ struct Mono: View {
     let text: String
     let color: Color
     var body: some View {
-        Text(text).font(.system(.caption, design: .monospaced)).foregroundStyle(color)
+        Text(text).font(.system(.footnote, design: .monospaced)).foregroundStyle(color)
             .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -264,9 +264,9 @@ struct LiveBubble: View {
                 case "text":
                     if let t = b.text, !t.isEmpty { Markdown(text: t) }
                 case "thinking":
-                    Text("Thinking…").font(.footnote).italic().foregroundStyle(.secondary)
+                    Text("Thinking…").font(.subheadline).italic().foregroundStyle(.secondary)
                 case "tool":
-                    Label(b.tool ?? "Tool", systemImage: "wrench.and.screwdriver").font(.footnote).foregroundStyle(.secondary)
+                    Label(b.tool ?? "Tool", systemImage: "wrench.and.screwdriver").font(.subheadline).foregroundStyle(.secondary)
                 default:
                     EmptyView()
                 }

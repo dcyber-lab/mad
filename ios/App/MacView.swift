@@ -10,6 +10,8 @@ struct MacView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tab: Tab = MacView.firstTab
     @State private var lastTab: Tab = MacView.firstTab
+    /// Usage is one tap from the main screen, in the navigation bar.
+    @State private var showUsage = MacView.firstUsage
 
     /// `macs` is not a screen: choosing it goes back to the Macs list, so the
     /// way back stays obvious while the Deck tab hides the navigation bar.
@@ -32,6 +34,15 @@ struct MacView: View {
         }
         #endif
         return .needs
+    }
+
+    /// Debug builds only: `-openUsage YES` opens the Usage page.
+    private static var firstUsage: Bool {
+        #if DEBUG
+        return UserDefaults.standard.bool(forKey: "openUsage")
+        #else
+        return false
+        #endif
     }
 
     /// Debug builds only: `-openAgent <id>` opens that agent's conversation.
@@ -72,11 +83,18 @@ struct MacView: View {
                 lastTab = new
             }
         }
+        .navigationDestination(isPresented: $showUsage) { UsageView(model: model) }
         .navigationDestination(item: $chatAgent) { ChatScreen(mac: model, agentID: $0.id) }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         // The page's own header is enough on the Deck tab.
         .toolbar(tab == .deck ? .hidden : .visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showUsage = true } label: { Image(systemName: "gauge.with.dots.needle.33percent") }
+                    .accessibilityLabel("Usage")
+            }
+        }
         .onAppear { model.onMachineName = { [mac = model.mac] in store.adoptMachineName($0, for: mac) } }
         // Polls while this screen is shown and the app is active; the task
         // restarts on every return to the foreground, so it looks at once.
@@ -109,9 +127,9 @@ struct LinkBanner: View {
 
     private func banner(_ text: String, _ icon: String, _ color: Color) -> some View {
         Label(text, systemImage: icon)
-            .font(.footnote)
+            .font(.subheadline)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.vertical, 6)
+            .padding(.horizontal, 12).padding(.vertical, 8)
             .background(color.opacity(0.18))
             .foregroundStyle(color)
     }
