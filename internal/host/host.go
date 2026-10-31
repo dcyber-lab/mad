@@ -227,7 +227,7 @@ func Run(ctx context.Context, id string, kinds []agent.Kind) error {
 	case "pi":
 		h.d = newPi(h, deck.TUICommand(p, a, true, kinds), p.Dir(a))
 	default:
-		h.d = newClaude(h, deck.TUICommand(p, a, true, kinds), p.Dir(a))
+		h.d = newClaude(h, deck.TUICommand(p, a, true, kinds), p.Dir(a), a.Permission)
 	}
 
 	sock := paths.HostSocket(id)

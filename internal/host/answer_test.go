@@ -48,7 +48,7 @@ func TestCodexTurnEndsAtOnceOnAnswer(t *testing.T) {
 func TestClaudeTurnEndsAtOnceOnAnswer(t *testing.T) {
 	record(t)
 	h := newHost("cl-fast")
-	c := newClaude(h, "true", t.TempDir())
+	c := newClaude(h, "true", t.TempDir(), "")
 	h.d = c
 	c.in = &echoWriter{react: func([]byte) {
 		c.line([]byte(`{"type":"result","subtype":"success","is_error":false}`))

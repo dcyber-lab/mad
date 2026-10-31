@@ -14,6 +14,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/live"
+	"github.com/dcyber-lab/mad/internal/state"
 )
 
 // claude runs a headless claude as the Agent SDK does: its own command
@@ -33,17 +34,28 @@ type claude struct {
 	in      io.Writer
 	asks    map[string]claudeAsk // open permission requests, by request id
 	chosen  string               // the mode the person set, which claude's own report must not undo
+	modes   map[string]modeAsk   // open set_permission_mode requests, by request id
 	seq     int
 	stream  *live.Stream
 }
 
 // claudePermissions are the modes it can ask in.
 var claudePermissions = []Model{
+	{Value: "auto", Name: "Auto", Description: "Claude judges each action"},
 	{Value: "default", Name: "Ask before edits", Description: "Asks before it edits or runs anything"},
 	{Value: "acceptEdits", Name: "Accept edits", Description: "Edits files without asking"},
 	{Value: "plan", Name: "Plan only", Description: "Plans, and changes nothing until you approve"},
 	{Value: "bypassPermissions", Name: "Don't ask", Description: "Does everything without asking"},
 }
+
+// modeAsk is a mode switch claude has not answered: the mode asked for,
+// and the one that stands if it refuses.
+type modeAsk struct{ mode, was string }
+
+// defaultPermission is the mode a window-mode claude starts in when
+// neither the person nor its command chose one: the same as the TUI
+// agents of run and team (run.PermAuto).
+const defaultPermission = "auto"
 
 type claudeAsk struct {
 	tool        string
@@ -55,12 +67,34 @@ type claudeAsk struct {
 const claudeHeadless = " -p --verbose --input-format stream-json --output-format stream-json" +
 	" --include-partial-messages --permission-prompt-tool stdio"
 
-func newClaude(h *Host, cmd, dir string) *claude {
-	return &claude{h: h, cmd: cmd, dir: dir, asks: map[string]claudeAsk{}, started: make(chan struct{})}
+// newClaude hosts cmd; chosen is the mode the person last set, if any.
+func newClaude(h *Host, cmd, dir, chosen string) *claude {
+	return &claude{h: h, cmd: cmd, dir: dir, chosen: chosen, asks: map[string]claudeAsk{},
+		modes: map[string]modeAsk{}, started: make(chan struct{})}
+}
+
+// flags are what claude is started with on top of its command: headless,
+// the person's mode (the last of two --permission-mode wins), auto when
+// nothing set one, and bypass allowed so that a switch to it is not refused.
+func (c *claude) flags() string {
+	f := claudeHeadless
+	if !strings.Contains(c.cmd, "--dangerously-skip-permissions") {
+		f += " --allow-dangerously-skip-permissions"
+	}
+	c.mu.Lock()
+	chosen := c.chosen
+	c.mu.Unlock()
+	switch {
+	case chosen != "":
+		f += " --permission-mode " + chosen
+	case !strings.Contains(c.cmd, "--permission-mode") && !strings.Contains(c.cmd, "--dangerously-skip-permissions"):
+		f += " --permission-mode " + defaultPermission
+	}
+	return f
 }
 
 func (c *claude) run(ctx context.Context) error {
-	cmd := agentCmd(ctx, c.dir, "sh", "-c", c.cmd+claudeHeadless)
+	cmd := agentCmd(ctx, c.dir, "sh", "-c", c.cmd+c.flags())
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -129,8 +163,12 @@ func (c *claude) line(data []byte) {
 			// before its first message may not have reached: the
 			// person's choice stands, and is sent again.
 			if chosen != "" && m.Mode != chosen {
+				reported := m.Mode
 				m.Mode = chosen
-				go func() { _ = c.control(map[string]any{"subtype": "set_permission_mode", "mode": chosen}) }()
+				go func() { _ = c.switchMode(chosen, reported) }()
+			}
+			if chosen == "" && m.Mode != "" {
+				c.remember(m.Mode) // as it is after a plan was approved, say
 			}
 			c.h.update(func(s *State) {
 				s.Session, s.Model = m.SessionID, m.Model
@@ -159,6 +197,7 @@ func (c *claude) line(data []byte) {
 	case "control_cancel_request":
 		c.forget(m.RequestID)
 	case "control_response":
+		c.modeAnswer(m.Response.RequestID, m.Response.Subtype, m.Response.Error, m.Response.Response)
 		if m.Response.RequestID == "init" && m.Response.Subtype == "success" {
 			var r struct {
 				Models []struct {
@@ -304,6 +343,15 @@ func (c *claude) answer(a Answer) error {
 		resp = map[string]any{"behavior": "allow", "updatedInput": in}
 	case a.Allow:
 		resp = map[string]any{"behavior": "allow", "updatedInput": q.input}
+		if q.tool == "ExitPlanMode" {
+			// It leaves plan mode on its own and says which it is in
+			// next (system init): plan is no longer the person's choice.
+			c.mu.Lock()
+			if c.chosen == "plan" {
+				c.chosen = ""
+			}
+			c.mu.Unlock()
+		}
 		if a.Always && len(q.suggestions) > 0 && string(q.suggestions) != "null" {
 			resp["updatedPermissions"] = q.suggestions
 		}
@@ -362,14 +410,88 @@ func (c *claude) setModel(model string) error {
 }
 
 func (c *claude) setPermission(mode string) error {
-	err := c.control(map[string]any{"subtype": "set_permission_mode", "mode": mode})
+	c.h.mu.Lock()
+	was := c.h.st.Permission
+	c.h.mu.Unlock()
+	err := c.switchMode(mode, was)
 	if err == nil {
-		c.mu.Lock()
-		c.chosen = mode
-		c.mu.Unlock()
 		c.h.update(func(s *State) { s.Permission = mode })
 	}
 	return err
+}
+
+// switchMode asks claude for mode, which stands as the person's choice
+// unless claude refuses; was is what it runs in meanwhile.
+func (c *claude) switchMode(mode, was string) error {
+	c.mu.Lock()
+	c.seq++
+	id := "mad-" + strconv.Itoa(c.seq)
+	c.modes[id] = modeAsk{mode, was}
+	c.chosen = mode
+	c.mu.Unlock()
+	err := c.write(map[string]any{"type": "control_request", "request_id": id,
+		"request": map[string]any{"subtype": "set_permission_mode", "mode": mode}})
+	if err != nil {
+		c.mu.Lock()
+		delete(c.modes, id)
+		c.chosen = was
+		c.mu.Unlock()
+	}
+	return err
+}
+
+// modeAnswer takes claude's answer to a mode switch: the mode it now
+// runs in (it may say another than was asked, "manual" is "default") is
+// kept, across restarts too; a refusal (bypass not allowed, say) leaves
+// the mode it ran in, and says why.
+func (c *claude) modeAnswer(id, subtype, errText string, resp json.RawMessage) {
+	c.mu.Lock()
+	ask, ok := c.modes[id]
+	delete(c.modes, id)
+	c.mu.Unlock()
+	if !ok {
+		return
+	}
+	if subtype != "success" {
+		c.mu.Lock()
+		if c.chosen == ask.mode {
+			c.chosen = ask.was
+		}
+		c.mu.Unlock()
+		c.h.update(func(s *State) {
+			s.Permission = ask.was
+			s.Error = "Could not switch to " + ask.mode + ": " + errText
+		})
+		return
+	}
+	var r struct {
+		Mode string `json:"mode"`
+	}
+	_ = json.Unmarshal(resp, &r)
+	if r.Mode == "" {
+		r.Mode = ask.mode
+	}
+	c.mu.Lock()
+	still := c.chosen == ask.mode // not another switch since
+	if still {
+		c.chosen = r.Mode
+	}
+	c.mu.Unlock()
+	if !still {
+		return
+	}
+	c.h.update(func(s *State) { s.Permission = r.Mode })
+	c.remember(r.Mode)
+}
+
+// remember keeps mode as the agent's, for a host started again.
+func (c *claude) remember(mode string) {
+	_ = state.Update(func(st *state.State) error {
+		if _, a := st.FindAgent(c.h.agent); a != nil {
+			a.Permission = mode
+		}
+		return nil
+	})
 }
 
 func (c *claude) interrupt() error {
