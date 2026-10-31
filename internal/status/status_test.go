@@ -170,8 +170,42 @@ func TestObserveHooks(t *testing.T) {
 		t.Errorf("active screen with old hook = %s", s)
 	}
 
-	if s := tr.Observe(claude, alive, true, &Hook{State: Waiting, At: t0}, "b", false, t0.Add(time.Hour)); s != Waiting {
+	if s := tr.Observe(claude, alive, true, &Hook{State: Waiting, At: t0.Add(30 * time.Minute)}, "b", false, t0.Add(time.Hour)); s != Waiting {
 		t.Errorf("hook waiting = %s", s)
+	}
+	// Its prompt answered (no hook says so until the tool is done): the
+	// screen moves on, with no prompt on it.
+	asked := &Hook{State: Waiting, At: t0.Add(2 * time.Hour)}
+	ask := "Bash command\n echo hi\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n"
+	tr = Tracker{}
+	tr.Observe(claude, alive, true, asked, ask, false, asked.At)
+	if s := tr.Observe(claude, alive, true, asked, ask, false, asked.At.Add(time.Minute)); s != Waiting {
+		t.Errorf("asking = %s", s)
+	}
+	moved := strings.Replace(ask, "❯ 1. Yes\n   2. No", "  1. Yes\n ❯ 2. No", 1) // the cursor, moved in the pane
+	if s := tr.Observe(claude, alive, true, asked, moved, false, asked.At.Add(time.Minute+time.Second)); s != Waiting {
+		t.Errorf("cursor moved = %s", s)
+	}
+	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (3s)", false, asked.At.Add(2*time.Minute)); s != Running {
+		t.Errorf("answered, running = %s", s)
+	}
+	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (4s)", false, asked.At.Add(2*time.Minute+time.Second)); s != Running {
+		t.Errorf("answered, still running = %s", s)
+	}
+	// Interrupted, or refused: claude says no more. The wait is over.
+	done := "⏺ Bash(echo hi)\n  ⎿  Interrupted · What should Claude do instead?\n❯ "
+	tr.Observe(claude, alive, true, asked, done, false, asked.At.Add(3*time.Minute))
+	if s := tr.Observe(claude, alive, true, asked, done, false, asked.At.Add(3*time.Minute+StaleRunning/2)); s != Running {
+		t.Errorf("just stopped = %s", s)
+	}
+	if s := tr.Observe(claude, alive, true, asked, done, false, asked.At.Add(3*time.Minute+StaleRunning+time.Second)); s != Idle {
+		t.Errorf("stopped = %s", s)
+	}
+	// The next prompt is a new wait.
+	again := &Hook{State: Waiting, At: asked.At.Add(time.Hour)}
+	tr.Observe(claude, alive, true, again, ask, false, again.At)
+	if s := tr.Observe(claude, alive, true, again, ask, false, again.At.Add(time.Minute)); s != Waiting {
+		t.Errorf("asking again = %s", s)
 	}
 	// Idle from hooks wins over typing on screen.
 	if s := tr.Observe(claude, alive, true, &Hook{State: Idle, At: t0}, "typing…", false, t0.Add(2*time.Hour)); s != Idle {

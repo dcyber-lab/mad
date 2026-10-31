@@ -168,6 +168,9 @@ type Tracker struct {
 	lastChange time.Time
 	quiet      time.Time
 	since      time.Time
+	// answered is the time of the waiting hook whose prompt was seen
+	// answered on the screen.
+	answered time.Time
 
 	Status string
 	// Attention: the agent finished or got blocked while not on stage.
@@ -285,7 +288,21 @@ func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 	if k.Hooks && hook != nil {
 		switch hook.State {
 		case Waiting:
-			return Waiting
+			// Answered in its pane, or by keys from the window: claude says
+			// nothing until the tool it allowed is done (or ever, when it
+			// was refused or interrupted), but its screen moves on, with no
+			// prompt on it. From then on that wait is over: it runs while
+			// the screen moves, as a running hook does.
+			if !t.answered.Equal(hook.At) && t.lastChange.After(hook.At) && !k.ScreenWaiting(tailLines(screen, waitingTail)) {
+				t.answered = hook.At
+			}
+			if !t.answered.Equal(hook.At) {
+				return Waiting
+			}
+			if now.Sub(t.lastChange) > StaleRunning {
+				return Idle
+			}
+			return Running
 		case Running:
 			last := hook.At
 			if t.lastChange.After(last) {
