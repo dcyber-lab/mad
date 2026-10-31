@@ -113,8 +113,10 @@ public final class PairingBook: ObservableObject {
         let i = macs.firstIndex { $0.baseURL == mac.baseURL }
         if let i {
             m.id = macs[i].id
-            m.name = macs[i].name
+            // Only a name the person chose survives a re-pair; otherwise the
+            // new name (the Mac's own, or the host's) replaces the stale one.
             m.renamed = macs[i].renamed
+            if m.renamed { m.name = macs[i].name }
         }
         try secrets.set(m.token, for: m.id.uuidString)
         if let i { macs[i] = m } else { macs.append(m) }

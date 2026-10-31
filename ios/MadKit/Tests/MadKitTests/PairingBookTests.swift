@@ -131,7 +131,7 @@ final class PairingBookTests: XCTestCase {
     }
 
     func testRepairReplacesTheTokenAndKeepsIdAndName() throws {
-        var old = Mac(name: "My Mac", baseURL: base, token: tokenA)
+        var old = Mac(name: "My Mac", baseURL: base, token: tokenA, renamed: true)
         old.deviceID = "dev-0"
         let b = book(macs: [old])
         try b.add(Mac(name: "box", baseURL: base, token: tokenB, deviceID: "dev-1"))
@@ -140,6 +140,33 @@ final class PairingBookTests: XCTestCase {
         XCTAssertEqual(b.macs[0].name, "My Mac")
         XCTAssertEqual(b.macs[0].token, tokenB)
         XCTAssertEqual(secrets.items[old.id.uuidString], tokenB)
+    }
+
+    /// The Mac's ComputerName changed: a re-pair takes the reply's name, unless the person renamed it.
+    func testRepairTakesTheNewMachineNameUnlessRenamed() async throws {
+        let plain = Mac(name: "Old ComputerName", baseURL: base, token: tokenA)
+        var b = book(macs: [plain])
+        answer = { _ in PairResult(id: "dev-1", machine: "New ComputerName") }
+        try await b.add(link)
+        XCTAssertEqual(b.macs.count, 1)
+        XCTAssertEqual(b.macs[0].id, plain.id)
+        XCTAssertEqual(b.macs[0].name, "New ComputerName")
+        XCTAssertFalse(b.macs[0].renamed)
+
+        let renamed = Mac(name: "Office", baseURL: base, token: tokenA, renamed: true)
+        tokens = [tokenA, tokenB]
+        b = book(macs: [renamed])
+        answer = { _ in PairResult(id: "dev-1", machine: "New ComputerName") }
+        try await b.add(link)
+        XCTAssertEqual(b.macs[0].name, "Office")
+        XCTAssertTrue(b.macs[0].renamed)
+    }
+
+    func testRepairWithoutAMachineNameFallsBackToTheHost() async throws {
+        let b = book(macs: [Mac(name: "Old ComputerName", baseURL: base, token: tokenA)])
+        answer = { _ in PairResult(id: "dev-1") }
+        try await b.add(link)
+        XCTAssertEqual(b.macs[0].name, "box")
     }
 
     func testFailedSaveOfANewMacAddsNothing() {
