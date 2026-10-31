@@ -1578,7 +1578,7 @@ function drawLive(o) {
       if (i < had || b.id && (o.partIDs.has(b.id) || o.calls.has(b.id))) continue;
       if (b.kind === "text" && (b.text || "").trim()) {
         const n = el("div", `msg from-agent${b.done ? "" : " streaming"}`);
-        n.append(mdPart(o, i, b.text));
+        n.append(mdPart(o, i, b.text, b.done));
         box.append(n);
         shown = true;
       } else if (b.kind === "thinking" && !b.done) {
@@ -1622,15 +1622,47 @@ function drawLive(o) {
   if (atEnd) o.chat.scrollTop = o.chat.scrollHeight;
 }
 
-// mdPart renders text part i of the message being written. A part that has
-// not changed since the last look keeps its rendering, so only the part
-// still being written is parsed again.
-function mdPart(o, i, text) {
-  const hit = o.mdParts.get(i);
-  if (hit && hit.text === text) return hit.node;
-  const node = md(text);
-  o.mdParts.set(i, { text, node });
-  return node;
+// mdCut is where text can be cut for parsing in parts: after a blank line
+// that ends a paragraph outside a code fence, when the next line starts with
+// a letter, so no list, table or quote runs on into it and nothing after the
+// cut changes what is before it. 0 when there is none, and none at all while
+// a link definition may be used before it is seen.
+function mdCut(text) {
+  if (/^ {0,3}\[[^\]\n]+\]:/m.test(text)) return 0;
+  const lines = text.split("\n");
+  let fence = false, off = 0, cut = 0;
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k];
+    if (/^\s{0,3}(```|~~~)/.test(line)) fence = !fence;
+    const next = lines[k + 1];
+    if (!fence && line.trim() === "" && next !== undefined && /^\p{L}/u.test(next)) cut = off + line.length + 1;
+    off += line.length + 1;
+  }
+  return cut;
+}
+
+// mdPart renders text part i of the message being written as one block. The
+// part up to its last cut keeps its rendering from earlier looks, so only
+// what follows the cut is parsed again.
+function mdPart(o, i, text, done) {
+  const cut = done ? text.length : mdCut(text);
+  let e = o.mdParts.get(i);
+  if (!e || !text.startsWith(e.head) || cut < e.head.length) {
+    e = { head: "", div: el("div", "md"), tail: [] };
+    o.mdParts.set(i, e);
+  }
+  e.tail.forEach((n) => n.remove());
+  e.tail = [];
+  if (cut > e.head.length) {
+    e.div.append(...md(text.slice(e.head.length, cut)).childNodes);
+    e.head = text.slice(0, cut);
+  }
+  const rest = text.slice(e.head.length);
+  if (rest.trim()) {
+    e.tail = [...md(rest).childNodes];
+    e.div.append(...e.tail);
+  }
+  return e.div;
 }
 
 // scheduleLive draws the message being written at the next frame, so the
