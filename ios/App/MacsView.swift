@@ -10,10 +10,26 @@ struct MacsView: View {
     @State private var newName = ""
     @State private var problem: String?
     @State private var path: [Mac] = []
+    @State private var retrying: Set<UUID> = []
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                ForEach(store.pending) { p in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(p.title).font(.headline)
+                            Text("Pairing not finished").font(.caption).foregroundStyle(.orange)
+                        }
+                        Spacer()
+                        if retrying.contains(p.id) {
+                            ProgressView()
+                        } else {
+                            Button("Retry") { Task { await finish(p) } }.buttonStyle(.bordered)
+                        }
+                    }
+                }
+                .onDelete { store.dropPending(at: $0) }
                 ForEach(store.macs) { mac in
                     NavigationLink(value: mac) {
                         VStack(alignment: .leading) {
@@ -28,7 +44,7 @@ struct MacsView: View {
                 .onDelete { store.delete(at: $0) }
             }
             .overlay {
-                if store.macs.isEmpty {
+                if store.macs.isEmpty && store.pending.isEmpty {
                     ContentUnavailableView("No Mac yet", systemImage: "qrcode.viewfinder",
                         description: Text("Run mad phone on your Mac, then scan its QR code."))
                 }
@@ -81,13 +97,38 @@ struct MacsView: View {
     private func launchHooks() {
         #if DEBUG
         let d = UserDefaults.standard
-        if let link = d.string(forKey: "pairLink"), store.macs.isEmpty { pair(link) }
-        if d.bool(forKey: "openMac"), path.isEmpty, let m = store.macs.first { path = [m] }
+        Task {
+            if let text = d.string(forKey: "pairLink"), store.macs.isEmpty,
+               let link = try? Pairing.parse(text, allowLocalHTTP: true) {
+                do { try await store.add(link) } catch { report(error) }
+            }
+            if d.bool(forKey: "openMac"), path.isEmpty, let m = store.macs.first { path = [m] }
+        }
         #endif
     }
 
     private func pair(_ text: String) {
-        do { store.add(try Pairing.parse(text, allowLocalHTTP: Self.allowLocalHTTP)) }
-        catch { problem = error.localizedDescription }
+        do {
+            let link = try Pairing.parse(text, allowLocalHTTP: Self.allowLocalHTTP)
+            Task {
+                do { try await store.add(link) } catch { report(error) }
+            }
+        } catch { problem = error.localizedDescription }
+    }
+
+    private func finish(_ p: MacStore.Pending) async {
+        retrying.insert(p.id)
+        defer { retrying.remove(p.id) }
+        do { try await store.complete(p) } catch { report(error) }
+    }
+
+    /// A refused pairing says to scan a new QR; a lost connection says the
+    /// pairing is kept and can be retried.
+    private func report(_ error: Error) {
+        if let e = error as? ConnectionError, e == .offline {
+            problem = "The Mac could not be reached. The pairing is kept: tap Retry when it is back."
+        } else {
+            problem = error.localizedDescription
+        }
     }
 }

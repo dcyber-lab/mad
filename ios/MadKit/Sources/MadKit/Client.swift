@@ -5,6 +5,8 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
     case refused
     /// The Mac could not be reached at all.
     case offline
+    /// Pairing was refused (400 or 403): the code is bad, used or expired.
+    case pairingRefused
     /// 409: the item was answered already or asks something else now; the
     /// message is the server's, for the person.
     case conflict(String)
@@ -15,6 +17,7 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
         switch self {
         case .refused: return "Token refused, re-pair."
         case .offline: return "Offline: the Mac cannot be reached."
+        case .pairingRefused: return "The Mac refused to pair: scan a new QR code."
         case .conflict(let why), .unexpected(let why): return why
         }
     }
@@ -102,6 +105,64 @@ public struct MadClient: Sendable {
             return try JSONDecoder().decode(DeckSnapshot.self, from: data)
         } catch {
             throw ConnectionError.unexpected("This does not look like mad's answer.")
+        }
+    }
+}
+
+/// A pairing that has been started: the code from the QR, the token this
+/// device made for it, and the name it gives itself. A retry after a lost
+/// answer sends the same request again, so the Mac answers with the same id.
+public struct PendingPairing: Equatable, Sendable {
+    public var base: URL
+    public var code: String
+    public var name: String
+    public var token: String
+
+    public init(base: URL, code: String, name: String, token: String) {
+        self.base = base; self.code = code; self.name = name; self.token = token
+    }
+
+    /// POST <base>/api/pair {"code","name","token"}. No Authorization: the
+    /// device has no token the Mac knows yet.
+    public var request: URLRequest {
+        var c = URLComponents(url: base, resolvingAgainstBaseURL: false)!
+        c.path = "/api/pair"
+        var r = URLRequest(url: c.url!)
+        r.httpMethod = "POST"
+        r.timeoutInterval = 10
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["code": code, "name": name, "token": token], options: [.sortedKeys])
+        return r
+    }
+
+    /// Exchanges the code for this device's id. Network errors are .offline
+    /// (keep the pending pairing and retry); 400 and 403 are .pairingRefused.
+    public func pair(session: URLSession = .shared) async throws -> String {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw ConnectionError.offline
+        }
+        return try Self.check(data, response)
+    }
+
+    public static func check(_ data: Data, _ response: URLResponse) throws -> String {
+        guard let http = response as? HTTPURLResponse else {
+            throw ConnectionError.unexpected("Not an HTTP answer.")
+        }
+        switch http.statusCode {
+        case 200:
+            struct Reply: Decodable { var id: String }
+            guard let r = try? JSONDecoder().decode(Reply.self, from: data), !r.id.isEmpty else {
+                throw ConnectionError.unexpected("This does not look like mad's answer.")
+            }
+            return r.id
+        case 400, 403:
+            throw ConnectionError.pairingRefused
+        default:
+            throw ConnectionError.unexpected("The Mac answered HTTP \(http.statusCode).")
         }
     }
 }
