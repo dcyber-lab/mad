@@ -209,12 +209,16 @@ func (b *builder) agent(a Agent) {
 	it := Item{Key: keyWait(a.ID, at, p.ID), Kind: KindPermission, Agent: a.ID, Title: a.Label, Where: a.Dir,
 		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: openRoute{label: "Open " + a.Label}}
 	tool, target := splitCall(a.Info.Tool)
+	asks := tool == "AskUserQuestion" || tool == "request_user_input"
 	switch {
-	case tool == "AskUserQuestion" || tool == "request_user_input":
+	case asks && (p.ID == "" || p.question()):
 		it.Kind, it.Context, it.Text = KindQuestion, "asks", "a question"
-	case tool != "":
+	case tool != "" && !asks:
 		it.Context, it.Text, it.Mono = tool, target, target != ""
 	default:
+		// A prompt on its screen that asks leave, though its transcript's
+		// last tool call is a question: one made beside the command it
+		// asks leave for (several tools in one turn). The screen says.
 		it.Context = "needs you"
 	}
 	if hook != nil && hook.Message != "" {

@@ -196,16 +196,24 @@ const letsThrough = new Set(["allow", "always", "approve"]);
 
 function itemRow(it) {
   const acts = [];
+  const p = ib.pending.get(it.key);
+  const review = () => rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`);
+  // A full item's body is part of what it allows (a TUI's prompt): what
+  // lets it through is on its card alone, never on a row, which offers
+  // Review. Sent from the card, the row says so.
+  if (it.full && it.acts.some((a) => letsThrough.has(a.verb) && !a.row)) {
+    const sent = p && it.acts.find((a) => !a.row && a.verb === p.verb && a.label === p.label && (a.option || "") === p.option);
+    if (sent) acts.push(actButton(it, sent, "side"));
+    else if (!p) acts.push(review());
+  }
   for (const a of it.acts.filter((x) => x.row)) {
     const b = actButton(it, a, "side");
     acts.push(b);
-    if (it.text && letsThrough.has(a.verb) && !ib.pending.has(it.key)) {
+    if (it.text && letsThrough.has(a.verb) && !p) {
       b.hidden = true;
       // a full item's body is part of what it allows: never whole in a row
       if (!it.full) b.classList.add("guard");
-      if (!acts.some((x) => x.classList.contains("review"))) {
-        acts.push(rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`));
-      }
+      if (!acts.some((x) => x.classList.contains("review"))) acts.push(review());
     }
   }
   const r = row({
