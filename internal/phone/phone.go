@@ -85,13 +85,14 @@ func Origin(host string) string {
 	return fmt.Sprintf("%s:%d", host, HTTPSPort)
 }
 
-func pageURL(host, token string) string {
-	return fmt.Sprintf("https://%s/#token=%s", Origin(host), token)
+func pageURL(host, code string) string {
+	return fmt.Sprintf("https://%s/#pair=%s", Origin(host), code)
 }
 
-// cloudflareURL is the page through a tunnel: port 443, so none in it.
-func cloudflareURL(host, token string) string {
-	return fmt.Sprintf("https://%s/#token=%s", host, token)
+// cloudflareURL is the page through a tunnel: port 443, so none in it. Both
+// carry a pairing code, not the token (devices.go).
+func cloudflareURL(host, code string) string {
+	return fmt.Sprintf("https://%s/#pair=%s", host, code)
 }
 
 // ExistingToken is the phone's token if one was made, and never makes
@@ -131,8 +132,8 @@ func Get(ctx context.Context) Status {
 	if c.Via == ViaCloudflare {
 		s.Host = tunnelHost()
 		if s.On && s.Host != "" {
-			if t, err := Token(); err == nil {
-				s.URL = cloudflareURL(s.Host, t)
+			if c, err := PairCode(); err == nil {
+				s.URL = cloudflareURL(s.Host, c)
 			}
 		}
 		return s
@@ -144,8 +145,8 @@ func Get(ctx context.Context) Status {
 	}
 	s.Host = h
 	if s.On {
-		if t, err := Token(); err == nil {
-			s.URL = pageURL(h, t)
+		if c, err := PairCode(); err == nil {
+			s.URL = pageURL(h, c)
 		}
 	}
 	return s
@@ -225,7 +226,11 @@ func On(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{Problem: err.Error()}, err
 	}
-	t, err := Token()
+	// The master token exists for the local window, as before.
+	if _, err := Token(); err != nil {
+		return Status{}, err
+	}
+	code, err := PairCode()
 	if err != nil {
 		return Status{}, err
 	}
@@ -238,7 +243,7 @@ func On(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, fmt.Errorf("tailscale serve: %v: %s", err, strings.TrimSpace(string(out)))
 	}
-	return Status{On: true, Via: ViaTailscale, Host: h, URL: pageURL(h, t)}, nil
+	return Status{On: true, Via: ViaTailscale, Host: h, URL: pageURL(h, code)}, nil
 }
 
 // Off stops tailscale serving it, the tunnel, and the server.

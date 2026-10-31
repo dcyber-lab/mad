@@ -913,7 +913,27 @@ async function phoneDialog() {
       } catch (_) { /* no clipboard here */ }
     };
     url.append(el("span", "", s.url), copy);
-    body.append(img, el("p", "dtext muted", `Served ${cf ? "through a Cloudflare Tunnel" : "over Tailscale"}. Scan it with the phone's camera${cf ? "" : ", the phone on your tailnet"}. There, Add to Home Screen keeps it at hand.`), url);
+    const devs = el("div", "pdevs");
+    try {
+      for (const d of await api("GET", "/api/phone/devices")) {
+        const row = el("div", "pdev");
+        const rm = el("button", "icon-btn");
+        rm.type = "button";
+        rm.title = "Remove";
+        rm.textContent = "Remove";
+        rm.onclick = async () => {
+          try {
+            await api("DELETE", "/api/phone/devices", { id: d.id });
+            row.remove();
+          } catch (e) {
+            toast(e.message, "err");
+          }
+        };
+        row.append(el("span", "", `${d.name} · seen ${ago(d.last_seen)}`), rm);
+        devs.append(row);
+      }
+    } catch (_) { /* the list is a courtesy */ }
+    body.append(img, el("p", "dtext muted", `Served ${cf ? "through a Cloudflare Tunnel" : "over Tailscale"}. Scan it with the phone's camera${cf ? "" : ", the phone on your tailnet"}: the code in it works once, for 10 minutes, and the phone gets a key of its own. There, Add to Home Screen keeps it at hand.`), url, el("p", "dtext muted", "Paired phones"), devs);
     actions = [{ label: "Turn off", value: "off" }, { label: "Done", cls: "primary", value: null }];
   }
   const v = await dialog({ title: "On your phone", body, actions });

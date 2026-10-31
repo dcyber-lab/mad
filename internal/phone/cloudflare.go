@@ -239,7 +239,10 @@ func onCloudflare(ctx context.Context, c Choice) (Status, error) {
 	if _, err := exec.LookPath(cloudflared); err != nil {
 		return Status{Problem: ErrNoCloudflared.Error()}, ErrNoCloudflared
 	}
-	t, err := Token()
+	if _, err := Token(); err != nil {
+		return Status{}, err
+	}
+	code, err := PairCode()
 	if err != nil {
 		return Status{}, err
 	}
@@ -254,5 +257,5 @@ func onCloudflare(ctx context.Context, c Choice) (Status, error) {
 	if _, err := exec.LookPath(tailscale); err == nil {
 		_ = exec.CommandContext(ctx, tailscale, "serve", fmt.Sprintf("--https=%d", HTTPSPort), "off").Run()
 	}
-	return Status{On: true, Via: ViaCloudflare, Host: h, URL: cloudflareURL(h, t)}, nil
+	return Status{On: true, Via: ViaCloudflare, Host: h, URL: cloudflareURL(h, code)}, nil
 }

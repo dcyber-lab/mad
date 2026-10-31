@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/phone"
@@ -16,7 +17,7 @@ import (
 func phoneCmd(args []string, stdio IO) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	const usage = "usage: mad phone [on [--tailscale | --cloudflare [--tunnel name --hostname host]] | off]"
+	const usage = "usage: mad phone [on [--tailscale | --cloudflare [--tunnel name --hostname host]] | off | devices | revoke <id|name>]"
 	what := ""
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		what, args = args[0], args[1:]
@@ -30,7 +31,7 @@ func phoneCmd(args []string, stdio IO) error {
 		fmt.Fprintln(stdio.Err, usage)
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
+	if err := fs.Parse(args); err != nil || fs.NArg() > 0 && !(what == "revoke" && fs.NArg() == 1) {
 		return errUsage
 	}
 	picked := *tailscale || *cloudflare || *tunnel != "" || *hostname != ""
@@ -39,6 +40,18 @@ func phoneCmd(args []string, stdio IO) error {
 	}
 	var s phone.Status
 	switch what {
+	case "devices":
+		return listDevices(stdio)
+	case "revoke":
+		if fs.NArg() != 1 {
+			return fmt.Errorf("usage: mad phone revoke <id|name>")
+		}
+		d, err := phone.Revoke(fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdio.Out, "mad: %s (%s) is no longer paired; what it had open closes within seconds\n", d.Name, d.ID)
+		return nil
 	case "on":
 		if picked {
 			c := phone.Choice{Via: phone.ViaTailscale}
@@ -83,6 +96,21 @@ func phoneCmd(args []string, stdio IO) error {
 	if s.Via == phone.ViaCloudflare {
 		where = "through a Cloudflare Tunnel, from anywhere"
 	}
-	fmt.Fprintf(stdio.Out, "Scan it with the phone's camera, %s, or open:\n%s\n", where, s.URL)
+	fmt.Fprintf(stdio.Out, "Scan it with the phone's camera, %s, or open (once, within %d minutes):\n%s\n", where, int(phone.PairTTL.Minutes()), s.URL)
 	return nil
+}
+
+// listDevices says which phones are paired.
+func listDevices(stdio IO) error {
+	devs := phone.Devices()
+	if len(devs) == 0 {
+		fmt.Fprintln(stdio.Out, "mad: no phone is paired; mad phone on shows the QR code to pair one")
+		return nil
+	}
+	tw := tabwriter.NewWriter(stdio.Out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "ID\tNAME\tCREATED\tLAST SEEN")
+	for _, d := range devs {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", d.ID, d.Name, d.Created.Local().Format("2006-01-02 15:04"), d.LastSeen.Local().Format("2006-01-02 15:04"))
+	}
+	return tw.Flush()
 }

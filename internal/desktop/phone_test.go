@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/phone"
 )
 
@@ -77,5 +81,121 @@ func TestOrigins(t *testing.T) {
 			}
 			t.Errorf("origin %s: accepted %v (%d, %v), want %v", origin, got, code, err, ok)
 		}
+	}
+}
+
+func pairedDevice(t *testing.T) string {
+	t.Helper()
+	code, err := phone.PairCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := phone.Pair(code, "test phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
+// Devices get in with their own token anywhere; the master token only off
+// a Cloudflare Tunnel.
+func TestDeviceAuth(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	h := s.Handler()
+	dev := pairedDevice(t)
+	get := func(token string, hdr map[string]string) int {
+		r := httptest.NewRequest("GET", "/api/deck?token="+token, nil)
+		for k, v := range hdr {
+			r.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	cf := map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}
+	for _, c := range []struct {
+		name  string
+		token string
+		hdr   map[string]string
+		want  int
+	}{
+		{"master, local", s.Token, nil, 200},
+		{"master through cloudflare", s.Token, cf, 403},
+		{"device, local", dev, nil, 200},
+		{"device through cloudflare", dev, cf, 200},
+		{"unknown", "nope", cf, 403},
+	} {
+		if got := get(c.token, c.hdr); got != c.want {
+			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+	r := httptest.NewRequest("GET", "/api/deck", nil)
+	r.Header.Set("Authorization", "Bearer "+dev)
+	r.Header.Set("Cf-Connecting-Ip", "203.0.113.9")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Errorf("device Bearer through cloudflare: %d", w.Code)
+	}
+}
+
+func TestPairEndpoint(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	h := s.Handler()
+	post := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/pair", strings.NewReader(body)))
+		return w
+	}
+	code, _ := phone.PairCode()
+	w := post(`{"code":"` + code + `","name":"iPhone Safari"}`)
+	var out struct{ Token, ID string }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || len(out.Token) != 32 || out.ID == "" {
+		t.Fatalf("pair: %d %s", w.Code, w.Body)
+	}
+	if w := post(`{"code":"` + code + `","name":"x"}`); w.Code != 403 {
+		t.Errorf("a used code: %d", w.Code)
+	}
+	if w := post(`{"code":"nope"}`); w.Code != 403 {
+		t.Errorf("a wrong code: %d", w.Code)
+	}
+	r := httptest.NewRequest("GET", "/api/deck?token="+out.Token, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != 200 {
+		t.Errorf("the new token: %d", rec.Code)
+	}
+}
+
+// A device removed by another process (the CLI) loses its websocket within
+// a few ticks.
+func TestRevokeClosesWebsocket(t *testing.T) {
+	isolate(t)
+	old := revokeTick
+	revokeTick = 50 * time.Millisecond
+	t.Cleanup(func() { revokeTick = old })
+	s := New(agent.Builtin())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	dev := pairedDevice(t)
+	ws := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/window?id=w1&token=" + dev
+	c, _, err := websocket.Dial(context.Background(), ws, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	// The CLI, as another process: it only writes the file.
+	if err := os.WriteFile(paths.PhoneDevices(), []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, _, err := c.Read(ctx); err == nil || ctx.Err() != nil {
+		t.Errorf("the websocket stayed open after the revoke: %v", err)
+	}
+	if _, _, err := websocket.Dial(context.Background(), ws, nil); err == nil {
+		t.Error("a revoked device opened a websocket")
 	}
 }

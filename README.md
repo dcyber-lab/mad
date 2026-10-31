@@ -399,6 +399,13 @@ Home Screen keeps it at hand as an app.
   the window's button use the last one. Anyone with the address can reach
   the server, and the token is what keeps them out: share the QR code
   with care.
+- The QR code holds a pairing code (`#pair=`), not the token: good for
+  one use within 10 minutes, traded for a token of that phone's own. `mad
+  phone devices` lists the paired phones and `mad phone revoke <id|name>`
+  cuts one off (what it had open closes within seconds), as the Remove
+  button in the window's phone dialog does. Through a Cloudflare Tunnel
+  only paired phones get in; the master token works on this Mac and over
+  Tailscale for phones that had it before.
 - `mad phone off` closes the way in and stops the server and the tunnel; `mad phone`
   shows how it stands, with the QR code again.
 - The bell at the foot of the sidebar turns on notifications for that
