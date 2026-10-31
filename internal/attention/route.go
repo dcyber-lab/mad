@@ -185,15 +185,23 @@ func (r keysRoute) do(a Answer, _ *Facts) error {
 	return nil
 }
 
+// ErrAsks: the agent to interrupt shows a prompt, which Esc would cancel.
+var ErrAsks = errors.New("not interrupted: a prompt on its screen waits on you. Answer it, or cancel it, from its card or in its terminal")
+
 // InterruptPane presses Esc in a TUI-run agent's pane while it works:
 // its screen says Esc interrupts it (codex's "esc to interrupt"), or its
-// tracker says it runs (working; claude's screen no longer says so). A
-// prompt on the screen is not interrupted (its Cancel is its item's act),
-// nor is an agent that is not working, whom a second Esc would show
-// claude's rewind menu: nothing is sent, ErrGone.
+// tracker says it runs (working; claude's screen no longer says so).
+// Nothing is sent onto a prompt, one it can read or one it cannot
+// (status.ShowsPrompt), whatever its tracker says: its hook may not tell
+// of it yet (ErrAsks; its Cancel is its item's act). Nor to an agent that
+// is not working, whom a second Esc would show claude's rewind menu
+// (ErrGone).
 func InterruptPane(pane string, working bool) error {
 	screen := capture(pane)
-	if _, asks := parsePrompt(screen); asks || !working && !interruptible(screen) {
+	if _, asks := parsePrompt(screen); asks || status.ShowsPrompt(screen) {
+		return ErrAsks
+	}
+	if !working && !interruptible(screen) {
 		return ErrGone
 	}
 	return press(pane, "Escape")
