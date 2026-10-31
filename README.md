@@ -440,8 +440,13 @@ in [ios/](ios). It is not on the App Store: you build it yourself.
   question, a message to answer, a skill to approve, the budget. Each card
   has the buttons the deck gives it (Allow, Deny, a reply of your own),
   the tab shows how many wait, and the list refreshes every few seconds.
+- **Agents.** The agents of every project, working ones first. Tap one
+  to read its conversation: what you said, what it said, each tool call
+  as one row that opens to its input and result, and the reply as it is
+  being written. You can write to it there, and interrupt it while it
+  works.
 - **Deck.** The full window, the same page as in Safari, for everything
-  else: chat, the board, the sidebar.
+  else: the board, the sidebar, files and diffs.
 
 To build it for the simulator:
 
