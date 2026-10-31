@@ -395,20 +395,33 @@ $("#searchbtn").onclick = () => {
   $("#filter").focus();
 };
 
-// drawWait says, over an agent its TUI has in the terminal deck, why it
-// is not run here yet: it comes here once that is done.
+// drawWait says, over an agent its TUI runs in the terminal deck, that it
+// is followed here and comes here once done. When it waits on you, its
+// inbox item is there as a card, all it asks and every act: the acts
+// answer it by keys to its pane. Open in terminal shows the pane itself.
 function drawWait(o, a) {
   const busy = !windowed(a) && a.chat && a.headless && (a.status === "running" || a.status === "waiting");
   o.wait.hidden = !busy;
   if (!busy) return;
-  const text = a.status === "waiting"
-    ? "It asks something in the terminal deck: answer it there. It comes here once done."
-    : "It works in the terminal deck: it comes here once done.";
-  if (o.wait.dataset.text !== text) {
-    o.wait.dataset.text = text;
-    o.wait.className = `wait${a.status === "waiting" ? " asks" : ""}`;
-    o.wait.replaceChildren(icon(a.status === "waiting" ? "alert" : "terminal"), el("span", "", text));
-  }
+  const asks = a.status === "waiting";
+  const it = asks ? needsYou().find((x) => x.agent === a.id) : null;
+  const acting = !!it && it.acts.some((x) => x.verb !== "open");
+  const text = !asks ? "Running in the terminal deck: watch it here; it comes here once done."
+    : acting ? "Waiting on you in the terminal deck: answer it here or there."
+      : "Waiting on you in the terminal deck: answer it there.";
+  const p = it && ib.pending.get(it.key);
+  const sig = JSON.stringify([text, it, p && [p.verb, p.label, p.option], it && ib.reply?.key === it.key ? ib.reply.where : ""]);
+  if (o.wait.dataset.text === sig) return;
+  o.wait.dataset.text = sig;
+  o.wait.className = `wait${asks ? " asks" : ""}`;
+  const line = el("div", "wl");
+  line.append(icon(asks ? "alert" : "terminal"), el("span", "", text));
+  o.wait.replaceChildren(line);
+  if (!asks) return;
+  if (acting) o.wait.append(itemCard(it, false, "wait"));
+  const row = el("div", "wacts");
+  row.append(rowButton("Open in terminal", "ghost", () => openTerminal(a), "the terminal deck, in your terminal app"));
+  o.wait.append(row);
 }
 
 // drawHome is the page shown with nothing open: an overview of what needs
@@ -1075,7 +1088,7 @@ function open(id) {
   const asks = el("div", "asks"); // what it asks, run here (window mode)
   log.append(live, asks);
   // While its TUI has it in the terminal deck: what it does is followed
-  // here, what it asks answered there.
+  // here, what it asks answered here by keys to its pane, or there.
   const wait = el("div", "wait");
   wait.hidden = true;
   // Scrolled up: a way back to what is being written.
