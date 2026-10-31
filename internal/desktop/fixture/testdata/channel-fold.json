@@ -1,0 +1,262 @@
+{
+  "deck": {
+    "machine": "Fixture Mac",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "fold0001-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "architect"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "builder"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "reviewer"
+          },
+          {
+            "id": "fold0004-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "designer"
+          },
+          {
+            "id": "fold0005-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "tester"
+          },
+          {
+            "id": "fold0006-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "docs"
+          },
+          {
+            "id": "fold0007-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "ops"
+          },
+          {
+            "id": "fold0008-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "kim"
+          }
+        ]
+      }
+    ],
+    "bus": [
+      {
+        "id": "fold",
+        "title": "#fold",
+        "members": [
+          {
+            "id": "fold0001-aaaa",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "label": "builder",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "label": "reviewer",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0004-aaaa",
+            "label": "designer",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0005-aaaa",
+            "label": "tester",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0006-aaaa",
+            "label": "docs",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0007-aaaa",
+            "label": "ops",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0008-aaaa",
+            "label": "kim",
+            "kind": "codex"
+          }
+        ],
+        "last": 8,
+        "last_text": "architect: 长的交接和汇报都折叠",
+        "last_at": "-1m",
+        "listed": true,
+        "mention": true,
+        "unread": 1
+      }
+    ]
+  },
+  "messages": {
+    "fold": [
+      {
+        "seq": 1,
+        "at": "-30m",
+        "from": {
+          "id": "you",
+          "label": "you"
+        },
+        "kind": "text",
+        "text": "移动端我用了一下，字体太小了，群里也没法发图片"
+      },
+      {
+        "seq": 2,
+        "at": "-29m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "handoff",
+        "text": "Images in bus channels and DMs.\n1. Bus: a message can carry images, stored by content and sniffed by type.\n2. API: POST /api/bus/post accepts images, limits are met before decoding.\n3. Page: pictures show in the channel and open large.\n4. Agents: a picture is named by file in the text an agent reads.\nDo it on a branch, open a PR, and report here.",
+        "handoff": {
+          "id": "h-1234abcd",
+          "to": "fold0002-aaaa",
+          "status": "open"
+        }
+      },
+      {
+        "seq": 3,
+        "at": "-20m",
+        "from": {
+          "id": "fold0002-aaaa",
+          "label": "builder",
+          "kind": "codex"
+        },
+        "kind": "done",
+        "text": "Done: PR https://github.com/dcyber-lab/mad/pull/88 adds pictures to channels.\nStorage, API, page and agents are done, CI is green on both runners, and a reviewer has looked at it twice.\nOne thing to know: a WebP's size is not read, so it has no w and h.\nNothing else changed.",
+        "handoff": {
+          "id": "h-1234abcd",
+          "to": "fold0002-aaaa",
+          "status": "done"
+        }
+      },
+      {
+        "seq": 4,
+        "at": "-15m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "@you 请看一下 #88，合并前需要你确认",
+        "mentions": [
+          "you"
+        ]
+      },
+      {
+        "seq": 5,
+        "at": "-10m",
+        "from": {
+          "id": "fold0003-aaaa",
+          "label": "reviewer",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "两张截图：左边是修改前，右边是修改后。",
+        "images": [
+          {
+            "id": "fx-before",
+            "mime": "image/png",
+            "size": 900,
+            "w": 200,
+            "h": 120
+          },
+          {
+            "id": "fx-after",
+            "mime": "image/png",
+            "size": 900,
+            "w": 200,
+            "h": 120
+          }
+        ]
+      },
+      {
+        "seq": 6,
+        "at": "-5m",
+        "from": {
+          "id": "fold0004-aaaa",
+          "label": "designer",
+          "kind": "codex"
+        },
+        "kind": "text",
+        "text": "链接：https://example.com/a/very/long/path/that/never/breaks/because/it/has/no/spaces/at/all/and/keeps/going/and/going/and/going/index.html?query=1&other=2&more=3&even=more&still=going"
+      },
+      {
+        "seq": 7,
+        "at": "-3m",
+        "from": {
+          "id": "you",
+          "label": "you"
+        },
+        "kind": "text",
+        "text": "收到，谢谢大家"
+      },
+      {
+        "seq": 8,
+        "at": "-1m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "第 3 条也上线了，三条全部完成。"
+      }
+    ]
+  }
+}

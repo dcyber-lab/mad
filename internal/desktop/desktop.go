@@ -74,6 +74,17 @@ func New(kinds []agent.Kind) *Server {
 	}
 }
 
+// WebFS is the page and its assets, as embedded. The fixture server
+// (fixture/) serves the real page from it.
+func WebFS() fs.FS {
+	web, _ := fs.Sub(webFS, "web")
+	return web
+}
+
+// WithHeaders holds a handler to what the real one is held to: nothing
+// cached, and the page under its content security policy.
+func WithHeaders(h http.Handler) http.Handler { return headers(h) }
+
 // Handler routes the page, its assets and the API.
 func (s *Server) Handler() http.Handler {
 	web, _ := fs.Sub(webFS, "web")

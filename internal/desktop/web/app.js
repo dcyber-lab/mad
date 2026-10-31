@@ -149,7 +149,11 @@ function drawMachine() {
   n.replaceChildren(el("span", "mtext", deck.machine || "mad"));
   if (embed) {
     const c = el("span", "mcaret", "▾");
+    c.setAttribute("role", "button");
+    c.setAttribute("aria-label", "切换 Mac");
+    c.tabIndex = 0;
     c.onclick = (e) => { e.stopPropagation(); switchMac(); };
+    c.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); switchMac(); } };
     n.append(c);
   }
 }
@@ -216,12 +220,28 @@ function charSVG(key, box) {
     : `<svg viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`;
 }
 
+// stateWord is what a character says about its agent, for a screen reader or a test:
+// "working", "needs you", "stopped" or "idle".
+function stateWord(st) {
+  return st === "running" ? "working" : st === "waiting" ? "needs you" : st === "stopped" || st === "exited" ? "stopped" : "idle";
+}
+
+// redDot marks something that waits on the person.
+function redDot() {
+  const d = el("span", "rdot");
+  d.setAttribute("role", "img");
+  d.setAttribute("aria-label", "needs you");
+  return d;
+}
+
 function avatar(a, small) {
   // a channel's own tile (the channel view's header): its members huddled, as in the chat list
   if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
   v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
+  v.setAttribute("role", "img");
+  v.setAttribute("aria-label", stateWord(live ? shownStatus(live) : ""));
   return v;
 }
 
@@ -389,7 +409,7 @@ function agentRow(a, key) {
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;
-  if (needAgents.has(a.id)) r.querySelector(".avatar").append(el("span", "rdot"));
+  if (needAgents.has(a.id)) r.querySelector(".avatar").append(redDot());
   r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
   const more = el("button", "icon-btn more");
   more.type = "button";

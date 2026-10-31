@@ -1,0 +1,48 @@
+{
+  "deck": {
+    "machine": "Fixture Mac",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "usage001-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent"
+          }
+        ]
+      }
+    ],
+    "quota": {
+      "claude": {
+        "five_hour": {
+          "used": 42,
+          "reset_at": "+2h10m"
+        },
+        "seven_day": {
+          "used": 71,
+          "reset_at": "+52h"
+        }
+      },
+      "codex": {
+        "five_hour": {
+          "used": 104,
+          "reset_at": "+1h"
+        },
+        "seven_day": {
+          "used": 10,
+          "reset_at": "0001-01-01T00:00:00Z"
+        }
+      }
+    }
+  }
+}

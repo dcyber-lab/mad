@@ -1,0 +1,26 @@
+{
+  "deck": {
+    "machine": "Fixture Mac",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "pair0001-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent"
+          }
+        ]
+      }
+    ]
+  }
+}
