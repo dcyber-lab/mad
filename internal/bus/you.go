@@ -1,6 +1,9 @@
 package bus
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // The person reads every channel: there is no membership to count by.
 
@@ -21,6 +24,8 @@ type Yours struct {
 	// own system lines are passed over. Empty for a channel with nothing
 	// said.
 	LastLine string `json:"last_line,omitempty"`
+	// LastAt is when that message was said.
+	LastAt time.Time `json:"last_at,omitzero"`
 }
 
 // lastRunes is how much of a message's first line the list keeps.
@@ -63,7 +68,7 @@ func YourChannels() (map[string]Yours, error) {
 			for _, m := range msgs {
 				y.Last = max(y.Last, m.Seq)
 				if m.Kind != "system" && (strings.TrimSpace(m.Text) != "" || len(m.Images) > 0) {
-					y.LastLine = lastLine(m)
+					y.LastLine, y.LastAt = lastLine(m), m.At
 				}
 				if m.Seq > cs[c.ID].Read && m.Kind != "system" && m.From.ID != You {
 					y.Unread++

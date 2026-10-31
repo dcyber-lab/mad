@@ -19,7 +19,7 @@ func TestYourChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 	y, err := YourChannels()
-	if err != nil || y["ops"] != (Yours{Last: 2, Unread: 1, Listed: true, LastLine: "you: @architect thanks, ship it to production"}) {
+	if err != nil || y["ops"] != (Yours{Last: 2, Unread: 1, Listed: true, LastLine: "you: @architect thanks, ship it to production", LastAt: now()}) {
 		t.Fatalf("yours = %+v %v", y, err)
 	}
 	if err := MarkRead(You, "ops", 2); err != nil {
@@ -88,6 +88,9 @@ func TestYourChannelsLastLine(t *testing.T) {
 	if got := last(); got != "" {
 		t.Errorf("nothing said: %q", got)
 	}
+	if y, _ := YourChannels(); !y["ops"].LastAt.IsZero() {
+		t.Errorf("nothing said, said at %v", y["ops"].LastAt)
+	}
 	mustPost(t, "ops", arch, "the deploy is green on staging now\nand the second line is not shown")
 	if got := last(); got != "architect: the deploy is green on staging now" {
 		t.Errorf("first line: %q", got)
@@ -113,5 +116,9 @@ func TestYourChannelsLastLine(t *testing.T) {
 	}
 	if got := last(); got != "you: [图片]" {
 		t.Errorf("pictures alone: %q", got)
+	}
+	// LastAt is the time of the message the line is of.
+	if y, _ := YourChannels(); !y["ops"].LastAt.Equal(now()) {
+		t.Errorf("last at %v, want %v", y["ops"].LastAt, now())
 	}
 }
