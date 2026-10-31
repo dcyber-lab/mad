@@ -7,9 +7,12 @@ public struct GroupTile: View {
 
     let members: [Member]
     let size: CGFloat
+    let dot: Bool?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(members: [Member], size: CGFloat) {
+    /// dot: whether the red dot shows; by default, when a member needs the person.
+    public init(members: [Member], size: CGFloat, dot: Bool? = nil) {
+        self.dot = dot
         self.members = members
         self.size = size
     }
@@ -65,6 +68,6 @@ public struct GroupTile: View {
         .accessibilityElement()
         .accessibilityLabel(word)
         .accessibilityAddTraits(.isImage)
-        .cornerDot(needsYou, size: size)
+        .cornerDot(dot ?? needsYou, size: size)
     }
 }
