@@ -107,7 +107,7 @@ function retry(why) {
     msg.textContent = `Could not pair with mad (${why}).`;
     const btn = document.createElement("button");
     btn.textContent = "Retry";
-    btn.style.cssText = "font:inherit;padding:8px 20px";
+    btn.style.cssText = "font:inherit;font-weight:600;padding:10px 28px;border:0;border-radius:999px;background:#fff;color:#000";
     btn.onclick = () => { box.remove(); resolve(); };
     box.append(msg, btn);
     document.body.append(box);
