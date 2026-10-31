@@ -79,8 +79,11 @@ func (m *model) sidebarView() string {
 		}
 		r := m.rows[i]
 		if r.teamHead != "" {
+			if l >= m.offset && lines+1 >= h {
+				break // a head with no room for anyone under it is not drawn
+			}
 			if l >= m.offset { // else only the lines under it are in view
-				left, right := m.teamHeadSegs(r)
+				left, right := m.teamHeadSegs(i)
 				b.WriteString(layout(m.width, nil, left, right) + "\n")
 				next++
 				lines++
@@ -286,11 +289,12 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 	}
 	if inRun(r.proj, a) || r.inTeam {
 		// A role: indented under its run or team, a run's with the model it was given.
-		left = append(left[:2], append([]seg{{stPlain, "  "}}, left[2:]...)...)
+		left = append(left[:2], append([]seg{{stPlain, m.indent()}}, left[2:]...)...)
 		if model := modelOf(a); model != "" && !r.inTeam {
 			left = append(left, seg{stFaint, " " + model})
 		}
-	} else if a.Dir != "" && a.Dir != r.proj.Path {
+	}
+	if !inRun(r.proj, a) && a.Dir != "" && a.Dir != r.proj.Path && !m.teamShares(r) {
 		// Its own checkout: name it, even before the first git scan.
 		left = append(left, m.gitSegs(a.Dir, filepath.Base(a.Dir))...)
 	}
@@ -382,7 +386,7 @@ func (m *model) detailSegs(r row) []seg {
 	info := m.transcripts[a.ID]
 	indent := seg{stPlain, "         "}
 	if inRun(r.proj, a) || r.inTeam {
-		indent.s += "  "
+		indent.s += m.indent()
 	}
 	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) && info.Tool != "" {
 		return []seg{indent, {stDim, info.Tool}}
@@ -491,26 +495,88 @@ func (m *model) projectSummary(p *state.Project) seg {
 	return m.shownSeg(top)
 }
 
-// teamHeadSegs is the line over a team's agents: its name, and on the right
-// how they stand, as a project's folded head says it (the most urgent state
-// that is not quiet) with the number of agents.
-func (m *model) teamHeadSegs(r row) (left, right []seg) {
-	var shown []string
-	n := 0
-	for _, a := range r.proj.TopAgents() {
-		if a.Team != r.teamHead {
-			continue
+// indent is how far a role sits under its run or team: less on a narrow
+// sidebar, where a name cut short is worse than a flush edge.
+func (m *model) indent() string {
+	switch {
+	case m.width < 28:
+		return "" // the head says it; the name is worth the columns
+	case m.width < 36:
+		return " "
+	}
+	return "  "
+}
+
+// teamMembers are the rows of the team whose head row i is: the agents
+// that follow it, together.
+func (m *model) teamMembers(i int) []row {
+	var out []row
+	for j := i; j < len(m.rows); j++ {
+		r := m.rows[j]
+		if r.agent == nil || !r.inTeam || r.proj != m.rows[i].proj || r.agent.Team != m.rows[i].teamHead || j > i && r.teamHead != "" {
+			break
 		}
-		n++
-		if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
+		out = append(out, r)
+	}
+	return out
+}
+
+// teamShares is whether r is a member of a team whose agents all work in one
+// checkout other than the project's: the team's head names it, not each row.
+func (m *model) teamShares(r row) bool {
+	if !r.inTeam {
+		return false
+	}
+	for i, x := range m.rows {
+		if x.agent == r.agent {
+			for k := i; k >= 0; k-- {
+				if m.rows[k].teamHead != "" {
+					return m.teamDir(k) != ""
+				}
+			}
+		}
+	}
+	return false
+}
+
+// teamDir is the checkout the team under head row i shares, or "" when its
+// agents are not all in one checkout of their own.
+func (m *model) teamDir(i int) string {
+	if len(m.teamMembers(i)) < 2 {
+		return "" // a team of one: its row says it
+	}
+	dir := ""
+	for _, r := range m.teamMembers(i) {
+		d := r.agent.Dir
+		if d == "" || d == r.proj.Path || dir != "" && d != dir {
+			return ""
+		}
+		dir = d
+	}
+	return dir
+}
+
+// teamHeadSegs is the line over a team's agents: its name, the checkout they
+// share if they do, and on the right how they stand, as a project's folded
+// head says it (the most urgent state that is not quiet) with the number of
+// agents.
+func (m *model) teamHeadSegs(i int) (left, right []seg) {
+	r := m.rows[i]
+	var shown []string
+	members := m.teamMembers(i)
+	for _, x := range members {
+		if tr := m.trackers[x.agent.ID]; tr != nil && tr.Status != "" {
 			shown = append(shown, status.Shown(tr.Status, tr.Attention))
 		}
 	}
-	left = []seg{{stPlain, " "}, {stPlain, "  "}, {stKey, "team "}, {stProject, r.teamHead}}
+	left = []seg{{stPlain, " "}, {stPlain, m.indent()}, {stKey, "team "}, {stProject, r.teamHead}}
+	if dir := m.teamDir(i); dir != "" {
+		left = append(left, m.gitSegs(dir, filepath.Base(dir))...)
+	}
 	if top := status.Roll(shown).Top(); top != "" && status.LookOf(top).Tone != status.ToneQuiet {
 		right = append(right, m.shownSeg(top), seg{stPlain, " "})
 	}
-	right = append(right, seg{stFaint, fmt.Sprintf("%d ", n)})
+	right = append(right, seg{stFaint, fmt.Sprintf("%d ", len(members))})
 	return left, right
 }
 
