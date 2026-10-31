@@ -106,4 +106,36 @@ final class CharacterPlanTests: XCTestCase {
         XCTAssertEqual(got.count, 5)
         for (a, b) in zip(got, [0.5, 3, 3.14, 6, 6.14]) { XCTAssertEqual(a, b, accuracy: 1e-6) }
     }
+
+    // MARK: the web page's own vectors
+
+    struct WebVector: Decodable {
+        let id: String, shape: Int, colour: Int, style: String, dur: Double, tilt: Double, order: [String]
+        let beat: Double, delay: Double, quirk: Double, pts: [Vector.Pt]
+    }
+
+    /// internal/desktop/web/testdata/character-vectors.json, written by the web implementation
+    /// (copied to Fixtures/web-character-vectors.json; regenerate with
+    /// `node internal/desktop/testdata/dump_character_vectors.js`).
+    func testPlansMatchTheWebPagesVectors() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/web-character-vectors.json")
+        let web = try JSONDecoder().decode([WebVector].self, from: Data(contentsOf: url))
+        XCTAssertGreaterThanOrEqual(web.count, 20)
+        for v in web {
+            let look = CharacterLook(id: v.id), p = look.plan
+            XCTAssertEqual(look.shape, v.shape, v.id)
+            XCTAssertEqual(look.color, v.colour, v.id)
+            XCTAssertEqual(p.style.rawValue, v.style, v.id)
+            XCTAssertEqual(p.dur, v.dur, accuracy: 1e-9, v.id)
+            XCTAssertEqual(p.tilt, v.tilt, accuracy: 1e-9, v.id)
+            XCTAssertEqual(p.beat, v.beat, accuracy: 1e-9, v.id)
+            XCTAssertEqual(p.delay, v.delay, accuracy: 1e-9, v.id)
+            XCTAssertEqual(p.quirk, v.quirk, accuracy: 1e-9, v.id)
+            XCTAssertEqual(p.order.map(\.rawValue), v.order, v.id)
+            XCTAssertEqual(p.pts.count, v.pts.count, v.id)
+            for (a, b) in zip(p.pts, v.pts) {
+                XCTAssertEqual(a.x, b.x, accuracy: 1e-9, v.id); XCTAssertEqual(a.y, b.y, accuracy: 1e-9, v.id); XCTAssertEqual(a.t, b.t, accuracy: 1e-9, v.id)
+            }
+        }
+    }
 }
