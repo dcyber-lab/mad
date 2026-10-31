@@ -446,6 +446,9 @@ in [ios/](ios). It is not on the App Store: you build it yourself.
   being written. Agents that can run in window mode you can write to there and
   interrupt while they work; for the others the conversation shows a hint,
   and the Deck tab has the terminal.
+- **Usage.** The gauge button in the navigation bar opens how much of
+  your Claude and Codex subscriptions is used: the five-hour and the
+  weekly window, each as a percent, what is left and when it resets.
 - **Deck.** The full window, the same page as in Safari, for everything
   else: the board, the sidebar, files and diffs.
 

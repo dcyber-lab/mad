@@ -14,9 +14,16 @@ enum Fixture {
         guard UserDefaults.standard.string(forKey: "fixture") == "inbox" else { return nil }
         let f = ISO8601DateFormatter()
         func ago(_ s: TimeInterval) -> String { f.string(from: now.addingTimeInterval(-s)) }
+        func ahead(_ s: TimeInterval) -> String { f.string(from: now.addingTimeInterval(s)) }
         let json = """
         {
           "machine": "Heng's MacBook Pro",
+          "quota": {
+            "claude": {"five_hour": {"used": 42.4, "reset_at": "\(ahead(2 * 3600 + 10 * 60))"},
+                       "seven_day": {"used": 71, "reset_at": "\(ahead(3 * 86400 + 5 * 3600))"}, "at": "\(ago(240))"},
+            "codex": {"five_hour": {"used": 9, "reset_at": "\(ahead(4 * 3600 + 25 * 60))"},
+                      "seven_day": {"used": 93.6, "reset_at": "\(ahead(5 * 86400))"}, "at": "\(ago(600))"}
+          },
           "projects": [
             {"name": "mad", "agents": [
               {"id": "claude-3fe9", "kind": "claude", "name": "ios", "status": "running", "shown": "running", "mode": "window", "headless": true},
