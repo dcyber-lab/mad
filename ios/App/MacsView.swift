@@ -9,9 +9,10 @@ struct MacsView: View {
     @State private var renaming: Mac?
     @State private var newName = ""
     @State private var problem: String?
+    @State private var path: [Mac] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(store.macs) { mac in
                     NavigationLink(value: mac) {
@@ -29,10 +30,11 @@ struct MacsView: View {
             .overlay {
                 if store.macs.isEmpty {
                     ContentUnavailableView("No Mac yet", systemImage: "qrcode.viewfinder",
-                        description: Text("Run `mad phone` on your Mac, then scan its QR code."))
+                        description: Text("Run mad phone on your Mac, then scan its QR code."))
                 }
             }
             .navigationTitle("mad")
+            .onAppear(perform: launchHooks)
             .navigationDestination(for: Mac.self) { MacView(mac: $0) }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -71,6 +73,16 @@ struct MacsView: View {
         true
         #else
         false
+        #endif
+    }
+
+    /// Debug builds only, for driving the app from the command line:
+    /// `-pairLink <url>` pairs, `-openMac YES` then opens the first Mac.
+    private func launchHooks() {
+        #if DEBUG
+        let d = UserDefaults.standard
+        if let link = d.string(forKey: "pairLink"), store.macs.isEmpty { pair(link) }
+        if d.bool(forKey: "openMac"), path.isEmpty, let m = store.macs.first { path = [m] }
         #endif
     }
 
