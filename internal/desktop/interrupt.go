@@ -29,9 +29,10 @@ var (
 
 // interruptGap is how long after an interrupt another to the same agent
 // is refused: as long as its tracker may still say it runs (claude says
-// nothing on Esc), and a second Esc to claude's TUI, idle by then, opens
-// its rewind menu.
-const interruptGap = status.StaleRunning
+// nothing on Esc: StaleRunning after its screen last moved, which the Esc
+// moves, and a look to see it), and a second Esc to claude's TUI, idle by
+// then, opens its rewind menu.
+const interruptGap = status.StaleRunning + status.ActiveWindow
 
 var errNotWorking = errors.New("it is not working: there is nothing to interrupt")
 

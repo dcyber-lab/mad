@@ -297,9 +297,9 @@ function agentRow(a, key) {
   const right = [];
   if (a.role) right.push(el("span", "tag", a.role));
   else if (st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
-  if (st === "running" && a.chat) right.push(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`));
+  if (st === "running" && a.chat) right.push(interruptButton(a));
   const r = row({
-    key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}`,
+    key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
     line: activityLine(a), right, onclick: () => show(a.id),
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
@@ -501,7 +501,7 @@ function workCard(a) {
   }
   if (a.chat) {
     const acts = el("div", "acts");
-    acts.append(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`));
+    acts.append(interruptButton(a));
     c.append(acts);
   }
   c.onclick = () => show(a.id);
@@ -1750,7 +1750,7 @@ function working() {
   const a = agents.get(current);
   const o = opened.get(current);
   if (!a || !o || nc.open || cv.open) return false;
-  return windowed(a) ? !!o.hs && o.hs.status === "running" : !!a.chat && a.status === "running";
+  return windowed(a) ? !!o.hs && o.hs.status === "running" : !!a.chat && a.status === "running" && !interruptSent(a);
 }
 
 // interruptCurrent stops what the agent shown does, as Esc in its TUI.
