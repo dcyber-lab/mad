@@ -161,24 +161,27 @@ struct ConversationHeader: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
             }
-            CharacterView(id: model.agentID, kind: model.kind, state: model.state, size: 34, dot: model.needsYou)
-                .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(model.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text(model.stateLine)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            // the character, the name and the state line read as one; Back stays a button of its own
+            HStack(spacing: 10) {
+                CharacterView(id: model.agentID, kind: model.kind, state: model.state, size: 34, dot: model.needsYou)
+                    .frame(width: 34, height: 34)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(model.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(model.stateLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(model.title), \(model.stateLine)")
+            .accessibilityAddTraits(.isHeader)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.title), \(model.stateLine)")
-        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -241,14 +244,24 @@ struct EntryView: View {
                 .buttonStyle(.plain)
             }
         }
-        .accessibilityElement(children: entry.isTool ? .contain : .ignore)
-        .accessibilityLabel(entry.isTool ? "" : entry.accessibilityLabel(agent: model.title))
+        .modifier(EntryAccessibility(entry: entry, agent: model.title))
     }
 }
 
-private extension ConvEntry {
-    /// A tool row is a button with its own label; the others read as one element.
-    var isTool: Bool { if case .tool = content { true } else { false } }
+/// An entry reads as one element, except a tool row: it keeps its own elements (the toggle, and the input and result once open).
+private struct EntryAccessibility: ViewModifier {
+    let entry: ConvEntry
+    let agent: String
+
+    func body(content: Content) -> some View {
+        if case .tool = entry.content {
+            content
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(entry.accessibilityLabel(agent: agent))
+        }
+    }
 }
 
 struct MarkdownBubble: View {
@@ -307,47 +320,57 @@ struct LiveBubbleView: View {
 }
 
 /// "Tool · label" on one line; open, it shows the input and the result (red when it failed).
+/// The toggle is one element (the summary, expanded or collapsed); the input and result are readable elements of their own.
 struct ToolRow: View {
     let tool: ConvTool
     @State private var open = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button { if tool.hasDetail { withAnimation(.snappy(duration: 0.2)) { open.toggle() } } } label: {
-                HStack(spacing: 8) {
-                    if tool.running {
-                        ProgressView().controlSize(.mini)
-                    } else if tool.error {
-                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(ConversationStyle.red)
-                    }
-                    summary
-                        .font(.subheadline)
-                        .lineLimit(open ? nil : 1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if tool.hasDetail {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(open ? 90 : 0))
-                    }
-                }
-                .contentShape(Rectangle())
+            if tool.hasDetail {
+                Button { withAnimation(.snappy(duration: 0.2)) { open.toggle() } } label: { line }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tool.accessibilityLabel)
+                    .accessibilityValue(open ? "expanded" : "collapsed")
+                    .accessibilityHint(open ? "collapses" : "expands")
+            } else {
+                line
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(tool.accessibilityLabel)
             }
-            .buttonStyle(.plain)
             if open {
-                if !tool.input.isEmpty { DetailBox(text: tool.input, error: false) }
-                if let result = tool.result, !result.isEmpty { DetailBox(text: result, error: tool.error) }
+                if !tool.input.isEmpty { DetailBox(title: "input", text: tool.input, error: false) }
+                if let result = tool.result, !result.isEmpty {
+                    DetailBox(title: tool.error ? "error" : "result", text: result, error: tool.error)
+                }
             }
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.14)))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(tool.accessibilityLabel)
-        .accessibilityHint(tool.hasDetail ? (open ? "collapses" : "expands") : "")
-        .accessibilityAddTraits(tool.hasDetail ? .isButton : [])
-        .accessibilityAction { if tool.hasDetail { open.toggle() } }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var line: some View {
+        HStack(spacing: 8) {
+            if tool.running {
+                ProgressView().controlSize(.mini)
+            } else if tool.error {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(ConversationStyle.red)
+            }
+            summary
+                .font(.subheadline)
+                .lineLimit(open ? nil : 1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if tool.hasDetail {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private var summary: Text {
@@ -358,6 +381,7 @@ struct ToolRow: View {
 }
 
 private struct DetailBox: View {
+    let title: String
     let text: String
     let error: Bool
 
@@ -371,6 +395,8 @@ private struct DetailBox: View {
         }
         .frame(maxHeight: 220)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(text)")
     }
 }
 
@@ -418,6 +444,22 @@ struct AskCardView: View {
     @State private var text = ""
 
     var body: some View {
+        // at the largest text sizes the card would fill the screen: past a height it scrolls inside itself
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+        }
+        .frame(maxHeight: 320)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.background))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(ConversationStyle.red.opacity(0.45), lineWidth: 1.5))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(card.accessibilityLabel)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(card.title).font(.subheadline.weight(.bold))
             if !card.detail.isEmpty {
@@ -435,13 +477,13 @@ struct AskCardView: View {
                 }
             }
             if let asking {
-                HStack(spacing: 8) {
-                    TextField(asking.label, text: $text, axis: .vertical)
-                        .lineLimit(1...4)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ConversationStyle.bubble))
+                TextField(asking.label, text: $text, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ConversationStyle.bubble))
+                FlowLayout(spacing: 8) {
                     chip("取消", primary: false) { self.asking = nil; text = "" }
                     chip(asking.label, primary: true) {
                         act(asking.id, text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -459,13 +501,6 @@ struct AskCardView: View {
                 }
             }
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.background))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(ConversationStyle.red.opacity(0.45), lineWidth: 1.5))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(card.accessibilityLabel)
     }
 
     private func chip(_ label: String, primary: Bool, _ action: @escaping () -> Void) -> some View {
@@ -473,35 +508,48 @@ struct AskCardView: View {
             Text(label)
                 .font(.subheadline.weight(primary ? .semibold : .regular))
                 .foregroundStyle(primary ? Color.white : Color.primary)
-                .lineLimit(1)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true) // a long label wraps inside its button
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(primary ? ConversationStyle.blue : ConversationStyle.bubble))
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(primary ? ConversationStyle.blue : ConversationStyle.bubble))
         }
         .buttonStyle(.plain)
     }
 }
 
 /// Lays children left to right and wraps to the next line, so the acts never run past the screen.
+/// Each child is asked for at most the container's width: one too wide for the rest of a line goes on a line of its own,
+/// and one wider than the container wraps its own text inside.
 struct FlowLayout: Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(width: proposal.width ?? .infinity, subviews: subviews).size
+        let width = proposal.width ?? .infinity
+        return Self.arrange(sizes: measure(subviews, width: width), width: width, spacing: spacing).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let laid = arrange(width: bounds.width, subviews: subviews)
-        for (view, origin) in zip(subviews, laid.origins) {
-            view.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+        let sizes = measure(subviews, width: bounds.width)
+        let laid = Self.arrange(sizes: sizes, width: bounds.width, spacing: spacing)
+        for (i, view) in subviews.enumerated() {
+            view.place(at: CGPoint(x: bounds.minX + laid.origins[i].x, y: bounds.minY + laid.origins[i].y),
+                       proposal: ProposedViewSize(width: sizes[i].width, height: sizes[i].height))
         }
     }
 
-    private func arrange(width: CGFloat, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
+    private func measure(_ subviews: Subviews, width: CGFloat) -> [CGSize] {
+        subviews.map { view in
+            let s = view.sizeThatFits(ProposedViewSize(width: width.isFinite ? width : nil, height: nil))
+            return CGSize(width: width.isFinite ? min(s.width, width) : s.width, height: s.height)
+        }
+    }
+
+    /// Where each size goes: left to right, a new line when the next does not fit, no size wider than `width`.
+    static func arrange(sizes: [CGSize], width: CGFloat, spacing: CGFloat) -> (size: CGSize, origins: [CGPoint]) {
         var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
         var origins: [CGPoint] = []
-        for view in subviews {
-            let s = view.sizeThatFits(.unspecified)
+        for s in sizes {
             if x > 0, x + s.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
             origins.append(CGPoint(x: x, y: y))
             x += s.width + spacing

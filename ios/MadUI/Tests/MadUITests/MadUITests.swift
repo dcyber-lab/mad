@@ -368,3 +368,30 @@ final class ConversationTests: XCTestCase {
         XCTAssertNotNil(m.live)
     }
 }
+
+final class FlowLayoutTests: XCTestCase {
+    func testWrapsWhenALineIsFull() {
+        let r = FlowLayout.arrange(sizes: [CGSize(width: 100, height: 30), CGSize(width: 100, height: 30), CGSize(width: 100, height: 30)], width: 250, spacing: 8)
+        XCTAssertEqual(r.origins, [CGPoint(x: 0, y: 0), CGPoint(x: 108, y: 0), CGPoint(x: 0, y: 38)])
+        XCTAssertEqual(r.size, CGSize(width: 208, height: 68))
+    }
+
+    func testATooWideChildGetsALineOfItsOwn() {
+        let r = FlowLayout.arrange(sizes: [CGSize(width: 60, height: 30), CGSize(width: 300, height: 60), CGSize(width: 60, height: 30)], width: 300, spacing: 8)
+        XCTAssertEqual(r.origins.map(\.y), [0, 38, 106])
+        XCTAssertEqual(r.origins[1].x, 0)
+        XCTAssertEqual(r.size.width, 300)
+    }
+
+    #if os(macOS)
+    /// A real layout pass: a 140-character label wraps inside its button, and the card is no wider than it was offered.
+    func testALongActLabelStaysInsideTheCard() {
+        let long = String(repeating: "总是允许这个命令在这个项目里运行 ", count: 5)
+        let card = AskCard(id: "a", title: "想运行一条命令", detail: "ls", acts: [AskAct(id: "1", label: "允许", primary: true), AskAct(id: "2", label: long), AskAct(id: "3", label: "拒绝")])
+        let host = NSHostingController(rootView: AskCardView(card: card, act: { _, _ in }))
+        let size = host.sizeThatFits(in: CGSize(width: 320, height: 2000))
+        XCTAssertLessThanOrEqual(size.width, 320.5)
+        XCTAssertGreaterThan(size.height, 150, "the long label took several lines")
+    }
+    #endif
+}
