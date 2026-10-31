@@ -71,42 +71,16 @@ function authSocket(path, params) {
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}?${new URLSearchParams(params)}`;
   return new WebSocket(url, ["mad", `mad.token.${token}`]);
 }
-// loadImage shows what url serves in img: fetched with the token, kept as
-// a blob URL that is let go of once img has left the page.
-const blobs = new Map(); // img → its object URL
-// busBlobs: the blob URLs of a channel's pictures, by their address (it names the picture's
-// content), so the panel's grid shows what the channel showed without fetching it again.
-// They are kept for the page's life, a few dozen at most.
-const busBlobs = new Map();
+// loadImage shows what url serves in img: fetched with the token, as a blob URL kept by blobCache
+// (blobs.js): a channel's picture shared by its id, the rest let go of with their img.
+const blobCache = new BlobCache({ budget: 40 << 20, shown: (u) => [...document.images].some((i) => i.src === u) });
 function loadImage(img, url) {
-  if (url.startsWith("/api/bus/image")) {
-    let p = busBlobs.get(url);
-    if (!p) {
-      p = authFetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText)))).then((b) => URL.createObjectURL(b));
-      if (busBlobs.size < 60) busBlobs.set(url, p);
-      p.catch(() => busBlobs.delete(url));
-    }
-    return p.then((u) => { img.src = u; }).catch(() => img.removeAttribute("src"));
-  }
-  return authFetch(url)
-    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
-    .then((b) => {
-      const u = URL.createObjectURL(b);
-      blobs.get(img) && URL.revokeObjectURL(blobs.get(img));
-      blobs.set(img, u);
-      img.src = u;
-    })
-    .catch(() => img.removeAttribute("src"));
+  const get = () => authFetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))));
+  const id = url.startsWith("/api/bus/image?") && new URLSearchParams(url.slice(url.indexOf("?"))).get("id");
+  const made = id ? blobCache.fetch(`bus:${id}`, get) : get().then((b) => blobCache.own(img, b));
+  return made.then((u) => { img.src = u; }).catch(() => img.removeAttribute("src"));
 }
-setInterval(() => {
-  const open = document.querySelector("#lightbox img")?.src;
-  for (const [img, u] of blobs) {
-    if (!img.isConnected && u !== open) {
-      URL.revokeObjectURL(u);
-      blobs.delete(img);
-    }
-  }
-}, 20000);
+setInterval(() => blobCache.sweep(), 20000);
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
