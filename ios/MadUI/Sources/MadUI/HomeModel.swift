@@ -96,6 +96,16 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
         return "\(kind) \(id.prefix(8))"
     }
 
+    /// What VoiceOver reads for the row, as one label: the name, the preview, the state word once (not
+    /// for idle), and "needs you" only when the dot says it and the state does not already.
+    public var accessibilityLabel: String {
+        var parts = [title]
+        if !preview.isEmpty { parts.append(preview) }
+        if state != .idle { parts.append(state.word) }
+        if needsYou && state != .needsYou { parts.append("needs you") }
+        return parts.joined(separator: ", ")
+    }
+
     var tile: [GroupTile.Member] { members.map { (id: $0.id, kind: $0.kind, state: $0.state) } }
 }
 
