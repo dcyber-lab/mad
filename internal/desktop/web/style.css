@@ -169,7 +169,7 @@ body.stale #lightbox, body.stale #dialog { top: var(--stale-h); }
 .project > .head:hover { color: var(--text-2); }
 .project > .head .chev { width: 13px; height: 13px; transition: transform 0.15s; }
 .project.collapsed > .head .chev { transform: rotate(-90deg); }
-.project > .head b { color: var(--text); font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.project > .head b { color: var(--text); font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 55%; } /* the branch gives way first */
 .project > .head .branch { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
 .project > .head .branch .i { width: 11px; height: 11px; }
 .none { padding: 18px 10px; color: var(--text-3); line-height: 1.6; }
@@ -592,8 +592,12 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #who { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
   #who::-webkit-scrollbar { display: none; }
   #who > .pill { display: none; }
-  #who .seg .kn { display: none; }
-  #who .seg button { padding: 0 9px; }
+  /* A new chat's choices (where, which agent, which model) wrap onto a row of their own, every label
+     whole: a row of bare glyphs and a cut model name is a guess. */
+  .cbar:has(.seg) { flex-wrap: wrap; }
+  #who:has(.seg) { order: -1; flex: 1 0 100%; flex-wrap: wrap; overflow: visible; }
+  #who .seg { order: -1; flex: 1 0 100%; }
+  #who .seg button { flex: 1; justify-content: center; }
 }
 
 /* ---- nothing open ---- */
@@ -880,6 +884,9 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .search input { font-size: 16px; }
   .project > .head .hacts { display: inline-flex; }
   #sidebar footer { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  /* five icons share the line: the chips above say how the agents stand, so no count to cut beside them */
+  .foot { justify-content: space-between; }
+  .foot #summary { display: none; }
 
   #bar, body.in-main #bar[hidden] { display: flex; }
   #bar { height: calc(52px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 6px 0 2px; gap: 4px; }
@@ -890,7 +897,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   #ptitle .pw { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
   #ptitle .pt { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; font-size: 15px; }
   #ptitle .ps { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; color: var(--text-3); }
-  #changes { padding: 0 9px; font-size: 0; gap: 0; }
+  #changes { padding: 0 9px; font-size: 0; gap: 0; min-width: 44px; justify-content: center; }
   #changes .i { width: 16px; height: 16px; }
 
   .chat .log { padding: 18px 14px 28px; }
@@ -1330,4 +1337,21 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 }
 @media (pointer: coarse) {
   .project > .head .hacts .icon-btn { width: 40px; height: 40px; }
+}
+
+/* ---- touch: every other button is 44px too ---- */
+
+@media (pointer: coarse) {
+  .icon-btn, .project > .head .hacts .icon-btn { width: 44px; height: 44px; }
+  .send { width: 44px; height: 44px; }
+  .btn, .bar-btn { min-height: 44px; }
+  .cbar { min-height: 44px; }
+  #who .chip, #who .model, #who .seg button { min-height: 44px; }
+  #qinput { min-height: 44px; }
+  #brand { min-height: 44px; display: inline-flex; align-items: center; }
+  .chead .icon-btn { width: 44px; height: 44px; }
+  .chead { padding-top: 0; padding-bottom: 0; }
+  /* a channel's small taps get their 44px from padding the layout gives back as margin */
+  .breply { padding: 13px 8px; margin: -13px -8px -13px auto; }
+  .bcount { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; margin: -10px 0 -15px; }
 }
