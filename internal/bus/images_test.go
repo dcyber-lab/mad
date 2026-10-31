@@ -250,3 +250,61 @@ func TestCompactionCollects(t *testing.T) {
 		t.Error("cutting a log did not ask for the collection")
 	}
 }
+
+// A sweep does not hold the bus: a post completes while one waits after its
+// snapshot, and what the post named, stored meanwhile, survives it.
+func TestCollectImagesDoesNotBlockPosts(t *testing.T) {
+	setup(t)
+	mustCreate(t, "live", idBuild)
+	orphan, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{6, 0, 0, 255}))
+	again, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{7, 0, 0, 255}))
+	setMtime(t, orphan.ID, time.Hour)
+	setMtime(t, again.ID, time.Hour)
+
+	snapshotted, release := make(chan struct{}), make(chan struct{})
+	sweepSnapshotted = func() {
+		close(snapshotted)
+		<-release
+	}
+	t.Cleanup(func() { sweepSnapshotted = nil })
+	done := make(chan int, 1)
+	go func() {
+		n, _ := CollectImages(ImageGCAge)
+		done <- n
+	}()
+	<-snapshotted
+
+	// The sweep is held after its snapshot: a post goes through (it would
+	// wait for the lock if the sweep had it), naming a picture the snapshot
+	// did not know, one stored again by this very post.
+	posted := make(chan error, 1)
+	go func() {
+		im, err := StoreImage(testPNG(t, 4, 4, color.RGBA{7, 0, 0, 255})) // the old picture, sent again
+		if err == nil {
+			_, err = PostImages("live", me, "@builder sent again", 0, []Image{im})
+		}
+		posted <- err
+	}()
+	select {
+	case err := <-posted:
+		if err != nil {
+			t.Fatalf("post during a sweep: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a post waited for the sweep")
+	}
+	close(release)
+	if n := <-done; n != 1 {
+		t.Errorf("the sweep removed %d; want the orphan alone", n)
+	}
+	if _, _, ok := ImagePath(orphan.ID); ok {
+		t.Error("the orphan is still there")
+	}
+	if _, _, ok := ImagePath(again.ID); !ok {
+		t.Error("the picture the post named was swept away")
+	}
+	msgs, _, _ := Read("live", 0, 10)
+	if len(msgs) != 1 || len(msgs[0].Images) != 1 || msgs[0].Images[0].Path() == "" {
+		t.Errorf("the message or its picture is broken: %+v", msgs)
+	}
+}
