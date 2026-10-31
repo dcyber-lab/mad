@@ -34,8 +34,14 @@ func (m *model) rebuildRows() {
 				m.rows = append(m.rows, row{proj: p, agent: a, num: i + 1})
 			}
 		}
+		prevTeam := ""
 		for i, a := range p.TopAgents() {
-			m.rows = append(m.rows, row{proj: p, agent: a, num: i + 1})
+			r := row{proj: p, agent: a, num: i + 1, inTeam: a.Team != ""}
+			if a.Team != "" && a.Team != prevTeam {
+				r.teamHead = a.Team
+			}
+			prevTeam = a.Team
+			m.rows = append(m.rows, r)
 		}
 		desk := row{proj: p}
 		for i := range m.externals {
@@ -101,10 +107,14 @@ func (m *model) rebuildRows() {
 // rowHeight is how many screen lines a row takes: an agent whose
 // transcript is followed gets a second line for what it is on.
 func (m *model) rowHeight(r row) int {
+	h := 1
 	if r.agent != nil && !m.st.Compact && transcript.Followed(r.agent.Kind) || r.run != nil && !m.st.Compact {
-		return 2
+		h = 2
 	}
-	return 1
+	if r.teamHead != "" {
+		h++ // its team's head, above it
+	}
+	return h
 }
 
 // rowAt is the row drawn on list line y (0 = first list line), if any.
@@ -112,7 +122,7 @@ func (m *model) rowAt(y int) (int, bool) {
 	line := y + m.offset
 	for i, l := range m.lineOf {
 		if line >= l && line < l+m.rowHeight(m.rows[i]) {
-			return i, true
+			return i, line != l || m.rows[i].teamHead == "" // a team's head is no row to open
 		}
 	}
 	return 0, false

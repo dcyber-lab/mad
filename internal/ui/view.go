@@ -77,14 +77,25 @@ func (m *model) sidebarView() string {
 				bg = cSelOn
 			}
 		}
-		if l >= m.offset { // else only its second line is in view
-			left, right := m.rowSegs(m.rows[i])
+		r := m.rows[i]
+		if r.teamHead != "" {
+			if l >= m.offset { // else only the lines under it are in view
+				left, right := m.teamHeadSegs(r)
+				b.WriteString(layout(m.width, nil, left, right) + "\n")
+				next++
+				lines++
+			}
+			l++
+			rh--
+		}
+		if l >= m.offset && lines < h { // else only its second line is in view
+			left, right := m.rowSegs(r)
 			b.WriteString(layout(m.width, bg, left, right) + "\n")
 			next++
 			lines++
 		}
 		if rh > 1 && lines < h {
-			detail := m.detailSegs(m.rows[i])
+			detail := m.detailSegs(r)
 			b.WriteString(layout(m.width, bg, detail, nil) + "\n")
 			next++
 			lines++
@@ -273,10 +284,10 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		// Messages waiting for its turn to end (mad queue).
 		left = append(left, seg{stFaint, fmt.Sprintf(" ⇢%d", n)})
 	}
-	if inRun(r.proj, a) {
-		// A role: indented under its run, with the model it was given.
+	if inRun(r.proj, a) || r.inTeam {
+		// A role: indented under its run or team, a run's with the model it was given.
 		left = append(left[:2], append([]seg{{stPlain, "  "}}, left[2:]...)...)
-		if model := modelOf(a); model != "" {
+		if model := modelOf(a); model != "" && !r.inTeam {
 			left = append(left, seg{stFaint, " " + model})
 		}
 	} else if a.Dir != "" && a.Dir != r.proj.Path {
@@ -300,7 +311,11 @@ const closeGlyph = "×"
 // from the top of the list, scrolled lines included) is on row i's ×,
 // give or take a column.
 func (m *model) onClose(i, x, line int) bool {
-	if line != m.lineOf[i] || x < m.width-3 {
+	main := m.lineOf[i]
+	if m.rows[i].teamHead != "" {
+		main++
+	}
+	if line != main || x < m.width-3 {
 		return false
 	}
 	left, right := m.rowSegs(m.rows[i])
@@ -366,7 +381,7 @@ func (m *model) detailSegs(r row) []seg {
 	a := r.agent
 	info := m.transcripts[a.ID]
 	indent := seg{stPlain, "         "}
-	if inRun(r.proj, a) {
+	if inRun(r.proj, a) || r.inTeam {
 		indent.s += "  "
 	}
 	if tr := m.trackers[a.ID]; tr != nil && (tr.Status == status.Running || tr.Status == status.Waiting) && info.Tool != "" {
@@ -474,6 +489,29 @@ func (m *model) projectSummary(p *state.Project) seg {
 		return seg{}
 	}
 	return m.shownSeg(top)
+}
+
+// teamHeadSegs is the line over a team's agents: its name, and on the right
+// how they stand, as a project's folded head says it (the most urgent state
+// that is not quiet) with the number of agents.
+func (m *model) teamHeadSegs(r row) (left, right []seg) {
+	var shown []string
+	n := 0
+	for _, a := range r.proj.TopAgents() {
+		if a.Team != r.teamHead {
+			continue
+		}
+		n++
+		if tr := m.trackers[a.ID]; tr != nil && tr.Status != "" {
+			shown = append(shown, status.Shown(tr.Status, tr.Attention))
+		}
+	}
+	left = []seg{{stPlain, " "}, {stPlain, "  "}, {stKey, "team "}, {stProject, r.teamHead}}
+	if top := status.Roll(shown).Top(); top != "" && status.LookOf(top).Tone != status.ToneQuiet {
+		right = append(right, m.shownSeg(top), seg{stPlain, " "})
+	}
+	right = append(right, seg{stFaint, fmt.Sprintf("%d ", n)})
+	return left, right
 }
 
 // shownSeg is the colored icon of a shown state.

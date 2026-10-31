@@ -110,6 +110,8 @@ type row struct {
 	desktop  int
 	deskKind string
 	num      int     // 1-based agent number within its project
+	inTeam   bool    // an agent of a team: drawn indented under the team's head
+	teamHead string  // set on a team's first agent: its head is drawn on the line above
 	bus      *busRow // a row of the bus block (proj is nil)
 }
 
