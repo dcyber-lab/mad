@@ -31,21 +31,24 @@ type Agent struct {
 	// Screen is its pane's text as the caller's poll captured it, "" when
 	// it captured none: a prompt on it is answered by keys (keysRoute).
 	Screen string
+	// Clearing: it waits, but what it asks is off its screen, for a moment
+	// (Tracker.Clearing): answered, or not drawn yet.
+	Clearing bool
 }
 
 // AgentOf is agent a of project p as tracker tr saw it on this poll, with
 // its report and its transcript as last read. tr may be nil (not seen
 // yet): a stopped agent.
 func AgentOf(p *state.Project, a *state.Agent, tr *status.Tracker, paneID string, rep status.Report, info transcript.Info) Agent {
-	raw, done, since := status.Stopped, false, time.Time{}
+	raw, done, since, clearing := status.Stopped, false, time.Time{}, false
 	if tr != nil && tr.Status != "" {
-		raw, done, since = tr.Status, tr.Done(), tr.Since()
+		raw, done, since, clearing = tr.Status, tr.Done(), tr.Since(), tr.Clearing()
 	}
 	if p.InRun(a) {
 		done = false
 	}
 	return Agent{ID: a.ID, Label: drive.Label(a), Project: p.Name, Dir: p.Dir(a), PaneID: paneID,
-		Status: raw, Shown: status.Shown(raw, done), Since: since, Report: rep, Info: info}
+		Status: raw, Shown: status.Shown(raw, done), Since: since, Report: rep, Info: info, Clearing: clearing}
 }
 
 // Facts is everything a View is built from: what the caller's poll read.

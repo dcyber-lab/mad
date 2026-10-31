@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/av/repo
+
+
+❯ Use the Bash tool once with a command string made of exactly 5 lines separated by real newline characters: line1 "echo first", line2 empty, line3 empty, line4 a line of 30 box-drawing characters
+  U+2500 (─) and nothing else, line5 "echo second". Do nothing else.
+
+  Ran 1 shell command
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 3s · done 8:36 AM
+
+❯ Use the AskUserQuestion tool to ask me which color I prefer, with options Red, Green and Blue. Do nothing else.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✢ Spinning… (running PreToolUse hook · 1s)
+  ⎿  Tip: Continue your session in Claude Code Desktop with /desktop
+                                                                                                                                                Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt

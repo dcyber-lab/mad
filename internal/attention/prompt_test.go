@@ -2,6 +2,7 @@ package attention
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -367,6 +368,34 @@ func TestKeysRouteAllowList(t *testing.T) {
 	}
 	if sent != nil {
 		t.Errorf("sent %q", sent)
+	}
+}
+
+// While its prompt is off its screen for a moment (answered, or not
+// drawn yet) a waiting agent has no item: nothing there to answer, and no
+// Open-only item flashes up between the prompt answered and it running.
+// A prompt it shows, it has.
+func TestWaitClearing(t *testing.T) {
+	at := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		name, screen string
+		clearing     bool
+		route        string
+	}{
+		{"off its screen", fixture(t, "claude-working.txt"), true, ""},
+		{"on its screen", fixture(t, "claude-bash.txt"), true, "attention.keysRoute"},
+		{"settled, unread", fixture(t, "claude-working.txt"), false, "attention.openRoute"},
+	} {
+		a := Agent{ID: "tk", Label: "tk", PaneID: "%7", Status: status.Waiting, Shown: status.Waiting, Since: at, Clearing: c.clearing,
+			Report: status.Report{Hook: &status.Hook{State: status.Waiting, At: at}}, Screen: c.screen}
+		v := NewDesk().Look(Facts{Agents: []Agent{a}, Now: at.Add(time.Second)})
+		var got string
+		if len(v.Inbox.Items) == 1 {
+			got = fmt.Sprintf("%T", v.Inbox.Items[0].route)
+		}
+		if got != c.route || len(v.Inbox.Items) > 1 {
+			t.Errorf("%s: %d items, route %q", c.name, len(v.Inbox.Items), got)
+		}
 	}
 }
 

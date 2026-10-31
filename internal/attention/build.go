@@ -161,7 +161,9 @@ func alive(a Agent) bool {
 // agent adds what agent a waits on the person for: its host's open
 // requests (window mode), else one item when it waits (its TUI's prompt,
 // told by its hook or its screen). A waiting agent always has an item,
-// with a task or not.
+// with a task or not, but for the moment its prompt is off its screen
+// (Clearing): there is nothing there to answer, and it either runs on or
+// asks again.
 func (b *builder) agent(a Agent) {
 	if len(a.Report.Asks) > 0 && alive(a) {
 		for _, ask := range a.Report.Asks {
@@ -198,6 +200,9 @@ func (b *builder) agent(a Agent) {
 		at = hook.At
 	}
 	p, keys := parsePrompt(a.Screen)
+	if a.Clearing && !keys {
+		return
+	}
 	if !keys || a.PaneID == "" {
 		p = prompt{}
 	}
