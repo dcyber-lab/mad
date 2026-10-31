@@ -1019,21 +1019,28 @@ $("#addproject").onclick = () => addProject();
 
 // In the app the footer's icon row is not drawn: what was there that suits
 // it (adding a project, Skills, the theme, how many agents) is in this menu.
-$("#embed-menu").hidden = !embed;
+// On a phone's width outside the app it holds only Usage: the footer has the rest.
+const drawEmbedMenu = () => { $("#embed-menu").hidden = !(embed || phone.matches); };
+drawEmbedMenu();
+phone.addEventListener("change", drawEmbedMenu);
 $("#embed-menu").onclick = async () => {
   const v = await dialog({
     title: "mad",
-    body: el("p", "dtext muted", $("#summary").textContent),
+    body: embed ? el("p", "dtext muted", $("#summary").textContent) : null,
     actions: [
-      { label: "Add project", value: "project" },
-      { label: "Skills", value: "skills" },
-      { label: "Phone and paired devices", value: "phone" },
-      { label: `Theme: ${theme}`, value: "theme" },
-      { label: "Show full page", value: "full" },
+      { label: "Usage", value: "usage" },
+      ...(embed ? [
+        { label: "Add project", value: "project" },
+        { label: "Skills", value: "skills" },
+        { label: "Phone and paired devices", value: "phone" },
+        { label: `Theme: ${theme}`, value: "theme" },
+        { label: "Show full page", value: "full" },
+      ] : []),
       { label: "Close", cls: "primary", value: null },
     ],
   });
-  if (v === "phone") phoneDialog();
+  if (v === "usage") openUsage();
+  else if (v === "phone") phoneDialog();
   else if (v === "full") leaveEmbed();
   else if (v) $({ project: "#addproject", skills: "#skills", theme: "#theme" }[v]).click();
 };

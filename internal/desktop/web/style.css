@@ -1411,3 +1411,97 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 /* Inside the iOS app (#embed=app): its own bars draw the navigation, so the
    footer's icon row is not drawn; its useful part is the header's more menu. */
 html.embed .foot { display: none; }
+
+/* ---- the usage page ---- */
+
+#usageview { position: absolute; inset: 0; overflow: auto; background: var(--bg); z-index: 2; }
+#usageview[hidden] { display: none; }
+.uspage { display: flex; flex-direction: column; gap: 14px; padding: 20px 16px calc(32px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; }
+.uscard { border: 1px solid var(--border-2); border-radius: 16px; background: var(--card); padding: 18px 18px 16px; }
+.uskind { font-size: 15px; color: var(--text-2); }
+.uspct { font-size: 48px; line-height: 1.1; font-weight: 650; letter-spacing: -0.02em; margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.uspct.hot { color: var(--waiting); }
+.uspct.over { color: var(--stopped); }
+.usbar { height: 8px; border-radius: 4px; background: var(--raise-2); overflow: hidden; }
+.usbar i { display: block; height: 100%; border-radius: 4px; background: var(--running); }
+.usbar i.hot { background: var(--waiting); }
+.usbar i.over { background: var(--stopped); }
+.usleft { margin-top: 10px; font-size: 16px; }
+.usreset { margin-top: 2px; font-size: 14px; color: var(--text-3); }
+
+/* ---- a phone's type: the width of a phone, and the app (html.ptype) ----
+   One simple system font, 16px for what is read, 14px for what is beside it,
+   nothing under 12px; more room per row, and less on each row. Usage is its
+   own page there, not the footer's bars. */
+
+html.ptype body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+html.ptype #quota { display: none; }
+html.ptype #sidebar header { padding: 16px 16px 12px; }
+html.ptype .brand { font-size: 18px; }
+
+/* the list */
+html.ptype .row { min-height: 64px; padding: 10px 12px; margin: 2px 0; column-gap: 12px; grid-template-columns: 36px minmax(0, 1fr) auto; }
+html.ptype .row.one { min-height: 52px; }
+html.ptype .row .avatar { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; }
+html.ptype .row .t1 { font-size: 16px; line-height: 22px; }
+html.ptype .row .t1 .nm { font-weight: 600; }
+html.ptype .row .t2 { font-size: 14px; line-height: 20px; }
+html.ptype .row .t2 .tgt { font-size: 13px; }
+html.ptype .row .btn.sm { font-size: 14px; }
+html.ptype .row .tag, html.ptype .row .meta, html.ptype .row .t1 .ctx { display: none; }
+html.ptype .row.fold .t1 { font-size: 14px; }
+html.ptype .ghead { font-size: 13px; padding: 16px 12px 6px; letter-spacing: 0.02em; }
+html.ptype .g-needs .ghead { padding: 16px 12px 6px; }
+html.ptype .chead { font-size: 13px; padding: 14px 12px 4px; }
+html.ptype .chead b { font-size: 13px; }
+html.ptype .project { margin-top: 10px; }
+html.ptype .project > .head { padding: 12px 12px 8px; }
+html.ptype .project > .head b { font-size: 15px; }
+html.ptype .project > .head .branch { display: none; }
+html.ptype .rollup { font-size: 13px; }
+html.ptype .teamhead .th2 { display: none; }
+html.ptype .chan { min-height: 52px; padding: 10px 12px; font-size: 16px; }
+html.ptype .chan .cnt { font-size: 13px; }
+html.ptype .chan.none { font-size: 14px; }
+html.ptype .cchip { font-size: 14px; height: 36px; }
+html.ptype .nextbtn:not([hidden]) { font-size: 16px; }
+html.ptype .search input { font-size: 16px; }
+
+/* a conversation */
+html.ptype .msg { font-size: 17px; line-height: 1.55; }
+html.ptype .msg.from-user { padding: 10px 16px; }
+html.ptype .md p, html.ptype .md ul, html.ptype .md ol, html.ptype .md blockquote, html.ptype .md .codeblock { margin: 12px 0; }
+html.ptype .md li { margin: 5px 0; }
+html.ptype .md h1 { font-size: 22px; } html.ptype .md h2 { font-size: 20px; } html.ptype .md h3 { font-size: 18px; } html.ptype .md h4 { font-size: 17px; }
+html.ptype .md pre { font-size: 13px; }
+html.ptype .md table { font-size: 14px; }
+html.ptype .call summary { font-size: 14px; padding: 12px 14px; }
+html.ptype .chat .note { font-size: 14px; }
+html.ptype #ptitle .pt { font-size: 17px; }
+html.ptype #ptitle .ps { font-size: 13px; }
+html.ptype #chanlog { gap: 14px; }
+html.ptype .bmsg .btext { font-size: 17px; line-height: 1.55; }
+html.ptype .bmsg .bmeta { font-size: 14px; }
+html.ptype .bmsg .bmeta b { font-size: 16px; }
+html.ptype .brcpt { font-size: 13px; }
+html.ptype #qinput { font-size: 17px; }
+html.ptype #who .chip, html.ptype #who .model, html.ptype #who .seg button { font-size: 14px; }
+html.ptype #hint { display: none; }
+
+/* the board, cards, menus and dialogs */
+html.ptype .icard, html.ptype .bcard { padding: 14px 16px; }
+html.ptype .btitle { font-size: 16px; }
+html.ptype .bid, html.ptype .bnudged { font-size: 13px; }
+html.ptype .bmeta2, html.ptype .bnote, html.ptype .bnone, html.ptype .bwhy { font-size: 14px; }
+html.ptype .bcol h2, html.ptype .bschedhead h2 { font-size: 14px; }
+html.ptype .icard .act, html.ptype .icard .todo { font-size: 14px; }
+html.ptype .trow { font-size: 15px; padding: 11px 12px; }
+html.ptype .trow .tmeta { font-size: 13px; }
+html.ptype .pill { font-size: 12px; }
+html.ptype .popup li .l { font-size: 16px; }
+html.ptype .popup li { padding: 14px 12px; }
+html.ptype .dlg { font-size: 16px; }
+html.ptype .dlg .dacts .btn { font-size: 16px; }
+html.ptype .skdesc, html.ptype .skrow .skd { font-size: 14px; }
+html.ptype .skby { font-size: 13px; }
+html.ptype .phonebox .pdev { font-size: 14px; }

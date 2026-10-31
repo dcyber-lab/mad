@@ -727,7 +727,7 @@ applyTheme();
 
 function drawQueue(fresh) {
   const box = $("#queue");
-  if (sk.open || bd.open) {
+  if (sk.open || bd.open || us.open) {
     box.hidden = true; // the Skills page and the board have no message box
     return;
   }
@@ -1218,6 +1218,7 @@ async function refresh() {
     $("#conn").title = "connected";
     setOffline(false);
     drawQuota(deck.quota);
+    drawUsage();
     drawSidebar();
     openWanted();
     if (cv.open) drawChanHead();
@@ -1403,6 +1404,10 @@ function openWanted() {
 // ---- on a phone: the list, or what is open, a screen each ----
 
 const phone = matchMedia("(max-width: 640px)");
+// html.ptype: the phone's type and spacing, on a phone's width and in the app.
+const drawPtype = () => document.documentElement.classList.toggle("ptype", embed || phone.matches);
+drawPtype();
+phone.addEventListener("change", drawPtype);
 
 // inMain shows what is open (an agent, a new chat) over the list, on a
 // phone; the phone's back goes back to the list.
@@ -1423,7 +1428,7 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    t.replaceChildren(el("span", "pt", bd.open ? "Board" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", bd.open ? "Board" : us.open ? "Usage" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
     t.className = "";
     return;
   }

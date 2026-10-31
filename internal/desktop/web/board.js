@@ -28,6 +28,7 @@ function openBoard() {
   closeNew();
   closeChannel();
   closeSkills();
+  closeUsage();
   closeChanges();
   closeMenu();
   closePopup();
@@ -42,6 +43,7 @@ function openBoard() {
 }
 
 function closeBoard() {
+  closeUsage();
   if (!bd.open) return;
   bd.open = false;
   $("#boardview").hidden = true;
