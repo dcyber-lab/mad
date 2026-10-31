@@ -510,3 +510,16 @@ func TestStartNamesAreUniqueAcrossProjects(t *testing.T) {
 		t.Errorf("kickoff not posted: %+v", msgs)
 	}
 }
+
+func TestTeamNameTypedOnAPhone(t *testing.T) {
+	project(t)
+	for in, want := range map[string]string{"Ios": "ios", " My Team ": "my-team", "api_v2": "api-v2"} {
+		got, err := teamName(in, "goal", nil)
+		if err != nil || got != want {
+			t.Errorf("teamName(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	if _, err := teamName("ios!", "goal", nil); err == nil {
+		t.Error("ios! was taken")
+	}
+}

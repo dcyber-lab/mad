@@ -138,6 +138,9 @@ async function newTeam(project) {
   drawRoles();
   const name = el("input", "say wide");
   name.placeholder = "name (from the goal when empty)";
+  name.autocapitalize = "none";
+  name.autocomplete = "off";
+  name.spellcheck = false;
   const goal = el("textarea", "say wide tgoal");
   goal.placeholder = "the goal: what the team is to get done";
   goal.rows = 3;
