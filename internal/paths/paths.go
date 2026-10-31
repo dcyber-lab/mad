@@ -69,6 +69,8 @@ func SidebarWidthFile() string { return filepath.Join(StateDir(), "sidebar_width
 func SidebarLog() string       { return filepath.Join(StateDir(), "sidebar.log") }
 func StreamLog() string        { return filepath.Join(StateDir(), "stream.log") }
 func PhoneLog() string         { return filepath.Join(StateDir(), "phone.log") }
+func PhoneTunnelLog() string   { return filepath.Join(StateDir(), "phone_tunnel.log") }
+func PhoneVia() string         { return filepath.Join(StateDir(), "phone_via") }
 func PhoneToken() string       { return filepath.Join(StateDir(), "phone_token") }
 
 // HostSocket is where `mad host` serves agent id; short, as a socket's

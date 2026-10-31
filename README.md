@@ -389,7 +389,17 @@ Home Screen keeps it at hand as an app.
   on. Closing the lid still puts it to sleep, unless a display is attached.
 - Opening the deck (a rebuilt mad, say) starts its server again on the
   mad it was opened with.
-- `mad phone off` closes the way in and stops the server; `mad phone`
+- A second way in is a Cloudflare Tunnel, to reach the Mac from anywhere
+  (`brew install cloudflared`): `mad phone on --cloudflare` needs no
+  account and gets a new `*.trycloudflare.com` name each time the tunnel
+  starts (it keeps it across a rebuilt mad); `mad phone on --cloudflare
+  --tunnel <name> --hostname <host>` uses a tunnel of your own, made with
+  `cloudflared tunnel login`, `create` and `route dns`. `mad phone on
+  --tailscale` goes back. The choice is kept: a plain `mad phone on` and
+  the window's button use the last one. Anyone with the address can reach
+  the server, and the token is what keeps them out: share the QR code
+  with care.
+- `mad phone off` closes the way in and stops the server and the tunnel; `mad phone`
   shows how it stands, with the QR code again.
 - The bell at the foot of the sidebar turns on notifications for that
   device: what the deck notifies about (an agent done, or needing you) is

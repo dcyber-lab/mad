@@ -273,3 +273,37 @@ func TestQueueAPI(t *testing.T) {
 		t.Errorf("clear: %+v", q)
 	}
 }
+
+// The iOS app sends the token as a Bearer header, the page in the URL.
+func TestBearerToken(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	h := s.Handler()
+	for _, tc := range []struct {
+		header string
+		want   int
+	}{
+		{"Bearer " + s.Token, http.StatusOK},
+		{"Bearer nope", http.StatusForbidden},
+		{s.Token, http.StatusForbidden},
+		{"", http.StatusForbidden},
+	} {
+		r := httptest.NewRequest("GET", "/api/deck", nil)
+		if tc.header != "" {
+			r.Header.Set("Authorization", tc.header)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.want {
+			t.Errorf("Authorization %q = %d, want %d", tc.header, w.Code, tc.want)
+		}
+	}
+	// A wrong header does not fall back to a right token in the URL.
+	r := httptest.NewRequest("GET", "/api/deck?token="+s.Token, nil)
+	r.Header.Set("Authorization", "Bearer nope")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("bad header with good token = %d", w.Code)
+	}
+}
