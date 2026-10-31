@@ -286,7 +286,8 @@ func Start(o Options) (*Started, error) {
 	}
 
 	taken := map[string]bool{}
-	if p := st.FindProject(root); p != nil {
+	// Messages name agents across the whole deck, not per project.
+	for _, p := range st.Projects {
 		for _, a := range p.Agents {
 			taken[a.Name] = true
 		}

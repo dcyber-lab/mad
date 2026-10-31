@@ -458,3 +458,55 @@ func TestRemovingAnAgentUpdatesTheRecord(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// Messages name agents by name across the whole deck: a team started in
+// one project must not reuse a role's name an agent of another project
+// has, or the lead's kickoff "@architect" names two agents.
+func TestStartNamesAreUniqueAcrossProjects(t *testing.T) {
+	root, _, _ := project(t)
+	if _, err := Start(Options{Project: root, Goal: "first goal"}); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(filepath.Dir(root), "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"}} {
+		if out, err := exec.Command("git", append([]string{"-C", other}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	// The seam adds agents to root's project; add the other project's own.
+	prev := spawn
+	spawn = func(s drive.Spec, k []agent.Kind) (*state.Agent, error) {
+		a := &state.Agent{ID: state.NewUUID(), Kind: s.Kind, Name: s.Name, Role: s.Role, Team: s.Team}
+		err := state.Update(func(st *state.State) error {
+			p, _ := st.AddProject(other)
+			p.Agents = append(p.Agents, a)
+			return nil
+		})
+		return a, err
+	}
+	defer func() { spawn = prev }()
+	got, err := Start(Options{Project: other, Goal: "second goal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Notes) != 0 {
+		t.Errorf("notes = %v", got.Notes)
+	}
+	st, _ := state.Load()
+	seen := map[string]bool{}
+	for _, p := range st.Projects {
+		for _, a := range p.Agents {
+			if seen[a.Name] {
+				t.Errorf("two agents called %q", a.Name)
+			}
+			seen[a.Name] = true
+		}
+	}
+	msgs, _, _ := bus.Read(got.Channel, 0, 50)
+	if len(msgs) != 1 {
+		t.Errorf("kickoff not posted: %+v", msgs)
+	}
+}

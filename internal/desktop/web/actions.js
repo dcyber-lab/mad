@@ -88,8 +88,10 @@ function toast(text, kind) {
   const t = el("div", `toast${kind ? " " + kind : ""}`);
   t.append(icon(kind === "err" ? "alert" : "check"), el("span", "", text));
   $("#toasts").append(t);
-  setTimeout(() => t.classList.add("out"), 3800);
-  setTimeout(() => t.remove(), 4300);
+  // An error is read, not glanced at: it stays as long as its text takes.
+  const ms = kind === "err" ? Math.min(20000, 4000 + text.length * 80) : 3800;
+  setTimeout(() => t.classList.add("out"), ms);
+  setTimeout(() => t.remove(), ms + 500);
 }
 
 // api calls the window's server: JSON in and out, its text as the error.
