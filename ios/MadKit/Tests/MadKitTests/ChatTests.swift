@@ -65,10 +65,9 @@ final class ChatDecodingTests: XCTestCase {
         let s = try decode(DeckSnapshot.self, """
         {"projects": [{"name": "p", "agents": [
           {"id": "a1", "kind": "claude", "name": "ios", "status": "running", "shown": "running", "mode": "window", "headless": true},
-          {"id": "a2", "kind": "codex", "title": "fix tests", "status": "idle", "shown": "idle", "team": "pay"},
+          {"id": "a2", "kind": "codex", "title": "fix tests", "status": "idle", "shown": "idle"},
           {"id": "a3", "kind": "pi", "status": "waiting", "shown": "waiting"},
           {"id": "a4", "status": "off", "shown": "asleep"}]}],
-         "teams": [{"name": "pay", "project": "p", "members": ["a2"]}],
          "states": [{"state": "waiting", "word": "Needs you", "tone": "needs"},
                     {"state": "running", "word": "Working", "tone": "working"},
                     {"state": "idle", "word": "Idle", "tone": "quiet"},
@@ -78,13 +77,12 @@ final class ChatDecodingTests: XCTestCase {
         XCTAssertEqual(a.map(\.label), ["ios", "fix tests", "pi a3", "a4"], "name, else title, else kind and the id's first 8, else the id")
         XCTAssertTrue(a[0].inWindowMode)
         XCTAssertTrue(a[0].headless)
-        XCTAssertEqual(a[1].team, "pay")
-        XCTAssertEqual(s.teams.map(\.members), [["a2"]])
         XCTAssertEqual(s.word(for: "running"), "Working")
         XCTAssertEqual(s.word(for: "waiting"), "Needs you")
         XCTAssertEqual(s.word(for: "mystery"), "Mystery", "an unknown state is shown as it is")
-        let order = a.sorted { s.rank(of: $0) < s.rank(of: $1) }.map(\.id)
-        XCTAssertEqual(order, ["a1", "a3", "a2", "a4"], "working first, then needs you, then the deck's order")
+        XCTAssertEqual(s.tone(for: "running"), "working")
+        XCTAssertEqual(s.tone(for: "asleep"), "quiet")
+        XCTAssertEqual(s.tone(for: "mystery"), "quiet")
     }
 }
 

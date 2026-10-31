@@ -30,16 +30,9 @@ enum Fixture {
               {"id": "claude-3fe9", "kind": "claude", "name": "ios", "status": "running", "shown": "running", "mode": "window", "headless": true},
               {"id": "claude-91ab", "kind": "claude", "name": "kim", "status": "waiting", "shown": "waiting", "mode": "window", "headless": true},
               {"id": "claude-77c0", "kind": "claude", "name": "gus", "status": "waiting", "shown": "waiting", "mode": "window", "headless": true},
-              {"id": "codex-2d", "kind": "codex", "name": "ada", "status": "idle", "shown": "finished", "headless": true},
-              {"id": "claude-b1", "kind": "claude", "name": "builder", "status": "running", "shown": "running", "team": "ship", "mode": "window", "headless": true},
-              {"id": "claude-r1", "kind": "claude", "name": "reviewer", "status": "idle", "shown": "idle", "team": "ship", "mode": "window", "headless": true}
-            ]},
-            {"name": "payments", "agents": [
-              {"id": "pi-9", "kind": "pi", "status": "idle", "shown": "idle"},
-              {"id": "sh-4", "kind": "shell", "title": "psql console", "status": "asleep", "shown": "asleep"}
+              {"id": "codex-2d", "kind": "codex", "name": "ada", "status": "idle", "shown": "finished", "headless": true}
             ]}
           ],
-          "teams": [{"name": "ship", "project": "mad", "members": ["claude-b1", "claude-r1"]}],
           "states": [
             {"state": "waiting", "word": "Needs you", "tone": "needs"},
             {"state": "running", "word": "Working", "tone": "working"},

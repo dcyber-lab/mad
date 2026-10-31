@@ -15,7 +15,7 @@ struct MacView: View {
 
     /// `macs` is not a screen: choosing it goes back to the Macs list, so the
     /// way back stays obvious while the Deck tab hides the navigation bar.
-    enum Tab { case needs, agents, deck, macs }
+    enum Tab { case needs, deck, macs }
 
     /// The agent whose conversation is open, if any.
     struct AgentRef: Identifiable, Hashable { var id: String }
@@ -29,7 +29,6 @@ struct MacView: View {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "startTab") {
         case "deck": return .deck
-        case "agents": return .agents
         default: break
         }
         #endif
@@ -65,9 +64,6 @@ struct MacView: View {
                 .tabItem { Label("Needs you", systemImage: "tray") }
                 .badge(model.needs)
                 .tag(Tab.needs)
-            AgentsView(model: model, open: { chatAgent = AgentRef(id: $0.id) })
-                .tabItem { Label("Agents", systemImage: "person.2") }
-                .tag(Tab.agents)
             DeckTab(model: model)
                 .tabItem { Label("Deck", systemImage: "square.grid.2x2") }
                 .tag(Tab.deck)
