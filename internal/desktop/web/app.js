@@ -25,11 +25,21 @@ function holdWindow() {
 // only suits a browser (the phone and notification buttons, the service
 // worker).
 const embed = (() => {
+  const want = new URLSearchParams(location.hash.slice(1)).get("embed"); // "app" enters, "0" leaves
   try {
-    if (new URLSearchParams(location.hash.slice(1)).get("embed") === "app") sessionStorage.setItem("mad.embed", "app");
+    if (want === "app") sessionStorage.setItem("mad.embed", "app");
+    else if (want === "0") sessionStorage.removeItem("mad.embed");
     return sessionStorage.getItem("mad.embed") === "app";
-  } catch (_) { return new URLSearchParams(location.hash.slice(1)).get("embed") === "app"; }
+  } catch (_) { return want === "app"; }
 })();
+// leaveEmbed shows the full page, in this session.
+function leaveEmbed() {
+  try { sessionStorage.removeItem("mad.embed"); } catch (_) { /* none */ }
+  const h = new URLSearchParams(location.hash.slice(1));
+  h.delete("embed");
+  history.replaceState(null, "", location.pathname + location.search + (h.size ? `#${h}` : ""));
+  location.reload();
+}
 document.documentElement.classList.toggle("embed", embed);
 
 // The token: the one in the URL's fragment (#token=, the local window's),
