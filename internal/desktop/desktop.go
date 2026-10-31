@@ -24,6 +24,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/discover"
+	"github.com/dcyber-lab/mad/internal/phone"
 )
 
 //go:embed web
@@ -107,6 +108,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/phone", s.auth(http.HandlerFunc(s.phone)))
 	mux.Handle("POST /api/phone", s.auth(http.HandlerFunc(s.phone)))
 	mux.Handle("DELETE /api/phone", s.auth(http.HandlerFunc(s.phone)))
+	mux.Handle("POST /api/pair", http.HandlerFunc(s.pair))
+	mux.Handle("GET /api/phone/devices", s.auth(http.HandlerFunc(s.phoneDevices)))
+	mux.Handle("DELETE /api/phone/devices", s.auth(http.HandlerFunc(s.phoneDevices)))
 	mux.Handle("GET /api/phone/qr", s.auth(http.HandlerFunc(s.phoneQR)))
 	mux.Handle("GET /api/push", s.auth(http.HandlerFunc(s.pushState)))
 	mux.Handle("POST /api/push", s.auth(http.HandlerFunc(s.pushSubscribe)))
@@ -133,21 +137,60 @@ func (s *Server) Handler() http.Handler {
 	return headers(mux)
 }
 
-// auth refuses requests without the token. Browsers let any page open a
+// auth refuses requests without a token. Browsers let any page open a
 // websocket to localhost, so this check, not the Origin, is what keeps
 // other sites out; the Origin is checked too by the websocket accept.
+// The token is a paired device's (phone.Pair), or the master one, which
+// the local window and phones paired before devices hold: not through a
+// Cloudflare Tunnel, where only a paired device gets in. A device
+// revoked meanwhile has its requests in flight cancelled.
 func (s *Server) auth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.URL.Query().Get("token")
 		if b, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
 			got = b
 		}
-		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) == 1 && !viaCloudflare(r) {
+			h.ServeHTTP(w, r)
+			return
+		}
+		if _, ok := phone.DeviceFor(got); !ok {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		h.ServeHTTP(w, r)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		go watchDevice(ctx, cancel, got)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// viaCloudflare says whether the request came through a Cloudflare
+// Tunnel: cloudflared's edge adds these, and a caller can only add them
+// to be refused.
+func viaCloudflare(r *http.Request) bool {
+	return r.Header.Get("Cf-Connecting-Ip") != "" || r.Header.Get("Cf-Ray") != ""
+}
+
+// revokeTick is how often a device's open requests look for its revoking.
+var revokeTick = time.Second
+
+// watchDevice calls cancel once the device holding token is revoked, so
+// its websockets and streams end within a tick, not at its next request.
+func watchDevice(ctx context.Context, cancel context.CancelFunc, token string) {
+	t := time.NewTicker(revokeTick)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if !phone.Holds(token) {
+				cancel()
+				return
+			}
+		}
+	}
 }
 
 // csp lets the page run its own scripts and nothing else. It draws what

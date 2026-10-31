@@ -115,8 +115,7 @@ func TestOnOff(t *testing.T) {
 	if err != nil || !s.On {
 		t.Fatalf("on: %+v, %v", s, err)
 	}
-	tok, _ := Token()
-	if s.URL != "https://box.tail1.ts.net:7443/#token="+tok {
+	if !pairURL(s.URL, "https://box.tail1.ts.net:7443/") {
 		t.Errorf("url %q", s.URL)
 	}
 	panes, _ := tmux.ListPanes()
@@ -322,9 +321,8 @@ func TestCloudflareOnOff(t *testing.T) {
 	if err != nil || !s.On {
 		t.Fatalf("on: %+v, %v", s, err)
 	}
-	tok, _ := Token()
 	const host = "quiet-fox-1234.trycloudflare.com"
-	if s.Via != ViaCloudflare || s.Host != host || s.URL != "https://"+host+"/#token="+tok {
+	if s.Via != ViaCloudflare || s.Host != host || !pairURL(s.URL, "https://"+host+"/") {
 		t.Errorf("status %+v", s)
 	}
 	panes, _ := tmux.ListPanes()
@@ -410,8 +408,7 @@ func TestCloudflareNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, err := On(ctx)
-	tok, _ := Token()
-	if err != nil || s.URL != "https://mad.example.com/#token="+tok {
+	if err != nil || !pairURL(s.URL, "https://mad.example.com/") {
 		t.Fatalf("on: %+v, %v", s, err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
@@ -498,7 +495,7 @@ func TestQuickTunnelNameMoves(t *testing.T) {
 	}
 	setName("second-one.trycloudflare.com")
 	g := Get(ctx)
-	if g.Host != "second-one.trycloudflare.com" || !strings.Contains(g.URL, "https://second-one.trycloudflare.com/#token=") {
+	if g.Host != "second-one.trycloudflare.com" || !pairURL(g.URL, "https://second-one.trycloudflare.com/") {
 		t.Errorf("get after the name moved: %+v", g)
 	}
 	if c := serverOrigin(); !strings.Contains(c, "-origin 'second-one.trycloudflare.com'") {
@@ -524,4 +521,12 @@ func TestQuickTunnelNameMoves(t *testing.T) {
 	if h := tunnelHost(); h != "fourth-one.trycloudflare.com" {
 		t.Errorf("without metrics: %q", h)
 	}
+}
+
+// pairURL says whether u is prefix and a pairing code in the fragment,
+// never the master token.
+func pairURL(u, prefix string) bool {
+	code, ok := strings.CutPrefix(u, prefix+"#pair=")
+	tok, _ := Token()
+	return ok && len(code) == 32 && code != tok
 }

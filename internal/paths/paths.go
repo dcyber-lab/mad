@@ -71,6 +71,10 @@ func StreamLog() string        { return filepath.Join(StateDir(), "stream.log") 
 func PhoneLog() string         { return filepath.Join(StateDir(), "phone.log") }
 func PhoneTunnelLog() string   { return filepath.Join(StateDir(), "phone_tunnel.log") }
 func PhoneVia() string         { return filepath.Join(StateDir(), "phone_via") }
+func PhoneDevices() string     { return filepath.Join(StateDir(), "phone_devices.json") }
+func PhonePairs() string       { return filepath.Join(StateDir(), "phone_pairs.json") }
+func PhonePairShown() string   { return filepath.Join(StateDir(), "phone_pair_shown") }
+func PhoneLock() string        { return filepath.Join(StateDir(), "phone_devices.lock") }
 func PhoneToken() string       { return filepath.Join(StateDir(), "phone_token") }
 
 // HostSocket is where `mad host` serves agent id; short, as a socket's
