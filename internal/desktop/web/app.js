@@ -221,9 +221,10 @@ function charSVG(key, box) {
 }
 
 // stateWord is what a character says about its agent, for a screen reader or a test:
-// "working", "needs you", "stopped" or "idle".
+// "working", "needs you", "starting", "stopped" or "idle".
 function stateWord(st) {
-  return st === "running" ? "working" : st === "waiting" ? "needs you" : st === "stopped" || st === "exited" ? "stopped" : "idle";
+  return st === "running" ? "working" : st === "waiting" ? "needs you" : st === "starting" ? "starting"
+    : st === "stopped" || st === "exited" ? "stopped" : "idle";
 }
 
 // redDot marks something that waits on the person.
@@ -366,13 +367,13 @@ function drawList() {
   if (sig !== nav.dataset.sig) {
     const ae = document.activeElement;
     const own = ae && ae !== document.body && nav.contains(ae) ? ae : null;
-    const rk = own && own.classList.contains("row") ? own.dataset.key : null;
+    const rk = own && own.classList.contains("rowhit") ? own.closest(".row").dataset.key : null;
     const hi = own && own.classList.contains("head") ? [...nav.querySelectorAll(".project > .head")].indexOf(own) : -1;
     nav.dataset.sig = sig;
     nav.replaceChildren(...nodes);
     fitRows(nav);
     nav.scrollTop = keep;
-    if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"]`)?.focus({ preventScroll: true });
+    if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"] .rowhit`)?.focus({ preventScroll: true });
     else if (hi >= 0) nav.querySelectorAll(".project > .head")[hi]?.focus({ preventScroll: true });
   }
   $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;

@@ -145,7 +145,8 @@ func TestPairing(t *testing.T) {
 }
 
 func TestListenRefusals(t *testing.T) {
-	for _, addr := range []string{"0.0.0.0:0", "192.168.1.5:9000", "127.0.0.1:7484", "localhost-ish"} {
+	for _, addr := range []string{"0.0.0.0:0", "192.168.1.5:9000", "127.0.0.1:7484", "127.0.0.1:07484", "127.0.0.1:+7484",
+		"127.0.0.1:007484", "[::1]:7484", "127.0.0.1:http", "localhost-ish"} {
 		if ln, err := listen(addr); err == nil {
 			ln.Close()
 			t.Errorf("%s: listened", addr)

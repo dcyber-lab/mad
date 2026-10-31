@@ -159,16 +159,19 @@ function itemLine(it) {
 // row is lead | name, context / line | right, one height per kind of row.
 function row(o) {
   const r = el("div", `row ${o.cls || ""}`);
-  r.tabIndex = 0;
-  r.setAttribute("role", "button");
-  r.setAttribute("aria-label", o.name);
   if (o.key) r.dataset.key = o.key;
   if (o.title) r.title = o.title;
   const t1 = el("div", "t1");
   t1.append(el("span", "nm", o.name));
   if (o.ctx) t1.append(el("span", "ctx", o.ctx));
   if (o.after) t1.append(o.after);
-  r.append(o.lead, t1);
+  // The row's one button, named by its name: it covers the row, under the
+  // row's other controls (they are its siblings, not inside it), and is
+  // what the keyboard reaches. Its click is the row's.
+  const hit = el("button", "rowhit");
+  hit.type = "button";
+  hit.setAttribute("aria-label", o.name);
+  r.append(hit, o.lead, t1);
   if (o.line) {
     const t2 = el("div", "t2");
     t2.append(...[].concat(o.line).flat().filter((x) => x != null && x !== ""));
@@ -180,12 +183,6 @@ function row(o) {
     r.append(rt);
   }
   r.onclick = o.onclick;
-  r.onkeydown = (e) => {
-    if (e.target === r && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
-      r.click();
-    }
-  };
   return r;
 }
 

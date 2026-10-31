@@ -1166,7 +1166,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .avatar.sys.s-waiting { --kc: var(--waiting); }
 .row .qn { margin-left: 0; }
 .row .more {
-  position: absolute; right: 6px; top: 50%; margin-top: -13px; width: 26px; height: 26px; border-radius: 8px;
+  z-index: 1; position: absolute; right: 6px; top: 50%; margin-top: -13px; width: 26px; height: 26px; border-radius: 8px;
   display: none; background: var(--row);
 }
 .row .more .i { width: 15px; height: 15px; }
@@ -1652,3 +1652,9 @@ html.ptype #ptitle.chan .pt { font-weight: 700; }
 html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; align-items: center; cursor: pointer; }
 /* The characters are not boxes: the lead is named in the members' list, not ringed in the strip. */
 #chanhead .cwho .avatar.lead, #bar .cwho .avatar.lead { box-shadow: none; outline: 0; }
+
+/* the row's one button covers it; the controls on the row stay above it */
+.rowhit { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; margin: 0; border: none; border-radius: inherit; background: none; cursor: pointer; }
+.rowhit:focus { outline: none; }
+.rowhit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.row .rt { position: relative; z-index: 1; }
