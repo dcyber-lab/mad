@@ -1173,7 +1173,9 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 @media (hover: hover) {
   /* The more button has a slot to itself: it never covers what is on the right. */
   .row.agent { padding-right: 38px; }
-  .row.agent:hover .more { display: grid; }
+  /* Unseen until the pointer is on the row or the keyboard is in it, but there to Tab to. */
+  .row.agent .more { display: grid; opacity: 0; pointer-events: none; }
+  .row.agent:hover .more, .row.agent:focus-within .more { opacity: 1; pointer-events: auto; }
 }
 
 /* The reply box, opened in place under its item or inside its card. */
