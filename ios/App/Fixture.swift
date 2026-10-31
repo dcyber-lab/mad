@@ -11,7 +11,8 @@ enum Fixture {
                          token: String(repeating: "0", count: 32))
 
     static func snapshot(now: Date = Date()) -> DeckSnapshot? {
-        guard UserDefaults.standard.string(forKey: "fixture") == "inbox" else { return nil }
+        let mode = UserDefaults.standard.string(forKey: "fixture")
+        guard mode == "inbox" || mode == "longlabel" else { return nil }
         let f = ISO8601DateFormatter()
         func ago(_ s: TimeInterval) -> String { f.string(from: now.addingTimeInterval(-s)) }
         func ahead(_ s: TimeInterval) -> String { f.string(from: now.addingTimeInterval(s)) }
@@ -61,6 +62,7 @@ enum Fixture {
              "since": "\(ago(900))", "blocks": true,
              "acts": [{"verb": "answer", "label": "Live replica", "option": "Live replica"},
                       {"verb": "answer", "label": "Snapshot", "option": "Snapshot"},
+                      {"verb": "answer", "label": "Use the live replica for this export, but only for the accounts that were changed in the last thirty days, and tell me about the rest", "option": "Live, recent only"},
                       {"verb": "answer", "label": "Something else", "input": true},
                       {"verb": "open", "label": "Open"}],
              "open": {"agent": "claude-77c0"}},
@@ -96,6 +98,21 @@ enum Fixture {
         }
         """
         guard var snap = try? JSONDecoder().decode(DeckSnapshot.self, from: Data(json.utf8)) else { return nil }
+        if mode == "longlabel" {
+            // One item, short, with very long option labels: to look at buttons that must wrap.
+            let long = """
+            {"key": "q:long", "kind": "question", "agent": "claude-77c0", "title": "gus", "since": "\(ago(60))", "blocks": true,
+             "acts": [{"verb": "answer", "label": "Yes", "option": "Yes", "primary": true},
+                      {"verb": "answer", "label": "Use the live replica for this export, but only for the accounts that were changed in the last thirty days, and tell me about the rest", "option": "Live, recent only"},
+                      {"verb": "answer", "label": "No", "option": "No"}],
+             "open": {"agent": "claude-77c0"}}
+            """
+            if let item = try? JSONDecoder().decode(DeckSnapshot.InboxItem.self, from: Data(long.utf8)) {
+                snap.inbox = [item]
+                snap.needs = 1
+            }
+            return snap
+        }
         // `-fixtureSkip N` leaves out the first N items, to look at the ones below the fold.
         let skip = min(max(UserDefaults.standard.integer(forKey: "fixtureSkip"), 0), snap.inbox.count)
         snap.inbox = Array(snap.inbox.dropFirst(skip))
