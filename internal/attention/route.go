@@ -115,6 +115,10 @@ func (r openRoute) do(Answer, *Facts) error { return ErrNotOffered }
 type keysRoute struct {
 	pane string
 	p    prompt
+	// allow: the prompt asks leave to do something (not a question): its
+	// options but a "No" let it through, and are Allow acts, which the
+	// page offers only beside the whole prompt.
+	allow bool
 }
 
 // rowLabel is the longest option label a sidebar row shows.
@@ -125,13 +129,26 @@ func (r keysRoute) acts() []Act {
 	rows := 0
 	for _, o := range r.p.Options {
 		a := Act{Verb: VerbAnswer, Label: o.Label, Option: o.Label, Primary: o.N == r.p.Cursor}
-		if a.Primary || rows < 2 && utf8.RuneCountInString(o.Label) <= rowLabel {
+		if r.allow && !refuses(o.Label) {
+			a.Verb = VerbAllow
+			if o.Under != "" {
+				a.Label += " " + o.Under // all it lets through
+			}
+		}
+		if a.Primary || rows < 2 && utf8.RuneCountInString(a.Label) <= rowLabel {
 			a.Row = true
 			rows++
 		}
 		acts = append(acts, a)
 	}
 	return append(acts, Act{Verb: VerbDeny, Label: "Cancel (Esc)"})
+}
+
+// refuses: an option that says no ("No", "No, and tell Codex what to do
+// differently").
+func refuses(label string) bool {
+	l := strings.ToLower(label)
+	return l == "no" || strings.HasPrefix(l, "no,") || strings.HasPrefix(l, "no ")
 }
 
 // keySettle is how long a TUI is given to take a digit before its screen
@@ -150,11 +167,17 @@ func (r keysRoute) do(a Answer, _ *Facts) error {
 	if !ok {
 		return ErrNotOffered
 	}
+	// Enter picks what the cursor is on, in every one of them: one key.
+	if now.Cursor == o.N {
+		return press(r.pane, "Enter")
+	}
 	if err := press(r.pane, strconv.Itoa(o.N)); err != nil {
 		return err
 	}
 	// A digit picks the option in claude's and codex's prompts; where it
-	// only moves the cursor (codex's trust screen), Enter picks it.
+	// is seen to have only moved the cursor (codex's trust screen), Enter
+	// picks it. A screen not yet redrawn gets no Enter: it would go to
+	// whatever the digit led to, another prompt maybe.
 	time.Sleep(keySettle)
 	if after, ok := parsePrompt(capture(r.pane)); ok && after.ID == now.ID && after.Cursor == o.N {
 		return press(r.pane, "Enter")

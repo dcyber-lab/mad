@@ -201,8 +201,11 @@ function itemRow(it) {
     acts.push(b);
     if (it.text && letsThrough.has(a.verb) && !ib.pending.has(it.key)) {
       b.hidden = true;
-      b.classList.add("guard");
-      acts.push(rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`));
+      // a full item's body is part of what it allows: never whole in a row
+      if (!it.full) b.classList.add("guard");
+      if (!acts.some((x) => x.classList.contains("review"))) {
+        acts.push(rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`));
+      }
     }
   }
   const r = row({
@@ -428,7 +431,9 @@ function itemCard(it, compact, where = "main") {
     t.append(meter(it.part));
     c.append(t);
   }
-  if (it.body && !compact) c.append(el("div", "body muted", it.body));
+  // a full item's body is what it asks, as its screen shows it: always whole
+  if (it.body && it.full) c.append(el("div", "body full screen", it.body));
+  else if (it.body && !compact) c.append(el("div", "body muted", it.body));
   if (it.tasks?.length && !compact) c.append(el("div", "tasks muted", it.tasks.map((t) => t.title || t.id).join(" · ")));
   if (!done) {
     // an answer's options are one tap each; "Reply" and the like follow

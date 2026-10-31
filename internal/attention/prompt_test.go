@@ -35,30 +35,34 @@ func labels(p prompt) []string {
 
 func TestParsePrompt(t *testing.T) {
 	for _, c := range []struct {
-		file, question, detail string
-		options                []string
-		numbers                []int
+		file, question, rest string
+		options              []string
+		numbers              []int
 	}{
+		// All it says, the command it asks about with it; claude's dashed
+		// lines around the command are left out.
 		{file: "claude-bash.txt", question: "Do you want to proceed?",
+			rest: "Bash command\nTip: auto mode handles these prompts for you — choose \"switch to auto mode\" below\nWrite hello-b3k to out1.txt and print it\necho hello-b3k > out1.txt && cat out1.txt",
 			options: []string{"Yes", "Yes, and always allow access to /private/tmp/b3k/repo from this project",
 				"Yes, and switch to auto mode · auto mode handles these prompts for you", "No"},
 			numbers: []int{1, 2, 3, 4}},
-		{file: "claude-write.txt", question: "Do you want to create notes.md?",
+		{file: "claude-write.txt", question: "Do you want to create notes.md?", rest: "Create file\nnotes.md\n1 hi",
 			options: []string{"Yes", "Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session", "No"},
 			numbers: []int{1, 2, 3}},
 		// "4. Type something." opens a field to type in: not offered.
-		{file: "claude-ask.txt", question: "Which color do you prefer?",
+		{file: "claude-ask.txt", question: "Which color do you prefer?", rest: "☐ Color",
 			options: []string{"Red", "Green", "Blue", "Chat about this"},
 			numbers: []int{1, 2, 3, 5}},
 		{file: "codex-approval.txt", question: "Would you like to run the following command?",
-			detail:  "Environment: local\nReason: Do you want to allow creating codex-file2.txt in the workspace?\n$ touch codex-file2.txt",
+			rest:    "Environment: local\nReason: Do you want to allow creating codex-file2.txt in the workspace?\n$ touch codex-file2.txt",
 			options: []string{"Yes, proceed", "Yes, and don't ask again for commands that start with `touch codex-file2.txt`", "No, and tell Codex what to do differently"},
 			numbers: []int{1, 2, 3}},
+		// At the top of the screen, under a blank line: it begins there.
 		{file: "codex-trust.txt", question: "Trust this folder? Codex can read, edit, and run files here, subject to your permission settings. Folder settings can run code automatically, even without a model request. Continue only if you",
-			detail:  "trust these files. Your trust decision will be saved.",
+			rest:    "Folder access\n/private/tmp/b3k/repo\ntrust these files. Your trust decision will be saved.",
 			options: []string{"Trust and continue", "Quit"}, numbers: []int{1, 2}},
 		{file: "codex-update.txt", question: "Update available · 0.157.1 → 0.166.0",
-			detail:  "Release notes: https://github.com/openai/codex/releases/latest",
+			rest:    "Release notes: https://github.com/openai/codex/releases/latest",
 			options: []string{"Update now (runs `npm install -g @openai/codex`)", "Skip", "Skip until next version"}, numbers: []int{1, 2, 3}},
 	} {
 		p, ok := parsePrompt(fixture(t, c.file))
@@ -70,8 +74,8 @@ func TestParsePrompt(t *testing.T) {
 		for _, o := range p.Options {
 			ns = append(ns, o.N)
 		}
-		if p.Question != c.question || p.Detail != c.detail || !reflect.DeepEqual(labels(p), c.options) || !reflect.DeepEqual(ns, c.numbers) || p.Cursor != 1 || p.ID == "" {
-			t.Errorf("%s: %q %q %q %v cursor %d id %q", c.file, p.Question, p.Detail, labels(p), ns, p.Cursor, p.ID)
+		if p.Question != c.question || strings.Join(p.Rest, "\n") != c.rest || !reflect.DeepEqual(labels(p), c.options) || !reflect.DeepEqual(ns, c.numbers) || p.Cursor != 1 || p.ID == "" {
+			t.Errorf("%s: %q %q %q %v cursor %d id %q", c.file, p.Question, p.Rest, labels(p), ns, p.Cursor, p.ID)
 		}
 	}
 }
@@ -88,17 +92,23 @@ func TestParsePromptRefuses(t *testing.T) {
 			t.Errorf("%s: read as %+v", file, p)
 		}
 	}
+	if _, ok := parsePrompt("\nProceed?\n❯ 1. Yes\n  2. No\nEsc to cancel"); !ok {
+		t.Fatal("the least prompt is not read")
+	}
 	for name, screen := range map[string]string{
 		"empty":        "",
-		"no footer":    "Proceed?\n❯ 1. Yes\n  2. No\n\nsome other line\nmore\nand more",
-		"no cursor":    "Proceed?\n  1. Yes\n  2. No\nEsc to cancel",
-		"two cursors":  "Proceed?\n❯ 1. Yes\n❯ 2. No\nEsc to cancel",
-		"a gap":        "Proceed?\n❯ 1. Yes\n  3. No\nEsc to cancel",
-		"not from one": "Proceed?\n❯ 2. Yes\n  3. No\nEsc to cancel",
-		"one option":   "Proceed?\n❯ 1. Yes\nEsc to cancel",
-		"same words":   "Proceed?\n❯ 1. Yes\n  2. Yes\nEsc to cancel",
-		"nothing over": "❯ 1. Yes\n  2. No\nEsc to cancel",
-		"text between": "Proceed?\n❯ 1. Yes\nsomething else\n  2. No\nEsc to cancel",
+		"no footer":    "\nProceed?\n❯ 1. Yes\n  2. No\n\nsome other line\nmore\nand more",
+		"no cursor":    "\nProceed?\n  1. Yes\n  2. No\nEsc to cancel",
+		"two cursors":  "\nProceed?\n❯ 1. Yes\n❯ 2. No\nEsc to cancel",
+		"a gap":        "\nProceed?\n❯ 1. Yes\n  3. No\nEsc to cancel",
+		"not from one": "\nProceed?\n❯ 2. Yes\n  3. No\nEsc to cancel",
+		"one option":   "\nProceed?\n❯ 1. Yes\nEsc to cancel",
+		"same words":   "\nProceed?\n❯ 1. Yes\n  2. Yes\nEsc to cancel",
+		"nothing over": "\n❯ 1. Yes\n  2. No\nEsc to cancel",
+		"text between": "\nProceed?\n❯ 1. Yes\nsomething else\n  2. No\nEsc to cancel",
+		// Its top may be cut: what it lets through cannot be shown whole.
+		"off the top": "rm -rf build &&\nProceed?\n❯ 1. Yes\n  2. No\nEsc to cancel",
+		"too long":    "\n" + strings.Repeat("cat <<EOF\n", promptLines) + "Proceed?\n❯ 1. Yes\n  2. No\nEsc to cancel",
 	} {
 		if p, ok := parsePrompt(screen); ok {
 			t.Errorf("%s: read as %+v", name, p)
@@ -118,6 +128,13 @@ func TestPromptID(t *testing.T) {
 	other, ok := parsePrompt(strings.Replace(screen, "\n echo hello-b3k", "\n rm -rf out1.txt; echo", 1))
 	if !ok || other.ID == p.ID {
 		t.Errorf("another command, same id %q", other.ID)
+	}
+	// What is under an option is its too: the rest of a wrapped label.
+	wrapped := "\nRun it?\n› 1. Yes\n  2. Yes, and don't ask again for\n     `touch a`\n  3. No\nesc to cancel"
+	a, _ := parsePrompt(wrapped)
+	b, ok := parsePrompt(strings.Replace(wrapped, "`touch a`", "`rm -rf ~`", 1))
+	if !ok || a.ID == b.ID || b.Options[1].Under != "`rm -rf ~`" {
+		t.Errorf("another wrapped option, same id %q: %+v", a.ID, b.Options)
 	}
 }
 
@@ -165,15 +182,13 @@ func (k *keyed) item(t *testing.T) Item {
 	return v.Inbox.Items[0]
 }
 
-func TestKeysRouteActs(t *testing.T) {
-	k := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{Tool: "Bash · echo hello-b3k > out1.txt && cat out1.txt"})
-	it := k.item(t)
-	if _, ok := it.route.(keysRoute); !ok {
-		t.Fatalf("route %T", it.route)
-	}
+func actList(it Item) []string {
 	var got []string
 	for _, a := range it.Acts {
 		s := string(a.Verb) + ":" + a.Label
+		if a.Option != "" && a.Option != a.Label {
+			s += " =" + a.Option
+		}
 		if a.Row {
 			s += " row"
 		}
@@ -182,19 +197,44 @@ func TestKeysRouteActs(t *testing.T) {
 		}
 		got = append(got, s)
 	}
-	want := []string{"answer:Yes row primary", "answer:Yes, and always allow access to /private/tmp/b3k/repo from this project",
-		"answer:Yes, and switch to auto mode · auto mode handles these prompts for you", "answer:No row", "deny:Cancel (Esc)"}
-	if !reflect.DeepEqual(got, want) {
+	return got
+}
+
+func TestKeysRouteActs(t *testing.T) {
+	// The transcript's line for a command is claude's description of it,
+	// cut: the item says what the screen does, the command whole.
+	k := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{Tool: "Bash · Write hello-b3k to out1.txt and print it"})
+	it := k.item(t)
+	if _, ok := it.route.(keysRoute); !ok {
+		t.Fatalf("route %T", it.route)
+	}
+	// What lets it through is Allow, which a row offers only as Review.
+	want := []string{"allow:Yes row primary", "allow:Yes, and always allow access to /private/tmp/b3k/repo from this project",
+		"allow:Yes, and switch to auto mode · auto mode handles these prompts for you", "answer:No row", "deny:Cancel (Esc)"}
+	if got := actList(it); !reflect.DeepEqual(got, want) {
 		t.Errorf("acts\n%q\nwant\n%q", got, want)
 	}
-	if it.Context != "Bash" || it.Text != "echo hello-b3k > out1.txt && cat out1.txt" || !strings.HasSuffix(string(it.Key), "/"+k.d.view.Inbox.Items[0].route.(keysRoute).p.ID) {
-		t.Errorf("item %q %q %q", it.Context, it.Text, it.Key)
+	body := "Bash command\nTip: auto mode handles these prompts for you — choose \"switch to auto mode\" below\nWrite hello-b3k to out1.txt and print it\necho hello-b3k > out1.txt && cat out1.txt"
+	if it.Kind != KindPermission || it.Context != "Bash" || it.Text != "Do you want to proceed?" || it.Body != body || !it.Full || it.Mono ||
+		!strings.HasSuffix(string(it.Key), "/"+it.route.(keysRoute).p.ID) {
+		t.Errorf("item %q %q %q %q full %v mono %v", it.Context, it.Text, it.Body, it.Key, it.Full, it.Mono)
 	}
 
-	// A question: its words from the screen.
+	// codex's: its "No, and tell Codex…" says no; an option the pane
+	// wrapped is offered with all of it.
+	c := newKeyed(t, strings.Replace(fixture(t, "codex-approval.txt"), "start with `touch codex-file2.txt` (p)", "start with\n     `touch codex-file2.txt` (p)", 1), transcript.Info{})
+	want = []string{"allow:Yes, proceed row primary", "allow:Yes, and don't ask again for commands that start with `touch codex-file2.txt` =Yes, and don't ask again for commands that start with",
+		"answer:No, and tell Codex what to do differently", "deny:Cancel (Esc)"}
+	if got := actList(c.item(t)); !reflect.DeepEqual(got, want) {
+		t.Errorf("codex acts\n%q\nwant\n%q", got, want)
+	}
+
+	// A question: its words from the screen, its options answers.
 	q := newKeyed(t, fixture(t, "claude-ask.txt"), transcript.Info{Tool: "AskUserQuestion"})
-	if it := q.item(t); it.Kind != KindQuestion || it.Text != "Which color do you prefer?" || len(it.Acts) != 5 {
-		t.Errorf("question %q %q %+v", it.Kind, it.Text, it.Acts)
+	it = q.item(t)
+	want = []string{"answer:Red row primary", "answer:Green row", "answer:Blue", "answer:Chat about this", "deny:Cancel (Esc)"}
+	if got := actList(it); it.Kind != KindQuestion || it.Text != "Which color do you prefer?" || !reflect.DeepEqual(got, want) {
+		t.Errorf("question %q %q %q", it.Kind, it.Text, got)
 	}
 }
 
@@ -215,10 +255,24 @@ func TestKeysRouteAnswers(t *testing.T) {
 		t.Errorf("second act: %v, sent %q", err, k.sent)
 	}
 
-	// The digit only moved the cursor to it (codex's trust screen): Enter
-	// picks it.
+	// The option under the cursor: Enter, one key, never a digit and an
+	// Enter that could reach what follows.
+	y := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{})
+	if err := y.d.Act(y.item(t).Key, Answer{Verb: VerbAllow, Option: "Yes"}); err != nil || !reflect.DeepEqual(y.sent, []string{"%7 Enter"}) {
+		t.Errorf("yes: %v, sent %q", err, y.sent)
+	}
+
+	// The digit is seen to have only moved the cursor to it (codex's trust
+	// screen): Enter picks it.
 	tr := newKeyed(t, fixture(t, "codex-trust.txt"), transcript.Info{})
-	if err := tr.d.Act(tr.item(t).Key, Answer{Verb: VerbAnswer, Option: "Trust and continue"}); err != nil || !reflect.DeepEqual(tr.sent, []string{"%7 1", "%7 Enter"}) {
+	sendKey = func(pane, key string) error {
+		tr.sent = append(tr.sent, pane+" "+key)
+		if key == "2" {
+			tr.screen = strings.Replace(strings.Replace(tr.screen, "› 1. Trust", "  1. Trust", 1), "  2. Quit", "› 2. Quit", 1)
+		}
+		return nil
+	}
+	if err := tr.d.Act(tr.item(t).Key, Answer{Verb: VerbAllow, Option: "Quit"}); err != nil || !reflect.DeepEqual(tr.sent, []string{"%7 2", "%7 Enter"}) {
 		t.Errorf("trust: %v, sent %q", err, tr.sent)
 	}
 
@@ -239,7 +293,7 @@ func TestKeysRouteNoEnterOnceTaken(t *testing.T) {
 		k.screen = fixture(t, "codex-working.txt")
 		return nil
 	}
-	if err := k.d.Act(it.Key, Answer{Verb: VerbAnswer, Option: "Yes, proceed"}); err != nil || !reflect.DeepEqual(k.sent, []string{"%7 1"}) {
+	if err := k.d.Act(it.Key, Answer{Verb: VerbAnswer, Option: "No, and tell Codex what to do differently"}); err != nil || !reflect.DeepEqual(k.sent, []string{"%7 3"}) {
 		t.Errorf("%v, sent %q", err, k.sent)
 	}
 }
@@ -257,7 +311,7 @@ func TestKeysRouteStale(t *testing.T) {
 		k := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{})
 		it := k.item(t)
 		k.screen = now
-		if err := k.d.Act(it.Key, Answer{Verb: VerbAnswer, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
+		if err := k.d.Act(it.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
 			t.Errorf("%s: %v, sent %q", name, err, k.sent)
 		}
 		// Gone stays hidden while listed; the next look with the changed
@@ -274,7 +328,7 @@ func TestKeysRouteStale(t *testing.T) {
 	old := k.item(t)
 	k.screen = fixture(t, "claude-write.txt")
 	k.look(transcript.Info{})
-	if err := k.d.Act(old.Key, Answer{Verb: VerbAnswer, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
+	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
 		t.Errorf("old key: %v, sent %q", err, k.sent)
 	}
 }
@@ -298,9 +352,9 @@ func TestKeysRouteAllowList(t *testing.T) {
 		}
 	}
 	// A crafted option on the screen itself is still only its digit.
-	crafted := "Run it?\n❯ 1. Enter\n  2. C-c\n  3. ; rm -rf ~\nEsc to cancel"
+	crafted := "\nRun it?\n❯ 1. Enter\n  2. C-c\n  3. ; rm -rf ~\nEsc to cancel"
 	c := newKeyed(t, crafted, transcript.Info{})
-	if err := c.d.Act(c.item(t).Key, Answer{Verb: VerbAnswer, Option: "; rm -rf ~"}); err != nil || !reflect.DeepEqual(c.sent, []string{"%7 3"}) {
+	if err := c.d.Act(c.item(t).Key, Answer{Verb: VerbAllow, Option: "; rm -rf ~"}); err != nil || !reflect.DeepEqual(c.sent, []string{"%7 3"}) {
 		t.Errorf("crafted: %v, sent %q", err, c.sent)
 	}
 	// press refuses anything else, whoever calls it.
