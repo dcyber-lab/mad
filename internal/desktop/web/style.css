@@ -1666,3 +1666,15 @@ html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; 
 .cimgbtn { display: block; max-width: 100%; padding: 0; margin: 0; border: none; background: none; border-radius: inherit; cursor: pointer; line-height: 0; }
 .cimgbtn:focus { outline: none; }
 .cimgbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+
+/* Nothing in a bubble is wider than its column: a quote or a link without a space to break on would
+   otherwise make the bubble as wide as it is (a flex item's width in the cross axis starts from its
+   content), and the page clips what runs off the screen. */
+.bmsg .bcol > * { min-width: 0; max-width: 100%; }
+.bmsg .bbody { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.bmsg .bbody .bquote { display: flex; align-items: baseline; max-width: 100%; min-width: 0; overflow: hidden; }
+.bmsg .bbody .bquote b { flex: none; margin-right: 0.4em; }
+.bmsg .bbody .bquote .bqt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bmsg .bbody .btext, .bmsg .bbody .btext a, .bmsg .bbody .btext code { overflow-wrap: anywhere; word-break: break-word; }
+.bmsg .bbody .btext pre { max-width: 100%; overflow-x: auto; }
+.bmsg .bbody .bcount { max-width: 100%; }
