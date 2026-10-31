@@ -95,7 +95,7 @@ function teamRow(c, found) {
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
-      : String(typeof c.last === "string" ? c.last : c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
+      : String(c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
     onclick: () => openChannel(c.id), title: c.topic || c.title,
   });
 }
