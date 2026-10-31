@@ -143,6 +143,7 @@ function openChannel(id, seq) {
 function closeChannel() {
   if (!cv.open) return;
   cv.open = null;
+  $("#bar .cwho")?.remove();
   clearInterval(cv.timer);
   $("#chanview").hidden = true;
   replyTo(null);
@@ -208,6 +209,8 @@ function drawChanHead() {
   // works), and a tap on it lists them with their state, to open one.
   const members = (c && c.members) || [];
   const parts = [what, el("span", "grow")];
+  const ptype = document.documentElement.classList.contains("ptype");
+  $("#bar .cwho")?.remove();
   if (members.length) {
     const who = el("button", "cwho");
     who.type = "button";
@@ -220,7 +223,11 @@ function drawChanHead() {
     }
     if (members.length > STRIP_MAX) who.append(el("span", "cmore", `+${members.length - STRIP_MAX}`));
     who.onclick = () => memberMenu(c, who);
-    parts.push(who);
+    // On a phone and in the app the strip is in the top bar, at its right
+    // end (back, the channel's tile and name, the members); elsewhere in
+    // the channel's own head.
+    if (ptype) $("#bar").insertBefore(who, $("#acts"));
+    else parts.push(who);
   }
   if (c && !c.dm) {
     const more = el("button", "icon-btn chmore"); // on a phone the top bar has it
@@ -244,7 +251,9 @@ function drawChanHead() {
   head.replaceChildren(...parts);
   // On a phone the top bar names it and holds the menu: the head shows
   // only what more there is (a topic, a pause, a team or a lead).
-  head.classList.toggle("bare", !(c && (c.topic || c.paused || c.team || lead || members.length)));
+  // On a phone and in the app the head has no more than the top bar has,
+  // unless there is a topic or a pause to say.
+  head.classList.toggle("bare", !(c && (c.topic || c.paused || (!ptype && (c.team || lead || members.length)))));
 }
 
 // STRIP_MAX is how many avatars the members' strip shows before "+n".
@@ -386,7 +395,7 @@ function busMessage(m) {
   if (m.kind === "done") meta.append(el("span", `pill ${h && h.status === "declined" ? "needs" : "done"}`, `${h ? h.id + " " : ""}${(h && h.status) || "done"}`));
   const text = el("div", "btext");
   text.append(md(mentionsBold(m.text || "")));
-  body.append(meta);
+  if (!document.documentElement.classList.contains("ptype")) body.append(meta);
   if (m.reply_to) {
     row.dataset.reply = m.reply_to;
     body.append(quoteOf(m.reply_to));
@@ -418,7 +427,15 @@ function busMessage(m) {
     body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`)));
   }
   if (less) body.append(less);
-  row.append(body);
+  if (document.documentElement.classList.contains("ptype")) {
+    // A bubble under its sender's name, as the phone's chat draws it: the
+    // name and time are outside the bubble, the text in it.
+    const col = el("div", "bcol");
+    col.append(meta, body);
+    row.append(col);
+  } else {
+    row.append(body);
+  }
   return row;
 }
 
@@ -466,7 +483,8 @@ function drawReceipts(list, paused) {
     let line = row.querySelector(".brcpt");
     if (!line) {
       line = el("div", "brcpt");
-      row.querySelector(".bbody").append(line);
+      // Under its bubble where there is one (the phone's chat), else in it.
+      (row.querySelector(".bcol") || row.querySelector(".bbody")).append(line);
     }
     const parts = [];
     for (const st of ["replied", "read", "delivered", "waiting"]) {
