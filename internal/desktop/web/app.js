@@ -297,7 +297,7 @@ function agentRow(a, key) {
   const right = [];
   if (a.role) right.push(el("span", "tag", a.role));
   else if (st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
-  if (st === "running" && a.chat) right.push(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI"));
+  if (st === "running" && a.chat) right.push(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`));
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}`,
     lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
@@ -486,7 +486,7 @@ function workCard(a) {
   }
   if (a.chat) {
     const acts = el("div", "acts");
-    acts.append(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI"));
+    acts.append(rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`));
     c.append(acts);
   }
   c.onclick = () => show(a.id);
