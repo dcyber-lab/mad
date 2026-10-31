@@ -1215,10 +1215,21 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .rollup .r-working { color: var(--running); }
 .rollup .r-finished { color: var(--done); }
 .rollup .r-quiet { color: var(--text-3); font-weight: 500; }
-.teamhead { display: flex; align-items: center; gap: 6px; padding: 5px 8px 2px 10px; font-size: 12px; color: var(--text-3); border-radius: 8px; }
+.teamhead { display: grid; gap: 2px; padding: 5px 8px 2px 10px; font-size: 12px; color: var(--text-3); border-radius: 8px; }
 .teamhead .i { width: 13px; height: 13px; }
 .teamhead b { font-weight: 600; color: var(--text-2); font-size: 12.5px; }
 .teamhead .grow { flex: 1; }
+.teamhead .th1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.teamhead .th1 > * { flex: none; }
+.teamhead .th1 > .grow { flex: 1; min-width: 0; }
+.teamhead .goal { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-3); font-weight: 400; }
+.teamhead .wn { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--running); font-weight: 600; white-space: nowrap; }
+.teamhead .tstop { width: 22px; height: 22px; }
+.teamhead .th2 { display: flex; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; height: 16px; font-size: 11.5px; }
+.teamhead .rchip { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--text-3); }
+.teamhead .rchip.s-running { color: var(--running); }
+.teamhead .rchip.s-waiting { color: var(--waiting); }
+.wteam { border-left-color: var(--running); }
 .teamhead.link { cursor: pointer; }
 /* a team's agents sit under its head, in a block of their own: the head names the team, so the rows do not */
 .team { margin: 2px 0 4px 12px; border-left: 2px solid var(--border-2); }
@@ -1380,3 +1391,5 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 }
 .dlg .derr { color: var(--stopped); margin: 10px 0 0; white-space: pre-wrap; }
 .dlg .dacts .btn:disabled { opacity: .55; cursor: default; }
+
+@media (max-width: 640px) { .teamhead .tstop { width: 34px; height: 34px; } }
