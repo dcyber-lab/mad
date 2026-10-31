@@ -3,7 +3,8 @@
 // do, and done today; a card's menu does what it needs.
 "use strict";
 
-const bd = { open: false, key: "" };
+// channel: only the cards of that channel (from its panel).
+const bd = { open: false, key: "", channel: "" };
 
 const boardColumns = [
   ["waiting-you", "Waiting for you"], ["doing", "Doing"], ["blocked", "Blocked"],
@@ -15,7 +16,7 @@ const boardWhy = {
   waits: "waits on another task", lapsed: "handoff lapsed", stalled: "stalled", permission: "waits on a permission",
 };
 
-function openBoard() {
+function openBoard(channel) {
   if (current) {
     const o = opened.get(current);
     if (o) {
@@ -34,6 +35,7 @@ function openBoard() {
   closePopup();
   $("#empty").style.display = "none";
   bd.open = true;
+  bd.channel = channel || "";
   bd.key = "";
   $("#boardview").hidden = false;
   inMain(true);
@@ -46,6 +48,7 @@ function closeBoard() {
   closeUsage();
   if (!bd.open) return;
   bd.open = false;
+  bd.channel = "";
   $("#boardview").hidden = true;
   $("#boardview").replaceChildren();
   bd.key = "";
@@ -57,9 +60,9 @@ function drawBoard() {
 }
 
 function drawBoardNow() {
-  const cards = deck.board || [];
-  const waiting = needsYou();
-  const key = JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
+  const cards = (deck.board || []).filter((c) => !bd.channel || c.channel === bd.channel);
+  const waiting = bd.channel ? [] : needsYou();
+  const key = bd.channel + JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
     + JSON.stringify([...agents.values()].map((a) => a.shown))
     + JSON.stringify(waiting.map((it) => [it.key, it.context, it.text, it.acts.length])) + JSON.stringify(ib.reply) + ib.nextKey + JSON.stringify(deck.spend || {})
     + JSON.stringify((deck.timers || []).map((t) => [t.id, t.next_at, t.paused, t.held, t.why, t.fired, t.missed]));
@@ -69,7 +72,7 @@ function drawBoardNow() {
   const head = el("div", "bhead");
   const inColumn = (col) => col === "waiting-you" ? waiting.length : cards.filter((c) => c.column === col).length;
   const counts = boardColumns.map(([col, name]) => [name, inColumn(col)]).filter(([, n]) => n);
-  head.append(el("h1", "", "Board"), el("p", "muted", counts.length ? counts.map(([n, k]) => `${k} ${n.toLowerCase()}`).join(" · ") : "Nothing on the board: handoffs and the agents' task_set put tasks here."));
+  head.append(el("h1", "", bd.channel ? `Board · #${bd.channel}` : "Board"), el("p", "muted", counts.length ? counts.map(([n, k]) => `${k} ${n.toLowerCase()}`).join(" · ") : "Nothing on the board: handoffs and the agents' task_set put tasks here."));
   const spend = spendLine(deck.spend);
   const cols = el("div", "bcols");
   for (const [col, name] of boardColumns) {

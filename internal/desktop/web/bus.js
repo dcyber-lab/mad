@@ -5,7 +5,10 @@
 
 // cv is the channel shown: its id, the last message drawn, the message
 // being answered.
-const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null, jump: 0 };
+// lastAt is when the last message drawn was said; run is the sender of the
+// messages drawn in a row (they share one name and one character); pics are
+// the pictures drawn, for the channel's panel.
+const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null, jump: 0, lastAt: 0, run: null, pics: [] };
 
 function busChannel(id) {
   return (deck.bus || []).find((c) => c.id === id);
@@ -129,7 +132,11 @@ function openChannel(id, seq) {
   if (fresh) {
     cv.last = 0;
     cv.paused = false;
+    cv.lastAt = 0;
+    cv.run = null;
+    cv.pics = [];
     replyTo(null);
+    closeChanPanel(true);
     $("#chanlog").replaceChildren();
   }
   inMain(true);
@@ -146,7 +153,7 @@ function openChannel(id, seq) {
 function closeChannel() {
   if (!cv.open) return;
   cv.open = null;
-  $("#bar .cwho")?.remove();
+  closeChanPanel(true);
   clearInterval(cv.timer);
   $("#chanview").hidden = true;
   replyTo(null);
@@ -201,87 +208,209 @@ function chanTitle(id) {
 // huddled in one tile, where it does).
 function chanTile(id) {
   const c = busChannel(id);
+  const other = c && c.dm && c.members.length === 1 && agents.get(c.members[0].id);
+  if (other) return avatar(other, true);
   return avatar({ kind: "channel", icon: "#", id, members: ((c && c.members) || []).map((m) => m.id) }, true);
 }
 
+// ---- the channel's head, and its side panel (群信息) ----
+
+// chanName is the channel's name as the head says it, without its # or @.
+function chanName(id) {
+  return chanTitle(id).replace(/^[#@]/, "");
+}
+
+// chanSub is the head's one small line: how many work, or that it is quiet.
+function chanSub(c) {
+  if (c && c.paused) return "已暂停";
+  const n = c ? chanAgents(c).filter((a) => shownStatus(a) === "running").length : 0;
+  if (c && c.dm) return n ? "在工作" : "空闲";
+  return n ? `${n} 个在工作` : "空闲";
+}
+
+// chanHeadWho is the channel's tile, its name and that line, as one
+// button: it opens the panel.
+function chanHeadWho(id) {
+  const who = el("button", "chwho");
+  who.type = "button";
+  who.setAttribute("aria-haspopup", "dialog");
+  who.title = "群信息";
+  const what = el("span", "chwhat");
+  what.append(el("b", "", chanName(id)), el("small", "", chanSub(busChannel(id))));
+  who.append(chanTile(id), what);
+  who.onclick = () => openChanPanel(who);
+  return who;
+}
+
+// chanInfoButton is the ⓘ that opens the panel.
+function chanInfoButton() {
+  const b = el("button", "icon-btn cinfo");
+  b.type = "button";
+  b.title = "群信息";
+  b.setAttribute("aria-label", "群信息");
+  b.setAttribute("aria-haspopup", "dialog");
+  b.append(icon("info"));
+  b.onclick = () => openChanPanel(b);
+  return b;
+}
+
+// drawChanHead draws the head of a wide window: one line. A phone's top
+// bar says the same (drawTitle, drawActs).
 function drawChanHead() {
   const id = cv.open;
   if (!id) return;
-  const c = busChannel(id);
-  const head = $("#chanhead");
-  // The channel's tile, its name and its topic small beside them (the
-  // lead is in the members' list); a team's progress under them.
-  const what = el("div", "cwhat");
-  const ttl = el("div", "cttl");
-  ttl.append(chanTile(id), el("b", "", chanTitle(id).replace(/^[#@]/, "")));
-  if (c && c.topic) ttl.append(el("span", "muted", c.topic));
-  what.append(ttl);
-  if (c && c.team) what.append(teamLine(c.team));
-  // The members, in one place: a strip of their avatars (which show who
-  // works), and a tap on it lists them with their state, to open one.
-  const members = (c && c.members) || [];
-  const parts = [what, el("span", "grow")];
-  const ptype = document.documentElement.classList.contains("ptype");
-  $("#bar .cwho")?.remove();
-  if (members.length) {
-    const who = el("button", "cwho");
-    who.type = "button";
-    who.title = `${members.length} agent${members.length === 1 ? "" : "s"}: see who is doing what`;
-    for (const m of members.slice(0, STRIP_MAX)) {
-      const a = agents.get(m.id) || { kind: m.kind, id: m.id };
-      const v = avatar(a, true);
-      if (m.id === c.lead) v.classList.add("lead");
-      who.append(v);
-    }
-    if (members.length > STRIP_MAX) who.append(el("span", "cmore", `+${members.length - STRIP_MAX}`));
-    who.onclick = () => memberMenu(c, who);
-    // On a phone and in the app the strip is in the top bar, at its right
-    // end (back, the channel's tile and name, the members); elsewhere in
-    // the channel's own head.
-    if (ptype) $("#bar").insertBefore(who, $("#acts"));
-    else parts.push(who);
+  $("#chanhead").replaceChildren(chanHeadWho(id), el("span", "grow"), chanInfoButton());
+  drawActs();
+  if (cp.open) drawChanPanel();
+}
+
+// cp is the panel: whether it is open, which page of it, what had the focus.
+const cp = { open: false, page: "", from: null, timer: 0 };
+
+function openChanPanel(from) {
+  if (!cv.open || !busChannel(cv.open) && !cv.open.startsWith("dm.")) return;
+  const box = $("#chpanel");
+  clearTimeout(cp.timer);
+  cp.open = true;
+  cp.page = "";
+  cp.from = from || document.activeElement;
+  box.hidden = false;
+  drawChanPanel();
+  void box.offsetWidth; // so the slide starts from where it was
+  box.classList.add("open");
+  $("#chpanel .cpclose")?.focus({ preventScroll: true });
+}
+
+// closeChanPanel slides it away; quick leaves the focus where it is.
+function closeChanPanel(quick) {
+  const box = $("#chpanel");
+  if (!cp.open) return;
+  cp.open = false;
+  box.classList.remove("open");
+  cp.timer = setTimeout(() => { box.hidden = true; $("#chpanel .chside").replaceChildren(); }, quick ? 0 : 300);
+  if (!quick && cp.from?.isConnected) cp.from.focus({ preventScroll: true });
+}
+
+// panelRow is a row of the panel's lists: a button, its label and a small
+// line beside it.
+function panelRow(label, small, onclick) {
+  const r = el("button", "cpact");
+  r.type = "button";
+  r.append(el("span", "", label));
+  if (small) r.append(el("small", "", small));
+  r.append(el("span", "chev", "›"));
+  r.lastChild.setAttribute("aria-hidden", "true");
+  r.onclick = onclick;
+  return r;
+}
+
+// drawChanPanel draws what the panel says of the channel: its tile, name
+// and topic, its members and how they stand, then what is of the group.
+function drawChanPanel() {
+  const id = cv.open;
+  const c = id && busChannel(id);
+  const side = $("#chpanel .chside");
+  if (!c) return closeChanPanel(true);
+  const close = el("button", "icon-btn cpclose");
+  close.type = "button";
+  close.title = "关闭";
+  close.setAttribute("aria-label", "关闭");
+  close.append(icon("x"));
+  close.onclick = () => closeChanPanel();
+  if (cp.page === "pics") return drawPanelPics(side, close);
+  const top = el("div", "cptop");
+  const tile = chanTile(id);
+  tile.classList.remove("small");
+  tile.classList.add("big");
+  top.append(tile, el("b", "", chanName(id)));
+  if (c.topic) top.append(el("p", "cptopic", c.topic));
+  const parts = [close, top];
+  // the members
+  const mem = c.members || [];
+  parts.push(el("h3", "cpsec", `成员 · ${mem.length}`));
+  const list = el("div", "cplist");
+  for (const m of mem) {
+    const a = agents.get(m.id);
+    const r = el("button", "cprow");
+    r.type = "button";
+    r.disabled = !a;
+    const t = el("span", "t");
+    const n = el("span", "n", m.label);
+    if (m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
+    t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : "不在列表里"));
+    r.append(avatar(a || { kind: m.kind, id: m.id }, false), t);
+    r.onclick = () => { closeChanPanel(true); show(m.id); };
+    list.append(r);
   }
-  if (c && !c.dm) {
-    const more = el("button", "icon-btn chmore"); // on a phone the top bar has it
-    more.type = "button";
-    more.title = "the channel's work";
-    more.append(icon("more"));
-    more.onclick = () => chanMenu(c, more);
-    parts.push(more);
-  }
-  if (c && c.paused) {
-    const r = button("Resume", "", async () => {
+  parts.push(list);
+  // the group
+  parts.push(el("h3", "cpsec", "这个群"));
+  const acts = el("div", "cplist");
+  const cards = (deck.board || []).filter((x) => x.channel === id);
+  const doing = cards.filter((x) => x.column === "doing" || x.column === "review").length;
+  const done = cards.filter((x) => x.column === "done").length;
+  acts.append(panelRow("任务板", cards.length ? `${doing} 进行中 · ${done} 完成` : "没有任务", () => { closeChanPanel(true); openBoard(id); }));
+  acts.append(panelRow("图片和文件", String(cv.pics.length), () => { cp.page = "pics"; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); }));
+  if (c.paused) {
+    acts.append(panelRow("继续", "这个群在等你", async () => {
       try {
         await api("POST", "/api/bus/resume", {}, { channel: id });
         loadChannel(false);
       } catch (e) {
         toast(e.message, "err");
       }
-    });
-    parts.push(el("span", "pill needs", "paused: waiting for you"), r);
+    }));
   }
-  head.replaceChildren(...parts);
-  // On a phone the top bar names it and holds the menu: the head shows
-  // only what more there is (a topic, a pause, a team or a lead).
-  // On a phone and in the app the head has no more than the top bar has,
-  // unless there is a topic or a pause to say.
-  head.classList.toggle("bare", !(c && (c.topic || c.paused || (!ptype && (c.team || members.length)))));
+  if (!c.dm) acts.append(panelRow("更多…", "", (e) => chanMenu(c, e.currentTarget)));
+  parts.push(acts);
+  side.replaceChildren(...parts);
 }
 
-// STRIP_MAX is how many avatars the members' strip shows before "+n".
-const STRIP_MAX = 6;
+// drawPanelPics is the panel's page of the channel's pictures.
+function drawPanelPics(side, close) {
+  const back = el("button", "cpback");
+  back.type = "button";
+  back.append(el("span", "", "‹"), "图片和文件");
+  back.onclick = () => { cp.page = ""; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); };
+  const grid = el("div", "cpgrid");
+  for (const p of cv.pics) grid.append(imageButton(p.url, `图片，来自 ${p.who}`));
+  if (!cv.pics.length) grid.append(el("p", "muted", "这个群里还没有图片。"));
+  side.replaceChildren(close, back, grid);
+}
 
-// memberMenu lists channel c's members with how each stands, and opens the
-// one picked.
-function memberMenu(c, anchor) {
-  popup(anchor, c.members.map((m) => {
-    const a = agents.get(m.id);
-    const state = a ? look(shownStatus(a)).word : "not in the deck";
-    const parts = [state];
-    if (a && a.role) parts.push(a.role);
-    if (m.id === c.lead) parts.push("the lead");
-    return { label: m.label, desc: parts.join(" · "), disabled: !a, onclick: () => show(m.id) };
-  }), { right: true });
+// the panel: a tap on its scrim, Esc, or a swipe to the right closes it; a swipe
+// to the left from the right edge of a phone opens it.
+$("#chpanel .chscrim").onclick = () => closeChanPanel();
+window.addEventListener("keydown", (e) => {
+  if (!cp.open) return;
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    closeChanPanel();
+  } else if (e.key === "Tab") {
+    const f = [...$("#chpanel .chside").querySelectorAll("button:not([disabled])")];
+    if (!f.length) return;
+    const at = f.indexOf(document.activeElement);
+    const next = e.shiftKey ? (at <= 0 ? f.length - 1 : at - 1) : (at < 0 || at === f.length - 1 ? 0 : at + 1);
+    e.preventDefault();
+    f[next].focus();
+  }
+}, true);
+{
+  let from = null; // where a touch began: {x, y, edge, panel}
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    from = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, edge: t.clientX > innerWidth - 24, panel: !!e.target.closest?.("#chpanel") } : null;
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (!from) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - from.x, dy = t.clientY - from.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
+      if (cp.open && from.panel && dx > 0) closeChanPanel();
+      else if (!cp.open && cv.open && from.edge && dx < 0 && !$("#chanview").hidden) openChanPanel($(".chwho"));
+    }
+    from = null;
+  }, { passive: true });
 }
 
 // chanMenu offers what the person does about channel c's work: its
@@ -350,13 +479,12 @@ async function loadChannel(first) {
   const atEnd = first || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
   for (const m of r.messages) {
     if (m.seq <= cv.last) continue;
-    $("#chanlog").append(busMessage(m));
+    drawMessage(m);
     cv.last = m.seq;
   }
   if (!cv.last && !$("#chanlog").children.length) {
     $("#chanlog").append(el("div", "note", id.startsWith("dm.") ? "Say something: it reaches the agent when its turn is over." : "Nothing said yet. @mention an agent to wake it."));
   }
-  drawReceipts(r.receipts || [], r.paused);
   if (cv.paused !== r.paused) {
     cv.paused = r.paused;
     drawChanHead();
@@ -369,21 +497,51 @@ async function loadChannel(first) {
   if (r.messages.length) api("POST", "/api/bus/read", {}, { channel: id, seq: cv.last }).catch(() => {});
 }
 
-// busMessage draws one message: the person's on the right, an agent's
-// with its avatar, a handoff or its result as a card, the bus's own
-// lines in the middle.
-function busMessage(m) {
+// ---- the messages ----
+
+// timeLine is the centred time between messages that are far apart: today's
+// as "今天 21:05", yesterday's, or the date.
+function timeLine(at) {
+  const d = new Date(at);
+  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(new Date()) - day(d)) / 864e5);
+  const when = days === 0 ? "今天" : days === 1 ? "昨天" : `${d.getMonth() + 1}月${d.getDate()}日`;
+  const t = el("div", "ctime", `${when} ${hm}`);
+  t.dataset.at = String(at);
+  return t;
+}
+
+// drawMessage draws message m at the end of the log: the person's on the
+// right, the bus's own lines in the middle, an agent's in a run with its
+// other messages in a row, which share the name and the character (beside
+// the last of them). A line of time comes first when ten minutes or more
+// have passed.
+function drawMessage(m) {
+  const log = $("#chanlog");
+  log.querySelector(".note")?.remove();
   if (m.kind === "system") {
-    const s = el("div", "bsys", m.text);
+    const s = el("div", "csys", m.text);
     s.dataset.seq = m.seq;
-    return s;
+    log.append(s);
+    cv.run = null;
+    return;
   }
-  $("#chanlog .note")?.remove();
-  const mine = m.from.id === "you";
-  const card = m.kind === "handoff" || m.kind === "done";
-  const row = el("div", `bmsg${mine ? " mine" : ""}${card ? " card" : ""}`);
-  row.dataset.seq = m.seq;
-  if (!mine) {
+  const at = Date.parse(m.at);
+  if (!isNaN(at)) {
+    if (!cv.lastAt || at - cv.lastAt >= 10 * 60e3) {
+      log.append(timeLine(at));
+      cv.run = null;
+    }
+    cv.lastAt = at;
+  }
+  const row = messageNode(m);
+  if (m.from.id === "you") {
+    log.append(row);
+    cv.run = null;
+    return;
+  }
+  if (!cv.run || cv.run.from !== m.from.id) {
     // mad itself (a nudge) is m, not its kind's s.
     const a = agents.get(m.from.id) || { kind: m.from.kind || "?", id: m.from.id, icon: m.from.id === "mad" ? "m" : "" };
     const v = avatar(a, true);
@@ -391,59 +549,120 @@ function busMessage(m) {
       v.title = "open it";
       v.onclick = () => show(m.from.id);
     }
-    row.append(v);
+    const stack = el("div", "cstack");
+    stack.append(el("div", "cname", m.from.label));
+    const grp = el("div", "cgrp");
+    grp.append(v, stack);
+    log.append(grp);
+    cv.run = { from: m.from.id, stack };
   }
-  const body = el("div", "bbody");
-  const meta = el("div", "bmeta");
-  meta.append(el("b", "", mine ? "You" : m.from.label), el("span", "muted", `#${m.seq} · ${clock(m.at)}`));
-  const re = el("button", "breply");
-  re.type = "button";
-  re.title = "reply to this";
-  re.append(icon("chat"), "Reply");
-  re.onclick = () => replyTo(m);
-  meta.append(re);
-  const h = m.handoff;
-  if (m.kind === "handoff") meta.append(el("span", "pill working", `hands ${h ? h.id + " " : ""}to ${agentLabel(h && h.to)}`));
-  if (m.kind === "done") meta.append(el("span", `pill ${h && h.status === "declined" ? "needs" : "done"}`, `${h ? h.id + " " : ""}${(h && h.status) || "done"}`));
-  const text = el("div", "btext");
+  cv.run.stack.append(row);
+}
+
+// messageNode is one message: a bubble; or, for what an agent did or reports,
+// one thin line, opened in place by a tap; its pictures; the message it answers,
+// quoted. Reply is on hover, and in a menu on a long press.
+function messageNode(m) {
+  const mine = m.from.id === "you";
+  const row = el("div", `cmsg${mine ? " mine" : ""}`);
+  row.dataset.seq = m.seq;
+  row.dataset.who = mine ? "你" : m.from.label;
+  const text = el("div", "ctext");
   text.append(md(mentionsBold(m.text || "")));
-  if (m.reply_to) {
-    row.dataset.reply = m.reply_to;
-    body.append(quoteOf(m.reply_to));
+  const quote = m.reply_to ? quoteOf(m.reply_to) : null;
+  if (m.reply_to) row.dataset.reply = m.reply_to;
+  let imgs = null;
+  if (m.images && m.images.length) {
+    const who = mine ? "你" : m.from.label;
+    const urls = m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`);
+    urls.forEach((url) => cv.pics.push({ url, who, seq: m.seq }));
+    imgs = imageRow(urls, who);
   }
-  // What an agent did or reports is a line, opened where it is by a tap;
-  // what the person wrote, or what is for the person, is shown whole.
   const folded = foldSummary(m);
-  let less = null;
   if (folded) {
     row.classList.add("fold");
-    const toggle = () => {
-      const open = row.classList.toggle("open");
-      more.setAttribute("aria-expanded", open);
-    };
-    const sum = el("div", "bsum");
-    const more = el("button", "bmore", "Show more");
-    more.type = "button";
-    more.onclick = toggle;
-    sum.append(el("span", "bsumt", folded), more);
-    sum.onclick = (e) => e.target === more || toggle();
-    body.append(sum);
-    less = el("button", "bless", "Show less");
-    less.type = "button";
-    less.onclick = toggle;
+    const line = el("button", "cline");
+    line.type = "button";
+    line.setAttribute("aria-expanded", "false");
+    const sum = el("span", "csum");
+    const head = foldHead(m);
+    if (head) sum.append(el("b", "", head), "：");
+    sum.append(folded);
+    const chev = el("span", "chev", "›");
+    chev.setAttribute("aria-hidden", "true");
+    line.append(sum, chev);
+    line.onclick = () => line.setAttribute("aria-expanded", String(row.classList.toggle("open")));
+    const full = el("div", "cfull");
+    if (quote) full.append(quote);
+    if (m.text) full.append(text);
+    if (imgs) full.append(imgs);
+    const h = m.handoff;
+    if (h) full.append(el("div", "cnote", `${h.id} · ${h.status || ""}`));
+    row.append(line, full);
+  } else {
+    if (quote || m.text) {
+      const bub = el("div", "cbub");
+      if (quote) bub.append(quote);
+      if (m.text) bub.append(text);
+      row.append(bub);
+    }
+    if (imgs) row.append(imgs);
   }
-  if (m.text) body.append(text);
-  // Pictures, fetched with the token, each to open large.
-  if (m.images && m.images.length) {
-    body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`), mine ? "你" : m.from.label));
-  }
-  if (less) body.append(less);
-  // A bubble under its sender's name: the name and time are outside the
-  // bubble, the text in it.
-  const col = el("div", "bcol");
-  col.append(meta, body);
-  row.append(col);
+  const re = el("button", "creply");
+  re.type = "button";
+  re.title = "回复";
+  re.setAttribute("aria-label", "回复");
+  re.append(icon("chat"));
+  re.onclick = () => replyTo(m);
+  row.append(re);
+  pressMenu(row, m);
   return row;
+}
+
+// pressMenu gives a message its menu, on a long press (a phone) or a right
+// click: reply, or copy what it says.
+function pressMenu(row, m) {
+  const open = (x, y) => popup({ x, y }, [
+    { label: "回复", icon: "chat", onclick: () => replyTo(m) },
+    { label: "复制", icon: "copy", disabled: !m.text, onclick: () => copyText(m.text) },
+  ], {});
+  let timer = 0, sx = 0, sy = 0;
+  const cancel = () => { clearTimeout(timer); timer = 0; };
+  row.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    timer = setTimeout(() => { timer = 0; popupGuard = Date.now() + 600; open(sx, sy); }, 450);
+  }, { passive: true });
+  row.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (Math.hypot(t.clientX - sx, t.clientY - sy) > 10) cancel();
+  }, { passive: true });
+  row.addEventListener("touchend", cancel);
+  row.addEventListener("touchcancel", cancel);
+  row.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    open(e.clientX, e.clientY);
+  });
+}
+
+// copyText puts text on the clipboard, and says so.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("已复制");
+  } catch (_) {
+    toast("不能复制", "err");
+  }
+}
+
+// foldHead is the bold start of a folded line: whom a handoff is to, or that
+// a result is done (or refused); none for other long messages.
+function foldHead(m) {
+  const h = m.handoff;
+  if (m.kind === "handoff") return `→ ${agentLabel(h && h.to)}`;
+  if (m.kind === "done") return h && h.status === "declined" ? "已拒绝" : "完成";
+  return "";
 }
 
 // foldSummary is the line a message folds to in a channel, "" when it is
@@ -460,12 +679,8 @@ function foldSummary(m) {
   const lines = text.split("\n").filter((l) => l.trim());
   const card = m.kind === "handoff" || m.kind === "done";
   if (!card && lines.length <= 3 && text.length <= 280) return "";
-  // The card's pill says which handoff and to whom, or how it ended: the
-  // line is what it is about (a declined one says so, the pill being small).
-  const first = firstSentence(lines[0] || "");
-  const h = m.handoff;
-  if (m.kind === "done" && h && h.status === "declined") return `declined: ${first}`;
-  return first;
+  // The line's bold start says whom a handoff is to, or how it ended (foldHead).
+  return firstSentence(lines[0] || "");
 }
 
 // firstSentence is the start of a line with its markdown taken off, cut at
@@ -477,36 +692,6 @@ function firstSentence(line) {
   const end = plain.search(/[.!?。！？](\s|$)/);
   const one = end > 0 ? plain.slice(0, end + 1) : plain;
   return one.length > 120 ? one.slice(0, 119) + "…" : one;
-}
-
-// drawReceipts puts under each of your messages who it woke and how far
-// it got: ◷ waiting (not yet in the agent's digest), ✓ delivered, ✓✓ read,
-// ↩ replied; or that it reached no one.
-function drawReceipts(list, paused) {
-  const mark = { waiting: "◷", delivered: "✓", read: "✓✓", replied: "↩" };
-  for (const rc of list) {
-    const row = $(`#chanlog .bmsg.mine[data-seq="${rc.seq}"]`);
-    if (!row) continue;
-    let line = row.querySelector(".brcpt");
-    if (!line) {
-      line = el("div", "brcpt");
-      // Under its bubble where there is one (the phone's chat), else in it.
-      (row.querySelector(".bcol") || row.querySelector(".bbody")).append(line);
-    }
-    const parts = [];
-    for (const st of ["replied", "read", "delivered", "waiting"]) {
-      const names = rc.targets.filter((t) => t.state === st).map((t) => t.label);
-      if (names.length) parts.push(`${mark[st]} ${names.join(", ")} ${st}`);
-    }
-    const none = !rc.targets.length;
-    let text = none ? "reached no agent — @ someone to wake them" : parts.join(" · ");
-    if (paused && rc.targets.some((t) => t.state === "waiting")) text += " · held: the channel is paused";
-    line.classList.toggle("none", none);
-    if (line.textContent !== text) line.textContent = text;
-    line.title = none
-      ? "A line with no @mention wakes no one; agents see it only when they read the channel."
-      : "◷ waiting · ✓ delivered to the agent · ✓✓ read · ↩ replied";
-  }
 }
 
 // noWake tells whether text, posted in the open channel, would wake no
@@ -534,32 +719,16 @@ function drawNoWake() {
 }
 $("#qinput").addEventListener("input", drawNoWake);
 
-// quoteOf is what a reply answers: the message, quoted, which a click
-// shows; and the message counts its replies.
+// quoteOf is what a reply answers: the message, quoted in one line, which a
+// click shows.
 function quoteOf(seq) {
-  const q = el("button", "bquote");
+  const q = el("button", "cquote");
   q.type = "button";
   const parent = $(`#chanlog [data-seq="${seq}"]`);
   if (parent) {
-    const who = parent.querySelector(".bmeta b")?.textContent || "";
-    const said = parent.querySelector(".btext")?.textContent || parent.textContent;
-    // The quote's text is the part that gives way (ellipsized), not the bubble.
-    q.append(el("b", "", who || `#${seq}`), " ", el("span", "bqt", snippet(said)));
-    let n = parent.querySelector(".bcount");
-    if (!n) {
-      n = el("button", "bcount");
-      n.type = "button";
-      n.dataset.n = "0";
-      n.onclick = () => {
-        const replies = $("#chanlog").querySelectorAll(`[data-reply="${seq}"]`);
-        if (replies.length) jumpTo(replies[replies.length - 1].dataset.seq);
-      };
-      (parent.querySelector(".bbody") || parent).append(n);
-    }
-    n.dataset.n = String(+n.dataset.n + 1);
-    n.textContent = `${n.dataset.n} repl${n.dataset.n === "1" ? "y" : "ies"}`;
+    q.append(el("b", "", parent.dataset.who || ""), " ", snippet(parent.querySelector(".ctext")?.textContent || parent.textContent));
   } else {
-    q.append(el("span", "bqt", `↩ #${seq}`));
+    q.append("↩ 更早的消息");
   }
   q.title = "show what it answers";
   q.onclick = () => jumpTo(seq);

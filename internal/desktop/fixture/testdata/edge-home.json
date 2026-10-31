@@ -158,6 +158,7 @@
         "unread": 3,
         "mention": true,
         "listed": true,
+        "lead": "team0001-arch",
         "team": {
           "name": "ios",
           "template": "",

@@ -4,26 +4,6 @@
 // it.
 "use strict";
 
-// teamLine is the roles of team t in a channel's header, each with its
-// agent's live status.
-function teamLine(t) {
-  const line = el("div", "cteam");
-  line.append(el("span", "muted", `team ${t.template} ·`));
-  for (const r of t.roles) {
-    const a = r.agent && agents.get(r.agent);
-    const chip = el("span", `trole${a ? " s-" + shownStatus(a) : " s-stopped"}`);
-    if (a) {
-      const v = avatar(a, true);
-      v.onclick = () => show(a.id);
-      v.title = `${label(a)}: ${look(shownStatus(a)).word.toLowerCase()}`;
-      chip.append(v);
-    }
-    chip.append(el("span", "", r.lead ? `${r.role} (lead)` : r.role));
-    line.append(chip);
-  }
-  return line;
-}
-
 // teamItems are what a team channel's menu adds to the channel's own.
 function teamItems(c) {
   const t = c.team;
