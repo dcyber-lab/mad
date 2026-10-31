@@ -93,8 +93,8 @@ function teamRow(c, found) {
   const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
-  const lead = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
-  if (chanDot(c)) lead.append(redDot());
+  const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
+  const lead = chanDot(c) ? withDot(face) : face;
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
@@ -435,7 +435,7 @@ function busMessage(m) {
   if (m.text) body.append(text);
   // Pictures, fetched with the token, each to open large.
   if (m.images && m.images.length) {
-    body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`)));
+    body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`), mine ? "你" : m.from.label));
   }
   if (less) body.append(less);
   // A bubble under its sender's name: the name and time are outside the

@@ -227,6 +227,15 @@ function stateWord(st) {
     : st === "stopped" || st === "exited" ? "stopped" : "idle";
 }
 
+// withDot is character v with a red dot at its corner. The dot is beside the
+// character, not in it: the character is an image, and what is inside an image
+// is not read by a screen reader or found by a test.
+function withDot(v) {
+  const w = el("span", `avwrap${v.classList.contains("group") ? " ofgroup" : ""}`);
+  w.append(v, redDot());
+  return w;
+}
+
 // redDot marks something that waits on the person.
 function redDot() {
   const d = el("span", "rdot");
@@ -405,12 +414,11 @@ function agentRow(a, key) {
   else if (!a.role && st !== "running" && a.cost) right.push(el("span", "meta", money(a.cost)));
   const r = row({
     key: key || `g:${a.id}`, cls: `agent s-${st}${look(st).tone === "quiet" ? " quiet" : ""}${a.id === current ? " sel" : ""}${interruptSent(a) ? " pending" : ""}`,
-    lead: avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
+    lead: needAgents.has(a.id) ? withDot(avatar(a)) : avatar(a), name: label(a), ctx: a.team || "", after: name.childNodes.length ? name : null,
     line: lastLine(a, st), right, onclick: () => show(a.id),
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;
-  if (needAgents.has(a.id)) r.querySelector(".avatar").append(redDot());
   r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
   const more = el("button", "icon-btn more");
   more.type = "button";
@@ -1554,16 +1562,27 @@ function addEntry(o, e) {
 
 // imageRow shows images by their URLs (/api/image, /api/file), each to
 // open large.
-function imageRow(urls) {
+function imageRow(urls, who) {
   const row = el("div", "imgs");
-  for (const u of urls) row.append(imageNode(u));
+  const name = who ? `图片，来自 ${who}` : "图片";
+  for (const u of urls) {
+    // a button named for the picture and who sent it, which opens it large
+    const img = imageNode(u, name);
+    img.onclick = null; // the button opens it
+    const b = el("button", "cimgbtn");
+    b.type = "button";
+    b.setAttribute("aria-label", name);
+    b.onclick = () => img.src && openLightbox(img.src);
+    b.append(img);
+    row.append(b);
+  }
   return row;
 }
 
-function imageNode(u) {
+function imageNode(u, alt = "") {
   const img = el("img", "cimg");
   img.loading = "lazy";
-  img.alt = "";
+  img.alt = alt;
   loadImage(img, u);
   img.onclick = () => img.src && openLightbox(img.src);
   // Grown as it came: a conversation read at its end stays there.
