@@ -5,7 +5,7 @@
 
 // cv is the channel shown: its id, the last message drawn, the message
 // being answered.
-const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null };
+const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null, jump: 0 };
 
 function busChannel(id) {
   return (deck.bus || []).find((c) => c.id === id);
@@ -59,7 +59,8 @@ function channelsGroup(q) {
 
 // openChannel shows channel id (or a DM of the person's, made with its
 // first message) in place of what was shown.
-function openChannel(id) {
+// seq, if given, is a message to scroll to and mark once it is drawn.
+function openChannel(id, seq) {
   if (current) {
     const o = opened.get(current);
     if (o) {
@@ -89,6 +90,7 @@ function openChannel(id) {
   drawChanHead();
   drawSidebar();
   drawQueue();
+  cv.jump = seq || 0;
   loadChannel(fresh);
   clearInterval(cv.timer);
   cv.timer = setInterval(() => loadChannel(false), 1500);
@@ -271,7 +273,11 @@ async function loadChannel(first) {
     cv.paused = r.paused;
     drawChanHead();
   }
-  if (atEnd) scroll.scrollTop = scroll.scrollHeight;
+  if (cv.jump) {
+    const s = cv.jump;
+    cv.jump = 0;
+    jumpTo(s);
+  } else if (atEnd) scroll.scrollTop = scroll.scrollHeight;
   if (r.messages.length) api("POST", "/api/bus/read", {}, { channel: id, seq: cv.last }).catch(() => {});
 }
 

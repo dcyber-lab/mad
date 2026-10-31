@@ -382,7 +382,7 @@ function markAllSeen() {
 function openItem(it) {
   const o = it.open || {};
   if (o.agent && agents.has(o.agent)) show(o.agent);
-  else if (o.channel) openChannel(o.channel);
+  else if (o.channel) openChannel(o.channel, o.seq); // an @you: at its message, which reading clears
   else if (o.page === "skills") openSkills();
   else if (o.page === "board") openBoard();
 }

@@ -90,6 +90,8 @@ type boardData struct {
 	st    *state.State
 	chans chanList
 	msgs  map[string][]Message
+	// read is how far the person has read each channel (their cursor).
+	read map[string]cursor
 }
 
 func (d *boardData) messages(ch string) []Message {
@@ -126,7 +128,10 @@ func isYourDM(ch string) bool {
 
 // pendingAsk is the latest message by agent id, in ch, that asks the person
 // (an @you, or any in their DM) and no message of theirs followed, since
-// the time since.
+// the time since. An @you is a mention, not a blocking ask (an agent that
+// is stopped on the person asks through a permission or a question, which
+// are not bus messages): once the person has read it, it is no longer
+// pending, answered or not.
 func (d *boardData) pendingAsk(ch, id string, since time.Time) *Message {
 	if ch == "" {
 		return nil
@@ -138,7 +143,7 @@ func (d *boardData) pendingAsk(ch, id string, since time.Time) *Message {
 			found = &m
 		}
 	}
-	if found == nil || d.youAfter(ch, found.Seq) {
+	if found == nil || d.youAfter(ch, found.Seq) || d.read[ch].Read >= found.Seq {
 		return nil
 	}
 	return found
@@ -199,6 +204,7 @@ func Board(st *state.State, statuses map[string]string, at time.Time) ([]Card, e
 		return nil, err
 	}
 	d := &boardData{st: st, chans: cl, msgs: map[string][]Message{}}
+	d.read, _ = loadCursors(You)
 	byID := map[string]Task{}
 	for _, t := range tasks {
 		byID[t.ID] = t

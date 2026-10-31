@@ -287,7 +287,7 @@ func (b *builder) card(c bus.Card) {
 		}
 		b.add(Item{Key: keyMessage(c.Channel, c.Message.Seq), Kind: KindAsk, Agent: asker, Title: label, Context: where,
 			Text: text, Body: body, Tasks: tasks, Since: since, undated: undated,
-			Open: Open{Channel: c.Channel}, route: busRoute{channel: c.Channel, seq: c.Message.Seq}})
+			Open: Open{Channel: c.Channel, Seq: c.Message.Seq}, route: busRoute{channel: c.Channel, seq: c.Message.Seq}})
 	case c.Kind == bus.CardPaused, c.Kind == bus.CardTask && c.Why == bus.WhyPaused && c.Channel != "":
 		b.add(Item{Key: keyPaused(c.Channel), Kind: KindPaused, Icon: "pause", Title: "#" + c.Channel, Context: "paused",
 			Text: "its agents' messages wait for you", Tasks: tasks, Since: since, undated: undated,
