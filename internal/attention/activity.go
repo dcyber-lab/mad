@@ -33,6 +33,11 @@ type Activity struct {
 	Todo *discover.Todo `json:"todo,omitempty"`
 	// Reply: the first line of its last reply, only while shown Finished.
 	Reply string `json:"reply,omitempty"`
+	// Last: the first line of its last reply, in any state (the list's
+	// second line): the turn file's, read already for Reply, so a poll reads
+	// nothing more. Empty before its first turn ended; while it works it
+	// is the reply of the turn before, which is the last there is.
+	Last string `json:"last"`
 }
 
 // replyRunes is how much of a reply's first line the activity line keeps.
@@ -50,6 +55,9 @@ func activityOf(a Agent) Activity {
 	}
 	if a.Shown == status.Finished {
 		act.Reply = firstLine(replyOf(a), replyRunes)
+	}
+	if t := a.Report.Turn; t != nil {
+		act.Last = firstLine(t.Reply, replyRunes)
 	}
 	return act
 }

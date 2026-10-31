@@ -33,8 +33,11 @@ type BusChannel struct {
 	DM      bool        `json:"dm,omitempty"`
 	Yours   bool        `json:"yours,omitempty"` // a DM with you: you may write in it
 	Members []BusMember `json:"members"`
-	Last    int         `json:"last"`
-	Unread  int         `json:"unread,omitempty"`
+	// Last is the last message as a line of a list ("who: its first
+	// line"); LastSeq its number, which the page counts what is new by.
+	Last    string `json:"last"`
+	LastSeq int    `json:"last_seq"`
+	Unread  int    `json:"unread,omitempty"`
 	// Mention: an unread message in it asks you; Listed: it is in the
 	// short list (bus.Yours).
 	Mention bool     `json:"mention,omitempty"`
@@ -56,7 +59,7 @@ func busChannels(st *state.State, look bus.Look) []BusChannel {
 	for _, c := range chans {
 		y := yours[c.ID]
 		bc := BusChannel{ID: c.ID, Title: "#" + c.ID, Topic: c.Topic, DM: strings.HasPrefix(c.ID, "dm."),
-			Last: y.Last, Unread: y.Unread, Mention: y.Mention, Listed: y.Listed, Paused: c.Paused, Lead: c.Lead,
+			Last: y.LastLine, LastSeq: y.Last, Unread: y.Unread, Mention: y.Mention, Listed: y.Listed, Paused: c.Paused, Lead: c.Lead,
 			Members: []BusMember{}, Team: teams[c.ID]}
 		var names []string
 		gone := 0 // members no longer in the deck
