@@ -1678,3 +1678,12 @@ html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; 
 .bmsg .bbody .btext, .bmsg .bbody .btext a, .bmsg .bbody .btext code { overflow-wrap: anywhere; word-break: break-word; }
 .bmsg .bbody .btext pre { max-width: 100%; overflow-x: auto; }
 .bmsg .bbody .bcount { max-width: 100%; }
+
+/* Inside the iOS app (html.embed) the page is not a web page: a double tap does not zoom, a tap does not
+   flash, and the chrome (the list, the head, the buttons) cannot be selected or long-pressed, though what
+   people wrote still can. An input of 16px or more is not zoomed to on focus. */
+html.embed { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+html.embed #sidebar, html.embed #bar, html.embed #chanhead, html.embed #tabs, html.embed button, html.embed [role="button"] {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+html.embed input, html.embed textarea, html.embed select { font-size: max(16px, 1em); }

@@ -30,6 +30,15 @@ final class DeckWebHost: NSObject, WKNavigationDelegate, WKUIDelegate {
     let view: WKWebView
     fileprivate let origin: WebOrigin
 
+    /// Fixes the page's scale at 1, whatever its viewport tag says.
+    private static let pinViewport = """
+    (function () {
+      var m = document.querySelector('meta[name=viewport]');
+      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; document.head.appendChild(m); }
+      m.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content';
+    })();
+    """
+
     init(url: URL) {
         origin = WebOrigin(url)
         let config = WKWebViewConfiguration()
@@ -42,8 +51,17 @@ final class DeckWebHost: NSObject, WKNavigationDelegate, WKUIDelegate {
         view.navigationDelegate = self
         view.uiDelegate = self
         view.isOpaque = false
-        view.backgroundColor = .systemBackground
-        view.scrollView.backgroundColor = .systemBackground
+        // The page's own background (its --bg, light and dark), so a bounce at the
+        // top or the bottom shows no white strip.
+        let page = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0x13 / 255, green: 0x13 / 255, blue: 0x15 / 255, alpha: 1) : .white }
+        view.backgroundColor = page
+        view.scrollView.backgroundColor = page
+        view.underPageBackgroundColor = page
+        // An app, not a web page: no link previews, and (below, in the viewport) no zoom.
+        view.allowsLinkPreview = false
+        // The viewport pins the scale too, as the page loads (it is the page's own
+        // `embed` that does the same for what is on screen).
+        config.userContentController.addUserScript(WKUserScript(source: Self.pinViewport, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         // The page is edge to edge: it keeps clear of the status bar and the home
         // indicator itself, with env(safe-area-inset-*).
         view.scrollView.contentInsetAdjustmentBehavior = .never
