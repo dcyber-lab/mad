@@ -225,6 +225,8 @@ function charSVG(key, box) {
 
 function avatar(a, small) {
   if (ptypeOn()) {
+    // a channel's own tile (the channel view's header): its members huddled, as in the chat list
+    if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
     const live = a.id && agents.get(a.id);
     const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
     v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data

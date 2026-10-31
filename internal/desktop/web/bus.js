@@ -39,10 +39,11 @@ function channelsGroup(q) {
   head.append(plus);
   g.append(head);
   let list = all.filter((c) => q ? `${c.title} ${c.topic || ""}`.toLowerCase().includes(q) : ib.allChans || c.listed || c.id === cv.open);
+  const hit = new Map(all.map((c) => [c.id, chanMatch(c, q)]));
   if (ptypeOn()) {
     // A phone lists every channel and team chat (the server leaves out the archived) and the person's
     // DMs, the ones with a red dot first, then the newest message first (c.last_at, as the server gives it).
-    list = all.filter((c) => (!c.dm || c.yours) && (!q || `${c.title} ${c.topic || ""}`.toLowerCase().includes(q)));
+    list = all.filter((c) => (!c.dm || c.yours) && hit.get(c.id));
     const at = (c) => Date.parse(c.last_at) || 0;
     list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
   }
@@ -53,7 +54,7 @@ function channelsGroup(q) {
   }
   for (const c of list) {
     if (ptypeOn()) {
-      g.append(teamRow(c));
+      g.append(teamRow(c, q && hit.get(c.id) !== true ? hit.get(c.id) : null));
       continue;
     }
     const row = el("div", `chan${cv.open === c.id ? " sel" : ""}${c.unread ? " unread" : ""}${c.dm && !c.yours ? " theirs" : ""}`);
@@ -88,12 +89,25 @@ function chanDot(c) {
   return c.mention || (c.dm && c.unread) || ids.some((id) => id && needAgents.has(id)) ? 1 : 0;
 }
 
+// chanAgents are the agents in channel c, as the page knows them.
+function chanAgents(c) {
+  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
+  return ids.map((id) => id && agents.get(id)).filter(Boolean);
+}
+
+// chanMatch: does channel c answer search q? A channel's members are not rows of
+// their own, so one matches when a member's label, title or kind does; that
+// member is returned, to be named on the row. true for a match of the channel's own.
+function chanMatch(c, q) {
+  if (!q || `${c.title} ${c.topic || ""}`.toLowerCase().includes(q)) return true;
+  return chanAgents(c).find((a) => [label(a), a.title, a.kind].some((s) => (s || "").toLowerCase().includes(q))) || false;
+}
+
 // teamRow is a channel with its members as one row, on a phone: the group's
 // picture, its name, and its last message (else how its members stand). A
 // red dot when it @you or a member waits on you.
-function teamRow(c) {
-  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
-  const mem = ids.map((id) => id && agents.get(id)).filter(Boolean);
+function teamRow(c, found) {
+  const mem = chanAgents(c);
   const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
@@ -101,7 +115,8 @@ function teamRow(c) {
   if (chanDot(c)) lead.append(el("span", "rdot"));
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
-    lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: String(typeof c.last === "string" ? c.last : c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
+    lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
+      : String(typeof c.last === "string" ? c.last : c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
     onclick: () => openChannel(c.id), title: c.topic || c.title,
   });
 }
