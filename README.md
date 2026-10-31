@@ -282,9 +282,9 @@ or plan as a list, a subagent with its task and report. What it asks you
 is a card there to answer: whether it may use a tool or run a command
 (the change shown as a diff; Allow, Always allow, Deny, or what to do
 instead), a question with its options, a plan to approve. Its model is a
-menu under the message box (also `/model`), the send button stops it
-while it works (as does `Esc`), and a message goes to it at once, waking
-it if it is asleep. `@` in a message offers the files of its directory;
+menu under the message box (also `/model`), the send button is
+Interrupt while it works (as is `Esc`), and a message goes to it at once,
+waking it if it is asleep. `@` in a message offers the files of its directory;
 while its todo list has items left, the one it is on is pinned over the
 message box. Images show where they are: one you sent, a screenshot a
 call gave back, an image file its reply names (`shot.png`,
@@ -302,6 +302,27 @@ TUI, or holds a draft of yours there, stays in the terminal deck until it
 is done (the window follows what it writes meanwhile). In the deck, a pane
 in window mode says what the agent is doing; `t` there takes it back too.
 A shell lives in the terminal deck only.
+
+What an agent asks in its TUI can be answered from the window and the
+phone too. When its screen shows a numbered choice (claude's "Do you
+want to proceed?" and its questions, codex's approval, trust and update
+screens), its inbox item and the banner over its tab show all that the
+prompt says, with its options and Cancel (Esc); a tap presses that
+option's key in its pane, as you would there. The key goes only while
+the pane still shows that same prompt: one answered in the pane
+meanwhile, or changed, says it was handled already and nothing is sent.
+An option that lets something through is offered only beside the whole
+prompt (a row offers Review, which opens it as a card), and a prompt that
+cannot be read whole (a form of several questions, one taller than the
+screen) offers Open only: answer that one in the terminal deck.
+
+Interrupt (on a working agent's row and card, in its menu, and the send
+button while it works) stops what it is doing now, as `Esc` does in its
+TUI, run here or in the terminal deck: the turn ends, the agent stays up
+and waits for you. Put to sleep (its menu, `z` in the deck) ends its
+process to free memory, and a message resumes it where it left off; it
+is refused while a command runs under the agent, which it would cut
+short: interrupt it, or let it finish.
 
 An agent its TUI runs streams in as it writes too: the deck runs
 `mad stream` next to the agents and starts them through it, claude with
