@@ -160,6 +160,8 @@ function itemLine(it) {
 function row(o) {
   const r = el("div", `row ${o.cls || ""}`);
   r.tabIndex = 0;
+  r.setAttribute("role", "button");
+  r.setAttribute("aria-label", o.name);
   if (o.key) r.dataset.key = o.key;
   if (o.title) r.title = o.title;
   const t1 = el("div", "t1");

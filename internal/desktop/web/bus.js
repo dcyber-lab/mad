@@ -54,9 +54,11 @@ function channelsGroup(q) {
 function groupChar(members, small) {
   const positions = [[3, 6, 24], [21, 3, 22], [12, 22, 26]];
   const mem = [...members].sort((a, b) => ({ running: 0 }[shownStatus(a)] ?? 1) - ({ running: 0 }[shownStatus(b)] ?? 1)).slice(0, 3);
-  const working = mem.some((a) => shownStatus(a) === "running");
+  const working = members.some((a) => shownStatus(a) === "running");
   const v = el("span", `avatar chara group${small ? " small" : ""}${working ? " s-running" : ""}`);
   const minis = mem.map((a, i) => `<g class="mini m${i + 1}">${charSVG(a.id, positions[i])}</g>`).join("");
+  v.setAttribute("role", "img");
+  v.setAttribute("aria-label", working ? "working" : members.some((a) => shownStatus(a) === "waiting") ? "needs you" : "idle");
   v.innerHTML = `<svg viewBox="0 0 48 48"><rect class="tile" x="1" y="1" width="46" height="46" rx="15"/>${minis || '<text x="24" y="31" text-anchor="middle" class="hash">#</text>'}</svg>`;
   return v;
 }
@@ -91,7 +93,7 @@ function teamRow(c, found) {
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const lead = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
-  if (chanDot(c)) lead.append(el("span", "rdot"));
+  if (chanDot(c)) lead.append(redDot());
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`

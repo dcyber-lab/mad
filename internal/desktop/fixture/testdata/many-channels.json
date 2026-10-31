@@ -1,0 +1,337 @@
+{
+  "deck": {
+    "machine": "Fixture Mac",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "many0001-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 1"
+          },
+          {
+            "id": "many0002-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 2"
+          },
+          {
+            "id": "many0003-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 3"
+          },
+          {
+            "id": "many0004-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 4"
+          },
+          {
+            "id": "many0005-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 5"
+          },
+          {
+            "id": "many0006-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "agent 6"
+          }
+        ]
+      }
+    ],
+    "bus": [
+      {
+        "id": "alpha",
+        "title": "#alpha",
+        "members": [
+          {
+            "id": "many0001-aaaa",
+            "label": "agent 1",
+            "kind": "claude"
+          },
+          {
+            "id": "many0002-aaaa",
+            "label": "agent 2",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "a: newest, no dot",
+        "last_at": "-3m",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "bravo",
+        "title": "#bravo",
+        "members": [
+          {
+            "id": "many0002-aaaa",
+            "label": "agent 2",
+            "kind": "claude"
+          },
+          {
+            "id": "many0003-aaaa",
+            "label": "agent 3",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "b: 一小时前",
+        "last_at": "-1h",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "charlie",
+        "title": "#charlie",
+        "members": [
+          {
+            "id": "many0003-aaaa",
+            "label": "agent 3",
+            "kind": "claude"
+          },
+          {
+            "id": "many0004-aaaa",
+            "label": "agent 4",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "c: @you 看一下",
+        "last_at": "-20m",
+        "unread": 1,
+        "mention": true,
+        "listed": true
+      },
+      {
+        "id": "delta",
+        "title": "#delta",
+        "members": [
+          {
+            "id": "many0004-aaaa",
+            "label": "agent 4",
+            "kind": "claude"
+          },
+          {
+            "id": "many0005-aaaa",
+            "label": "agent 5",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "d: older",
+        "last_at": "-5h",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "echo",
+        "title": "#echo",
+        "members": [
+          {
+            "id": "many0005-aaaa",
+            "label": "agent 5",
+            "kind": "claude"
+          },
+          {
+            "id": "many0006-aaaa",
+            "label": "agent 6",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "e: oldest, no dot",
+        "last_at": "-2d",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "foxtrot",
+        "title": "#foxtrot",
+        "members": [
+          {
+            "id": "many0006-aaaa",
+            "label": "agent 6",
+            "kind": "claude"
+          },
+          {
+            "id": "many0001-aaaa",
+            "label": "agent 1",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "f: 有红点，较早",
+        "last_at": "-40m",
+        "unread": 1,
+        "mention": true,
+        "listed": true
+      },
+      {
+        "id": "golf",
+        "title": "#golf",
+        "members": [
+          {
+            "id": "many0001-aaaa",
+            "label": "agent 1",
+            "kind": "claude"
+          },
+          {
+            "id": "many0002-aaaa",
+            "label": "agent 2",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "g: mid",
+        "last_at": "-90m",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "hotel",
+        "title": "#hotel",
+        "members": [
+          {
+            "id": "many0002-aaaa",
+            "label": "agent 2",
+            "kind": "claude"
+          },
+          {
+            "id": "many0003-aaaa",
+            "label": "agent 3",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "h: recent, no dot",
+        "last_at": "-10m",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "india",
+        "title": "#india",
+        "members": [
+          {
+            "id": "many0003-aaaa",
+            "label": "agent 3",
+            "kind": "claude"
+          },
+          {
+            "id": "many0004-aaaa",
+            "label": "agent 4",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "i: 有红点，最早",
+        "last_at": "-6h",
+        "unread": 1,
+        "mention": true,
+        "listed": true
+      },
+      {
+        "id": "juliet",
+        "title": "#juliet",
+        "members": [
+          {
+            "id": "many0004-aaaa",
+            "label": "agent 4",
+            "kind": "claude"
+          },
+          {
+            "id": "many0005-aaaa",
+            "label": "agent 5",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "j: recent",
+        "last_at": "-15m",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "kilo",
+        "title": "#kilo",
+        "members": [
+          {
+            "id": "many0005-aaaa",
+            "label": "agent 5",
+            "kind": "claude"
+          },
+          {
+            "id": "many0006-aaaa",
+            "label": "agent 6",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "k: old",
+        "last_at": "-8h",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      },
+      {
+        "id": "lima",
+        "title": "#lima",
+        "members": [
+          {
+            "id": "many0006-aaaa",
+            "label": "agent 6",
+            "kind": "claude"
+          },
+          {
+            "id": "many0001-aaaa",
+            "label": "agent 1",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "l: 昨天",
+        "last_at": "-25h",
+        "unread": 0,
+        "mention": false,
+        "listed": false
+      }
+    ]
+  }
+}
