@@ -1,0 +1,51 @@
+{
+  "file": "fixture",
+  "offset": 4000,
+  "reset": true,
+  "entries": [
+    {
+      "kind": "user",
+      "text": "给我绘制一个表格，把本周的任务汇总一下"
+    },
+    {
+      "kind": "text",
+      "text": "好的，我先读一下任务板，再生成表格。\n\n- 读 `board.json`\n- 按负责人分组\n- 写成 **report.xlsx**"
+    },
+    {
+      "kind": "tool",
+      "tool": "Read",
+      "label": "board.json",
+      "input": "board.json",
+      "id": "t1"
+    },
+    {
+      "kind": "result",
+      "id": "t1",
+      "text": "{\n  \"tasks\": 15,\n  \"done\": 12\n}"
+    },
+    {
+      "kind": "tool",
+      "tool": "Bash",
+      "label": "go test ./internal/board/...",
+      "input": "go test ./internal/board/...",
+      "id": "t2"
+    },
+    {
+      "kind": "result",
+      "id": "t2",
+      "error": true,
+      "text": "--- FAIL: TestSummary (0.01s)\n    summary_test.go:42: want 15 tasks, got 14\nFAIL"
+    },
+    {
+      "kind": "text",
+      "text": "测试没过，少了一条任务：\n\nhttps://github.com/dcyber-lab/mad/blob/main/internal/board/summary.go#L42-L120?plain=1&token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n```go\nfor _, t := range tasks[1:] { // skips the first task\n    out[t.Owner] = append(out[t.Owner], t)\n}\n```\n\n循环从第二条开始，所以第一条任务被漏掉了。"
+    },
+    {
+      "kind": "tool",
+      "tool": "Bash",
+      "label": "python3 make_table.py --out report.xlsx",
+      "input": "python3 make_table.py --out report.xlsx",
+      "id": "t3"
+    }
+  ]
+}

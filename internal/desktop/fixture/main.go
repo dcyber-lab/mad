@@ -261,6 +261,18 @@ func relative(v any, now time.Time) {
 // chat answers an agent's transcript: the scenario's, or an empty one.
 func (f *fixture) chat(w http.ResponseWriter, r *http.Request) {
 	if raw, ok := f.scn.Chat[r.URL.Query().Get("id")]; ok {
+		// A client that has read it (its file, from the end) is told there is nothing new, as the
+		// real one does, so a poll does not add the entries again.
+		var seen struct {
+			File   string `json:"file"`
+			Offset int64  `json:"offset"`
+		}
+		q := r.URL.Query()
+		from, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		if json.Unmarshal(raw, &seen) == nil && seen.File != "" && q.Get("file") == seen.File && from >= seen.Offset {
+			reply(w, map[string]any{"file": seen.File, "offset": seen.Offset, "entries": []any{}})
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(raw)
 		return

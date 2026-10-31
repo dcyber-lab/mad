@@ -15,8 +15,15 @@ public protocol MadAPI: ChatAPI {
     func markRead(channel: String, seq: Int) async throws
     /// GET /api/bus/image?id: a picture's bytes.
     func imageData(id: String) async throws -> Data
+    /// GET of an image address a chat entry carries (`ChatImage.url`).
+    func pictureData(url: String) async throws -> Data
     /// POST /api/inbox: the person acts on an inbox item.
     func act(key: String, verb: String, option: String?, text: String?) async throws
 }
 
 extension MadClient: MadAPI {}
+
+extension MadAPI {
+    /// A fake of the Mac that has no pictures need not say so.
+    public func pictureData(url: String) async throws -> Data { throw ConnectionError.unexpected("No picture.") }
+}

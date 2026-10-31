@@ -103,9 +103,12 @@ public struct ConvEntry: Identifiable, Equatable, Sendable {
 public struct ConvImage: Equatable, Hashable, Sendable {
     public var url: URL?
     public var alt: String
-    public init(url: URL? = nil, alt: String = "") {
+    /// An address only the app knows how to fetch (it needs the Mac's token): `ConversationActions.loadImage` gets the image by it.
+    public var source: String
+    public init(url: URL? = nil, alt: String = "", source: String = "") {
         self.url = url
         self.alt = alt
+        self.source = source
     }
 }
 
@@ -192,18 +195,23 @@ public struct ConversationActions {
     /// An ask's act, with the words typed for an input act.
     public var act: (_ actID: String, _ text: String?) -> Void
     public var interrupt: () -> Void
-    public var loadEarlier: () -> Void
+    /// Nil when there is no way to load more: the earlier note is then plain text, not a button.
+    public var loadEarlier: (() -> Void)?
+    /// The bytes of an image by its `source`; nil keeps the placeholder.
+    public var loadImage: ((ConvImage) async -> Data?)?
     public var back: () -> Void
     /// The ＋ beside the composer (attach).
     public var attach: () -> Void
 
     public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String?) -> Void = { _, _ in },
-                interrupt: @escaping () -> Void = {}, loadEarlier: @escaping () -> Void = {},
+                interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
+                loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {}) {
         self.send = send
         self.act = act
         self.interrupt = interrupt
         self.loadEarlier = loadEarlier
+        self.loadImage = loadImage
         self.back = back
         self.attach = attach
     }

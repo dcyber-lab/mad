@@ -249,6 +249,20 @@ extension MadClient {
         return data
     }
 
+    /// A path the Mac named, with its query ("/api/image?id=…&file=…", a chat entry's image), as a
+    /// request that carries the token. Nil for an address that is not a path on the Mac.
+    public func pictureRequest(url: String) -> URLRequest? {
+        guard url.hasPrefix("/"), let c = URLComponents(string: url) else { return nil }
+        return request(c.path, query: c.queryItems ?? [])
+    }
+
+    public func pictureData(url: String) async throws -> Data {
+        guard let r = pictureRequest(url: url) else { throw ConnectionError.unexpected("Not an address on the Mac.") }
+        let (data, response) = try await runRequest(r)
+        try Self.checkBus(data, response, [200])
+        return data
+    }
+
     func jsonRequest(_ path: String, _ body: [String: Any]) -> URLRequest {
         var r = request(path)
         r.httpMethod = "POST"
