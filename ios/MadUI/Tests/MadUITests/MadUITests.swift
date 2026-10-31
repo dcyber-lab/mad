@@ -60,6 +60,22 @@ final class PathTests: XCTestCase {
         XCTAssertEqual(r.maxX, 20, accuracy: 0.01)
     }
 
+    func testMalformedDataReturnsAndDoesNotCrash() {
+        var junk = ["M0 0 Z 1", "M0 0 z 1 2 3", "M", "L1", "Q1 2", "A1", "C1 2 3", "M0 0 L", "M0 0 L 1", "", " ", ",,,", "-", "1e5", "M 1.2.3 4",
+                    "M0 0 A0 0 0 0 0 0 0", "M0 0 A1 1 0 2 2 5 5", "\u{0}", "M0 0 Z Z Z", "M0 0 Z M 1 1 L 2 2 Z 3"]
+        var rng = SystemRandomNumberGenerator()
+        let alphabet = Array("MmLlHhVvCcQqAaZz0123456789 ,.-+eE#x")
+        for _ in 0..<300 { junk.append(String((0..<Int.random(in: 1...40, using: &rng)).map { _ in alphabet.randomElement(using: &rng)! })) }
+        let start = Date()
+        for d in junk { _ = SVGPath.parse(d) } // must come back; a hang would end in the test's timeout
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+    }
+
+    func testNumbersAfterZEndTheParsing() {
+        let r = tight(SVGPath.parse("M0 0 L10 0 L10 10 Z 5 5 L99 99"))
+        XCTAssertEqual(r.maxX, 10, accuracy: 0.01) // nothing after the stray number is drawn
+    }
+
     func testQuadraticCurveIsDrawn() {
         let r = tight(SVGPath.parse("M21 29 q3 2.6 6 0")) // the calm face's smile
         XCTAssertEqual(r.width, 6, accuracy: 0.01)

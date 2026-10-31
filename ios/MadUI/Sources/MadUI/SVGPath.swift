@@ -104,12 +104,13 @@ enum SVGPath {
 
         mutating func skip() { while i < s.count, s[i] == " " || s[i] == "," || s[i] == "\n" { i += 1 } }
 
-        /// The next command letter; a number where a letter would be repeats the last command.
+        /// The next command letter; a number where a letter would be repeats the last command,
+        /// except after Z, which takes no numbers: they end the parsing (else it would never consume them).
         mutating func command(after last: Character) -> Character? {
             skip()
             guard i < s.count else { return nil }
             if s[i].isLetter { i += 1; return s[i - 1] }
-            return last
+            return last == "Z" || last == "z" ? nil : last
         }
 
         mutating func number() -> CGFloat? {
