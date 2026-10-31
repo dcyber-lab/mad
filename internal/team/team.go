@@ -388,9 +388,21 @@ func teamName(name, goal string, teams []Record) (string, error) {
 
 // normalName is a typed team name as names go: lowercase, with spaces
 // and underscores as dashes. A phone capitalizes the first letter.
+// Other characters (Chinese, say) are dropped: the name goes into agent
+// names, and an @mention takes ASCII only. Nothing left means the name
+// comes from the goal.
 func normalName(name string) string {
-	name = strings.ToLower(strings.TrimSpace(name))
-	return strings.Join(strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '_' || r == '\t' }), "-")
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == ' ' || r == '\t':
+			b.WriteRune('-')
+		}
+	}
+	parts := strings.FieldsFunc(b.String(), func(r rune) bool { return r == '-' })
+	return strings.Join(parts, "-")
 }
 
 // setAgent records the agent of a team's role.

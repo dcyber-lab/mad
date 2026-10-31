@@ -60,7 +60,7 @@ function dialog({ title, body, actions, ready }) {
     if (body) card.append(body);
     const row = el("div", "dacts");
     const key = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !busy) {
         e.stopPropagation();
         done(null);
       }
@@ -71,12 +71,48 @@ function dialog({ title, body, actions, ready }) {
       document.removeEventListener("keydown", key, true);
       resolve(v);
     };
+    // An action's submit runs with the dialog open: the error it returns
+    // (or throws) is shown here and what was typed stays.
+    const err = el("p", "dtext derr");
+    err.hidden = true;
+    let busy = false;
+    const submit = async (a, b) => {
+      if (busy) return;
+      busy = true;
+      err.hidden = true;
+      const label = b.textContent;
+      for (const x of row.children) x.disabled = true;
+      if (a.busy) b.textContent = a.busy;
+      let e = null;
+      try {
+        e = await a.submit();
+      } catch (x) {
+        e = x.message || String(x);
+      }
+      busy = false;
+      if (!e) return done(a.value);
+      for (const x of row.children) x.disabled = false;
+      b.textContent = label;
+      err.textContent = e;
+      err.hidden = false;
+      err.scrollIntoView({ block: "nearest" });
+    };
     // now runs in the click itself: what a browser lets only a click do.
-    for (const a of actions) row.append(button(a.label, a.cls, () => { if (a.now) a.now(); done(a.value); }));
-    card.append(row);
+    for (const a of actions) {
+      const b = button(a.label, a.cls, () => {
+        if (a.submit) return submit(a, b);
+        if (busy) return;
+        if (a.now) a.now();
+        done(a.value);
+      });
+      row.append(b);
+    }
+    card.append(err, row);
     d.replaceChildren(card);
     d.hidden = false;
-    d.onmousedown = (e) => { if (e.target === d) done(null); };
+    // A click beside a form would drop what was typed: only Cancel or Esc
+    // closes one.
+    d.onmousedown = (e) => { if (e.target === d && !busy && !card.querySelector("input, textarea")) done(null); };
     document.addEventListener("keydown", key, true);
     ready?.(done);
     (card.querySelector("input") || row.lastChild)?.focus();

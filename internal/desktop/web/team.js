@@ -137,7 +137,7 @@ async function newTeam(project) {
   };
   drawRoles();
   const name = el("input", "say wide");
-  name.placeholder = "name (from the goal when empty)";
+  name.placeholder = "name: English letters, digits, dashes (from the goal when empty)";
   name.autocapitalize = "none";
   name.autocomplete = "off";
   name.spellcheck = false;
@@ -163,29 +163,29 @@ async function newTeam(project) {
   };
   body.append(field("Project", proj), field("Template", tpl), roles, field("Name", name), field("Goal", goal), field("Permission", perm), wt, branch,
     el("p", "dtext muted", `Lead and teammates start together in a new channel; the lead gets the goal. At most ${info.max_teams} teams run at once.`));
-  const v = await dialog({
-    title: "A new team", body,
-    actions: [{ label: "Cancel", value: null }, { label: "Start", cls: "primary", value: "ok" }],
-    ready: () => goal.focus(),
-  });
-  if (v !== "ok") return;
-  if (!goal.value.trim()) {
-    toast("The team needs a goal", "err");
-    return;
-  }
-  const agentsChosen = {};
-  for (const [r, p] of Object.entries(picked)) agentsChosen[r] = p.agent + (p.effort ? "@" + p.effort : "");
-  toast("Starting the team: its agents come up one by one");
-  try {
-    const r = await api("POST", "/api/team", {}, {
+  // The start runs with the form open: a refusal is shown in it, and what
+  // was typed stays to be fixed.
+  let started = null;
+  const start = async () => {
+    if (!goal.value.trim()) {
+      goal.focus();
+      return "The team needs a goal.";
+    }
+    const agentsChosen = {};
+    for (const [r, p] of Object.entries(picked)) agentsChosen[r] = p.agent + (p.effort ? "@" + p.effort : "");
+    started = await api("POST", "/api/team", {}, {
       op: "start", template: tpl.value, project: proj.value, name: name.value.trim(), goal: goal.value.trim(),
       permission: perm.value, worktree: shared.checked ? branch.value.trim() : "", agents: agentsChosen,
     });
-    for (const n of r.notes || []) toast(n, "err");
-    await refresh();
-    openChannel(r.channel);
-  } catch (e) {
-    toast(e.message, "err");
-    refresh();
-  }
+    return null;
+  };
+  const v = await dialog({
+    title: "A new team", body,
+    actions: [{ label: "Cancel", value: null }, { label: "Start", cls: "primary", value: "ok", submit: start, busy: "Starting: agents come up one by one…" }],
+    ready: () => goal.focus(),
+  });
+  if (v !== "ok" || !started) return;
+  for (const n of started.notes || []) toast(n, "err");
+  await refresh();
+  openChannel(started.channel);
 }

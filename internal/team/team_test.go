@@ -513,13 +513,13 @@ func TestStartNamesAreUniqueAcrossProjects(t *testing.T) {
 
 func TestTeamNameTypedOnAPhone(t *testing.T) {
 	project(t)
-	for in, want := range map[string]string{"Ios": "ios", " My Team ": "my-team", "api_v2": "api-v2"} {
+	for in, want := range map[string]string{"Ios": "ios", " My Team ": "my-team", "api_v2": "api-v2", "开发ios": "ios", "开发 iOS 版": "ios", "--a--b--": "a-b"} {
 		got, err := teamName(in, "goal", nil)
 		if err != nil || got != want {
 			t.Errorf("teamName(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if _, err := teamName("ios!", "goal", nil); err == nil {
-		t.Error("ios! was taken")
+	if got, err := teamName("开发", "make the api", nil); err != nil || got == "" || !nameRe.MatchString(got) {
+		t.Errorf("an all-Chinese name = %q, %v; want one from the goal", got, err)
 	}
 }
