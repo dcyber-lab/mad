@@ -137,7 +137,7 @@ async function newTeam(project) {
   };
   drawRoles();
   const name = el("input", "say wide");
-  name.placeholder = "name: English letters, digits, dashes (from the goal when empty)";
+  name.placeholder = "name: letters, digits, dashes, any language (from the goal when empty)";
   name.autocapitalize = "none";
   name.autocomplete = "off";
   name.spellcheck = false;

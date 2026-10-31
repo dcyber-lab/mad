@@ -511,15 +511,86 @@ func TestStartNamesAreUniqueAcrossProjects(t *testing.T) {
 	}
 }
 
-func TestTeamNameTypedOnAPhone(t *testing.T) {
+func TestTeamNameRule(t *testing.T) {
 	project(t)
-	for in, want := range map[string]string{"Ios": "ios", " My Team ": "my-team", "api_v2": "api-v2", "开发ios": "ios", "开发 iOS 版": "ios", "--a--b--": "a-b"} {
+	for in, want := range map[string]string{
+		"Ios": "ios", " My Team ": "my-team", "api_v2": "api-v2", "--a--b--": "a-b",
+		"开发ios": "开发ios", "开发 iOS 版": "开发-ios-版", "支付重构": "支付重构",
+		"重构🔥": "重构", "../x": "x", "a/b\\c": "a-b-c", "开发，ios！": "开发-ios",
+		strings.Repeat("字", 60): strings.Repeat("字", maxName),
+	} {
 		got, err := teamName(in, "goal", nil)
 		if err != nil || got != want {
 			t.Errorf("teamName(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if got, err := teamName("开发", "make the api", nil); err != nil || got == "" || !nameRe.MatchString(got) {
-		t.Errorf("an all-Chinese name = %q, %v; want one from the goal", got, err)
+	for _, in := range []string{"🔥", "../", "  "} {
+		if got, err := teamName(in, "make the api", nil); err != nil || got == "" || !validName(got) || strings.Contains(got, "🔥") {
+			t.Errorf("teamName(%q) = %q, %v; want one from the goal", in, got, err)
+		}
+	}
+}
+
+func TestAgentSuffix(t *testing.T) {
+	for in, want := range map[string]string{"api": "api", "开发ios": "ios-", "支付重构": "t-"} {
+		got := agentSuffix(in)
+		if !strings.HasPrefix(got, want) || got != agentSuffix(in) || (in != "api" && len(got) != len(want)+4) {
+			t.Errorf("agentSuffix(%q) = %q", in, got)
+		}
+		for _, r := range got {
+			if r > 127 {
+				t.Errorf("agentSuffix(%q) = %q is not ASCII", in, got)
+			}
+		}
+	}
+}
+
+func TestStartChineseName(t *testing.T) {
+	root, specs, _ := project(t)
+	// A first team holds the role names, so the second's agents get a suffix.
+	if _, err := Start(Options{Project: root, Name: "first", Goal: "g"}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Start(Options{Project: root, Name: "开发 iOS 版", Goal: "做一个 iOS 版"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Name != "开发-ios-版" || s.Channel != "开发-ios-版" {
+		t.Fatalf("name %q channel %q", s.Name, s.Channel)
+	}
+	c, ok, _ := bus.Find(s.Channel)
+	if !ok || len(c.Members) != 3 {
+		t.Fatalf("channel = %+v", c)
+	}
+	if _, err := os.Stat(filepath.Join(paths.StateDir(), "bus", "开发-ios-版.jsonl")); err != nil {
+		t.Errorf("channel file: %v", err)
+	}
+	list, _ := Running(nil)
+	if len(list) != 2 || list[1].Name != "开发-ios-版" || list[1].Channel != "开发-ios-版" {
+		t.Errorf("records = %+v", list)
+	}
+	suffix := agentSuffix(s.Name)
+	for i, role := range []string{"architect", "builder", "reviewer"} {
+		sp := (*specs)[3+i]
+		if sp.Name != role+"-"+suffix || sp.Team != "开发-ios-版" {
+			t.Errorf("spec = %+v", sp)
+		}
+	}
+	// The team's lead can still be mentioned: the kickoff names it.
+	msgs, _, _ := bus.Read(s.Channel, 0, 50)
+	lead := "architect-" + suffix
+	if len(msgs) != 1 || len(msgs[0].Mentions) != 1 || !strings.HasPrefix(msgs[0].Text, "@"+lead+" ") {
+		t.Fatalf("kickoff = %+v", msgs)
+	}
+	if _, err := bus.Post(s.Channel, bus.From{ID: bus.You, Label: bus.You}, "@"+lead+"你好", 0); err != nil {
+		t.Errorf("a mention with Chinese right after it: %v", err)
+	}
+	msgs, _, _ = bus.Read(s.Channel, 0, 50)
+	if m := msgs[len(msgs)-1]; len(m.Mentions) != 1 || m.Mentions[0] != msgs[0].Mentions[0] {
+		t.Errorf("mentions = %+v", m.Mentions)
+	}
+	// And the CLI-side lookups take the Chinese name.
+	if r, ok, err := Find(nil, "开发-ios-版"); err != nil || !ok || r.Name != "开发-ios-版" {
+		t.Errorf("Find = %+v %v %v", r, ok, err)
 	}
 }
