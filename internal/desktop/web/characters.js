@@ -95,4 +95,143 @@ function plan(id) {
   return { style, dur, reach, tilt, pts, order, beat: 1500 + r() * 2200, delay: r() * 1200, quirk: 900 + r() * 1200 };
 }
 
-if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, mix, charHash, charLook, rng, plan };
+
+
+// EXPR: the expressions, strokes and dots in the face's color; the face's origin (0, 0) is between the eyes.
+const EXPR = {
+  happy: '<path class="ink" d="M-7.5 1 q2.5 -3 5 0"/><path class="ink" d="M2.5 1 q2.5 -3 5 0"/><path class="ink" d="M-3.5 6 q3.5 3.5 7 0"/>',
+  focus: '<circle class="dot" cx="-5" cy="0" r="1.9"/><circle class="dot" cx="5" cy="0" r="1.9"/><path class="ink" d="M-7.5 -4.2 l5 0.3"/><path class="ink" d="M7.5 -4.2 l-5 0.3"/><path class="ink" d="M-2.5 7 h5"/>',
+  think: '<circle class="dot" cx="-4" cy="-1.5" r="1.9"/><circle class="dot" cx="6" cy="-1.5" r="1.9"/><path class="ink" d="M-1 7 q3 -1.5 6 0"/><path class="ink" d="M11 -9 q2 -3 0 -5" opacity=".7"/><circle class="dot" cx="12.5" cy="-1" r="1" opacity=".6"/>',
+  wow: '<circle class="ink" cx="-5" cy="0" r="2.6"/><circle class="ink" cx="5" cy="0" r="2.6"/><ellipse class="ink" cx="0" cy="7.5" rx="2" ry="2.6"/>',
+  wink: '<circle class="dot" cx="-5" cy="0" r="1.9"/><path class="ink" d="M2.5 0.5 h5"/><path class="ink" d="M-3.5 5.5 q3.5 3.5 7 0"/>',
+  ask: '<circle class="dot" cx="-5" cy="0" r="1.9"/><circle class="dot" cx="5" cy="0" r="1.9"/><path class="ink" d="M-8 -5 q3 -2 6 0"/><path class="ink" d="M2 -5.5 q3 -2.5 6 -1"/><path class="ink" d="M-2.5 7.5 q1.2 -1.2 2.5 0 q1.3 1.2 2.5 0"/><text x="12" y="-9" font-size="9" font-weight="700">?</text>',
+  calm: '<circle class="dot" cx="-5" cy="0" r="1.9"/><circle class="dot" cx="5" cy="0" r="1.9"/><path class="ink" d="M-3 6 q3 2.5 6 0"/>',
+  sleep: '<path class="ink" d="M-7.5 0 q2.5 2 5 0"/><path class="ink" d="M2.5 0 q2.5 2 5 0"/><path class="ink" d="M-2 7 h4"/><text x="11" y="-7" font-size="7" font-weight="700" opacity=".7">z</text>',
+};
+
+// charExpr is the expression a character of key has in state ("work", "need", "idle" or "stop"), before it
+// moves: a working one starts with the first of its own order (still, with reduced motion, "focus").
+function charExpr(state, key) {
+  const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return state === "work" ? (still ? "focus" : plan(key).order[0]) : state === "need" ? "ask" : state === "stop" ? "sleep" : "calm";
+}
+
+// charSVG is the character of key, 48 by 48 (nested at x y with width w when box is given): its body in
+// the pastel (CSS --fill), its face in the deep color (--face), with the face of expr; a stopped one is
+// at half opacity. It is all there is to a still one; charStart makes the others move.
+function charSVG(key, box, expr = "calm", stopped = false) {
+  const { shape, colour } = charLook(key);
+  const [, dy, body] = SHAPES[shape];
+  const style = `--fill:${COLORS[colour]};--face:${mix(STRONG[colour], 0.55)}${stopped ? ";opacity:0.5" : ""}`;
+  const inner = `<g class="all"><g class="head">${body}<g class="face" transform="translate(24 ${23 + dy})"><g class="facein">${EXPR[expr]}</g></g></g></g>`;
+  return box
+    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48" style="${style}">${inner}</svg>`
+    : `<svg viewBox="0 0 48 48" style="${style}">${inner}</svg>`;
+}
+
+// ---- how it moves: only a working one, and only while it is on the screen ----
+
+// charLive: the characters that have timers or animations, to be let go of when they leave the page.
+const charLive = new Set();
+const charReduced = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+// charSeen follows which characters are on the screen: one that has not moved yet is started when it first is
+// (a list drawn and thrown away starts nothing), one that is moving stops while it is not.
+const charSeen = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    const t = e.target;
+    if (e.isIntersecting && t.__wake) {
+      const wake = t.__wake;
+      t.__wake = null;
+      wake();
+    }
+    t.__chars?.forEach((r) => (e.isIntersecting ? r.resume() : r.pause()));
+  }
+}) : null;
+
+// charWake runs start (which calls charStart for what is drawn in el) when el is first on the screen.
+function charWake(el, start) {
+  if (!charSeen) return start();
+  el.__wake = start;
+  charSeen.observe(el);
+}
+
+// charStart gives the character drawn in root (an element holding its .head, .facein, .all and .leaf)
+// the expression and the motion of state: "work" (its plan: it looks around, its expressions change
+// in its own order and pace), "need" (asking, its head slowly tilting), "idle" (calm, and a blink every
+// 2.5 to 5.5 seconds unless opts.blink is false), "stop" (asleep, at half opacity). Reduced motion: still,
+// with the state's expression. watch is the element whose being on the screen it follows (default root).
+function charStart(root, key, state, opts = {}) {
+  if (charReduced.matches || state === "stop" || (state === "idle" && opts.blink === false)) return null; // nothing to move
+  const facein = root.querySelector(".facein"), head = root.querySelector(".head"), all = root.querySelector(".all"), leaf = root.querySelector(".leaf");
+  if (!facein || !head) return null;
+  const set = (k) => { facein.innerHTML = EXPR[k]; };
+  const run = { root, anims: [], ticks: [], handles: [], on: false };
+  const still = charReduced.matches;
+  if (state === "work") {
+    const p = plan(key);
+    set(still ? "focus" : p.order[0]);
+    if (!still) {
+      head.style.transformOrigin = all.style.transformOrigin = "50% 100%";
+      const opt = { duration: p.dur, iterations: Infinity, easing: "ease-in-out", delay: p.delay };
+      const kf = (fn) => p.pts.map(([x, y, t]) => Object.assign({ offset: t }, fn(x, y)));
+      run.anims.push(facein.animate(kf((x, y) => ({ transform: `translate(${x}px,${y}px)` })), opt));
+      run.anims.push(head.animate(kf((x) => ({ transform: `rotate(${x / 4 * p.tilt}deg)` })), opt));
+      run.anims.push(all.animate([{ transform: "translateY(0)" }, { transform: "translateY(-1.3px)" }], { duration: p.quirk, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+      if (leaf) {
+        leaf.style.transformOrigin = "50% 100%";
+        run.anims.push(leaf.animate([{ transform: "rotate(-12deg)" }, { transform: "rotate(12deg)" }], { duration: p.quirk * 0.8, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+      }
+      let i = 0;
+      run.ticks.push({ ms: p.beat, fn: () => { i = (i + 1) % p.order.length; set(p.order[i]); } });
+    }
+  } else if (state === "need") {
+    set("ask");
+    if (!still) {
+      head.style.transformOrigin = "50% 100%";
+      run.anims.push(head.animate([{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }], { duration: 2400, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+    }
+  } else if (state === "idle") {
+    set("calm");
+    if (!still && opts.blink !== false) {
+      run.ticks.push({ ms: 2500 + (charHash(key) % 3000), fn: () => { set("sleep"); setTimeout(() => { if (run.on) set("calm"); }, 140); } });
+    }
+  } else {
+    set("sleep");
+  }
+  if (!run.anims.length && !run.ticks.length) return run;
+  run.resume = () => {
+    if (run.on) return;
+    run.on = true;
+    run.anims.forEach((a) => a.play());
+    run.handles = run.ticks.map((t) => setInterval(t.fn, t.ms));
+  };
+  run.pause = () => {
+    run.on = false;
+    run.anims.forEach((a) => a.pause());
+    run.handles.forEach(clearInterval);
+    run.handles = [];
+  };
+  run.stop = () => {
+    run.pause();
+    run.anims.forEach((a) => a.cancel());
+    run.anims = [];
+    charLive.delete(run);
+  };
+  charLive.add(run);
+  run.resume();
+  const w = opts.watch || root;
+  (w.__chars = w.__chars || []).push(run);
+  charSeen?.observe(w);
+  return run;
+}
+
+// What left the page is let go of: its animations cancelled, its timers cleared.
+if (typeof document !== "undefined") setInterval(() => {
+  for (const r of [...charLive]) {
+    if (r.root.isConnected) continue;
+    r.stop();
+    for (const w of [r.root, r.root.closest?.(".avatar")]) if (w?.__chars) { w.__chars = w.__chars.filter((x) => x !== r); if (!w.__chars.length) charSeen?.unobserve(w); }
+  }
+}, 2000);
+
+if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG };
