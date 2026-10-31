@@ -390,6 +390,25 @@ func TestActivity(t *testing.T) {
 			t.Errorf("since %v", act.Since)
 		}
 	}
+	// Last is the last reply's first line in every state, the turn file's
+	// (nothing more is read), and empty before a turn ended.
+	for _, shown := range []string{status.Running, status.Waiting, status.Finished, status.Idle} {
+		a := agentAt("a", shown, ago(6*time.Minute))
+		a.Shown = shown
+		a.Report.Turn = &status.Turn{Reply: "Tests pass\nand more", At: ago(30 * time.Minute)} // an older turn's: still the last
+		if got := activityOf(a).Last; got != "Tests pass" {
+			t.Errorf("%s: last %q", shown, got)
+		}
+		a.Report.Turn = nil
+		if got := activityOf(a).Last; got != "" {
+			t.Errorf("%s without a turn: last %q", shown, got)
+		}
+	}
+	long := agentAt("a", status.Idle, t0)
+	long.Report.Turn = &status.Turn{Reply: strings.Repeat("字", 200), At: t0}
+	if got := []rune(activityOf(long).Last); len(got) != replyRunes || got[len(got)-1] != '…' {
+		t.Errorf("a long reply: %d runes", len(got))
+	}
 	// A list all done is not shown.
 	a := agentAt("a", status.Running, t0)
 	a.Info = transcript.Info{Tool: "Edit", Todo: &discover.Todo{Done: 3, Total: 3}}

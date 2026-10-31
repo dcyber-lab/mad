@@ -8,6 +8,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 )
 
 // The bus in the window: channels in the snapshot, a channel's messages,
@@ -60,10 +61,10 @@ func TestBusAPI(t *testing.T) {
 	for _, b := range snap.Bus {
 		got[b.Title] = b
 	}
-	if r := got["#review"]; r.Last != 2 || r.Unread != 1 || len(r.Members) != 2 || r.Topic != "the API" {
+	if r := got["#review"]; r.LastSeq != 2 || r.Last != "alice: the handler returns 500 for an unknown id" || r.Unread != 1 || len(r.Members) != 2 || r.Topic != "the API" {
 		t.Errorf("#review: %+v", r)
 	}
-	if b := got["@bob"]; !b.DM || !b.Yours || b.Last != 2 {
+	if b := got["@bob"]; !b.DM || !b.Yours || b.LastSeq != 2 {
 		t.Errorf("@bob: %+v (all: %v)", b, got)
 	}
 	if b := got["alice ↔ bob"]; !b.DM || b.Yours {
@@ -171,5 +172,59 @@ func TestBusRemovedAgents(t *testing.T) {
 	}
 	if title := got[bus.DMChannel(a1, bus.You)]; title != "@aaaa1111" {
 		t.Errorf("your DM with a removed agent: %q (all %v)", title, got)
+	}
+}
+
+// Each agent in the snapshot says the first line of its last reply, in any
+// state, and the list's channels the last message as "who: first line".
+func TestSnapshotLastLines(t *testing.T) {
+	isolate(t)
+	const a1, a2 = "aaaa1111-0000-0000-0000-000000000001", "bbbb2222-0000-0000-0000-000000000002"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: t.TempDir(), Agents: []*state.Agent{
+		{ID: a1, Kind: "claude", Name: "alice"}, {ID: a2, Kind: "claude", Name: "bob"},
+	}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := status.WriteTurn(a1, &status.Turn{Reply: "Tests pass, PR is up\nand the details are below", At: time.Now()}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.Create("review", "", []string{a1, a2}, bus.From{ID: bus.You, Label: bus.You}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.Post("review", bus.From{ID: a1, Label: "alice", Kind: "claude"}, "the handler returns 500 for an unknown id\nsecond line", 0); err != nil {
+		t.Fatal(err)
+	}
+	s := New(manageKinds)
+	s.poll.Poll(time.Now())
+	var snap struct {
+		Projects []struct {
+			Agents []struct {
+				ID   string
+				Last *string `json:"last"`
+			}
+		}
+		Bus []struct {
+			ID      string
+			Last    string `json:"last"`
+			LastSeq int    `json:"last_seq"`
+		}
+	}
+	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, a := range snap.Projects[0].Agents {
+		if a.Last == nil {
+			t.Errorf("%s has no last field", a.ID)
+			continue
+		}
+		got[a.ID] = *a.Last
+	}
+	if got[a1] != "Tests pass, PR is up" || got[a2] != "" {
+		t.Errorf("agents' last: %q", got)
+	}
+	if len(snap.Bus) != 1 || snap.Bus[0].Last != "alice: the handler returns 500 for an unknown id" || snap.Bus[0].LastSeq != 1 {
+		t.Errorf("channels: %+v", snap.Bus)
 	}
 }
