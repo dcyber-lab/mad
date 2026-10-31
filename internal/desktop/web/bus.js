@@ -204,16 +204,24 @@ function drawChanHead() {
   const lead = c && c.lead && agents.get(c.lead);
   if (c && c.team) what.append(teamLine(c.team));
   else if (lead) what.append(el("span", "muted", "lead " + label(lead)));
-  const who = el("div", "cwho");
-  for (const m of (c && c.members) || []) {
-    const a = agents.get(m.id) || { kind: m.kind, id: m.id };
-    const v = avatar(a, true);
-    v.title = m.id === (c && c.lead) ? m.label + ", the lead" : m.label;
-    if (m.id === (c && c.lead)) v.classList.add("lead");
-    v.onclick = () => show(m.id);
-    who.append(v);
+  // The members, in one place: a strip of their avatars (which show who
+  // works), and a tap on it lists them with their state, to open one.
+  const members = (c && c.members) || [];
+  const parts = [what, el("span", "grow")];
+  if (members.length) {
+    const who = el("button", "cwho");
+    who.type = "button";
+    who.title = `${members.length} agent${members.length === 1 ? "" : "s"}: see who is doing what`;
+    for (const m of members.slice(0, STRIP_MAX)) {
+      const a = agents.get(m.id) || { kind: m.kind, id: m.id };
+      const v = avatar(a, true);
+      if (m.id === c.lead) v.classList.add("lead");
+      who.append(v);
+    }
+    if (members.length > STRIP_MAX) who.append(el("span", "cmore", `+${members.length - STRIP_MAX}`));
+    who.onclick = () => memberMenu(c, who);
+    parts.push(who);
   }
-  const parts = [what, el("span", "grow"), who];
   if (c && !c.dm) {
     const more = el("button", "icon-btn chmore"); // on a phone the top bar has it
     more.type = "button";
@@ -236,7 +244,23 @@ function drawChanHead() {
   head.replaceChildren(...parts);
   // On a phone the top bar names it and holds the menu: the head shows
   // only what more there is (a topic, a pause, a team or a lead).
-  head.classList.toggle("bare", !(c && (c.topic || c.paused || c.team || lead)));
+  head.classList.toggle("bare", !(c && (c.topic || c.paused || c.team || lead || members.length)));
+}
+
+// STRIP_MAX is how many avatars the members' strip shows before "+n".
+const STRIP_MAX = 6;
+
+// memberMenu lists channel c's members with how each stands, and opens the
+// one picked.
+function memberMenu(c, anchor) {
+  popup(anchor, c.members.map((m) => {
+    const a = agents.get(m.id);
+    const state = a ? look(shownStatus(a)).word : "not in the deck";
+    const parts = [state];
+    if (a && a.role) parts.push(a.role);
+    if (m.id === c.lead) parts.push("the lead");
+    return { label: m.label, desc: parts.join(" · "), disabled: !a, onclick: () => show(m.id) };
+  }), { right: true });
 }
 
 // chanMenu offers what the person does about channel c's work: its
@@ -367,13 +391,68 @@ function busMessage(m) {
     row.dataset.reply = m.reply_to;
     body.append(quoteOf(m.reply_to));
   }
+  // What an agent did or reports is a line, opened where it is by a tap;
+  // what the person wrote, or what is for the person, is shown whole.
+  const folded = foldSummary(m);
+  let less = null;
+  if (folded) {
+    row.classList.add("fold");
+    const toggle = () => {
+      const open = row.classList.toggle("open");
+      more.setAttribute("aria-expanded", open);
+    };
+    const sum = el("div", "bsum");
+    const more = el("button", "bmore", "Show more");
+    more.type = "button";
+    more.onclick = toggle;
+    sum.append(el("span", "bsumt", folded), more);
+    sum.onclick = (e) => e.target === more || toggle();
+    body.append(sum);
+    less = el("button", "bless", "Show less");
+    less.type = "button";
+    less.onclick = toggle;
+  }
   if (m.text) body.append(text);
   // Pictures, fetched with the token, each to open large.
   if (m.images && m.images.length) {
     body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`)));
   }
+  if (less) body.append(less);
   row.append(body);
   return row;
+}
+
+// foldSummary is the line a message folds to in a channel, "" when it is
+// shown whole: an agent's handoff, its result, and what runs past three
+// lines. The person's own, mad's, a message that @mentions the person, and
+// whatever an agent says in its DM with the person (all of it addressed to
+// them) stay whole.
+function foldSummary(m) {
+  if (m.from.id === "you" || m.from.id === "mad" || m.kind === "system") return "";
+  const c = busChannel(cv.open);
+  if (c && c.dm && c.yours) return "";
+  const text = (m.text || "").trim();
+  if (/(^|[\s(（])@you(?![\w-])/i.test(text)) return "";
+  const lines = text.split("\n").filter((l) => l.trim());
+  const card = m.kind === "handoff" || m.kind === "done";
+  if (!card && lines.length <= 3 && text.length <= 280) return "";
+  // The card's pill says which handoff and to whom, or how it ended: the
+  // line is what it is about (a declined one says so, the pill being small).
+  const first = firstSentence(lines[0] || "");
+  const h = m.handoff;
+  if (m.kind === "done" && h && h.status === "declined") return `declined: ${first}`;
+  return first;
+}
+
+// firstSentence is the start of a line with its markdown taken off, cut at
+// the end of its first sentence, or at 120 characters.
+function firstSentence(line) {
+  const plain = line.replace(/^[#>\-*\s]+/, "").replace(/[*_`]/g, "")
+    .replace(/https?:\/\/\S+?\/pull\/(\d+)\S*/g, "PR #$1") // a link is its name
+    .replace(/https?:\/\/([^\s/,;)]+)\S*/g, "$1").trim();
+  const end = plain.search(/[.!?。！？](\s|$)/);
+  const one = end > 0 ? plain.slice(0, end + 1) : plain;
+  return one.length > 120 ? one.slice(0, 119) + "…" : one;
 }
 
 // drawReceipts puts under each of your messages who it woke and how far
