@@ -487,7 +487,11 @@ function rollupNode(rollup) {
       r.append(n);
     }
   }
-  if (quiet) r.append(el("span", "r-quiet", `${quiet} quiet`));
+  if (quiet) {
+    const q = el("span", "r-quiet", String(quiet));
+    q.append(el("span", "qw", " quiet")); // the word goes on a phone, the count stays
+    r.append(q);
+  }
   return r;
 }
 
