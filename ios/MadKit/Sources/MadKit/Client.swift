@@ -27,13 +27,13 @@ public struct MadClient: Sendable {
         self.session = session
     }
 
-    /// The request for a path: the token travels as ?token= today. To move
-    /// to header auth, drop the query item and set Authorization instead.
+    /// The request for a path. The token travels in the Authorization
+    /// header, never in the URL, so it stays out of logs and history.
     public func request(_ path: String) -> URLRequest {
         var c = URLComponents(url: mac.baseURL, resolvingAgainstBaseURL: false)!
         c.path = path
-        c.queryItems = [URLQueryItem(name: "token", value: mac.token)]
         var r = URLRequest(url: c.url!)
+        r.setValue("Bearer " + mac.token, forHTTPHeaderField: "Authorization")
         r.timeoutInterval = 10
         return r
     }

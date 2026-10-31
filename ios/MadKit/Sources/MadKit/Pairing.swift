@@ -53,7 +53,7 @@ public enum Pairing {
         guard let host = c.host, !host.isEmpty else { throw PairingError.noHost }
         guard let frag = c.fragment, frag.hasPrefix("token=") else { throw PairingError.noToken }
         let token = String(frag.dropFirst("token=".count)).lowercased()
-        guard token.count == 32, token.allSatisfy({ $0.isHexDigit }) else {
+        guard token.count == 32, token.allSatisfy({ $0.isASCII && $0.isHexDigit }) else {
             throw PairingError.badToken
         }
         var base = URLComponents()

@@ -19,5 +19,4 @@ To run on a device, copy `ios/Config/Local.xcconfig.example` to
 `ios/Config/Local.xcconfig` (gitignored) and set your `DEVELOPMENT_TEAM` and
 `MAD_BUNDLE_ID`.
 
-The token travels as `?token=` for now; `MadClient.request` is the one place to
-switch to `Authorization: Bearer`.
+The token travels in the `Authorization: Bearer` header (needs the server's header auth), never in the URL.
