@@ -78,6 +78,19 @@ func TestBusAPI(t *testing.T) {
 	if msgs.Last != 2 || len(msgs.Messages) != 1 || msgs.Messages[0].From.Label != "alice" {
 		t.Errorf("messages since 1: %+v", msgs)
 	}
+	// The person's two posts: one @alice, one with no @.
+	post("/api/bus/post", `{"channel":"review","text":"and a plain line"}`, 200)
+	var rc struct{ Receipts []BusReceipt }
+	_ = json.Unmarshal(call(t, s, "GET", "/api/bus/messages?channel=review&since=99", "").Body.Bytes(), &rc)
+	if len(rc.Receipts) != 2 {
+		t.Fatalf("receipts: %+v", rc.Receipts)
+	}
+	if r := rc.Receipts[0]; r.Seq != 1 || len(r.Targets) != 1 || r.Targets[0].Label != "alice" || r.Targets[0].State != "waiting" {
+		t.Errorf("@alice: %+v", r)
+	}
+	if r := rc.Receipts[1]; len(r.Targets) != 0 {
+		t.Errorf("plain line: %+v", r)
+	}
 	if w := call(t, s, "GET", "/api/bus/messages?channel=nowhere", ""); w.Code != 404 {
 		t.Errorf("no such channel: %d", w.Code)
 	}
