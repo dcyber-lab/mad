@@ -678,6 +678,7 @@ function drawQueue(fresh) {
     fitInput();
   }
   $("#attach").hidden = !takesImages();
+  box.classList.toggle("inchan", !!cv.open); // a channel's message box is one line
   if (cv.open) {
     // A channel: what is typed is posted, as you.
     $("#qinput").placeholder = "发消息给 " + chanTitle(cv.open).replace(/^[#@]/, "");
@@ -1374,14 +1375,14 @@ function drawTitle() {
   const t = $("#ptitle");
   const a = current && agents.get(current);
   if (!a) {
-    if (cv.open && document.documentElement.classList.contains("ptype")) {
-      // The channel's tile and its name, as the phone's chat head has them
-      // (back, tile, name, the members at the right).
-      t.replaceChildren(chanTile(cv.open), el("span", "pt", chanTitle(cv.open).replace(/^[#@]/, "")));
-      t.className = "chan";
+    if (cv.open && !bd.open && !us.open && !sk.open && !nc.open) {
+      // a channel: its tile, name and one small line, which open its panel
+      t.replaceChildren(chanHeadWho(cv.open));
+      t.className = "chtitle";
+      t.dataset.agent = "";
       return;
     }
-    t.replaceChildren(el("span", "pt", bd.open ? "Board" : us.open ? "Usage" : sk.open ? "Skills" : cv.open ? chanTitle(cv.open) : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", bd.open ? (bd.channel ? `Board · #${bd.channel}` : "Board") : us.open ? "Usage" : sk.open ? "Skills" : nc.open ? "New chat" : ""));
     t.className = "";
     t.dataset.agent = "";
     return;
@@ -1565,18 +1566,21 @@ function addEntry(o, e) {
 function imageRow(urls, who) {
   const row = el("div", "imgs");
   const name = who ? `图片，来自 ${who}` : "图片";
-  for (const u of urls) {
-    // a button named for the picture and who sent it, which opens it large
-    const img = imageNode(u, name);
-    img.onclick = null; // the button opens it
-    const b = el("button", "cimgbtn");
-    b.type = "button";
-    b.setAttribute("aria-label", name);
-    b.onclick = () => img.src && openLightbox(img.src);
-    b.append(img);
-    row.append(b);
-  }
+  for (const u of urls) row.append(imageButton(u, name));
   return row;
+}
+
+// imageButton is a picture as a button named for it (and who sent it), which
+// opens it large.
+function imageButton(u, name) {
+  const img = imageNode(u, name);
+  img.onclick = null; // the button opens it
+  const b = el("button", "cimgbtn");
+  b.type = "button";
+  b.setAttribute("aria-label", name);
+  b.onclick = () => img.src && openLightbox(img.src);
+  b.append(img);
+  return b;
 }
 
 function imageNode(u, alt = "") {

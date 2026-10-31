@@ -136,7 +136,76 @@
         "last_at": "-1m",
         "listed": true,
         "mention": true,
-        "unread": 1
+        "unread": 1,
+        "lead": "fold0001-aaaa"
+      }
+    ],
+    "board": [
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-1",
+          "title": "频道里支持发图片",
+          "owner": "fold0002-aaaa",
+          "status": "doing",
+          "channel": "fold"
+        },
+        "title": "频道里支持发图片",
+        "column": "doing",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 600000000000,
+        "since": "-10m"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-2",
+          "title": "用量单独一页",
+          "owner": "fold0002-aaaa",
+          "status": "doing",
+          "channel": "fold"
+        },
+        "title": "用量单独一页",
+        "column": "doing",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 300000000000,
+        "since": "-5m"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-3",
+          "title": "字体放大",
+          "owner": "fold0002-aaaa",
+          "status": "done",
+          "channel": "fold"
+        },
+        "title": "字体放大",
+        "column": "done",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 3600000000000,
+        "since": "-1h"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-9",
+          "title": "别的群的任务",
+          "owner": "",
+          "status": "todo",
+          "channel": "other"
+        },
+        "title": "别的群的任务",
+        "column": "todo",
+        "channel": "other",
+        "age": 0,
+        "since": "-2h"
       }
     ]
   },

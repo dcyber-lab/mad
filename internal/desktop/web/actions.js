@@ -79,7 +79,11 @@ $("#popup").addEventListener("keydown", (e) => {
     closePopup(true); // the focus is back on the anchor before Tab moves it on
   }
 });
+// popupGuard: until then a press outside does not close the menu. A long press
+// that opened it can end in the mouse events a browser makes of a touch.
+let popupGuard = 0;
 document.addEventListener("mousedown", (e) => {
+  if (Date.now() < popupGuard) return;
   if (!$("#popup").hidden && !$("#popup").contains(e.target)) closePopup();
 }, true);
 window.addEventListener("blur", closePopup);
@@ -659,9 +663,16 @@ async function openTerminal(a) {
 function drawActs() {
   drawTitle();
   const a = current && agents.get(current);
-  // a phone's channel has its menu here, not in a band of its own
-  const ch = cv.open && phone.matches ? busChannel(cv.open) : null;
-  $("#acts").hidden = !a && !(ch && !ch.dm);
+  // a phone's channel has its ⓘ here, not in a band of its own
+  const ch = !a && cv.open && phone.matches && !bd.open && !us.open && !sk.open && !nc.open;
+  $("#acts").hidden = !a && !ch;
+  const more = $("#more");
+  more.setAttribute("aria-label", ch ? "群信息" : "更多");
+  more.title = ch ? "群信息" : "more";
+  if (more.dataset.icon !== (ch ? "info" : "more")) {
+    more.dataset.icon = ch ? "info" : "more";
+    more.replaceChildren(icon(ch ? "info" : "more"));
+  }
   $("#changes").hidden = !a || !a.chat;
   $("#changes").classList.toggle("on", !!a && side.id === current);
   // 对话 / 终端 / 改动: the conversation, its terminal, its changes
@@ -686,9 +697,8 @@ $("#changes").onclick = () => {
 };
 $("#more").onclick = () => {
   const a = current && agents.get(current);
-  const ch = cv.open && busChannel(cv.open);
   if (a) agentMenu(a, $("#more"), { right: true });
-  else if (ch && !ch.dm) chanMenu(ch, $("#more"));
+  else if (cv.open) openChanPanel($("#more"));
 };
 
 // ---- its changes: the diff of its directory, beside the conversation ----
