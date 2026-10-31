@@ -38,7 +38,14 @@ function channelsGroup(q) {
   }
   head.append(plus);
   g.append(head);
-  const list = all.filter((c) => q ? `${c.title} ${c.topic || ""}`.toLowerCase().includes(q) : ib.allChans || c.listed || c.id === cv.open);
+  let list = all.filter((c) => q ? `${c.title} ${c.topic || ""}`.toLowerCase().includes(q) : ib.allChans || c.listed || c.id === cv.open);
+  if (ptypeOn()) {
+    // A phone lists every channel and team chat (the server leaves out the archived) and the person's
+    // DMs, the ones with a red dot first, then the newest message first (c.last_at, as the server gives it).
+    list = all.filter((c) => (!c.dm || c.yours) && (!q || `${c.title} ${c.topic || ""}`.toLowerCase().includes(q)));
+    const at = (c) => Date.parse(c.last_at) || 0;
+    list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
+  }
   if (!all.length) {
     const hint = el("div", "chan none", "Talk with your agents: + makes a channel or a team.");
     hint.onclick = () => createChannel();
@@ -74,6 +81,13 @@ function groupChar(members, small) {
   return v;
 }
 
+// chanDot: 1 when something in channel c waits on the person (an @you, an
+// unread DM, a member with an item in the inbox), else 0.
+function chanDot(c) {
+  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
+  return c.mention || (c.dm && c.unread) || ids.some((id) => id && needAgents.has(id)) ? 1 : 0;
+}
+
 // teamRow is a channel with its members as one row, on a phone: the group's
 // picture, its name, and its last message (else how its members stand). A
 // red dot when it @you or a member waits on you.
@@ -84,7 +98,7 @@ function teamRow(c) {
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const lead = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
-  if (c.mention || (c.dm && c.unread) || mem.some((a) => needAgents.has(a.id))) lead.append(el("span", "rdot"));
+  if (chanDot(c)) lead.append(el("span", "rdot"));
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: String(typeof c.last === "string" ? c.last : c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
