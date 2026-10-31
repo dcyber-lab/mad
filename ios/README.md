@@ -149,8 +149,9 @@ app is not active), and `refresh()`, one look.
 `ServerModel` (in `MacApp/`) takes, in this order: a fixture server (below); the phone server on
 127.0.0.1:7484 with the token in `<state dir>/phone_token` (`$XDG_STATE_HOME/mad` or
 `~/.local/state/mad`) if it answers `/api/deck`; else it starts `mad desktop -no-window -addr
-127.0.0.1:0` (the `mad` set in Settings, else the first on PATH), reads the URL and token it prints,
-and stops it when the app quits. These are `LocalServer` and `ServerLauncher` in MadKit.
+127.0.0.1:0 -exit-on-stdin-eof` (the `mad` set in Settings, else the first on PATH), reads the URL and
+token it prints, and stops it when the app quits. The app holds the write end of the child's stdin, so
+if the app is killed the pipe closes and the child exits by itself. These are `LocalServer` and `ServerLauncher` in MadKit.
 
 ### The fixture hook
 

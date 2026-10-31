@@ -93,6 +93,9 @@ public enum LocalServer {
 /// stopped when the app quits.
 public final class ServerLauncher: @unchecked Sendable {
     private var process: Process?
+    /// The write end of the child's stdin. The app holds it, so when the app dies, however it dies,
+    /// the kernel closes it and the child (`-exit-on-stdin-eof`) sees EOF and exits.
+    private var lifeline: FileHandle?
     private let lock = NSLock()
 
     public init() {}
@@ -100,7 +103,7 @@ public final class ServerLauncher: @unchecked Sendable {
     deinit { stop() }
 
     /// Starts `binary` with `arguments` and waits for the line that says where it listens.
-    public func start(binary: URL, arguments: [String] = ["desktop", "-no-window", "-addr", "127.0.0.1:0"],
+    public func start(binary: URL, arguments: [String] = ["desktop", "-no-window", "-addr", "127.0.0.1:0", "-exit-on-stdin-eof"],
                       timeout: TimeInterval = 20) async throws -> Endpoint {
         stop()
         let p = Process()
@@ -113,8 +116,12 @@ public final class ServerLauncher: @unchecked Sendable {
         let out = Pipe()
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice
+        let life = Pipe()
+        p.standardInput = life.fileHandleForReading
         do { try p.run() } catch { throw LocalServer.LaunchError.failed(error.localizedDescription) }
-        remember(p)
+        // The child has its own copy of the read end; this one would keep the pipe open if it stayed.
+        try? life.fileHandleForReading.close()
+        remember(p, lifeline: life.fileHandleForWriting)
 
         // The first line it prints is the URL. Read as it comes, with a timer beside it: a read that
         // waits for output cannot be cancelled, so a silent server would hold it until it exits.
@@ -167,9 +174,16 @@ public final class ServerLauncher: @unchecked Sendable {
         }
     }
 
-    private func remember(_ p: Process) {
+    /// The server's process id while it runs.
+    public var processIdentifier: Int32? {
+        lock.lock(); defer { lock.unlock() }
+        return process?.processIdentifier
+    }
+
+    private func remember(_ p: Process, lifeline l: FileHandle) {
         lock.lock()
         process = p
+        lifeline = l
         lock.unlock()
     }
 
@@ -183,7 +197,10 @@ public final class ServerLauncher: @unchecked Sendable {
         lock.lock()
         let p = process
         process = nil
+        let l = lifeline
+        lifeline = nil
         lock.unlock()
+        try? l?.close()
         if let p, p.isRunning {
             p.terminate()
             // Not waitUntilExit: it can miss an exit that races the call and then waits forever.

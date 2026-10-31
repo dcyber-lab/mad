@@ -128,5 +128,32 @@ final class LocalServerTests: XCTestCase {
         }
         XCTAssertFalse(l.isRunning)
     }
+
+    /// The app can be killed without a chance to stop its server: the server must go with it.
+    func testTheServerExitsWhenTheAppIsKilled() throws {
+        // A server that ends when its stdin does, as `mad desktop -exit-on-stdin-eof` does.
+        let fake = try script("echo http://127.0.0.1:43210/#token=feedbeef\ncat >/dev/null")
+        let probeURL = Bundle(for: LocalServerTests.self).bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("launcher-probe")
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: probeURL.path), "launcher-probe is not built")
+        let app = Process()
+        app.executableURL = probeURL
+        app.arguments = [fake.path]
+        let out = Pipe()
+        app.standardOutput = out
+        try app.run()
+        defer { if app.isRunning { app.terminate() } }
+        let line = String(decoding: out.fileHandleForReading.availableData, as: UTF8.self)
+        guard let pid = Int32(line.trimmingCharacters(in: .whitespacesAndNewlines)) else { return XCTFail("probe said: \(line)") }
+        XCTAssertEqual(kill(pid, 0), 0, "the server runs while the app does")
+        kill(app.processIdentifier, SIGKILL)
+        app.waitUntilExit()
+        var gone = false
+        for _ in 0..<100 where !gone {
+            Thread.sleep(forTimeInterval: 0.05)
+            gone = kill(pid, 0) != 0
+        }
+        XCTAssertTrue(gone, "the server is still running 5 s after the app was killed")
+    }
     #endif
 }
