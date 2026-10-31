@@ -8,11 +8,13 @@ repository tells how to build and install it; this file is for working on it.
 - `MadKit/` is a Swift package with the core, tested with `swift test` on the
   Mac (no simulator needed): pairing-link parsing (`Pairing`), the `/api/deck`,
   `/api/inbox` and `/api/pair` client (`MadClient`, `PendingPairing`), snapshot
-  and inbox decoding (`DeckSnapshot`), and `PairingBook`, the rules for the
-  paired Macs.
+  and inbox decoding (`DeckSnapshot`), conversations (`ChatEntry`,
+  `ChatTranscript`, `ChatSession`), usage and how its resets are worded
+  (`Usage`, `UsageWording`), and `PairingBook`, the rules for the paired Macs.
 - `App/` is the SwiftUI app: the Macs list (`MacsView`), an opened Mac with
-  its Needs you and Deck tabs (`MacView`, `NeedsView`, `MacModel`), the camera
-  (`ScannerScreen`) and storage (`MacStore`).
+  its Needs you and Deck tabs and the Usage page (`MacView`, `NeedsView`,
+  `UsageView`, `MacModel`), an agent's conversation, opened from a card's Open
+  button (`ChatView`), the camera (`ScannerScreen`) and storage (`MacStore`).
 - `project.yml` is the XcodeGen spec. The `.xcodeproj` is generated and
   gitignored.
 
@@ -85,10 +87,14 @@ Debug builds only (none of this is compiled into Release):
   - `-pairLink <url>` pairs when no Mac is stored yet,
   - `-openMac YES` opens the first Mac,
   - `-startTab deck` starts on the Deck tab,
+  - `-openAgent <id>` opens that agent's conversation,
+  - `-openUsage YES` opens the Usage page,
+  - `-expandTools YES` starts every tool call in a conversation open,
   - `-fixture inbox` shows a sample Mac, "Studio", with one inbox item of each
     kind, without a server; acts send nothing and say so. Use it with
-    `-openMac YES`. `-fixtureSkip N` leaves out the first N items, to see the
-    ones below the fold.
+    `-openMac YES`, and with it a sample conversation for every agent and sample
+    usage. `-fixtureSkip N` leaves out the first N items, to see the ones below
+    the fold; `-fixture longlabel` is one item with very long buttons.
 
 Never point a test at the real deck's server and tap an act: allow, deny and
 reply answer real agents. Use `-fixture inbox`, or an isolated server (a

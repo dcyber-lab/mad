@@ -115,7 +115,7 @@ final class SnapshotTests: XCTestCase {
         {"key": "perm:1", "kind": "permission", "title": "kim", "context": "Bash", "text": "go test ./...", "blocks": true, "acts": []},
         {"key": "done:2", "kind": "finished", "title": "gus", "acts": []}
       ], "needs": 1},
-      "working": ["claude-3fe9"], "teams": [], "states": [], "at": "2026-10-31T13:00:00Z"
+      "working": ["claude-3fe9"], "states": [], "at": "2026-10-31T13:00:00Z"
     }
     """
 
