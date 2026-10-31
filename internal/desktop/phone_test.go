@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -236,5 +237,39 @@ func TestPushBoundToDevice(t *testing.T) {
 		if sub.Device != want {
 			t.Errorf("%s bound to %q, want %q", sub.Endpoint, sub.Device, want)
 		}
+	}
+}
+
+// The Mac's friendly name is in the deck's snapshot and in the pair reply,
+// looked up once.
+func TestMachineName(t *testing.T) {
+	isolate(t)
+	oldLookup := lookupMachine
+	calls := 0
+	lookupMachine = func() string { calls++; return "Ann's MacBook Pro" }
+	machineOnce, machineName = sync.Once{}, ""
+	t.Cleanup(func() {
+		lookupMachine = oldLookup
+		machineOnce, machineName = sync.Once{}, ""
+	})
+	s := New(agent.Builtin())
+	h := s.Handler()
+	for i := 0; i < 3; i++ {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "/api/deck?token="+s.Token, nil))
+		var snap struct{ Machine string }
+		if json.Unmarshal(w.Body.Bytes(), &snap) != nil || snap.Machine != "Ann's MacBook Pro" {
+			t.Fatalf("deck machine: %s", w.Body)
+		}
+	}
+	code, _ := phone.PairCode()
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/api/pair", strings.NewReader(`{"code":"`+code+`","name":"x","token":"0123456789abcdef0123456789abcdef"}`)))
+	var out struct{ ID, Machine string }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Machine != "Ann's MacBook Pro" || out.ID == "" {
+		t.Errorf("pair reply: %d %s", w.Code, w.Body)
+	}
+	if calls != 1 {
+		t.Errorf("looked up %d times", calls)
 	}
 }

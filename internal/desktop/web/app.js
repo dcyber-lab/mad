@@ -20,6 +20,18 @@ function holdWindow() {
   // The server went away or restarted: say so again when it is back.
   ws.onclose = () => setTimeout(holdWindow, 1000);
 }
+// Inside the iOS app (#embed=app, kept for the session like the token): the
+// app draws its own bars, so the page leaves out its footer row and what
+// only suits a browser (the phone and notification buttons, the service
+// worker).
+const embed = (() => {
+  try {
+    if (new URLSearchParams(location.hash.slice(1)).get("embed") === "app") sessionStorage.setItem("mad.embed", "app");
+    return sessionStorage.getItem("mad.embed") === "app";
+  } catch (_) { return new URLSearchParams(location.hash.slice(1)).get("embed") === "app"; }
+})();
+document.documentElement.classList.toggle("embed", embed);
+
 // The token: the one in the URL's fragment (#token=, the local window's),
 // else the one kept (the device's own, got by pair.js; a phone's home
 // screen opens the page without it). Out of sight once read.
@@ -1320,7 +1332,7 @@ function close(id) {
 let toOpen = new URLSearchParams(location.search).get("agent");
 let toOpenChannel = new URLSearchParams(location.search).get("channel");
 if (toOpen || toOpenChannel) history.replaceState(null, "", location.pathname);
-if ("serviceWorker" in navigator && isSecureContext) {
+if (!embed && "serviceWorker" in navigator && isSecureContext) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
   navigator.serviceWorker.addEventListener("message", (e) => {
     if (e.data && (e.data.open || e.data.channel)) {

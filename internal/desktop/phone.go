@@ -80,7 +80,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, map[string]string{"id": id})
+	reply(w, map[string]string{"id": id, "machine": machine()})
 }
 
 // phoneDevices lists the paired phones (GET) or removes one (DELETE ?id=).

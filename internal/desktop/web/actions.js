@@ -1016,6 +1016,23 @@ async function notifyDialog() {
 $("#newchat").onclick = () => openNew();
 $("#emptynew").onclick = () => openNew();
 $("#addproject").onclick = () => addProject();
+
+// In the app the footer's icon row is not drawn: what was there that suits
+// it (adding a project, Skills, the theme, how many agents) is in this menu.
+$("#more").hidden = !embed;
+$("#more").onclick = async () => {
+  const v = await dialog({
+    title: "mad",
+    body: el("p", "dtext muted", $("#summary").textContent),
+    actions: [
+      { label: "Add project", value: "project" },
+      { label: "Skills", value: "skills" },
+      { label: `Theme: ${theme}`, value: "theme" },
+      { label: "Close", cls: "primary", value: null },
+    ],
+  });
+  if (v) $({ project: "#addproject", skills: "#skills", theme: "#theme" }[v]).click();
+};
 $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();
 window.addEventListener("keydown", (e) => {

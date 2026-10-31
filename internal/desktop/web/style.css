@@ -1407,3 +1407,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   padding: 4px 0;
   font-size: 13px;
 }
+
+/* Inside the iOS app (#embed=app): its own bars draw the navigation, so the
+   footer's icon row is not drawn; its useful part is the header's more menu. */
+html.embed .foot { display: none; }

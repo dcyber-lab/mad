@@ -2,6 +2,10 @@ package desktop
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +44,32 @@ type Snapshot struct {
 	// word, dot and color from it, as the deck does.
 	States []status.Look `json:"states"`
 	At     time.Time     `json:"at"`
+	// Machine is this Mac's friendly name, for the app's list of Macs.
+	Machine string `json:"machine"`
+}
+
+// lookupMachine finds the name; tests replace it.
+var lookupMachine = func() string {
+	if runtime.GOOS == "darwin" {
+		if out, err := exec.Command("scutil", "--get", "ComputerName").Output(); err == nil {
+			if n := strings.TrimSpace(string(out)); n != "" {
+				return n
+			}
+		}
+	}
+	h, _ := os.Hostname()
+	return strings.TrimSuffix(h, ".local")
+}
+
+var (
+	machineOnce sync.Once
+	machineName string
+)
+
+// machine is this Mac's friendly name, looked up once per server start.
+func machine() string {
+	machineOnce.Do(func() { machineName = lookupMachine() })
+	return machineName
 }
 
 type Project struct {
@@ -125,7 +155,7 @@ func newPoller(kinds []agent.Kind, l *looks) *poller {
 		reader:   transcript.NewReader(),
 		infos:    map[string]transcript.Info{},
 		gits:     map[string]git.Info{},
-		snap:     Snapshot{Projects: []Project{}, States: status.Looks},
+		snap:     Snapshot{Projects: []Project{}, States: status.Looks, Machine: machine()},
 	}
 }
 
@@ -193,7 +223,7 @@ func (p *poller) Poll(now time.Time) {
 	}
 
 	queues, _ := queue.All()
-	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}, States: status.Looks}
+	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}, States: status.Looks, Machine: machine()}
 	seen := map[string]bool{}
 	var facts []attention.Agent
 	for _, pr := range st.Projects {
