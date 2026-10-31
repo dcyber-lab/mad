@@ -1118,7 +1118,7 @@ function open(id) {
     parts: new Map(), // message id → its parts the transcript has (claude)
     partIDs: new Set(), // parts the transcript has, by their own id (codex)
     msg: null, version: 0, msgAt: 0, follow: null, // the message being written (/api/live)
-    mdParts: new Map(), mdMsg: "", liveFrame: 0, // its rendered text parts, by place; a frame drawing it
+    mdParts: new Map(), mdWraps: new Map(), mdMsg: "", liveFrame: 0, // its rendered text parts, by place; a frame drawing it
   };
   opened.set(id, o);
   return o;
@@ -1561,12 +1561,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function drawLive(o) {
   const atEnd = nearEnd(o);
   const box = o.live;
-  box.replaceChildren();
+  const parts = [];
   const m = o.msg;
   const fresh = m && m.id && !(m.done && Date.now() - o.msgAt > 5000);
   const hostCodex = windowed(agents.get(o.id)) && agents.get(o.id)?.kind === "codex";
   if (m && m.id !== o.mdMsg) {
     o.mdParts.clear();
+    o.mdWraps.clear();
     o.mdMsg = m.id;
   }
   let shown = false;
@@ -1577,15 +1578,19 @@ function drawLive(o) {
       // or ones of the same id.
       if (i < had || b.id && (o.partIDs.has(b.id) || o.calls.has(b.id))) continue;
       if (b.kind === "text" && (b.text || "").trim()) {
-        const n = el("div", `msg from-agent${b.done ? "" : " streaming"}`);
-        n.append(mdPart(o, i, b.text, b.done));
-        box.append(n);
+        const n = o.mdWraps.get(i) || el("div");
+        o.mdWraps.set(i, n);
+        const cls = `msg from-agent${b.done ? "" : " streaming"}`;
+        if (n.className !== cls) n.className = cls;
+        const body = mdPart(o, i, b.text);
+        if (n.firstChild !== body) n.replaceChildren(body);
+        parts.push(n);
         shown = true;
       } else if (b.kind === "thinking" && !b.done) {
         const n = el("div", "thinking");
         n.append(el("span", "what shimmer", "Thinking"));
         if (b.text) n.append(el("div", "gist", b.text.slice(-300)));
-        box.append(n);
+        parts.push(n);
         shown = true;
       } else if (b.kind === "tool") {
         // codex run here: its host's items are not the transcript's, so a
@@ -1599,7 +1604,7 @@ function drawLive(o) {
         const args = json ? (b.done ? parseArgs(text) : {}) : b.tool === "exec" ? { input: text } : {};
         const d = callCard(b.tool, args, ctx, json ? hint(text) : shortPath(firstLine(text), ctx.dir));
         d.classList.add(b.done ? "done" : "pending");
-        box.append(d);
+        parts.push(d);
         shown = true;
       }
     }
@@ -1617,9 +1622,19 @@ function drawLive(o) {
   if (!shown && running && busy) {
     const n = el("div", "busy");
     n.append(el("span", "spin"), el("span", "shimmer", a.tool ? [a.tool, a.target].filter(Boolean).join(" · ") : "Working"));
-    box.append(n);
+    parts.push(n);
   }
+  setChildren(box, parts);
   if (atEnd) o.chat.scrollTop = o.chat.scrollHeight;
+}
+
+// setChildren makes box hold nodes. A node already in its place stays where
+// it is: taking it out of the page would make the browser lay it out again.
+function setChildren(box, nodes) {
+  nodes.forEach((n, k) => {
+    if (box.childNodes[k] !== n) box.insertBefore(n, box.childNodes[k] || null);
+  });
+  while (box.childNodes.length > nodes.length) box.lastChild.remove();
 }
 
 // mdCut is where text can be cut for parsing in parts: after a blank line
@@ -1644,8 +1659,8 @@ function mdCut(text) {
 // mdPart renders text part i of the message being written as one block. The
 // part up to its last cut keeps its rendering from earlier looks, so only
 // what follows the cut is parsed again.
-function mdPart(o, i, text, done) {
-  const cut = done ? text.length : mdCut(text);
+function mdPart(o, i, text) {
+  const cut = mdCut(text);
   let e = o.mdParts.get(i);
   if (!e || !text.startsWith(e.head) || cut < e.head.length) {
     e = { head: "", div: el("div", "md"), tail: [] };
