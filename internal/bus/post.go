@@ -296,6 +296,54 @@ func ReplyImages(ch, text string, seq int, images []Image) (PostResult, error) {
 	return res, err
 }
 
+// CheckReply says whether the person may post to ch now, before anything is
+// kept for the post: the channel is there, or it is a DM of theirs with an
+// agent that is.
+func CheckReply(ch string) error {
+	if !isDM(ch) {
+		cl, err := loadChannels()
+		if err != nil {
+			return err
+		}
+		if c := cl.find(ch); c == nil || c.Archived {
+			return fmt.Errorf("no channel #%s", ch)
+		}
+		return nil
+	}
+	ids := DMSides(ch)
+	if len(ids) != 2 || (ids[0] != You && ids[1] != You) {
+		return ErrTheirDM
+	}
+	to := ids[0]
+	if to == You {
+		to = ids[1]
+	}
+	return CheckDM(From{ID: You, Label: You}, to)
+}
+
+// CheckDM says whether from may message agent to: it is one, not itself,
+// and not in a run.
+func CheckDM(from From, to string) error {
+	if to == "" {
+		return errors.New("no one to send to")
+	}
+	if to == from.ID {
+		return errors.New("a message to yourself reaches no one")
+	}
+	st, err := state.Load()
+	if err != nil {
+		return err
+	}
+	a := findIn(st, to)
+	if a == nil {
+		return fmt.Errorf("no agent %q", to)
+	}
+	if a.Run != "" {
+		return fmt.Errorf("%s is in a run; use mad run note", drive.Label(a))
+	}
+	return nil
+}
+
 func post(sp postSpec) (PostResult, error) {
 	text := strings.TrimSpace(sp.text)
 	if text == "" && len(sp.images) == 0 {
@@ -355,6 +403,11 @@ func post(sp postSpec) (PostResult, error) {
 		}
 		if mads(sp.kind) && c.Paused {
 			return errNudgePaused
+		}
+		for _, im := range sp.images {
+			if im.Path() == "" { // collected, or never kept
+				return fmt.Errorf("a picture of this message is gone: send it again")
+			}
 		}
 		msgs, err := readMsgs(c.ID)
 		if err != nil {

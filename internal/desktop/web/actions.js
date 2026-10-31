@@ -770,25 +770,48 @@ function splitPatch(patch) {
 
 const pendingImgs = []; // { mime, data (base64), url }
 
+// MAX_IMAGES and MAX_IMAGE_BYTES are the server's limits (bus.MaxImages and
+// bus.MaxImageBytes; a test keeps them equal).
+const MAX_IMAGES = 6;
+const MAX_IMAGE_BYTES = 10 << 20;
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+// addImages takes the files that are pictures, up to what a message takes
+// counting the ones still being read, and says how many it left out.
 function addImages(files) {
+  let left = 0;
+  const bad = [];
   for (const f of files) {
     if (!f.type.startsWith("image/")) continue;
-    if (f.size > 10 << 20) {
-      toast(`${f.name || "An image"} is over 10 MB`, "err");
+    if (!IMAGE_TYPES.includes(f.type)) {
+      bad.push(f.name || "An image");
       continue;
     }
-    if (pendingImgs.length >= 8) {
-      toast("8 images at most", "err");
-      break;
+    if (f.size > MAX_IMAGE_BYTES) {
+      toast(`${f.name || "An image"} is over ${MAX_IMAGE_BYTES >> 20} MB`, "err");
+      continue;
     }
+    if (pendingImgs.length + pendingReads >= MAX_IMAGES) {
+      left++;
+      continue;
+    }
+    pendingReads++;
     const reader = new FileReader();
     reader.onload = () => {
+      pendingReads--;
       const url = String(reader.result);
       pendingImgs.push({ mime: f.type, data: url.slice(url.indexOf(",") + 1), url });
       drawImages();
     };
+    reader.onerror = () => {
+      pendingReads--;
+      toast(`${f.name || "An image"} could not be read`, "err");
+      drawImages();
+    };
     reader.readAsDataURL(f);
   }
+  if (bad.length) toast(`${bad.join(", ")}: send a png, jpeg, gif or webp (a HEIC photo as a JPEG)`, "err");
+  if (left) toast(`${MAX_IMAGES} images at most: ${left} left out`, "err");
 }
 
 function drawImages() {
