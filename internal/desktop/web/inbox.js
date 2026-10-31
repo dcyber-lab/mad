@@ -337,7 +337,8 @@ function replyBox(it, r) {
 }
 
 // act sends the person's choice: no hold, the agent waits on it. 409: it
-// was handled already (elsewhere, or it stopped waiting); 400: its error.
+// was handled already (elsewhere, or it stopped waiting), or it asks
+// something else now, as the server's text says; 400: its error.
 async function act(it, a, text) {
   if (ib.pending.has(it.key)) return; // one act per item: it is already sent
   ib.pending.set(it.key, { verb: a.verb, label: a.label, option: a.option || "", at: Date.now(), done: 0 });
@@ -350,7 +351,7 @@ async function act(it, a, text) {
       body: JSON.stringify({ key: it.key, verb: a.verb, option: a.option || "", text: text || "" }),
     });
     if (r.status === 409) {
-      toast("Already handled: it is not waiting on you any more");
+      toast((await r.text()).trim() || "Already handled: it is not waiting on you any more");
     } else if (!r.ok) {
       ib.pending.delete(it.key);
       toast((await r.text()).trim() || r.statusText, "err");

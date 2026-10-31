@@ -2,6 +2,7 @@ package attention
 
 import (
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,18 @@ func keyWait(agent string, at time.Time, prompt string) Key {
 		k += "/" + prompt
 	}
 	return Key(k)
+}
+
+// keyAgent is the agent a request's or a wait's key is of, "" for any
+// other key. An agent's id names its files: it has no "/".
+func keyAgent(k Key) string {
+	for _, kind := range []string{"req:", "wait:"} {
+		if rest, ok := strings.CutPrefix(string(k), kind); ok {
+			agent, _, _ := strings.Cut(rest, "/")
+			return agent
+		}
+	}
+	return ""
 }
 
 // keyMessage: a message on the bus (an @you, a DM).

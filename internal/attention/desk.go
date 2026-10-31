@@ -12,6 +12,10 @@ var (
 	// ErrGone: no such item is open: answered already (here, on another
 	// surface, in the agent's TUI) or no longer waiting.
 	ErrGone = errors.New("that was answered already")
+	// ErrChanged: no such item is open, and its agent asks something else
+	// now (another prompt, another request): an act meant for the old one
+	// is never sent to the new.
+	ErrChanged = errors.New("it asks something else now")
 	// ErrNotOffered: the item does not offer that act (or that option).
 	ErrNotOffered = errors.New("that cannot be done to it")
 )
@@ -97,9 +101,11 @@ func (d *Desk) View() View {
 }
 
 // Act carries out a on the item with key k, once: a second act on the
-// same key (a double tap, the phone and the window both) is ErrGone. a
-// must be one of the item's acts, with one of its options: the surface is
-// not trusted to offer only what the item does. VerbOpen is not sent.
+// same key (a double tap, the phone and the window both) is ErrGone; an
+// act on an item gone while its agent waits on something else is
+// ErrChanged. a must be one of the item's acts, with one of its options:
+// the surface is not trusted to offer only what the item does. VerbOpen
+// is not sent.
 //
 // The lock is not held while the route works (a host can take seconds).
 // If the route fails, the item shows again at the next look.
@@ -107,8 +113,12 @@ func (d *Desk) Act(k Key, a Answer) error {
 	d.mu.Lock()
 	it, ok := d.view.Inbox.Find(k)
 	if _, acted := d.acted[k]; !ok || acted {
+		err := ErrGone
+		if !ok && d.asks(keyAgent(k)) {
+			err = ErrChanged
+		}
 		d.mu.Unlock()
-		return ErrGone
+		return err
 	}
 	if !offered(it, a) {
 		d.mu.Unlock()
@@ -121,7 +131,7 @@ func (d *Desk) Act(k Key, a Answer) error {
 	err := it.route.do(a, &f)
 	if err != nil {
 		d.mu.Lock()
-		if errors.Is(err, ErrGone) {
+		if errors.Is(err, ErrGone) || errors.Is(err, ErrChanged) {
 			d.gone[k] = true // answered elsewhere: it must not come back
 		} else {
 			delete(d.acted, k)
@@ -129,6 +139,20 @@ func (d *Desk) Act(k Key, a Answer) error {
 		d.mu.Unlock()
 	}
 	return err
+}
+
+// asks tells whether agent waits on the person in the view: a prompt or
+// a request of its is an item. d.mu is held.
+func (d *Desk) asks(agent string) bool {
+	if agent == "" {
+		return false
+	}
+	for _, it := range d.view.Inbox.NeedsYou() {
+		if keyAgent(it.Key) == agent {
+			return true
+		}
+	}
+	return false
 }
 
 // offered tells whether a is one of it's acts: the same verb, and the

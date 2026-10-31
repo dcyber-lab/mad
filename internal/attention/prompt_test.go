@@ -300,20 +300,25 @@ func TestKeysRouteNoEnterOnceTaken(t *testing.T) {
 	}
 }
 
-// The prompt changed between the look and the act (answered in the pane,
-// or another one): ErrGone, nothing sent.
+// The prompt changed between the look and the act: answered in the pane
+// (ErrGone), or another one shows, read or not (ErrChanged). Nothing is
+// sent.
 func TestKeysRouteStale(t *testing.T) {
-	for name, now := range map[string]string{
-		"answered":      "",
-		"another":       strings.Replace(fixture(t, "claude-bash.txt"), "\n echo hello-b3k", "\n rm -rf out1.txt; echo", 1),
-		"another kind":  fixture(t, "claude-write.txt"),
-		"not a prompt":  fixture(t, "claude-ask-two.txt"),
-		"working again": fixture(t, "codex-working.txt"),
+	for name, c := range map[string]struct {
+		screen string
+		err    error
+	}{
+		"answered":      {"", ErrGone},
+		"another":       {strings.Replace(fixture(t, "claude-bash.txt"), "\n echo hello-b3k", "\n rm -rf out1.txt; echo", 1), ErrChanged},
+		"another kind":  {fixture(t, "claude-write.txt"), ErrChanged},
+		"unread":        {fixture(t, "claude-ask-two.txt"), ErrChanged},
+		"amended":       {strings.Replace(fixture(t, "claude-bash.txt"), "Tab to amend", "Enter to submit", 1), ErrChanged},
+		"working again": {fixture(t, "codex-working.txt"), ErrGone},
 	} {
 		k := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{})
 		it := k.item(t)
-		k.screen = now
-		if err := k.d.Act(it.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
+		k.screen = c.screen
+		if err := k.d.Act(it.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, c.err) || k.sent != nil {
 			t.Errorf("%s: %v, sent %q", name, err, k.sent)
 		}
 		// Gone stays hidden while listed; the next look with the changed
@@ -325,13 +330,18 @@ func TestKeysRouteStale(t *testing.T) {
 			}
 		}
 	}
-	// Likewise an act on the old prompt's key after a look saw the new one.
+	// Likewise an act on the old prompt's key after a look saw the new
+	// one; once it asks nothing, the old key is gone.
 	k := newKeyed(t, fixture(t, "claude-bash.txt"), transcript.Info{})
 	old := k.item(t)
 	k.screen = fixture(t, "claude-write.txt")
 	k.look(transcript.Info{})
-	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
+	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrChanged) || k.sent != nil {
 		t.Errorf("old key: %v, sent %q", err, k.sent)
+	}
+	k.d.Look(Facts{Now: time.Now()})
+	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
+		t.Errorf("old key, nothing asked: %v, sent %q", err, k.sent)
 	}
 }
 
