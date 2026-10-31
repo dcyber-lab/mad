@@ -88,6 +88,14 @@ func pageURL(host, token string) string {
 	return fmt.Sprintf("https://%s/#token=%s", Origin(host), token)
 }
 
+// ExistingToken is the phone's token if one was made, and never makes
+// one: ok is false before the phone was first turned on.
+func ExistingToken() (string, bool) {
+	b, err := os.ReadFile(paths.PhoneToken())
+	t := strings.TrimSpace(string(b))
+	return t, err == nil && len(t) >= 32
+}
+
 // Token is the phone's token, made the first time.
 func Token() (string, error) {
 	if b, err := os.ReadFile(paths.PhoneToken()); err == nil && len(strings.TrimSpace(string(b))) >= 32 {

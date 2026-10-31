@@ -45,6 +45,8 @@ type Server struct {
 	modelList *answers[discover.Model]
 	// interrupts: when each agent was last interrupted (/api/interrupt).
 	interrupts interrupts
+	// wins: the app windows open on this server (window_life.go).
+	wins windows
 }
 
 // New makes a server with a fresh random token.
@@ -74,6 +76,8 @@ func (s *Server) Handler() http.Handler {
 	// the URL's fragment, which the browser never sends.
 	mux.Handle("GET /", http.FileServerFS(web))
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
+	mux.Handle("GET /api/window", s.auth(http.HandlerFunc(s.window)))
+	mux.Handle("GET /api/window/state", s.auth(http.HandlerFunc(s.windowState)))
 	mux.Handle("GET /api/chat", s.auth(http.HandlerFunc(s.chat)))
 	mux.Handle("GET /api/live", s.auth(http.HandlerFunc(s.live)))
 	mux.Handle("GET /api/commands", s.auth(http.HandlerFunc(s.commands)))

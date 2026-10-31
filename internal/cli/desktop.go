@@ -2,9 +2,14 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
@@ -36,6 +41,25 @@ func desktopCmd(args []string, stdio IO) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
+	id := windowID()
+	// A window opens on the phone's server when it is up and answers to
+	// the phone's token, rather than on a server of its own with a second
+	// poller doing the same tmux work. The server stays when the window
+	// closes: only the window's browser ends.
+	if !*serve && !*noWindow && !flagSet(fs, "addr") {
+		if t, ok := phone.ExistingToken(); ok {
+			base := fmt.Sprintf("http://127.0.0.1:%d", phone.Port)
+			client := &http.Client{Timeout: 3 * time.Second}
+			if desktop.Reusable(ctx, client, base, t) {
+				fmt.Fprintf(stdio.Err, "mad: window on the phone's server (%s); it keeps running when the window closes\n", base)
+				openWindow(ctx, stdio, base+"/#token="+t+"&win="+id, func() bool {
+					return desktop.OpenOnServer(ctx, client, base, t, id)
+				}, stop)
+				<-ctx.Done()
+				return nil
+			}
+		}
+	}
 	srv := desktop.New(kinds())
 	if *origin != "" {
 		srv.Origins = []string{*origin}
@@ -58,22 +82,57 @@ func desktopCmd(args []string, stdio IO) error {
 		if *noWindow {
 			return
 		}
-		go func() {
-			profile := desktop.ProfileDir(paths.StateDir())
-			_ = os.MkdirAll(profile, 0o700)
-			cmd := desktop.WindowCommand(url, profile)
-			started := time.Now()
-			if err := cmd.Run(); err != nil {
-				fmt.Fprintf(stdio.Err, "mad: no window (%v); open the URL above\n", err)
-				return
-			}
-			// A browser that hands the page to one already running, or
-			// xdg-open, returns at once; the window outlives it.
-			if time.Since(started) > 3*time.Second {
-				stop()
-				return
-			}
-			fmt.Fprintln(stdio.Err, "mad: serving until Ctrl-C")
-		}()
+		openWindow(ctx, stdio, url+"&win="+id, func() bool { return srv.WindowOpen(id) }, stop)
 	})
+}
+
+// flagSet says whether flag name was given.
+func flagSet(fs *flag.FlagSet, name string) bool {
+	var set bool
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
+}
+
+func windowID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// openWindow opens url in mad's app window and, in the background, ends
+// mad (stop) when the window is closed: closing it does not quit the
+// browser on a Mac, so the browser on mad's profile is closed too, never
+// the person's own. open says whether the page is still there.
+func openWindow(ctx context.Context, stdio IO, url string, open func() bool, stop func()) {
+	go func() {
+		profile := desktop.ProfileDir(paths.StateDir())
+		_ = os.MkdirAll(profile, 0o700)
+		cmd := desktop.WindowCommand(url, profile)
+		own := slices.Contains(cmd.Args, "--user-data-dir="+profile)
+		started := time.Now()
+		if own {
+			go func() {
+				desktop.WatchWindow(ctx, open)
+				if ctx.Err() == nil {
+					desktop.CloseBrowser(profile)
+					stop()
+				}
+			}()
+		}
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(stdio.Err, "mad: no window (%v); open the URL above\n", err)
+			return
+		}
+		// A browser that hands the page to one already running, or
+		// xdg-open, returns at once; the window outlives it.
+		if time.Since(started) > 3*time.Second {
+			stop()
+			return
+		}
+		if own {
+			fmt.Fprintln(stdio.Err, "mad: serving until the window closes")
+		} else {
+			fmt.Fprintln(stdio.Err, "mad: serving until Ctrl-C")
+		}
+	}()
 }

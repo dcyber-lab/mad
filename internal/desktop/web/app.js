@@ -4,6 +4,22 @@
 // (/api/live).
 "use strict";
 
+// The id mad gave this window (&win= in the URL), kept over a reload: the
+// window tells the server it is open by holding a websocket named by it,
+// and mad ends with the window (window_life.go).
+const winId = (() => {
+  try {
+    const w = new URLSearchParams(location.hash.slice(1)).get("win");
+    if (w) sessionStorage.setItem("mad.win", w);
+    return w || sessionStorage.getItem("mad.win") || "";
+  } catch (_) { return ""; }
+})();
+function holdWindow() {
+  if (!winId) return;
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/window?${new URLSearchParams({ token, id: winId })}`);
+  // The server went away or restarted: say so again when it is back.
+  ws.onclose = () => setTimeout(holdWindow, 1000);
+}
 // The token: in the URL's fragment, else the one kept from it (a phone's
 // home screen opens the page without it). Out of sight once read.
 const token = (() => {
@@ -2068,4 +2084,5 @@ window.addEventListener("keydown", (e) => {
 function localStorageGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private window */ } }
 
+holdWindow();
 poll();

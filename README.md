@@ -274,6 +274,11 @@ right. It draws the agents itself, without a terminal: claude, codex and
 pi run in it headless, and the terminal deck can be open at the same time.
 Agents keep running when it closes.
 
+Closing the window ends `mad desktop` and the browser it opened (on a Mac
+the browser would otherwise stay running with no window); a reload does
+not. While the phone is on, the window opens on the phone's server instead
+of a second one, which keeps running when the window closes.
+
 A tab is the agent's conversation: what you asked, its replies as
 formatted markdown as it writes them, and its tool calls, each drawn as
 what it does: an edit as its diff, a file written with its lines, a
