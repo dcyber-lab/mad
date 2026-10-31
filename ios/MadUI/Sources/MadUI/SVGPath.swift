@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Parses SVG path data (M L H V C A Z, absolute and relative) into a Path, so
+/// Parses SVG path data (M L H V C Q A Z, absolute and relative) into a Path, so
 /// the characters are drawn from the very strings the web page uses.
 enum SVGPath {
     static func parse(_ d: String) -> Path {
@@ -32,6 +32,10 @@ enum SVGPath {
                       let d1 = tokens.number(), let e = tokens.number(), let f = tokens.number() else { return path }
                 let p1 = pt(a, b), p2 = pt(c1, d1), p3 = pt(e, f)
                 path.addCurve(to: p3, control1: p1, control2: p2); cur = p3
+            case "Q":
+                guard let a = tokens.number(), let b = tokens.number(), let c1 = tokens.number(), let d1 = tokens.number() else { return path }
+                let p1 = pt(a, b), p2 = pt(c1, d1)
+                path.addQuadCurve(to: p2, control: p1); cur = p2
             case "A":
                 guard let rx = tokens.number(), let ry = tokens.number(), let rot = tokens.number(),
                       let large = tokens.number(), let sweep = tokens.number(),

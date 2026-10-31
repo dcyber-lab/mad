@@ -60,6 +60,18 @@ final class PathTests: XCTestCase {
         XCTAssertEqual(r.maxX, 20, accuracy: 0.01)
     }
 
+    func testQuadraticCurveIsDrawn() {
+        let r = tight(SVGPath.parse("M21 29 q3 2.6 6 0")) // the calm face's smile
+        XCTAssertEqual(r.width, 6, accuracy: 0.01)
+        XCTAssertEqual(r.maxY, 30.3, accuracy: 0.01)
+    }
+
+    func testEveryFaceMarkHasAShape() {
+        for (i, face) in CharacterLook.faces.enumerated() {
+            for m in face { XCTAssertFalse(m.path.isEmpty, "face \(i)") }
+        }
+    }
+
     func testLargeArcTakesTheLongWay() {
         let small = tight(SVGPath.parse("M0 0 A10 10 0 0 1 10 10"))
         XCTAssertEqual(small.minY, 0, accuracy: 0.01)
