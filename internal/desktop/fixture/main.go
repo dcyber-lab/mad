@@ -105,7 +105,12 @@ func listen(addr string) (net.Listener, error) {
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return nil, errors.New("only a loopback address: the fixture takes any token")
 	}
-	if port == "7484" {
+	// The port as a number, so 07484 and +7484 are 7484 too; a name for a port is not taken.
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, fmt.Errorf("port %q is not a number", port)
+	}
+	if n == 7484 {
 		return nil, errors.New("7484 is the deck's")
 	}
 	return net.Listen("tcp", addr)

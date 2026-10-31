@@ -58,7 +58,8 @@ function groupChar(members, small) {
   const v = el("span", `avatar chara group${small ? " small" : ""}${working ? " s-running" : ""}`);
   const minis = mem.map((a, i) => `<g class="mini m${i + 1}">${charSVG(a.id, positions[i])}</g>`).join("");
   v.setAttribute("role", "img");
-  v.setAttribute("aria-label", working ? "working" : members.some((a) => shownStatus(a) === "waiting") ? "needs you" : "idle");
+  v.setAttribute("aria-label", working ? "working" : members.some((a) => shownStatus(a) === "waiting") ? "needs you"
+    : members.some((a) => shownStatus(a) === "starting") ? "starting" : "idle");
   v.innerHTML = `<svg viewBox="0 0 48 48"><rect class="tile" x="1" y="1" width="46" height="46" rx="15"/>${minis || '<text x="24" y="31" text-anchor="middle" class="hash">#</text>'}</svg>`;
   return v;
 }
