@@ -406,18 +406,20 @@ function drawWait(o, a) {
   const asks = a.status === "waiting";
   const it = asks ? needsYou().find((x) => x.agent === a.id) : null;
   const acting = !!it && it.acts.some((x) => x.verb !== "open");
-  const text = !asks ? "Running in the terminal deck: watch it here; it comes here once done."
-    : acting ? "Waiting on you in the terminal deck: answer it here or there."
-      : "Waiting on you in the terminal deck: answer it there.";
+  // waiting with no item: its prompt is off its screen for a moment,
+  // answered or not drawn yet (status.Tracker.Clearing)
+  const text = !asks || !it ? "Running in the terminal deck: watch it here; it comes here once done."
+    : acting ? "Waiting on you in the terminal deck: answer it here or there; it comes here once done."
+      : "Waiting on you in the terminal deck: answer it there; it comes here once done.";
   const p = it && ib.pending.get(it.key);
   const sig = JSON.stringify([text, it, p && [p.verb, p.label, p.option], it && ib.reply?.key === it.key ? ib.reply.where : ""]);
   if (o.wait.dataset.text === sig) return;
   o.wait.dataset.text = sig;
-  o.wait.className = `wait${asks ? " asks" : ""}`;
+  o.wait.className = `wait${it ? " asks" : ""}`;
   const line = el("div", "wl");
-  line.append(icon(asks ? "alert" : "terminal"), el("span", "", text));
+  line.append(icon(it ? "alert" : "terminal"), el("span", "", text));
   o.wait.replaceChildren(line);
-  if (!asks) return;
+  if (!it) return;
   if (acting) o.wait.append(itemCard(it, false, "wait"));
   const row = el("div", "wacts");
   row.append(rowButton("Open in terminal", "ghost", () => openTerminal(a), "the terminal deck, in your terminal app"));
