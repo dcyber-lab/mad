@@ -240,25 +240,12 @@ func (p *Project) InRun(a *Agent) bool {
 	return false
 }
 
-// TopAgents are p's agents in none of its runs. A team's agents stay
-// together, where its first one is: the sidebar draws them under the
-// team's head, and the number keys count them as drawn.
+// TopAgents are p's agents in none of its runs.
 func (p *Project) TopAgents() []*Agent {
 	var out []*Agent
-	placed := map[string]bool{}
 	for _, a := range p.Agents {
-		if p.InRun(a) || a.Team != "" && placed[a.Team] {
-			continue
-		}
-		if a.Team == "" {
+		if !p.InRun(a) {
 			out = append(out, a)
-			continue
-		}
-		placed[a.Team] = true
-		for _, b := range p.Agents {
-			if b.Team == a.Team && !p.InRun(b) {
-				out = append(out, b)
-			}
 		}
 	}
 	return out
