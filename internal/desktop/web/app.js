@@ -320,7 +320,7 @@ function projectHead(p, quiet) {
   head.tabIndex = 0;
   head.append(icon("down", "chev"), el("b", "", p.name));
   if (p.branch) {
-    const b = el("span", "branch");
+    const b = el("span", p.branch.length > 8 ? "branch long" : "branch");
     b.append(icon("branch"), p.branch);
     head.append(b);
   }

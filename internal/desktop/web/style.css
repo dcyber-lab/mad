@@ -169,8 +169,9 @@ body.stale #lightbox, body.stale #dialog { top: var(--stale-h); }
 .project > .head:hover { color: var(--text-2); }
 .project > .head .chev { width: 13px; height: 13px; transition: transform 0.15s; }
 .project.collapsed > .head .chev { transform: rotate(-90deg); }
-.project > .head b { color: var(--text); font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 55%; } /* the branch gives way first */
-.project > .head .branch { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.project > .head b { color: var(--text); font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.project > .head .branch { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1000 auto; white-space: nowrap; }
+.project > .head .branch.long { min-width: 5ch; } /* a long branch gives way first, but only down to what reads; the name takes the rest of the cut */
 .project > .head .branch .i { width: 11px; height: 11px; }
 .none { padding: 18px 10px; color: var(--text-3); line-height: 1.6; }
 
@@ -626,7 +627,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .project > .head:hover .rollup { display: none; }
 .project > .head .hacts .icon-btn { width: 24px; height: 24px; border-radius: 7px; }
 .project > .head .hacts .icon-btn .i { width: 14px; height: 14px; }
-.project > .head .hacts { margin-left: auto; }
+.project > .head .hacts { margin-left: auto; flex: none; }
+.project > .head .chev { flex: none; }
 #back, #ptitle { display: none; }
 #bar #acts { display: flex; align-items: center; gap: 6px; flex: none; }
 #bar #acts[hidden] { display: none; }
@@ -1325,7 +1327,9 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .row:has(.rt) { column-gap: 8px; }
   .row .rt { grid-row: 1 / span 2; }
   .row:has(.rt) .t2 { grid-column: 2; }
-  .project > .head { padding-top: 11px; }
+  .project > .head { padding-top: 11px; gap: 4px; }
+  .rollup .qw { display: none; }
+  .project > .head .branch.long { min-width: 8ch; }
   .nextbtn:not([hidden]) {
     display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 14px;
     border-radius: 12px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
@@ -1355,6 +1359,14 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .chead .icon-btn { width: 44px; height: 44px; }
   .chead { padding-top: 0; padding-bottom: 0; }
   /* a channel's small taps get their 44px from padding the layout gives back as margin */
-  .breply { padding: 13px 8px; margin: -13px -8px -13px auto; }
+  .bmsg .bmeta { align-items: center; min-height: 44px; margin-bottom: 0; }
+  .breply { padding: 0 8px; margin: 0 -8px 0 auto; min-height: 44px; }
+  .bquote { display: flex; align-items: center; min-height: 44px; margin: 0 0 2px; }
+  .bquote b { flex: none; margin-right: 0.3em; }
+  #chanlog { gap: 6px; }
+  /* the 22px tile that opens its agent: its 44px box is padding, taken back as margin */
+  .bmsg > .avatar.small { box-sizing: content-box; padding: 11px; margin: 0 -10px 0 -11px; border-radius: 18px; background-clip: content-box; }
+  .bmsg > .avatar.small .dot { right: 8px; bottom: 8px; }
+  #qreply .icon-btn { width: 44px; height: 44px; }
   .bcount { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; margin: -10px 0 -15px; }
 }
