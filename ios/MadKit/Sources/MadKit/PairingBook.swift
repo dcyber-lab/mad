@@ -36,14 +36,14 @@ public final class PairingBook: ObservableObject {
     public var onChange: () -> Void = {}
 
     private let secrets: SecretStore
-    private let send: (PendingPairing) async throws -> String
+    private let send: (PendingPairing) async throws -> PairResult
     private let makeToken: () throws -> String
     private let deviceName: String
     private var inFlight: Set<UUID> = []
 
     public init(secrets: SecretStore, macs: [Mac] = [], pending: [Pending] = [], deviceName: String,
                 makeToken: @escaping () throws -> String,
-                send: @escaping (PendingPairing) async throws -> String) {
+                send: @escaping (PendingPairing) async throws -> PairResult) {
         self.secrets = secrets
         self.macs = macs
         self.pending = pending
@@ -85,9 +85,10 @@ public final class PairingBook: ObservableObject {
         guard inFlight.insert(p.id).inserted else { return }
         defer { inFlight.remove(p.id) }
         do {
-            let id = try await send(p.pairing)
+            let result = try await send(p.pairing)
             guard pending.contains(where: { $0.id == p.id && $0.code == p.code }) else { return }
-            try add(Mac(name: Pairing.defaultName(for: p.base), baseURL: p.base, token: p.token, deviceID: id))
+            try add(Mac(name: result.machine ?? Pairing.defaultName(for: p.base), baseURL: p.base,
+                        token: p.token, deviceID: result.id))
             drop(p)
         } catch ConnectionError.pairingRefused {
             drop(p)
@@ -113,6 +114,7 @@ public final class PairingBook: ObservableObject {
         if let i {
             m.id = macs[i].id
             m.name = macs[i].name
+            m.renamed = macs[i].renamed
         }
         try secrets.set(m.token, for: m.id.uuidString)
         if let i { macs[i] = m } else { macs.append(m) }
@@ -123,6 +125,16 @@ public final class PairingBook: ObservableObject {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty, let i = macs.firstIndex(where: { $0.id == mac.id }) else { return }
         macs[i].name = n
+        macs[i].renamed = true
+        onChange()
+    }
+
+    /// The Mac's own name, from its snapshot: it replaces the name unless the
+    /// person renamed the Mac.
+    public func adoptMachineName(_ name: String?, for mac: Mac) {
+        guard let name, !name.isEmpty, let i = macs.firstIndex(where: { $0.id == mac.id }),
+              !macs[i].renamed, macs[i].name != name else { return }
+        macs[i].name = name
         onChange()
     }
 

@@ -8,8 +8,12 @@ public struct Mac: Hashable, Codable, Identifiable, Sendable {
     public var token: String
     /// The Mac's id for this device, from pairing (nil for a pasted token).
     public var deviceID: String?
+    /// The person gave it this name, so the Mac's own name no longer replaces it.
+    public var renamed: Bool
 
-    public init(id: UUID = UUID(), name: String, baseURL: URL, token: String, deviceID: String? = nil) {
+    public init(id: UUID = UUID(), name: String, baseURL: URL, token: String, deviceID: String? = nil,
+                renamed: Bool = false) {
+        self.renamed = renamed
         self.id = id
         self.name = name
         self.baseURL = baseURL
@@ -20,6 +24,12 @@ public struct Mac: Hashable, Codable, Identifiable, Sendable {
     /// The full mad page, which stores the token itself.
     public var deckURL: URL {
         URL(string: baseURL.absoluteString + "/#token=" + token) ?? baseURL
+    }
+
+    /// The page as the app embeds it: `embed=app` drops the page's own
+    /// bottom toolbar, which the app's tab bar replaces.
+    public var embeddedDeckURL: URL {
+        URL(string: baseURL.absoluteString + "/#token=" + token + "&embed=app") ?? baseURL
     }
 }
 

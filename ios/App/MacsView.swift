@@ -93,10 +93,15 @@ struct MacsView: View {
     }
 
     /// Debug builds only, for driving the app from the command line:
-    /// `-pairLink <url>` pairs, `-openMac YES` then opens the first Mac.
+    /// `-pairLink <url>` pairs, `-openMac YES` then opens the first Mac,
+    /// `-fixture inbox -openMac YES` opens a sample Mac (see Fixture).
     private func launchHooks() {
         #if DEBUG
         let d = UserDefaults.standard
+        if Fixture.snapshot() != nil, d.bool(forKey: "openMac"), path.isEmpty {
+            path = [Fixture.mac]
+            return
+        }
         Task {
             if let text = d.string(forKey: "pairLink"), store.macs.isEmpty,
                let link = try? Pairing.parse(text, allowLocalHTTP: true) {

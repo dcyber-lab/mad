@@ -25,7 +25,7 @@ private let tokenB = "aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb"
 final class PairingBookTests: XCTestCase {
     private var secrets = FakeSecrets()
     private var sent: [PendingPairing] = []
-    private var answer: (PendingPairing) async throws -> String = { _ in "dev-1" }
+    private var answer: (PendingPairing) async throws -> PairResult = { _ in PairResult(id: "dev-1") }
     private var tokens = [tokenA, tokenB]
 
     private func book(macs: [Mac] = []) -> PairingBook {
@@ -65,7 +65,7 @@ final class PairingBookTests: XCTestCase {
         let p = b.pending[0]
         XCTAssertEqual(secrets.items[PairingBook.account(p)], tokenA, "the token was saved before it was sent")
 
-        answer = { _ in "dev-1" }
+        answer = { _ in PairResult(id: "dev-1") }
         try await b.complete(p)
         XCTAssertEqual(sent.count, 2)
         XCTAssertEqual(sent[0], sent[1], "the retry is the same code, token and name")
@@ -78,7 +78,7 @@ final class PairingBookTests: XCTestCase {
         let b = book()
         answer = { _ in throw ConnectionError.offline }
         try? await b.add(link)
-        answer = { _ in "dev-1" }
+        answer = { _ in PairResult(id: "dev-1") }
         try await b.add(link)
         XCTAssertEqual(sent.map(\.token), [tokenA, tokenA])
         XCTAssertEqual(tokens, [tokenB], "no second token was made")
@@ -98,12 +98,12 @@ final class PairingBookTests: XCTestCase {
 
     func testDeletingDuringFlightWins() async throws {
         let b = book()
-        var release: CheckedContinuation<String, Error>?
+        var release: CheckedContinuation<PairResult, Error>?
         answer = { _ in try await withCheckedThrowingContinuation { release = $0 } }
         let task = Task { try await b.add(link) }
         while release == nil { await Task.yield() }
         b.drop(b.pending[0])
-        release?.resume(returning: "dev-1")
+        release?.resume(returning: PairResult(id: "dev-1"))
         try await task.value
         XCTAssertEqual(b.macs, [], "a late answer for a deleted pairing installs nothing")
         XCTAssertEqual(b.pending, [])
@@ -155,5 +155,34 @@ final class PairingBookTests: XCTestCase {
         b.onChange = { n += 1 }
         try await b.add(link)
         XCTAssertGreaterThanOrEqual(n, 2)
+    }
+
+    func testPairingTakesTheMachineNameFromTheReply() async throws {
+        let b = book()
+        answer = { _ in PairResult(id: "dev-1", machine: "Heng's MacBook Pro") }
+        try await b.add(link)
+        XCTAssertEqual(b.macs[0].name, "Heng's MacBook Pro")
+        XCTAssertFalse(b.macs[0].renamed)
+    }
+
+    func testSnapshotNameReplacesTheDefaultButNotARename() throws {
+        let m = Mac(name: "box", baseURL: base, token: tokenA)
+        let b = book(macs: [m])
+        b.adoptMachineName("Heng's MacBook Pro", for: m)
+        XCTAssertEqual(b.macs[0].name, "Heng's MacBook Pro")
+        b.rename(b.macs[0], to: "Office")
+        XCTAssertTrue(b.macs[0].renamed)
+        b.adoptMachineName("Something Else", for: b.macs[0])
+        XCTAssertEqual(b.macs[0].name, "Office")
+        b.adoptMachineName(nil, for: b.macs[0])
+        XCTAssertEqual(b.macs[0].name, "Office")
+    }
+
+    func testRepairKeepsTheRenamedFlag() throws {
+        let m = Mac(name: "Office", baseURL: base, token: tokenA, renamed: true)
+        let b = book(macs: [m])
+        try b.add(Mac(name: "Studio", baseURL: base, token: tokenB))
+        XCTAssertEqual(b.macs[0].name, "Office")
+        XCTAssertTrue(b.macs[0].renamed)
     }
 }

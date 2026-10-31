@@ -109,6 +109,14 @@ public struct MadClient: Sendable {
     }
 }
 
+/// The Mac's answer to a pairing: this device's id, and the Mac's friendly
+/// name (nil from a server that does not send it).
+public struct PairResult: Equatable, Sendable {
+    public var id: String
+    public var machine: String?
+    public init(id: String, machine: String? = nil) { self.id = id; self.machine = machine }
+}
+
 /// A pairing that has been started: the code from the QR, the token this
 /// device made for it, and the name it gives itself. A retry after a lost
 /// answer sends the same request again, so the Mac answers with the same id.
@@ -138,7 +146,7 @@ public struct PendingPairing: Equatable, Sendable {
 
     /// Exchanges the code for this device's id. Network errors are .offline
     /// (keep the pending pairing and retry); 400 and 403 are .pairingRefused.
-    public func pair(session: URLSession = .shared) async throws -> String {
+    public func pair(session: URLSession = .shared) async throws -> PairResult {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -148,17 +156,18 @@ public struct PendingPairing: Equatable, Sendable {
         return try Self.check(data, response)
     }
 
-    public static func check(_ data: Data, _ response: URLResponse) throws -> String {
+    public static func check(_ data: Data, _ response: URLResponse) throws -> PairResult {
         guard let http = response as? HTTPURLResponse else {
             throw ConnectionError.unexpected("Not an HTTP answer.")
         }
         switch http.statusCode {
         case 200:
-            struct Reply: Decodable { var id: String }
+            struct Reply: Decodable { var id: String; var machine: String? }
             guard let r = try? JSONDecoder().decode(Reply.self, from: data), !r.id.isEmpty else {
                 throw ConnectionError.unexpected("This does not look like mad's answer.")
             }
-            return r.id
+            let m = r.machine?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return PairResult(id: r.id, machine: (m?.isEmpty ?? true) ? nil : m)
         case 400, 403:
             throw ConnectionError.pairingRefused
         default:

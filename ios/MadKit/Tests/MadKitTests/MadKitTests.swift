@@ -287,7 +287,10 @@ final class PairExchangeTests: XCTestCase {
     }
 
     func testStatusMapping() throws {
-        XCTAssertEqual(try PendingPairing.check(Data(#"{"id":"d-1"}"#.utf8), response(200)), "d-1")
+        XCTAssertEqual(try PendingPairing.check(Data(#"{"id":"d-1"}"#.utf8), response(200)), PairResult(id: "d-1"))
+        XCTAssertEqual(try PendingPairing.check(Data(#"{"id":"d-1","machine":"Heng's MacBook"}"#.utf8), response(200)),
+                       PairResult(id: "d-1", machine: "Heng's MacBook"))
+        XCTAssertEqual(try PendingPairing.check(Data(#"{"id":"d-1","machine":"  "}"#.utf8), response(200)).machine, nil)
         for status in [400, 403] {
             XCTAssertThrowsError(try PendingPairing.check(Data(), response(status))) {
                 XCTAssertEqual($0 as? ConnectionError, .pairingRefused)
@@ -318,5 +321,20 @@ final class PairExchangeTests: XCTestCase {
         let again = pending
         XCTAssertEqual(again.request.httpBody, pending.request.httpBody)
         XCTAssertEqual(again.request.url, pending.request.url)
+    }
+}
+
+final class MachineNameTests: XCTestCase {
+    func testSnapshotMachine() throws {
+        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine":" Heng's MacBook Pro "}"#.utf8))
+        XCTAssertEqual(s.machine, "Heng's MacBook Pro")
+        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data("{}".utf8)).machine)
+        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine":""}"#.utf8)).machine)
+    }
+
+    func testEmbeddedDeckURL() throws {
+        let m = try mac("https://box.ts.net:7443/#token=\(tok)")
+        XCTAssertEqual(m.embeddedDeckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=app")
+        XCTAssertEqual(m.deckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)")
     }
 }
