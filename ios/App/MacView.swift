@@ -1,4 +1,5 @@
 import MadKit
+import MadUI
 import SwiftUI
 
 /// An opened Mac: the deck page, full screen. The page draws its own header
@@ -16,7 +17,25 @@ struct MacView: View {
 
     init(mac: Mac) { _model = StateObject(wrappedValue: MacModel(mac: mac)) }
 
+    /// Debug builds only: `-nativeHome YES` opens the native shell (MadUI) instead of the page.
+    private static var nativeHome: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "nativeHome")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
+        if Self.nativeHome {
+            NativeShell(api: MadClient(mac: model.mac), title: model.mac.name)
+                .navigationBarBackButtonHidden(false)
+        } else {
+            pageBody
+        }
+    }
+
+    private var pageBody: some View {
         VStack(spacing: 0) {
             if let expiry {
                 ExpiryBar(text: expiry.chinese) {

@@ -10,6 +10,8 @@ configFiles:
 packages:
   MadKit:
     path: MadKit
+  MadUI:
+    path: MadUI
 targets:
   mad:
     type: application
@@ -17,6 +19,7 @@ targets:
     sources: [App]
     dependencies:
       - package: MadKit
+      - package: MadUI
     info:
       path: App/Info.plist
       properties:
@@ -39,6 +42,36 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
+  # The Mac app: SwiftUI, shares MadKit and MadUI with the iPhone app. Signed to run locally
+  # (ad hoc), not sandboxed: it reads mad's state directory and starts the mad it finds.
+  madmac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [MacApp]
+    dependencies:
+      - package: MadKit
+      - package: MadUI
+    info:
+      path: MacApp/Info.plist
+      properties:
+        CFBundleDisplayName: mad
+        LSMinimumSystemVersion: "14.0"
+        NSPrincipalClass: NSApplication
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(MAD_BUNDLE_ID).mac
+        PRODUCT_NAME: madmac
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
   madUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -53,6 +86,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(MAD_BUNDLE_ID).uitests
         TARGETED_DEVICE_FAMILY: "1"
 schemes:
+  madmac:
+    build:
+      targets:
+        madmac: all
   mad:
     build:
       targets:
