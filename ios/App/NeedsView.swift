@@ -111,6 +111,13 @@ struct ItemCard: View {
 }
 
 /// An item's acts as buttons, in the order it gives them, wrapping.
+/// A button's words: they wrap inside the button when the label is long.
+private struct ActLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View { Text(text).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true) }
+}
+
 struct FlowButtons: View {
     let acts: [DeckSnapshot.Act]
     let disabled: Bool
@@ -120,9 +127,9 @@ struct FlowButtons: View {
         WrapLayout(spacing: 10) {
             ForEach(acts) { a in
                 if a.primary {
-                    Button(a.label) { tap(a) }.buttonStyle(.borderedProminent)
+                    Button { tap(a) } label: { ActLabel(a.label) }.buttonStyle(.borderedProminent)
                 } else {
-                    Button(a.label) { tap(a) }.buttonStyle(.bordered)
+                    Button { tap(a) } label: { ActLabel(a.label) }.buttonStyle(.bordered)
                 }
             }
         }
@@ -132,6 +139,8 @@ struct FlowButtons: View {
 }
 
 /// Lays children left to right, wrapping to a new line when the row is full.
+/// A child wider than a line gets a line of its own at most the container's
+/// width, and wraps what it holds inside (a long button label).
 struct WrapLayout: Layout {
     var spacing: CGFloat = 8
 
@@ -142,22 +151,28 @@ struct WrapLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let r = arrange(subviews, width: bounds.width)
         for (i, p) in r.origins.enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: .unspecified)
+            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y),
+                              proposal: ProposedViewSize(width: r.sizes[i].width, height: r.sizes[i].height))
         }
     }
 
-    private func arrange(_ subviews: Subviews, width: CGFloat) -> (size: CGSize, origins: [CGPoint]) {
-        var origins: [CGPoint] = []
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (size: CGSize, origins: [CGPoint], sizes: [CGSize]) {
+        var origins: [CGPoint] = [], sizes: [CGSize] = []
         var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0, maxW: CGFloat = 0
         for s in subviews {
-            let sz = s.sizeThatFits(.unspecified)
-            if x > 0, x + sz.width > width { x = 0; y += rowH + spacing; rowH = 0 }
+            // What it wants on one line, then what it takes when it may be no wider than a line.
+            let ideal = s.sizeThatFits(.unspecified)
+            let w = min(ideal.width, width)
+            let sz = s.sizeThatFits(ProposedViewSize(width: w, height: nil))
+            let size = CGSize(width: min(max(sz.width, 0), w), height: sz.height)
+            if x > 0, x + size.width > width { x = 0; y += rowH + spacing; rowH = 0 }
             origins.append(CGPoint(x: x, y: y))
-            x += sz.width + spacing
-            rowH = max(rowH, sz.height)
+            sizes.append(size)
+            x += size.width + spacing
+            rowH = max(rowH, size.height)
             maxW = max(maxW, x - spacing)
         }
-        return (CGSize(width: maxW, height: y + rowH), origins)
+        return (CGSize(width: maxW, height: y + rowH), origins, sizes)
     }
 }
 
