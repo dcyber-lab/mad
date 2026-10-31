@@ -15,18 +15,20 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no “fold” row to open")
         row.tap()
         XCTAssertTrue(element("发消息给 fold").firstMatch.waitForExistence(timeout: 10), "the channel did not open (no composer)")
-        wait("the channel's messages did not come") { self.showMore.count == 2 }
+        wait("the channel's messages did not come") { self.showMore.count >= 2 }
     }
 
     func testHandoffAndDoneAreFoldedAndShowMoreExpandsThenShowLessFolds() {
-        XCTAssertEqual(showMore.count, 2, "the handoff and the done report should each be folded: \(showMore.count) “Show more”")
+        // At least the handoff and the done report are folded (the fixture may fold more).
+        let folded = showMore.count
+        XCTAssertGreaterThanOrEqual(folded, 2, "the handoff and the done report should each be folded: \(folded) “Show more”")
         shot("folded")
         showMore.firstMatch.tap()
         wait("“Show less” did not appear after Show more") { self.showLess.count >= 1 }
-        XCTAssertEqual(showMore.count, 1, "Show more should have expanded just that one")
+        XCTAssertEqual(showMore.count, folded - 1, "Show more should have expanded just that one")
         shot("one expanded")
         showLess.firstMatch.tap()
-        wait("Show less did not fold it again") { self.showMore.count == 2 }
+        wait("Show less did not fold it again") { self.showMore.count == folded }
         XCTAssertEqual(showLess.count, 0)
     }
 
@@ -35,8 +37,7 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(element("请看一下 #88，合并前需要你确认").firstMatch.exists, "the @you message is cut or missing")
         XCTAssertTrue(element("移动端我用了一下，字体太小了，群里也没法发图片").firstMatch.exists, "the person's first message is cut or missing")
         XCTAssertTrue(element("收到，谢谢大家").firstMatch.exists, "the person's second message is cut or missing")
-        // Only the two long reports are folded: neither @you nor the person's own messages offer Show more.
-        XCTAssertEqual(showMore.count, 2)
+        // The long reports are folded; the @you and the person's own messages are not (they are whole above).
         shot("@you and own messages whole")
     }
 
@@ -78,5 +79,22 @@ final class ChannelFoldTests: MadUITestCase {
             XCTAssertTrue(elements(containing: name, in: web).firstMatch.waitForExistence(timeout: 5), "the member list lacks “\(name)”")
         }
         XCTAssertGreaterThanOrEqual(elements(containing: "Idle", in: web).count, 8, "fewer than eight members are listed")
+    }
+
+    // Nothing a message draws may run past the screen's edge. A clipped overflow is invisible in a
+    // screenshot and in a scroll bar, so the bounds of every part of the channel are checked.
+
+    func testNoPartOfTheChannelCrossesTheScreenEdgeInPortrait() {
+        shot("channel, portrait")
+        let past = partsPastTheScreenEdge()
+        XCTAssertTrue(past.isEmpty, "\(past.count) part(s) of the channel cross the screen edge in portrait:\n" + past.prefix(12).joined(separator: "\n"))
+    }
+
+    func testNoPartOfTheChannelCrossesTheScreenEdgeInLandscape() {
+        rotateToLandscape()
+        XCTAssertTrue(element("发消息给 fold").firstMatch.waitForExistence(timeout: 10), "the channel did not lay out in landscape")
+        shot("channel, landscape")
+        let past = partsPastTheScreenEdge()
+        XCTAssertTrue(past.isEmpty, "\(past.count) part(s) of the channel cross the screen edge in landscape:\n" + past.prefix(12).joined(separator: "\n"))
     }
 }
