@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dcyber-lab/mad/internal/status"
 )
 
 // Errors of Desk.Act, for a surface to tell apart.
@@ -141,8 +143,10 @@ func (d *Desk) Act(k Key, a Answer) error {
 	return err
 }
 
-// asks tells whether agent waits on the person in the view: a prompt or
-// a request of its is an item. d.mu is held.
+// asks tells whether agent waits on the person now: a prompt or a
+// request of its is an item, or a prompt is on its screen that its hook
+// does not tell of yet (claude's permission hook comes seconds after it).
+// d.mu is held.
 func (d *Desk) asks(agent string) bool {
 	if agent == "" {
 		return false
@@ -150,6 +154,12 @@ func (d *Desk) asks(agent string) bool {
 	for _, it := range d.view.Inbox.NeedsYou() {
 		if keyAgent(it.Key) == agent {
 			return true
+		}
+	}
+	for _, a := range d.facts.Agents {
+		if a.ID == agent && a.Screen != "" {
+			_, ok := parsePrompt(a.Screen)
+			return ok || status.ShowsPrompt(a.Screen)
 		}
 	}
 	return false

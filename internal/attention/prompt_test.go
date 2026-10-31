@@ -339,7 +339,15 @@ func TestKeysRouteStale(t *testing.T) {
 	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrChanged) || k.sent != nil {
 		t.Errorf("old key: %v, sent %q", err, k.sent)
 	}
-	k.d.Look(Facts{Now: time.Now()})
+	// The new one drawn, its hook still saying it runs (claude's comes
+	// seconds after): no item yet, but it asks something else all the same.
+	running := Agent{ID: "tk", Label: "tk", PaneID: "%7", Status: status.Running, Shown: status.Running, Screen: fixture(t, "claude-write.txt")}
+	k.d.Look(Facts{Agents: []Agent{running}, Now: time.Now()})
+	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrChanged) || k.sent != nil {
+		t.Errorf("old key, new prompt not told of yet: %v, sent %q", err, k.sent)
+	}
+	running.Screen = fixture(t, "claude-working.txt")
+	k.d.Look(Facts{Agents: []Agent{running}, Now: time.Now()})
 	if err := k.d.Act(old.Key, Answer{Verb: VerbAllow, Option: "Yes"}); !errors.Is(err, ErrGone) || k.sent != nil {
 		t.Errorf("old key, nothing asked: %v, sent %q", err, k.sent)
 	}
