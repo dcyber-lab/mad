@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -126,5 +127,27 @@ func TestInboxStoppedAgentDoesNotWait(t *testing.T) {
 	in := s.poll.Snapshot().Inbox
 	if len(in.Items) != 0 {
 		t.Errorf("a stopped agent waits: %+v", in.Items)
+	}
+}
+
+// A stale act's 409 tells the person which it was: handled already, or
+// its agent asks something else now.
+func TestInboxStaleActSays(t *testing.T) {
+	isolate(t)
+	s := New(manageKinds)
+	ask := status.Ask{ID: "r2", Host: "h1", Kind: status.AskPermission, Tool: "Bash", Command: "rm -rf build", At: time.Now()}
+	s.poll.desk.Look(attention.Facts{Now: time.Now(), Agents: []attention.Agent{
+		{ID: "kim", Label: "kim", Status: status.Waiting, Report: status.Report{Asks: []status.Ask{ask}}},
+	}})
+	for key, says := range map[string]string{
+		"req:kim/h1/r1":   "It asks something else now: see the new prompt",
+		"wait:kim/1/abc":  "It asks something else now: see the new prompt",
+		"req:lee/h1/r1":   "Already handled: it is not waiting on you any more",
+		"skill:somewhere": "Already handled: it is not waiting on you any more",
+	} {
+		w := call(t, s, "POST", "/api/inbox", `{"key":"`+key+`","verb":"allow"}`)
+		if w.Code != 409 || strings.TrimSpace(w.Body.String()) != says {
+			t.Errorf("%s: %d %q", key, w.Code, w.Body.String())
+		}
 	}
 }

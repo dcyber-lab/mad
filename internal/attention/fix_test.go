@@ -65,7 +65,7 @@ func TestRequestKeysNameTheirHost(t *testing.T) {
 		t.Fatalf("one key %q for two hosts' requests", vOld.Inbox.Items[0].Key)
 	}
 	d.Look(now)
-	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrGone) {
+	if err := d.Act("req:kim/h1/r1", Answer{Verb: VerbAllow}); !errors.Is(err, ErrChanged) {
 		t.Errorf("a stale card's act on the new host's request: %v", err)
 	}
 	if len(*sent) != 0 {

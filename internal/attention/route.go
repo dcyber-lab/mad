@@ -158,9 +158,14 @@ func refuses(label string) bool {
 var keySettle = 500 * time.Millisecond
 
 func (r keysRoute) do(a Answer, _ *Facts) error {
-	now, ok := parsePrompt(capture(r.pane))
-	if !ok || now.ID != r.p.ID {
-		return ErrGone // answered in the pane, or it asks something else now
+	screen := capture(r.pane)
+	now, ok := parsePrompt(screen)
+	switch {
+	case ok && now.ID == r.p.ID:
+	case ok || status.ShowsPrompt(screen):
+		return ErrChanged // another prompt, read or not
+	default:
+		return ErrGone // answered in the pane
 	}
 	if a.Verb == VerbDeny {
 		return press(r.pane, "Escape")
