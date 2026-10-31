@@ -882,6 +882,12 @@ async function queueCall(method, params, body, path = "/api/queue") {
 }
 
 async function submit() {
+  // Pictures still being read are not in the draft yet: sending now would
+  // send the message without them, and they would go with the next one.
+  if (pendingReads > 0) {
+    toast("The pictures are still loading: send again in a moment");
+    return;
+  }
   const t = $("#qinput");
   const text = t.value;
   const id = current;

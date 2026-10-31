@@ -149,9 +149,19 @@ var afterCompact = func() {
 	go func() { _, _ = CollectImages(ImageGCAge) }()
 }
 
+// sweepSnapshotted, when set, is called by CollectImages after it took the
+// set of named pictures and let go of the bus lock; tests hold the sweep
+// there.
+var sweepSnapshotted func()
+
 // CollectImages removes the pictures no kept message names (archived
 // channels' included), unless they are younger than minAge, and says how
 // many it removed. It runs when the deck starts, and when a log is cut.
+// The bus lock is held only to read the logs for the names; the files are
+// looked at and removed without it, each one's age looked at again just
+// before it goes, so a post is never held up by a sweep. A picture named
+// by a post made after the snapshot is young (stored for it), or touched
+// when stored again, and post checks its pictures are still there.
 func CollectImages(minAge time.Duration) (int, error) {
 	root := imageDir()
 	files, err := os.ReadDir(root)
@@ -161,13 +171,12 @@ func CollectImages(minAge time.Duration) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	removed := 0
+	named := map[string]bool{}
 	err = locked(func() error {
 		cl, err := loadChannels()
 		if err != nil {
 			return err
 		}
-		named := map[string]bool{}
 		for _, c := range cl.Channels {
 			msgs, err := readMsgs(c.ID)
 			if err != nil {
@@ -179,20 +188,30 @@ func CollectImages(minAge time.Duration) (int, error) {
 				}
 			}
 		}
-		for _, f := range files {
-			name := f.Name()
-			id := strings.TrimSuffix(name, filepath.Ext(name))
-			if f.IsDir() || named[id] || !imageIDRe.MatchString(id) {
-				continue
-			}
-			if info, err := f.Info(); err != nil || time.Since(info.ModTime()) < minAge {
-				continue
-			}
-			if os.Remove(filepath.Join(root, name)) == nil {
-				removed++
-			}
-		}
 		return nil
 	})
-	return removed, err
+	if err != nil {
+		return 0, err
+	}
+	if sweepSnapshotted != nil {
+		sweepSnapshotted()
+	}
+	removed := 0
+	for _, f := range files {
+		name := f.Name()
+		id := strings.TrimSuffix(name, filepath.Ext(name))
+		if f.IsDir() || named[id] || !imageIDRe.MatchString(id) {
+			continue
+		}
+		path := filepath.Join(root, name)
+		// Its age now, not as the directory was listed: it may have been
+		// stored again meanwhile.
+		if info, err := os.Stat(path); err != nil || time.Since(info.ModTime()) < minAge {
+			continue
+		}
+		if os.Remove(path) == nil {
+			removed++
+		}
+	}
+	return removed, nil
 }
