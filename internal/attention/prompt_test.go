@@ -209,8 +209,9 @@ func TestKeysRouteActs(t *testing.T) {
 	if _, ok := it.route.(keysRoute); !ok {
 		t.Fatalf("route %T", it.route)
 	}
-	// What lets it through is Allow, which a row offers only as Review.
-	want := []string{"allow:Yes row primary", "allow:Yes, and always allow access to /private/tmp/b3k/repo from this project",
+	// What lets it through is Allow, on its card alone: never on a row,
+	// where the page offers Review.
+	want := []string{"allow:Yes primary", "allow:Yes, and always allow access to /private/tmp/b3k/repo from this project",
 		"allow:Yes, and switch to auto mode · auto mode handles these prompts for you", "answer:No row", "deny:Cancel (Esc)"}
 	if got := actList(it); !reflect.DeepEqual(got, want) {
 		t.Errorf("acts\n%q\nwant\n%q", got, want)
@@ -224,7 +225,7 @@ func TestKeysRouteActs(t *testing.T) {
 	// codex's: its "No, and tell Codex…" says no; an option the pane
 	// wrapped is offered with all of it.
 	c := newKeyed(t, strings.Replace(fixture(t, "codex-approval.txt"), "start with `touch codex-file2.txt` (p)", "start with\n     `touch codex-file2.txt` (p)", 1), transcript.Info{})
-	want = []string{"allow:Yes, proceed row primary", "allow:Yes, and don't ask again for commands that start with `touch codex-file2.txt` =Yes, and don't ask again for commands that start with",
+	want = []string{"allow:Yes, proceed primary", "allow:Yes, and don't ask again for commands that start with `touch codex-file2.txt` =Yes, and don't ask again for commands that start with",
 		"answer:No, and tell Codex what to do differently", "deny:Cancel (Esc)"}
 	if got := actList(c.item(t)); !reflect.DeepEqual(got, want) {
 		t.Errorf("codex acts\n%q\nwant\n%q", got, want)

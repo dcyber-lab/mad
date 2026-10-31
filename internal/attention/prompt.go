@@ -33,6 +33,10 @@ type prompt struct {
 	Options []option
 	// Cursor is the option the cursor is on, 1-based.
 	Cursor int
+	// Foot is its footer, the line that offers Esc: "Esc to cancel · Tab
+	// to amend" under claude's permission, "Enter to select · … · Esc to
+	// cancel" under its question.
+	Foot string
 	// ID names the prompt: its words, the cursor aside (moving it in the
 	// pane is not a new prompt). Two looks with one ID show one prompt.
 	ID string
@@ -152,7 +156,7 @@ func parsePrompt(screen string) (prompt, bool) {
 	if !begun || len(above) == 0 || form(above) {
 		return prompt{}, false
 	}
-	p := prompt{Cursor: cursor}
+	p := prompt{Cursor: cursor, Foot: strings.TrimSpace(lines[foot])}
 	q := 0 // no line asks: the first is its title
 	for i, l := range above {
 		if strings.Contains(l, "?") {
@@ -166,6 +170,7 @@ func parsePrompt(screen string) (prompt, bool) {
 	for _, l := range above {
 		h.Write([]byte(l + "\n"))
 	}
+	h.Write([]byte(p.Foot + "\n"))
 	seen := map[string]bool{}
 	for _, o := range opts {
 		o.Label, o.Under = hintRe.ReplaceAllString(o.Label, ""), hintRe.ReplaceAllString(o.Under, "")
@@ -186,6 +191,23 @@ func parsePrompt(screen string) (prompt, bool) {
 	}
 	p.ID = strconv.FormatUint(h.Sum64(), 36)
 	return p, true
+}
+
+// question tells a question from a prompt that asks leave, by its screen
+// alone: claude's AskUserQuestion has its header's box over it ("☐
+// Color") and "Enter to select" under it, which a command it asks leave
+// for cannot put there. Any other prompt asks leave: what lets it through
+// is offered only beside all of it.
+func (p prompt) question() bool {
+	if !strings.Contains(strings.ToLower(p.Foot), "enter to select") {
+		return false
+	}
+	for _, l := range p.Rest {
+		if strings.HasPrefix(l, "☐") {
+			return true
+		}
+	}
+	return false
 }
 
 // form tells a form of several questions or picks from one prompt:

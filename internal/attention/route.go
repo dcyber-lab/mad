@@ -115,9 +115,10 @@ func (r openRoute) do(Answer, *Facts) error { return ErrNotOffered }
 type keysRoute struct {
 	pane string
 	p    prompt
-	// allow: the prompt asks leave to do something (not a question): its
-	// options but a "No" let it through, and are Allow acts, which the
-	// page offers only beside the whole prompt.
+	// allow: the prompt asks leave to do something (not a question, as its
+	// screen tells: prompt.question): its options but a "No" let it
+	// through, and are Allow acts, offered only beside the whole prompt,
+	// never on a row.
 	allow bool
 }
 
@@ -129,13 +130,14 @@ func (r keysRoute) acts() []Act {
 	rows := 0
 	for _, o := range r.p.Options {
 		a := Act{Verb: VerbAnswer, Label: o.Label, Option: o.Label, Primary: o.N == r.p.Cursor}
-		if r.allow && !refuses(o.Label) {
+		switch {
+		case r.allow && !refuses(o.Label):
+			// on its card, beside all it says; its row offers Review
 			a.Verb = VerbAllow
 			if o.Under != "" {
 				a.Label += " " + o.Under // all it lets through
 			}
-		}
-		if a.Primary || rows < 2 && utf8.RuneCountInString(a.Label) <= rowLabel {
+		case a.Primary || rows < 2 && utf8.RuneCountInString(a.Label) <= rowLabel:
 			a.Row = true
 			rows++
 		}
