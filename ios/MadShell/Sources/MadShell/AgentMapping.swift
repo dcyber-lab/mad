@@ -67,11 +67,11 @@ public enum AgentMapping {
 
     // MARK: sending
 
-    /// An agent can take a message from the phone when it runs headless or is already in window mode;
-    /// one in a terminal is answered in the terminal.
+    /// An agent can take a message from the phone only in window mode (the server marks ordinary terminal
+    /// agents headless too); one in a terminal is answered in the terminal.
     static func sending(_ agent: Agent?) -> (Bool, String) {
         guard let agent else { return (false, "这个 agent 已经不在了") }
-        if agent.headless || agent.inWindowMode { return (true, "") }
+        if agent.inWindowMode { return (true, "") }
         return (false, "这个 agent 在终端里运行，回复请到 Deck 里的终端")
     }
 
@@ -97,10 +97,11 @@ public enum AgentMapping {
     }
 
     /// What an act of the card sends back: the item's key and the act it was made from. Nil when the
-    /// item is gone or answered meanwhile.
-    public static func answer(actID: String, text: String?, agent id: String, deck: Deck)
+    /// item is gone, answered meanwhile, or no longer the one the card `cardID` showed (a replacement
+    /// prompt must not take a stale card's Allow).
+    public static func answer(cardID: String, actID: String, text: String?, agent id: String, deck: Deck)
         -> (key: String, verb: String, option: String?, text: String?)? {
-        guard let item = item(for: id, deck: deck), let act = item.acts.first(where: { $0.id == actID }) else { return nil }
+        guard let item = item(for: id, deck: deck), item.key == cardID, let act = item.acts.first(where: { $0.id == actID }) else { return nil }
         return (item.key, act.verb, act.option, text.flatMap { $0.isEmpty ? nil : $0 })
     }
 }

@@ -21,7 +21,7 @@ public struct ConversationView: View {
             ConversationHeader(model: model, showsBack: showsBack, back: actions.back)
             messages
             if let ask = model.ask {
-                AskCardView(card: ask, act: actions.act)
+                AskCardView(card: ask, act: { actions.act(ask.id, $0, $1) })
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }

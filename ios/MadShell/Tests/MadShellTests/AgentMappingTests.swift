@@ -105,15 +105,16 @@ final class AgentMappingTests: XCTestCase {
     func testAnActGoesBackAsTheItemsKeyAndVerb() throws {
         let deck = try fixture("deck-edge-home", as: Deck.self)
         let ask = try XCTUnwrap(AgentMapping.ask(for: needs, deck: deck))
-        let allow = try XCTUnwrap(AgentMapping.answer(actID: ask.acts[0].id, text: nil, agent: needs, deck: deck))
+        let allow = try XCTUnwrap(AgentMapping.answer(cardID: ask.id, actID: ask.acts[0].id, text: nil, agent: needs, deck: deck))
         XCTAssertEqual(allow.key, "k-need")
         XCTAssertEqual(allow.verb, "allow")
         XCTAssertNil(allow.option)
-        let deny = try XCTUnwrap(AgentMapping.answer(actID: ask.acts[1].id, text: "no", agent: needs, deck: deck))
+        let deny = try XCTUnwrap(AgentMapping.answer(cardID: ask.id, actID: ask.acts[1].id, text: "no", agent: needs, deck: deck))
         XCTAssertEqual(deny.verb, "deny")
         XCTAssertEqual(deny.text, "no")
-        XCTAssertNil(AgentMapping.answer(actID: ask.acts[0].id, text: nil, agent: "work0001-aaaa", deck: deck), "another agent has no such item")
-        XCTAssertNil(AgentMapping.answer(actID: "nope", text: nil, agent: needs, deck: deck))
+        XCTAssertNil(AgentMapping.answer(cardID: ask.id, actID: ask.acts[0].id, text: nil, agent: "work0001-aaaa", deck: deck), "another agent has no such item")
+        XCTAssertNil(AgentMapping.answer(cardID: "k-old", actID: ask.acts[0].id, text: nil, agent: needs, deck: deck), "a stale card's act")
+        XCTAssertNil(AgentMapping.answer(cardID: ask.id, actID: "nope", text: nil, agent: needs, deck: deck))
     }
 
     func testAnAgentWithNothingWaitingHasNoAsk() throws {
@@ -142,7 +143,7 @@ final class AgentMappingTests: XCTestCase {
 
     // MARK: sending
 
-    func testAHeadlessAgentTakesMessages() throws {
+    func testAnAgentInWindowModeTakesMessages() throws {
         let c = try conversation()
         XCTAssertTrue(c.canSend)
         XCTAssertEqual(c.sendHint, "")
@@ -151,7 +152,8 @@ final class AgentMappingTests: XCTestCase {
     func testAnAgentInATerminalDoesNot() throws {
         var deck = try fixture("deck-edge-home", as: Deck.self)
         let i = try XCTUnwrap(deck.projects[0].agents.firstIndex { $0.id == needs })
-        deck.projects[0].agents[i].headless = false
+        // the server marks ordinary terminal agents headless too: only window mode counts
+        deck.projects[0].agents[i].headless = true
         deck.projects[0].agents[i].mode = nil
         let c = try conversation(deck: deck)
         XCTAssertFalse(c.canSend)

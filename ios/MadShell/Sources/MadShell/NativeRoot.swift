@@ -162,15 +162,19 @@ struct AgentDetail: View {
     private var actions: ConversationActions {
         ConversationActions(
             send: { text in Task { _ = await store.send(text) } },
-            act: { actID, text in Task { await answer(actID, text) } },
+            act: { cardID, actID, text in Task { await answer(cardID, actID, text) } },
             interrupt: { Task { await store.interrupt() } },
             loadImage: { image in try? await api.pictureData(url: image.source) },
             back: { onBack?() })
     }
 
-    private func answer(_ actID: String, _ text: String?) async {
-        // the item as the deck says now: gone or answered meanwhile sends nothing
-        guard let d = deck.deck, let a = AgentMapping.answer(actID: actID, text: text, agent: id, deck: d) else { return }
+    private func answer(_ cardID: String, _ actID: String, _ text: String?) async {
+        // the item as the deck says now: a card that is not it any more sends nothing
+        guard let d = deck.deck, let a = AgentMapping.answer(cardID: cardID, actID: actID, text: text, agent: id, deck: d) else {
+            failure = "它现在在问别的了"
+            await deck.refresh()
+            return
+        }
         do {
             try await api.act(key: a.key, verb: a.verb, option: a.option, text: a.text)
             failure = nil

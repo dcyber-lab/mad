@@ -192,8 +192,8 @@ public struct AskAct: Identifiable, Equatable, Sendable {
 /// What the screen does; each is a closure the app fills in.
 public struct ConversationActions {
     public var send: (String) -> Void
-    /// An ask's act, with the words typed for an input act.
-    public var act: (_ actID: String, _ text: String?) -> Void
+    /// An ask's act: the card it was made on (its `id`), the act, and the words typed for an input act.
+    public var act: (_ cardID: String, _ actID: String, _ text: String?) -> Void
     public var interrupt: () -> Void
     /// Nil when there is no way to load more: the earlier note is then plain text, not a button.
     public var loadEarlier: (() -> Void)?
@@ -203,7 +203,7 @@ public struct ConversationActions {
     /// The ＋ beside the composer (attach).
     public var attach: () -> Void
 
-    public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String?) -> Void = { _, _ in },
+    public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {}) {
