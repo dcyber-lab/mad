@@ -186,7 +186,14 @@ public final class ServerLauncher: @unchecked Sendable {
         lock.unlock()
         if let p, p.isRunning {
             p.terminate()
-            p.waitUntilExit()
+            // Not waitUntilExit: it can miss an exit that races the call and then waits forever.
+            // Polling is bounded, and a server that ignores SIGTERM gets SIGKILL.
+            var waited = 0.0
+            while p.isRunning, waited < 3 {
+                Thread.sleep(forTimeInterval: 0.02)
+                waited += 0.02
+            }
+            if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         }
     }
 }

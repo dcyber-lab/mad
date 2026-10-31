@@ -28,6 +28,7 @@ demo:
 ios:
 	cd ios/MadKit && swift test
 	cd ios/MadUI && swift test
+	cd ios/MadShell && swift test
 	cd ios && xcodegen generate
 	xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
 	xcodebuild -project ios/mad.xcodeproj -scheme madmac -destination 'platform=macOS' -derivedDataPath ios/build/mac build

@@ -1,0 +1,122 @@
+import MadKit
+import MadUI
+import SwiftUI
+
+/// The native window of mad, on the iPhone and on the Mac: the home list of MadUI over a `DeckStore`,
+/// and a detail for what a row opens. The detail is a placeholder for now: the channel and agent views
+/// are built into `Detail` from `ChannelStore` and `AgentStore` by the agents who own them.
+///
+/// It owns the `DeckStore` for `api`, polls it while the app is active, and offers it to the views below
+/// through the environment (`@Environment(DeckStore.self)`). `onSwitchMac` is the way back to the list
+/// of Macs (the iPhone's; the Mac app has no such list).
+public struct NativeRoot: View {
+    @State private var store: DeckStore
+    @State private var selection: HomeRow.ID?
+    @Environment(\.scenePhase) private var scenePhase
+
+    private let api: MadAPI
+    private let title: String
+    private let onSwitchMac: (() -> Void)?
+
+    public init(api: MadAPI, title: String = "mad", onSwitchMac: (() -> Void)? = nil) {
+        self.api = api
+        self.title = title
+        self.onSwitchMac = onSwitchMac
+        _store = State(initialValue: DeckStore(api: api))
+    }
+
+    private var model: HomeModel {
+        guard let deck = store.deck else { return HomeModel(machine: title, sections: []) }
+        return HomeMapping.model(from: deck, fallbackName: title)
+    }
+
+    private var actions: HomeActions {
+        HomeActions(
+            open: { selection = $0 },
+            switchMac: { onSwitchMac?() },
+            menu: { item in if item == .switchMac { onSwitchMac?() } })
+    }
+
+    public var body: some View {
+        content
+            .environment(store)
+            // Polls while the app is active; the task restarts when it comes back, so it looks at once.
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                await store.run()
+            }
+            .overlay(alignment: .top) { LinkNote(link: store.link) }
+    }
+
+    @ViewBuilder private var content: some View {
+        #if os(macOS)
+        NavigationSplitView {
+            HomeSidebar(model: model, selection: $selection, actions: actions)
+        } detail: {
+            Detail(selection: selection)
+        }
+        #else
+        // The home list has its own navigation; a row opens the detail over it, with a way back.
+        if let id = selection {
+            NavigationStack {
+                Detail(selection: id)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } }
+            }
+        } else {
+            HomeView(model: model, actions: actions)
+        }
+        #endif
+    }
+}
+
+/// What a row opens. A placeholder: it says what it will be.
+struct Detail: View {
+    @Environment(DeckStore.self) private var store
+    let selection: HomeRow.ID?
+
+    var body: some View {
+        if let id = selection {
+            if let channel = store.channel(id: id) {
+                placeholder(channel.dm ? channel.title : channel.id, "The channel view comes here (ChannelStore).")
+            } else if let agent = store.agent(id: id) {
+                placeholder(agent.label, "The agent's conversation comes here (AgentStore).")
+            } else {
+                placeholder(id, "It is gone.")
+            }
+        } else {
+            placeholder("mad", "Choose a chat or an agent.")
+        }
+    }
+
+    private func placeholder(_ title: String, _ note: String) -> some View {
+        VStack(spacing: 8) {
+            Text(title).font(.title2.weight(.semibold))
+            Text(note).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// A thin note at the top when the Mac cannot be reached or refuses the token.
+public struct LinkNote: View {
+    let link: LinkState
+    public init(link: LinkState) { self.link = link }
+
+    public var body: some View {
+        switch link {
+        case .refused: note("Token refused: pair this Mac again.", "key.slash")
+        case .offline: note("The Mac cannot be reached.", "wifi.slash")
+        case .failed(let why): note(why, "exclamationmark.triangle")
+        case .connecting, .ok: EmptyView()
+        }
+    }
+
+    private func note(_ text: String, _ icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.subheadline)
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial)
+    }
+}

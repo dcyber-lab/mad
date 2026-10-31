@@ -1,6 +1,6 @@
 import AppKit
 import MadKit
-import MadUI
+import MadShell
 import SwiftUI
 
 /// mad for the Mac. It talks to the server of the Mac it runs on: the phone server if that is up,
@@ -80,7 +80,7 @@ struct RootView: View {
                 }
                 .padding(32)
             case .ready(let endpoint):
-                NativeShell(api: endpoint.client(), title: "mad")
+                NativeRoot(api: endpoint.client(), title: "mad")
             }
         }
         .task { await server.start() }

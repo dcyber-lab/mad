@@ -90,13 +90,19 @@ clear of the status bar and the home indicator itself.
 ## Native apps (the foundation)
 
 The iPhone app and the Mac app are meant to be native SwiftUI; the page stays as the fallback. They
-share two local packages:
+share three local packages:
 
 - `MadKit` (no UI; iOS 17+ and macOS 14+): the models of mad's JSON API, the client, the stores.
-- `MadUI` (SwiftUI; the same): the views both apps show. `NativeShell` is its entry: a
-  `NavigationSplitView` with a sidebar of channels and agents and a placeholder detail, which the
-  views of the other agents grow into. It owns a `DeckStore` and offers it to its children through the
-  environment (`@Environment(DeckStore.self)`).
+- `MadUI` (SwiftUI; the same): the views, which take plain view-model structs (`HomeModel`,
+  `HomeSection`, `HomeRow`), never MadKit types.
+- `MadShell` (depends on both): the glue. `HomeMapping.model(from: Deck, fallbackName:) -> HomeModel`
+  maps a deck to what the home view shows (tested against the fixture decks), and
+  `NativeRoot(api:title:onSwitchMac:)` owns a `DeckStore`, polls it while the scene is active, and shows
+  `HomeSidebar` in a `NavigationSplitView` on the Mac, `HomeView` with the detail over it on the
+  iPhone. Channel and agent details are placeholders for now; the other agents' views plug in there,
+  mapping their store's messages to their own view-model structs the same way.
+
+In Debug builds, the iPhone app opens `NativeRoot` instead of the page with `-nativeHome YES`.
 
 `make ios` builds the iPhone app (simulator) and the Mac app. `make mac` builds the Mac app and opens
 it (`ios/build/mac/Build/Products/Debug/madmac.app`, signed to run locally, ad hoc, not sandboxed).

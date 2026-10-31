@@ -12,6 +12,8 @@ packages:
     path: MadKit
   MadUI:
     path: MadUI
+  MadShell:
+    path: MadShell
 targets:
   mad:
     type: application
@@ -19,7 +21,7 @@ targets:
     sources: [App]
     dependencies:
       - package: MadKit
-      - package: MadUI
+      - package: MadShell
     info:
       path: App/Info.plist
       properties:
@@ -51,7 +53,7 @@ targets:
     sources: [MacApp]
     dependencies:
       - package: MadKit
-      - package: MadUI
+      - package: MadShell
     info:
       path: MacApp/Info.plist
       properties:
