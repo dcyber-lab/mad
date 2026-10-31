@@ -186,11 +186,21 @@ func TestObserveHooks(t *testing.T) {
 	if s := tr.Observe(claude, alive, true, asked, moved, false, asked.At.Add(time.Minute+time.Second)); s != Waiting {
 		t.Errorf("cursor moved = %s", s)
 	}
-	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (3s)", false, asked.At.Add(2*time.Minute)); s != Running {
+	// One look without it is not yet an answer; off it for answerSettle,
+	// it is.
+	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (3s)", false, asked.At.Add(2*time.Minute)); s != Waiting {
+		t.Errorf("answered, one look = %s", s)
+	}
+	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (4s)", false, asked.At.Add(2*time.Minute+answerSettle)); s != Running {
 		t.Errorf("answered, running = %s", s)
 	}
-	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (4s)", false, asked.At.Add(2*time.Minute+time.Second)); s != Running {
+	if s := tr.Observe(claude, alive, true, asked, "⏺ Bash(echo hi)\n✢ Germinating… (5s)", false, asked.At.Add(2*time.Minute+answerSettle+time.Second)); s != Running {
 		t.Errorf("answered, still running = %s", s)
+	}
+	// A prompt on the screen again, with no new hook (a second tool of
+	// the same turn): waiting again.
+	if s := tr.Observe(claude, alive, true, asked, ask, false, asked.At.Add(2*time.Minute+answerSettle+2*time.Second)); s != Waiting {
+		t.Errorf("asking again, same hook = %s", s)
 	}
 	// Interrupted, or refused: claude says no more. The wait is over.
 	done := "⏺ Bash(echo hi)\n  ⎿  Interrupted · What should Claude do instead?\n❯ "

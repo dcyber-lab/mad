@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,7 +35,24 @@ const (
 	StaleRunning = 10 * time.Second
 	// waitingTail is how many bottom screen lines are scanned for prompts.
 	waitingTail = 15
+	// answerSettle: a wait's prompt off a screen that moved since it
+	// asked, this long, is answered. A shorter gap is not: claude's
+	// PreToolUse hook comes before its question is drawn, and a look may
+	// catch a frame half redrawn.
+	answerSettle = ActiveWindow
 )
+
+// promptMarks are what a TUI's prompt shows in its last lines, of any
+// kind, and its screen at work does not: a footer that offers a way out,
+// a choice under a cursor, claude's question. A prompt too long to read
+// whole shows them still.
+var promptMarks = regexp.MustCompile(`(?im)\besc to cancel\b|\benter to (?:select|confirm)\b|^\s*[❯›>]\s*[1-9]\.\s|\bdo you want to proceed\?`)
+
+// ShowsPrompt tells whether the last lines of screen look like a TUI's
+// prompt (promptMarks), whether or not it can be read.
+func ShowsPrompt(screen string) bool {
+	return promptMarks.MatchString(tailLines(screen, waitingTail))
+}
 
 // Hook is what an agent last reported, stored as StatusDir/<agent id>.json.
 type Hook struct {
@@ -168,9 +186,11 @@ type Tracker struct {
 	lastChange time.Time
 	quiet      time.Time
 	since      time.Time
-	// answered is the time of the waiting hook whose prompt was seen
-	// answered on the screen.
-	answered time.Time
+	// wait is the waiting hook's time last seen, clear since when its
+	// prompt has been off the screen (zero while it shows), clearing that
+	// it is off for less than answerSettle.
+	wait, clear time.Time
+	clearing    bool
 
 	Status string
 	// Attention: the agent finished or got blocked while not on stage.
@@ -266,7 +286,13 @@ func (t *Tracker) Done() bool {
 	return t.Attention && (t.Status == Idle || t.Status == Asleep)
 }
 
+// Clearing: the agent waits by its hook, but its prompt has been off its
+// screen for less than answerSettle: answered, or not drawn yet. Nothing
+// it asks is on the screen to answer.
+func (t *Tracker) Clearing() bool { return t.clearing }
+
 func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook, screen string, now time.Time) string {
+	t.clearing = false
 	if !hasPane {
 		return Stopped
 	}
@@ -291,12 +317,22 @@ func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 			// Answered in its pane, or by keys from the window: claude says
 			// nothing until the tool it allowed is done (or ever, when it
 			// was refused or interrupted), but its screen moves on, with no
-			// prompt on it. From then on that wait is over: it runs while
-			// the screen moves, as a running hook does.
-			if !t.answered.Equal(hook.At) && t.lastChange.After(hook.At) && !k.ScreenWaiting(tailLines(screen, waitingTail)) {
-				t.answered = hook.At
+			// prompt on it. Its prompt off a screen that moved since it
+			// asked, for answerSettle, is answered: it runs while the screen
+			// moves, as a running hook does. Nothing is kept of it: a prompt
+			// on the screen again is waiting again.
+			if !t.wait.Equal(hook.At) {
+				t.wait, t.clear = hook.At, time.Time{}
 			}
-			if !t.answered.Equal(hook.At) {
+			if !t.lastChange.After(hook.At) || k.ScreenWaiting(tailLines(screen, waitingTail)) || ShowsPrompt(screen) {
+				t.clear = time.Time{}
+				return Waiting
+			}
+			if t.clear.IsZero() {
+				t.clear = now
+			}
+			if now.Sub(t.clear) < answerSettle {
+				t.clearing = true
 				return Waiting
 			}
 			if now.Sub(t.lastChange) > StaleRunning {
