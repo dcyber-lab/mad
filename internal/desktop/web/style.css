@@ -404,7 +404,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .msg.from-user .cimg { max-width: min(100%, 260px); max-height: 220px; }
 .call .cbody.result .imgs { margin: 0; }
 #lightbox {
-  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px;
   background: rgba(8, 8, 12, 0.86); cursor: zoom-out; animation: fade 0.12s ease-out;
 }
 #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
@@ -687,7 +687,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 
 /* Menus, dialogs, toasts. */
 .popup {
-  position: fixed; z-index: 50; margin: 0; padding: 6px; list-style: none; min-width: 220px; max-width: 360px;
+  position: fixed; z-index: 110; margin: 0; padding: 6px; list-style: none; min-width: 220px; max-width: 360px;
   max-height: min(420px, 70vh); overflow-y: auto; background: var(--surface); border: 1px solid var(--border-2);
   border-radius: 14px; box-shadow: var(--shadow-lg); animation: rise 0.12s ease-out;
 }
@@ -706,7 +706,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .popup li .ok { width: 16px; height: 16px; flex: none; align-self: center; }
 .popup li.rule { height: 1px; padding: 0; margin: 5px 6px; background: var(--border); cursor: default; }
 
-#dialog { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(10, 10, 14, 0.36); animation: fade 0.12s ease-out; }
+#dialog { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(10, 10, 14, 0.36); animation: fade 0.12s ease-out; }
 #dialog[hidden] { display: none; }
 @keyframes fade { from { opacity: 0; } }
 .dlg {
@@ -738,7 +738,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 .btn.danger { background: var(--stopped); color: #fff; border-color: transparent; }
 .btn.danger:hover:not(:disabled) { background: var(--stopped); opacity: 0.88; }
 
-#toasts { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+#toasts { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 130; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast {
   display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px; font-size: 13px;
   background: var(--primary-bg); color: var(--primary-fg); box-shadow: var(--shadow-lg); animation: rise 0.16s ease-out;
@@ -1760,6 +1760,7 @@ html.ptype #queue.inchan { padding-inline: 12px; }
 #queue.inchan .send:disabled { background: color-mix(in srgb, var(--accent) 38%, var(--raise)); color: var(--primary-fg, #fff); opacity: 0.8; }
 
 /* 群信息: a panel from the right, over a scrim */
+/* above the page; the picture, a menu, a dialog and a toast open from it are above it (z-index 100 to 130) */
 #chpanel { position: fixed; inset: 0; z-index: 90; visibility: hidden; pointer-events: none; transition: visibility 0s 0.3s; }
 #chpanel[hidden] { display: none; }
 #chpanel.open { visibility: visible; pointer-events: auto; transition: visibility 0s; }

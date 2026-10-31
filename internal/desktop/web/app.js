@@ -74,7 +74,20 @@ function authSocket(path, params) {
 // loadImage shows what url serves in img: fetched with the token, kept as
 // a blob URL that is let go of once img has left the page.
 const blobs = new Map(); // img → its object URL
+// busBlobs: the blob URLs of a channel's pictures, by their address (it names the picture's
+// content), so the panel's grid shows what the channel showed without fetching it again.
+// They are kept for the page's life, a few dozen at most.
+const busBlobs = new Map();
 function loadImage(img, url) {
+  if (url.startsWith("/api/bus/image")) {
+    let p = busBlobs.get(url);
+    if (!p) {
+      p = authFetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText)))).then((b) => URL.createObjectURL(b));
+      if (busBlobs.size < 60) busBlobs.set(url, p);
+      p.catch(() => busBlobs.delete(url));
+    }
+    return p.then((u) => { img.src = u; }).catch(() => img.removeAttribute("src"));
+  }
   return authFetch(url)
     .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
     .then((b) => {
@@ -1377,7 +1390,9 @@ function drawTitle() {
   if (!a) {
     if (cv.open && !bd.open && !us.open && !sk.open && !nc.open) {
       // a channel: its tile, name and one small line, which open its panel
-      t.replaceChildren(chanHeadWho(cv.open));
+      const old = t.querySelector(".chwho");
+      const who = chanHeadWho(cv.open, old);
+      if (who !== old || t.children.length !== 1) t.replaceChildren(who);
       t.className = "chtitle";
       t.dataset.agent = "";
       return;
@@ -1627,6 +1642,7 @@ function localImages(m, text, id) {
 }
 
 function openLightbox(src) {
+  const from = document.activeElement;
   const box = el("div", "");
   box.id = "lightbox";
   const img = el("img");
@@ -1635,6 +1651,7 @@ function openLightbox(src) {
   const close = () => {
     box.remove();
     window.removeEventListener("keydown", key, true);
+    if (from?.isConnected) from.focus({ preventScroll: true });
   };
   const key = (e) => {
     if (e.key === "Escape") {

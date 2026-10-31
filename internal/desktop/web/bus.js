@@ -228,17 +228,41 @@ function chanSub(c) {
   return n ? `${n} 个在工作` : "空闲";
 }
 
+// tileSig says how the channel's tile stands (its members' states), so a tile is
+// drawn again only when that changed.
+function tileSig(id) {
+  const c = busChannel(id);
+  return ((c && c.members) || []).map((m) => `${m.id}:${agents.has(m.id) ? shownStatus(agents.get(m.id)) : ""}`).join();
+}
+
 // chanHeadWho is the channel's tile, its name and that line, as one
-// button: it opens the panel.
-function chanHeadWho(id) {
-  const who = el("button", "chwho");
-  who.type = "button";
-  who.setAttribute("aria-haspopup", "dialog");
-  who.title = "群信息";
-  const what = el("span", "chwhat");
-  what.append(el("b", "", chanName(id)), el("small", "", chanSub(busChannel(id))));
-  who.append(chanTile(id), what);
-  who.onclick = () => openChanPanel(who);
+// button: it opens the panel. Given the one drawn before for the same
+// channel (reuse), it is updated in place and returned: the poll that draws
+// this each second must not take the focus from it.
+function chanHeadWho(id, reuse) {
+  let who = reuse && reuse.dataset.id === id ? reuse : null;
+  const c = busChannel(id);
+  if (!who) {
+    who = el("button", "chwho");
+    who.type = "button";
+    who.dataset.id = id;
+    who.setAttribute("aria-haspopup", "dialog");
+    who.title = "群信息";
+    const what = el("span", "chwhat");
+    what.append(el("b"), el("small"));
+    who.append(chanTile(id), what);
+    who.dataset.sig = tileSig(id);
+    who.onclick = () => openChanPanel(who);
+  }
+  const [name, sub] = [chanName(id), chanSub(c)];
+  const b = who.querySelector(".chwhat b"), small = who.querySelector(".chwhat small");
+  if (b.textContent !== name) b.textContent = name;
+  if (small.textContent !== sub) small.textContent = sub;
+  who.setAttribute("aria-label", `${name}，${sub}`); // its name for a screen reader: the channel and how it stands
+  if (who.dataset.sig !== tileSig(id)) {
+    who.firstChild.replaceWith(chanTile(id));
+    who.dataset.sig = tileSig(id);
+  }
   return who;
 }
 
@@ -259,7 +283,10 @@ function chanInfoButton() {
 function drawChanHead() {
   const id = cv.open;
   if (!id) return;
-  $("#chanhead").replaceChildren(chanHeadWho(id), el("span", "grow"), chanInfoButton());
+  const head = $("#chanhead");
+  const old = head.querySelector(".chwho");
+  const who = chanHeadWho(id, old);
+  if (who !== old) head.replaceChildren(who, el("span", "grow"), chanInfoButton()); // another channel
   drawActs();
   if (cp.open) drawChanPanel();
 }
@@ -287,21 +314,36 @@ function closeChanPanel(quick) {
   if (!cp.open) return;
   cp.open = false;
   box.classList.remove("open");
-  cp.timer = setTimeout(() => { box.hidden = true; $("#chpanel .chside").replaceChildren(); }, quick ? 0 : 300);
+  cp.timer = setTimeout(() => { box.hidden = true; $("#chpanel .chside").replaceChildren(); delete $("#chpanel .chside").dataset.sig; }, quick ? 0 : 300);
   if (!quick && cp.from?.isConnected) cp.from.focus({ preventScroll: true });
 }
 
 // panelRow is a row of the panel's lists: a button, its label and a small
-// line beside it.
-function panelRow(label, small, onclick) {
+// line beside it (key says which, for patching and for the focus).
+function panelRow(key, label, small, onclick) {
   const r = el("button", "cpact");
   r.type = "button";
-  r.append(el("span", "", label));
-  if (small) r.append(el("small", "", small));
-  r.append(el("span", "chev", "›"));
-  r.lastChild.setAttribute("aria-hidden", "true");
+  r.dataset.key = key;
+  const chev = el("span", "chev", "›");
+  chev.setAttribute("aria-hidden", "true");
+  r.append(el("span", "", label), el("small", "", small || ""), chev);
   r.onclick = onclick;
   return r;
+}
+
+// panelSig is what the panel's rows are made of: when it is the same as at the
+// last draw the panel is only patched (each second the deck is drawn again),
+// so what has the focus keeps it and nothing is fetched again.
+function panelSig(c) {
+  if (cp.page === "pics") return JSON.stringify(["pics", cv.pics.map((p) => p.url)]);
+  return JSON.stringify([c.id, c.topic || "", !!c.paused, !!c.dm, c.lead || "", (c.members || []).map((m) => [m.id, m.label])]);
+}
+
+function bigTile(id) {
+  const t = chanTile(id);
+  t.classList.remove("small");
+  t.classList.add("big");
+  return t;
 }
 
 // drawChanPanel draws what the panel says of the channel: its tile, name
@@ -311,20 +353,44 @@ function drawChanPanel() {
   const c = id && busChannel(id);
   const side = $("#chpanel .chside");
   if (!c) return closeChanPanel(true);
+  const sig = panelSig(c);
+  if (side.dataset.sig === sig) {
+    if (cp.page !== "pics") patchChanPanel(side, c);
+    return;
+  }
+  const had = side.contains(document.activeElement) ? document.activeElement.dataset.key : "";
+  side.dataset.sig = sig;
+  if (cp.page === "pics") drawPanelPics(side);
+  else drawPanelMain(side, c);
+  if (had) side.querySelector(`[data-key="${CSS.escape(had)}"]`)?.focus({ preventScroll: true });
+}
+
+function panelClose() {
   const close = el("button", "icon-btn cpclose");
   close.type = "button";
+  close.dataset.key = "close";
   close.title = "关闭";
   close.setAttribute("aria-label", "关闭");
   close.append(icon("x"));
   close.onclick = () => closeChanPanel();
-  if (cp.page === "pics") return drawPanelPics(side, close);
+  return close;
+}
+
+// boardLine is the 任务板 row's small line: this channel's tasks, counted.
+function boardLine(id) {
+  const cards = (deck.board || []).filter((x) => x.channel === id);
+  const doing = cards.filter((x) => x.column === "doing" || x.column === "review").length;
+  const done = cards.filter((x) => x.column === "done").length;
+  return cards.length ? `${doing} 进行中 · ${done} 完成` : "没有任务";
+}
+
+function drawPanelMain(side, c) {
+  const id = c.id;
   const top = el("div", "cptop");
-  const tile = chanTile(id);
-  tile.classList.remove("small");
-  tile.classList.add("big");
-  top.append(tile, el("b", "", chanName(id)));
+  top.dataset.sig = tileSig(id);
+  top.append(bigTile(id), el("b", "", chanName(id)));
   if (c.topic) top.append(el("p", "cptopic", c.topic));
-  const parts = [close, top];
+  const parts = [panelClose(), top];
   // the members
   const mem = c.members || [];
   parts.push(el("h3", "cpsec", `成员 · ${mem.length}`));
@@ -333,7 +399,9 @@ function drawChanPanel() {
     const a = agents.get(m.id);
     const r = el("button", "cprow");
     r.type = "button";
+    r.dataset.key = `m:${m.id}`;
     r.disabled = !a;
+    r.dataset.st = a ? shownStatus(a) : "";
     const t = el("span", "t");
     const n = el("span", "n", m.label);
     if (m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
@@ -346,13 +414,10 @@ function drawChanPanel() {
   // the group
   parts.push(el("h3", "cpsec", "这个群"));
   const acts = el("div", "cplist");
-  const cards = (deck.board || []).filter((x) => x.channel === id);
-  const doing = cards.filter((x) => x.column === "doing" || x.column === "review").length;
-  const done = cards.filter((x) => x.column === "done").length;
-  acts.append(panelRow("任务板", cards.length ? `${doing} 进行中 · ${done} 完成` : "没有任务", () => { closeChanPanel(true); openBoard(id); }));
-  acts.append(panelRow("图片和文件", String(cv.pics.length), () => { cp.page = "pics"; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); }));
+  acts.append(panelRow("board", "任务板", boardLine(id), () => { closeChanPanel(true); openBoard(id); }));
+  acts.append(panelRow("pics", "图片和文件", String(cv.pics.length), () => { cp.page = "pics"; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); }));
   if (c.paused) {
-    acts.append(panelRow("继续", "这个群在等你", async () => {
+    acts.append(panelRow("resume", "继续", "这个群在等你", async () => {
       try {
         await api("POST", "/api/bus/resume", {}, { channel: id });
         loadChannel(false);
@@ -361,38 +426,77 @@ function drawChanPanel() {
       }
     }));
   }
-  if (!c.dm) acts.append(panelRow("更多…", "", (e) => chanMenu(c, e.currentTarget)));
+  if (!c.dm) acts.append(panelRow("more", "更多…", "", (e) => chanMenu(c, e.currentTarget)));
   parts.push(acts);
   side.replaceChildren(...parts);
 }
 
+// patchChanPanel brings a panel of the same rows up to date: each member's state
+// and line, the tile, the counts; nothing else is touched.
+function patchChanPanel(side, c) {
+  const top = side.querySelector(".cptop");
+  if (top && top.dataset.sig !== tileSig(c.id)) {
+    top.querySelector(".avatar").replaceWith(bigTile(c.id));
+    top.dataset.sig = tileSig(c.id);
+  }
+  const rows = [...side.querySelectorAll(".cprow")];
+  (c.members || []).forEach((m, i) => {
+    const r = rows[i];
+    if (!r) return;
+    const a = agents.get(m.id);
+    const st = a ? shownStatus(a) : "";
+    r.disabled = !a;
+    if (r.dataset.st !== st) {
+      r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false));
+      r.dataset.st = st;
+    }
+    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : "不在列表里";
+    if (line.textContent !== text) line.textContent = text;
+  });
+  const set = (key, text) => {
+    const small = side.querySelector(`.cpact[data-key="${key}"] small`);
+    if (small && small.textContent !== text) small.textContent = text;
+  };
+  set("board", boardLine(c.id));
+  set("pics", String(cv.pics.length));
+}
+
 // drawPanelPics is the panel's page of the channel's pictures.
-function drawPanelPics(side, close) {
+function drawPanelPics(side) {
   const back = el("button", "cpback");
   back.type = "button";
+  back.dataset.key = "back";
   back.append(el("span", "", "‹"), "图片和文件");
   back.onclick = () => { cp.page = ""; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); };
   const grid = el("div", "cpgrid");
   for (const p of cv.pics) grid.append(imageButton(p.url, `图片，来自 ${p.who}`));
   if (!cv.pics.length) grid.append(el("p", "muted", "这个群里还没有图片。"));
-  side.replaceChildren(close, back, grid);
+  side.replaceChildren(panelClose(), back, grid);
 }
 
 // the panel: a tap on its scrim, Esc, or a swipe to the right closes it; a swipe
 // to the left from the right edge of a phone opens it.
 $("#chpanel .chscrim").onclick = () => closeChanPanel();
+// trapTab keeps Tab inside the open panel: from its last button to its first, and back.
+function trapTab(e) {
+  const f = [...$("#chpanel .chside").querySelectorAll("button:not([disabled])")];
+  if (!f.length) return;
+  const at = f.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? f.length - 1 : at - 1) : (at < 0 || at === f.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  f[next].focus();
+}
+
+// layerAbove: a menu, a dialog or a picture open over the panel has the keys: they close
+// first, one Esc each, and the panel's own handling stands down.
+const layerAbove = () => !$("#popup").hidden || !$("#dialog").hidden || !!$("#lightbox");
 window.addEventListener("keydown", (e) => {
-  if (!cp.open) return;
+  if (!cp.open || layerAbove()) return;
   if (e.key === "Escape") {
     e.stopPropagation();
     closeChanPanel();
   } else if (e.key === "Tab") {
-    const f = [...$("#chpanel .chside").querySelectorAll("button:not([disabled])")];
-    if (!f.length) return;
-    const at = f.indexOf(document.activeElement);
-    const next = e.shiftKey ? (at <= 0 ? f.length - 1 : at - 1) : (at < 0 || at === f.length - 1 ? 0 : at + 1);
-    e.preventDefault();
-    f[next].focus();
+    trapTab(e);
   }
 }, true);
 {
@@ -687,7 +791,8 @@ function foldSummary(m) {
 // the end of its first sentence, or at 120 characters.
 function firstSentence(line) {
   const plain = line.replace(/^[#>\-*\s]+/, "").replace(/[*_`]/g, "")
-    .replace(/https?:\/\/\S+?\/pull\/(\d+)\S*/g, "PR #$1") // a link is its name
+    // a link to a pull request is its name; one after the word PR is not "PR PR #88"
+    .replace(/(\bPR\s+)?https?:\/\/\S+?\/pull\/(\d+)\S*/gi, (_, pr, n) => `PR #${n}`)
     .replace(/https?:\/\/([^\s/,;)]+)\S*/g, "$1").trim();
   const end = plain.search(/[.!?。！？](\s|$)/);
   const one = end > 0 ? plain.slice(0, end + 1) : plain;

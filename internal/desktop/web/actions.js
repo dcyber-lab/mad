@@ -77,6 +77,7 @@ $("#popup").addEventListener("keydown", (e) => {
     closePopup(true);
   } else if (e.key === "Tab") {
     closePopup(true); // the focus is back on the anchor before Tab moves it on
+    if (typeof cp !== "undefined" && cp.open) trapTab(e); // from a menu of the channel's panel it moves on inside the panel
   }
 });
 // popupGuard: until then a press outside does not close the menu. A long press
@@ -94,6 +95,9 @@ window.addEventListener("blur", closePopup);
 // end it from the body.
 function dialog({ title, body, actions, ready }) {
   return new Promise((resolve) => {
+    // what had the focus gets it back when it closes: a menu's item is gone by now, its anchor is the one
+    const at = document.activeElement;
+    const from = at && at.closest && at.closest("#popup") ? popupBack : at;
     const d = $("#dialog");
     const card = el("div", "dlg");
     card.append(el("h2", "", title));
@@ -109,6 +113,7 @@ function dialog({ title, body, actions, ready }) {
       d.hidden = true;
       d.replaceChildren();
       document.removeEventListener("keydown", key, true);
+      if (from?.isConnected && from !== document.body) from.focus({ preventScroll: true });
       resolve(v);
     };
     // An action's submit runs with the dialog open: the error it returns
@@ -1124,7 +1129,7 @@ $("#bell").onclick = () => notifyDialog();
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#popup").hidden) {
     closePopup(true);
-    e.stopPropagation();
+    e.stopImmediatePropagation(); // handlers after this one (the channel panel's) must not see it: one Esc, one layer
     return;
   }
   if (e.metaKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === "n") {
