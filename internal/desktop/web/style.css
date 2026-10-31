@@ -1650,3 +1650,5 @@ html.ptype .bmore, html.ptype .bless { font-size: 15px; min-height: 36px; paddin
 html.ptype #ptitle.chan { display: flex; align-items: center; gap: 8px; }
 html.ptype #ptitle.chan .pt { font-weight: 700; }
 html.ptype #bar .cwho { flex: none; margin-left: auto; display: flex; gap: 2px; align-items: center; cursor: pointer; }
+/* The characters are not boxes: the lead is named in the members' list, not ringed in the strip. */
+#chanhead .cwho .avatar.lead, #bar .cwho .avatar.lead { box-shadow: none; outline: 0; }
