@@ -73,13 +73,12 @@ final class EdgeHomeTests: MadUITestCase {
     }
 
     func testALongCJKLineStaysOnOneLine() {
-        let long = web.staticTexts.allElementsBoundByIndex.filter { $0.label.count >= 40 && $0.frame.minY > 200 }
-        XCTAssertFalse(long.isEmpty, "no long preview line to look at")
-        for line in long {
-            XCTAssertLessThanOrEqual(line.frame.height, 40, "a long line wrapped: “\(line.label.prefix(30))…” is \(line.frame.height) high")
-            XCTAssertTrue(screenFrame.insetBy(dx: -1, dy: 0).contains(CGRect(x: line.frame.minX, y: line.frame.minY, width: 0, height: 0)))
-            XCTAssertLessThanOrEqual(line.frame.maxX, screenFrame.maxX + 1, "a long line runs off the screen")
-        }
+        // The preview under the 长文本测试 row is far longer than the screen is wide.
+        let line = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "这是一段很长的中文回复")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "no long CJK preview line")
+        XCTAssertLessThanOrEqual(line.frame.height, 24, "the long line wrapped: it is \(line.frame.height) high")
+        XCTAssertLessThanOrEqual(line.frame.maxX, screenFrame.maxX - 8, "the long line runs to the screen's edge: ends at \(line.frame.maxX)")
+        XCTAssertTrue(element("长文本测试").firstMatch.exists, "the row for the long line is gone")
     }
 
     func testSearchFindsTheTeamRow() {

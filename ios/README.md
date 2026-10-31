@@ -87,6 +87,33 @@ goes with it; the Keychain holds the only lasting one. The page is loaded with
 `#token=<t>&embed=app` in the fragment, and with the app's insets off: it keeps
 clear of the status bar and the home indicator itself.
 
+## UI tests
+
+`make ios-uitest` taps through the special cases of the app and its page in a simulator
+of its own, "mad UITest" (an iPhone 17, made on first use and kept; never your other
+simulators), against the fixture server (`internal/desktop/fixture`) and its canned
+scenarios. It runs one scenario at a time, one simulator and one `xcodebuild` at a time:
+
+| Test class | Fixture scenario | What it looks at |
+| --- | --- | --- |
+| `EdgeHomeTests` | `edge-home` | the 60-character Mac name and its ▾, the red dots, the order of the chats, tiles of 1, 2 and 5 members, the characters' states, the untitled agent's label, the long CJK line, search, the ⋯ menu, dark mode, landscape |
+| `EmptyTests` | `empty` | the empty state |
+| `ManyChannelsTests` | `many-channels` | rows with a red dot first, then newest |
+| `ChannelFoldTests` | `channel-fold` | folded handoff and report (Show more and Show less), the @you and own messages whole, the pictures and their lightbox, the long URL, the member strip |
+| `UsageTests` | `usage` | 42% and 71%, 104% without a negative "left", no reset line for the zero time |
+| `AppTests` | `edge-home` | the expiry banner and its ✕, ▾ 切换 Mac back to the list and the Mac opening again, the last Mac opening on launch |
+| `PairingTests`, `PairingRetryTests` | `pairing` | a good code, a refused one ("scan a new QR"), a 503 and then Retry |
+| `PairingOfflineTests` | `pairing` | the server down (the pairing is kept, with Retry), then back, and Retry pairs |
+
+The tests find things in the page by accessibility label and attach a screenshot to each
+case. When it ends, `ios/build/uitest-report/index.html` is a gallery of every screenshot,
+grouped by case, with a pass or fail and the failure message. `ONLY="UsageTests AppTests"`
+runs some classes only; `FIXTURE_ROOT=<dir>` takes the fixture server from another checkout.
+The tests are in `UITests/`; the harness is `scripts/uitest.sh` and `scripts/uitest_report.py`.
+The app takes `-resetStore YES` (Debug) so each case starts with no Mac paired.
+
+The app now turns to landscape too (the page lays out for it), which the landscape case looks at.
+
 ## Debug builds
 
 Debug builds only (none of this is compiled into Release):
@@ -96,7 +123,8 @@ Debug builds only (none of this is compiled into Release):
   Info.plist allows local networking; Release takes https only).
 - Launch arguments, e.g. `xcrun simctl launch <device> dev.mad.ios -openMac YES`:
   - `-pairLink <url>` pairs when no Mac is stored yet,
-  - `-openMac YES` opens the first Mac,
+  - `-openMac YES` opens the first Mac (once, when the app starts),
+  - `-resetStore YES` forgets every Mac and pending pairing first (the UI tests start with it),
   - `-profileHoursLeft N` shows the note for a profile with N hours left,
   - `-debugSwitchMac YES` has the page post `switchMac` to the app six seconds
     after a Mac opens, to see the way back to the list work.

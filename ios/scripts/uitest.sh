@@ -51,7 +51,9 @@ xcrun simctl ui "$UDID" appearance light >/dev/null 2>&1
 
 # ---- build once ---------------------------------------------------------------
 mkdir -p "$RESULTS" ios/build
-rm -rf "$RESULTS"/*.xcresult "$RESULTS"/*.log "$REPORT"
+# A full run starts clean; with ONLY, the runs of the classes not asked for are kept, so the report still shows them.
+if [ -z "${ONLY:-}" ]; then rm -rf "$RESULTS"/*.xcresult "$RESULTS"/*.log; fi
+rm -rf "$REPORT"
 (cd ios && xcodegen generate -q) || die "xcodegen failed"
 (cd "$FIXTURE_ROOT" && go build -o "$ROOT/$SERVER_BIN" ./internal/desktop/fixture) || die "the fixture server did not build"
 echo "Building the app and its tests..."
@@ -83,9 +85,11 @@ start_server() {
 }
 
 FAILED=0
+RUNS=0
 # run <name> <url> <only-testing>: one xcodebuild test run; its result bundle is $RESULTS/<name>.xcresult.
 run() {
     printf '  %-34s' "$1"
+    RUNS=$((RUNS + 1))
     rm -rf "$RESULTS/$1.xcresult"
     TEST_RUNNER_MAD_FIXTURE_URL="$2" xcodebuild test-without-building -project ios/mad.xcodeproj -scheme madUITests \
         -destination "id=$UDID" -derivedDataPath ios/build/uitest -resultBundlePath "$RESULTS/$1.xcresult" \
@@ -101,7 +105,11 @@ run() {
     if [ $rc -eq 0 ]; then echo "passed"; else echo "FAILED"; FAILED=$((FAILED + 1)); fi
 }
 
-wanted() { [ -z "${ONLY:-}" ] || case " $ONLY " in *" $1 "*) return 0 ;; esac; return 1; }
+wanted() {
+    [ -z "${ONLY:-}" ] && return 0
+    case " $ONLY " in *" $1 "*) return 0 ;; esac
+    return 1
+}
 
 # a test class and the scenario its server serves
 for pair in "EdgeHomeTests edge-home" "EmptyTests empty" "ManyChannelsTests many-channels" \
@@ -129,6 +137,7 @@ fi
 # ---- the report ---------------------------------------------------------------
 python3 -I ios/scripts/uitest_report.py "$RESULTS" "$REPORT" || echo "make ios-uitest: the report could not be made" >&2
 echo
+[ "$RUNS" -gt 0 ] || { echo "make ios-uitest: no test run happened (check ONLY=${ONLY:-})" >&2; FAILED=$((FAILED + 1)); }
 echo "Report: $ROOT/$REPORT/index.html"
 [ "$FAILED" -eq 0 ] && echo "All runs passed." || echo "$FAILED run(s) failed."
 xcrun simctl shutdown "$UDID" 2>/dev/null

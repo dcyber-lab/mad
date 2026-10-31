@@ -11,6 +11,7 @@ struct MacsView: View {
     @State private var problem: String?
     @State private var path: [Mac]
     @State private var retrying: Set<UUID> = []
+    @State private var hooked = false
     @Environment(\.scenePhase) private var scenePhase
     /// Looked at again whenever the app appears or comes back, so a build left
     /// running that crosses the 2-day line shows its note.
@@ -72,7 +73,8 @@ struct MacsView: View {
             }
             .onAppear {
                 expiry = MacsView.expiryNotice()
-                launchHooks()
+                // The Debug hooks run once: coming back to the list must not open the Mac again.
+                if !hooked { hooked = true; launchHooks() }
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { expiry = MacsView.expiryNotice() }

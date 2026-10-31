@@ -9,6 +9,7 @@ import glob
 import html
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -61,10 +62,13 @@ def attachments(bundle, dest):
     for entry in manifest:
         ident = entry.get("testIdentifier") or entry.get("testIdentifierURL", "")
         for a in entry.get("attachments", []):
-            name = a.get("suggestedHumanReadableName") or a.get("exportedFileName", "")
-            # "name_0_UUID.png" -> "name"
-            human = name.rsplit("_", 2)[0] if name.count("_") >= 2 and name.endswith((".png", ".jpeg", ".jpg")) else name
-            out.setdefault(ident, []).append((human, a.get("exportedFileName", ""), a.get("timestamp", 0)))
+            name = a.get("suggestedHumanReadableName") or ""
+            # Only the screenshots the tests attached by name ("name_0_UUID.png"); not the
+            # recordings, snapshots and debug text Xcode adds.
+            m = re.match(r"(.+)_\d+_[0-9A-Fa-f-]{36}\.(png|jpe?g)$", name)
+            if not m:
+                continue
+            out.setdefault(ident, []).append((m.group(1), a.get("exportedFileName", ""), a.get("timestamp", 0)))
     return out
 
 

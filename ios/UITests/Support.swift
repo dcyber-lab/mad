@@ -44,7 +44,7 @@ class MadUITestCase: XCTestCase {
 
     /// Launches again without forgetting or pairing anything (the Mac last used opens).
     func relaunch(extra: [String] = []) {
-        app.terminate()
+        app?.terminate()
         app = XCUIApplication()
         app.launchArguments = extra
         app.launch()
