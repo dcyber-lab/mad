@@ -61,6 +61,10 @@ type Item struct {
 	// Body is what a card shows under Text: the ask past its first line,
 	// a skill's description, a check-in's note, the agent's own line.
 	Body string `json:"body,omitempty"`
+	// Full: Body is part of what it asks (the command a TUI's prompt
+	// shows), not a note on it. Shown whole, and an act that lets it
+	// through is offered only beside it, never on a row.
+	Full bool `json:"full,omitempty"`
 	// Part is how much of the budget is spent (1 = all), for its meter.
 	Part *float64 `json:"part,omitempty"`
 	// Tasks are the board's tasks this item holds up.

@@ -13,18 +13,23 @@ import (
 // to run the following command?", a trust or update screen. Read off the
 // screen with no rule per kind:
 //
-//	Do you want to proceed?          the question: the first line with a "?"
+//	──────────────────────────       where it begins: a rule, or blank lines
+//	Bash command                     what it says: the question is the first
+//	echo hi > out.txt                line with a "?", the rest in order
+//	Do you want to proceed?
 //	❯ 1. Yes                         options 1..n, one under the cursor
 //	  2. Yes, and always allow …
 //	  3. No
 //	Esc to cancel · Tab to amend     a footer that says Esc
 //
 // A screen it cannot read so is not a prompt: its item offers Open only.
+// Nor is one it cannot read whole (it runs off the top of the screen): an
+// option that lets something through is offered only beside all of it.
 type prompt struct {
 	Question string
-	// Detail is what the prompt says between its question and its options
-	// (codex's reason and command).
-	Detail  string
+	// Rest is what else it says, in order: the command it asks about,
+	// codex's reason, claude's "Bash command".
+	Rest    []string
 	Options []option
 	// Cursor is the option the cursor is on, 1-based.
 	Cursor int
@@ -36,11 +41,19 @@ type prompt struct {
 type option struct {
 	N     int    // its number: the key that picks it
 	Label string // its words, a key hint like "(y)" or "(esc)" cut
+	// Under is what is indented under it: a description, or the rest of a
+	// label the pane wrapped.
+	Under string
 }
 
-// The most lines above the options that are read as the prompt's: past
-// them is the conversation.
-const promptLines = 8
+// Text is all the prompt says, its question first.
+func (p prompt) Text() string {
+	return strings.Join(append([]string{p.Question}, p.Rest...), "\n")
+}
+
+// The most lines above the options read as the prompt's: a longer one (a
+// command of many lines) is not read.
+const promptLines = 30
 
 var (
 	optionRe = regexp.MustCompile(`^(\s*)([❯›>]\s*)?([1-9])\.\s+(\S.*)$`)
@@ -76,12 +89,14 @@ func parsePrompt(screen string) (prompt, bool) {
 	// The options, upward from the footer: description lines indented
 	// under them, rules and blank lines may come between.
 	var opts []option
+	var under []string // lines under the option above them, read first
 	cursor, top, col := 0, -1, -1
 	for i := foot - 1; i >= 0; i-- {
 		l := lines[i]
 		if m := optionRe.FindStringSubmatch(l); m != nil {
 			n, _ := strconv.Atoi(m[3])
-			opts = append([]option{{N: n, Label: strings.TrimSpace(m[4])}}, opts...)
+			opts = append([]option{{N: n, Label: strings.TrimSpace(m[4]), Under: strings.Join(under, " ")}}, opts...)
+			under = nil
 			if m[2] != "" {
 				if cursor != 0 {
 					return prompt{}, false // two cursors: not one list
@@ -94,7 +109,11 @@ func parsePrompt(screen string) (prompt, bool) {
 			}
 			continue
 		}
-		if l == "" || rule(l) || len(opts) > 0 && indent(l) > col {
+		if l == "" || rule(l) {
+			continue
+		}
+		if len(opts) > 0 && indent(l) > col {
+			under = append([]string{strings.TrimSpace(l)}, under...)
 			continue
 		}
 		break
@@ -107,17 +126,30 @@ func parsePrompt(screen string) (prompt, bool) {
 			return prompt{}, false
 		}
 	}
-	// What is above them, up to a rule (claude draws one over its prompts).
+	// What is above them, up to where it begins: a rule (claude draws one
+	// over its prompts), two blank lines (codex leaves them), or the top of
+	// the screen after a blank line. Text that runs off the top may be cut.
 	var above []string
-	for i := top - 1; i >= 0 && len(above) < promptLines; i-- {
-		if rule(lines[i]) {
-			break
-		}
-		if l := strings.TrimSpace(lines[i]); l != "" {
+	begun, blank := false, 0
+	for i := top - 1; i >= 0 && !begun; i-- {
+		l := strings.TrimSpace(lines[i])
+		switch {
+		case l == "":
+			blank++
+			begun = blank >= 2 && len(above) > 0 || i == 0
+		case rule(l):
+			begun = true
+		case dashes(l): // claude's, around a command
+			blank = 0
+		default:
+			blank = 0
+			if len(above) == promptLines {
+				return prompt{}, false
+			}
 			above = append([]string{l}, above...)
 		}
 	}
-	if len(above) == 0 || form(above) {
+	if !begun || len(above) == 0 || form(above) {
 		return prompt{}, false
 	}
 	p := prompt{Cursor: cursor}
@@ -128,14 +160,15 @@ func parsePrompt(screen string) (prompt, bool) {
 			break
 		}
 	}
-	p.Question, p.Detail = above[q], strings.Join(above[q+1:], "\n")
+	p.Question = above[q]
+	p.Rest = append(append([]string{}, above[:q]...), above[q+1:]...)
 	h := fnv.New64a()
 	for _, l := range above {
 		h.Write([]byte(l + "\n"))
 	}
 	seen := map[string]bool{}
 	for _, o := range opts {
-		o.Label = hintRe.ReplaceAllString(o.Label, "")
+		o.Label, o.Under = hintRe.ReplaceAllString(o.Label, ""), hintRe.ReplaceAllString(o.Under, "")
 		if strings.HasPrefix(o.Label, "[") {
 			return prompt{}, false // a checkbox: several picks, then submit
 		}
@@ -143,7 +176,7 @@ func parsePrompt(screen string) (prompt, bool) {
 			return prompt{}, false // an option is acted on by its words
 		}
 		seen[o.Label] = true
-		h.Write([]byte(strconv.Itoa(o.N) + ". " + o.Label + "\n"))
+		h.Write([]byte(strconv.Itoa(o.N) + ". " + o.Label + "\n" + o.Under + "\n"))
 		if !typed(o.Label) {
 			p.Options = append(p.Options, o)
 		}
@@ -179,7 +212,12 @@ func typed(label string) bool {
 // rule: a line drawn across, of ─ alone.
 func rule(l string) bool {
 	l = strings.TrimSpace(l)
-	return utf8.RuneCountInString(l) >= 10 && strings.Trim(l, "─") == ""
+	return utf8.RuneCountInString(l) >= 10 && strings.Trim(l, "─━") == ""
+}
+
+// dashes: a dashed line across, which sets a part of a prompt apart.
+func dashes(l string) bool {
+	return utf8.RuneCountInString(l) >= 10 && strings.Trim(l, "╌╍┄┅┈┉") == ""
 }
 
 func indent(l string) int {

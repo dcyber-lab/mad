@@ -197,17 +197,12 @@ func (b *builder) agent(a Agent) {
 	if hook != nil && hook.State == status.Waiting {
 		at = hook.At
 	}
-	// Its prompt answered by keys when its screen shows one that can be
-	// read; else Open, never a guess.
-	var route route = openRoute{label: "Open " + a.Label}
 	p, keys := parsePrompt(a.Screen)
-	if keys && a.PaneID != "" {
-		route = keysRoute{pane: a.PaneID, p: p}
-	} else {
+	if !keys || a.PaneID == "" {
 		p = prompt{}
 	}
 	it := Item{Key: keyWait(a.ID, at, p.ID), Kind: KindPermission, Agent: a.ID, Title: a.Label, Where: a.Dir,
-		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: route}
+		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: openRoute{label: "Open " + a.Label}}
 	tool, target := splitCall(a.Info.Tool)
 	switch {
 	case tool == "AskUserQuestion" || tool == "request_user_input":
@@ -224,9 +219,12 @@ func (b *builder) agent(a Agent) {
 			it.Body = hook.Message
 		}
 	}
-	if p.Question != "" && (tool == "" || it.Kind == KindQuestion) {
-		// What the screen asks says more than a hook's "needs your permission".
-		it.Text, it.Body, it.Mono = p.Question, p.Detail, false
+	if p.ID != "" {
+		// A prompt its screen shows whole is answered by keys to its pane,
+		// in the screen's words: the transcript's line is claude's
+		// description of a command, cut. Else Open, never a guess.
+		it.route = keysRoute{pane: a.PaneID, p: p, allow: it.Kind == KindPermission}
+		it.Text, it.Body, it.Mono, it.Full = p.Question, strings.Join(p.Rest, "\n"), false, true
 	}
 	if it.Since.IsZero() {
 		it.Since, it.undated = b.f.Now, true
