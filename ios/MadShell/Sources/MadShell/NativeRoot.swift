@@ -23,6 +23,11 @@ public struct NativeRoot: View {
         self.title = title
         self.onSwitchMac = onSwitchMac
         _store = State(initialValue: DeckStore(api: api))
+        #if DEBUG
+        // Debug builds: `-nativeOpen <row id>` opens a row at once (a channel or an agent), to look at it
+        // without a tap (the simulator cannot be tapped from a script).
+        if let row = UserDefaults.standard.string(forKey: "nativeOpen"), !row.isEmpty { _selection = State(initialValue: row) }
+        #endif
     }
 
     private var model: HomeModel {
@@ -53,14 +58,16 @@ public struct NativeRoot: View {
         NavigationSplitView {
             HomeSidebar(model: model, selection: $selection, actions: actions)
         } detail: {
-            Detail(selection: selection)
+            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 })
         }
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
             NavigationStack {
-                Detail(selection: id)
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } }
+                Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 })
+                    // a channel draws its own head, with its own way back
+                    .toolbar(store.channel(id: id) == nil ? .automatic : .hidden, for: .navigationBar)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { if store.channel(id: id) == nil { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
             }
         } else {
             HomeView(model: model, actions: actions)
@@ -69,15 +76,19 @@ public struct NativeRoot: View {
     }
 }
 
-/// What a row opens. A placeholder: it says what it will be.
+/// What a row opens: a channel is the native channel view; an agent is still a placeholder.
 struct Detail: View {
     @Environment(DeckStore.self) private var store
     let selection: HomeRow.ID?
+    let api: MadAPI
+    let onBack: (() -> Void)?
+    let open: (HomeRow.ID) -> Void
 
     var body: some View {
         if let id = selection {
-            if let channel = store.channel(id: id) {
-                placeholder(channel.dm ? channel.title : channel.id, "The channel view comes here (ChannelStore).")
+            if store.channel(id: id) != nil {
+                ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
+                    .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
                 placeholder(agent.label, "The agent's conversation comes here (AgentStore).")
             } else {

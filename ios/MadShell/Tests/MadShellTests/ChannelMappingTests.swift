@@ -1,0 +1,210 @@
+import MadKit
+import MadUI
+import XCTest
+@testable import MadShell
+
+private let tz = TimeZone(secondsFromGMT: 8 * 3600)!
+private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = tz; return c }
+/// "now" for the fixture's messages: 1 November 2026, 09:00 in +08:00.
+private let now = ISO8601DateFormatter().date(from: "2026-11-01T09:00:00+08:00")!
+
+private func fixture<T: Decodable>(_ name: String, _ type: T.Type) throws -> T {
+    let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
+    return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
+}
+
+/// A message by hand, for a rule on its own.
+private func msg(_ seq: Int, _ who: String = "architect", _ text: String = "hello", kind: String = "text", at: String = "2026-11-01T08:00:00+08:00",
+                 mentions: [String] = [], replyTo: Int = 0, images: [String] = [], handoff: BusMessage.Handoff? = nil) -> BusMessage {
+    var m = BusMessage(seq: seq, at: ISO8601DateFormatter().date(from: at), from: .init(id: who == "you" ? "you" : "id-\(who)", label: who),
+                       kind: kind, text: text, mentions: mentions, replyTo: replyTo, handoff: handoff, images: images.map { BusImage(id: $0) })
+    m.seq = seq
+    return m
+}
+
+private func screen(_ messages: [BusMessage], deck: Deck? = nil) -> ChannelScreen {
+    ChannelMapping.screen(channel: "fold", messages: messages, deck: deck, calendar: cal, now: now)
+}
+
+private func bubbles(_ s: ChannelScreen) -> [ChannelBubble] {
+    s.items.flatMap { item -> [ChannelBubble] in
+        switch item {
+        case .mine(let b): [b]
+        case .run(let r): r.bubbles
+        default: []
+        }
+    }
+}
+
+final class ChannelMappingTests: XCTestCase {
+    private func foldScreen() throws -> ChannelScreen {
+        let page = try fixture("messages-channel-fold", MessagesPage.self)
+        return screen(page.messages, deck: try fixture("deck-channel-fold", Deck.self))
+    }
+
+    // MARK: folding
+
+    func testWhatTheFixtureFoldsAndWhatItShowsWhole() throws {
+        let s = try foldScreen()
+        let folded = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0.fold) })
+        XCTAssertEqual(folded.keys.count, 13)
+        // a handoff, a result, a long message and a code block fold; the rest are whole
+        for seq in [2, 3, 11, 13] { XCTAssertNotNil(folded[seq] ?? nil, "#\(seq) should be folded") }
+        for seq in [1, 4, 5, 6, 7, 8, 9, 10, 12] { XCTAssertNil(folded[seq] ?? nil, "#\(seq) should be whole") }
+        XCTAssertEqual(try XCTUnwrap(folded[2] ?? nil).head, "→ builder", "the handoff names whom it hands to, by label")
+        XCTAssertEqual(try XCTUnwrap(folded[2] ?? nil).summary, "Images in bus channels and DMs.")
+        XCTAssertEqual(try XCTUnwrap(folded[3] ?? nil).head, "完成")
+        XCTAssertEqual(try XCTUnwrap(folded[3] ?? nil).summary, "PR #88 adds pictures to channels.", "a PR's address is its number, and 'Done:' is the head's")
+        XCTAssertEqual(bubbles(s).first { $0.id == 3 }?.text.hasPrefix("Done: PR https://"), true, "the whole text stays for the tap")
+    }
+
+    func testTheRulesOfFolding() {
+        let long = String(repeating: "字", count: 281)
+        let atLimit = String(repeating: "字", count: 280)
+        let lines3 = "a\nb\nc", lines4 = "a\nb\nc\nd"
+        func folded(_ m: BusMessage, deck: Deck? = nil) -> Bool { bubbles(screen([m], deck: deck)).first?.fold != nil }
+        XCTAssertFalse(folded(msg(1, "builder", atLimit)), "280 characters is not past the limit")
+        XCTAssertTrue(folded(msg(1, "builder", long)), "281 is")
+        XCTAssertFalse(folded(msg(1, "builder", lines3)), "three lines is not past")
+        XCTAssertTrue(folded(msg(1, "builder", lines4)), "four is")
+        XCTAssertFalse(folded(msg(1, "builder", "a\n\n\nb\n\nc")), "blank lines do not count")
+        // reports fold however short
+        XCTAssertTrue(folded(msg(1, "builder", "done", kind: "done")))
+        XCTAssertTrue(folded(msg(1, "builder", "no", kind: "declined")))
+        XCTAssertTrue(folded(msg(1, "builder", "no", kind: "done", handoff: .init(id: "h-1", status: "declined"))))
+        XCTAssertTrue(folded(msg(1, "architect", "go", kind: "handoff", handoff: .init(id: "h-1", to: "x"))))
+        // the person's own never; one that asks the person never
+        XCTAssertFalse(folded(msg(1, "you", long)))
+        XCTAssertFalse(folded(msg(1, "builder", "@you " + long)))
+        XCTAssertFalse(folded(msg(1, "builder", "please look, @You", kind: "done")), "the case of @you does not matter")
+        XCTAssertFalse(folded(msg(1, "builder", long, mentions: ["you"])))
+        XCTAssertTrue(folded(msg(1, "builder", "write to me@you.com " + long)), "an address is not an @you")
+        XCTAssertTrue(folded(msg(1, "builder", "@younger " + long)), "nor @younger")
+    }
+
+    func testAnAgentsMessagesInADMWithThePersonStayWhole() throws {
+        let deck = try JSONDecoder().decode(Deck.self, from: Data("""
+        {"bus":[{"id":"dm.you.a1","title":"@alice","dm":true,"yours":true,"members":[{"id":"a1","label":"alice","kind":"claude"}]}]}
+        """.utf8))
+        let s = ChannelMapping.screen(channel: "dm.you.a1", messages: [msg(1, "alice", String(repeating: "x", count: 400))], deck: deck, calendar: cal, now: now)
+        XCTAssertNil(bubbles(s).first?.fold)
+        XCTAssertEqual(s.title, "alice")
+        XCTAssertEqual(s.placeholder, "发消息给 alice")
+        XCTAssertFalse(s.readOnly)
+    }
+
+    func testTheSummaryIsTheFirstSentenceWithoutMarkdown() {
+        XCTAssertEqual(ChannelMapping.firstSentence("## **Done** with `go test`. More follows"), "Done with go test.")
+        XCTAssertEqual(ChannelMapping.firstSentence("见 https://example.com/a/b/c 这里。后面"), "见 example.com 这里。")
+        XCTAssertEqual(ChannelMapping.firstSentence("[the PR](https://github.com/x/y/pull/5) is up"), "the PR is up")
+        XCTAssertEqual(ChannelMapping.firstSentence(String(repeating: "a", count: 300)).count, 120)
+        XCTAssertEqual(ChannelMapping.firstSentence("v1.2 is out"), "v1.2 is out", "a dot inside a word is not an end")
+    }
+
+    // MARK: runs
+
+    func testOneSendersMessagesInARowAreOneRun() {
+        let s = screen([msg(1, "architect", "one", at: "2026-11-01T08:00:00+08:00"), msg(2, "architect", "two", at: "2026-11-01T08:01:00+08:00"),
+                        msg(3, "builder", "three", at: "2026-11-01T08:02:00+08:00"), msg(4, "architect", "four", at: "2026-11-01T08:03:00+08:00")])
+        let runs = s.items.compactMap { item -> ChannelRun? in if case .run(let r) = item { r } else { nil } }
+        XCTAssertEqual(runs.map { $0.sender.name }, ["architect", "builder", "architect"])
+        XCTAssertEqual(runs.map { $0.bubbles.map(\.id) }, [[1, 2], [3], [4]])
+    }
+
+    func testThePersonsMessageEndsARunAndIsNeverInOne() {
+        let s = screen([msg(1, "architect", "one"), msg(2, "you", "mine"), msg(3, "architect", "again"), msg(4, "you", "a"), msg(5, "you", "b")])
+        let kinds = s.items.map { item -> String in
+            switch item { case .run: "run"; case .mine: "mine"; case .time: "time"; case .note: "note" }
+        }
+        XCTAssertEqual(kinds, ["time", "run", "mine", "run", "mine", "mine"])
+    }
+
+    func testAQuietWhileEndsARun() {
+        let s = screen([msg(1, "architect", "one", at: "2026-11-01T08:00:00+08:00"), msg(2, "architect", "two", at: "2026-11-01T08:10:00+08:00")])
+        XCTAssertEqual(s.items.count, 4, "time, run, time, run: ten minutes is a quiet")
+    }
+
+    // MARK: time lines
+
+    func testTimeLinesComeAfterTenMinutesOrANewDay() {
+        let s = screen([
+            msg(1, at: "2026-11-01T08:00:00+08:00"),
+            msg(2, "you", at: "2026-11-01T08:09:59+08:00"), // under ten minutes: no line
+            msg(3, at: "2026-11-01T08:20:00+08:00"),        // ten and more: a line, "08:20"
+            msg(4, "you", at: "2026-11-01T08:21:00+08:00"),
+        ])
+        let lines = s.items.compactMap { item -> String? in if case .time(_, let t) = item { t } else { nil } }
+        XCTAssertEqual(lines, ["今天 08:00", "08:20"])
+    }
+
+    func testTheFirstLineOfADayNamesTheDay() {
+        let s = screen([
+            msg(1, at: "2026-10-31T23:58:00+08:00"),        // yesterday
+            msg(2, at: "2026-11-01T00:01:00+08:00"),        // a new day, though only 3 minutes on
+            msg(3, at: "2026-10-30T08:00:00+08:00"),        // out of order is not expected; sorted by number it is a new day again
+        ])
+        let lines = s.items.compactMap { item -> String? in if case .time(_, let t) = item { t } else { nil } }
+        XCTAssertEqual(lines, ["昨天 23:58", "今天 00:01", "10月30日 08:00"])
+    }
+
+    func testSystemLinesAreNotesAndHaveNoCharacter() {
+        let s = screen([msg(1, "architect", "one"), msg(2, "mad", "Paused: waiting for you", kind: "system")])
+        XCTAssertEqual(s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } }, ["Paused: waiting for you"])
+        XCTAssertEqual(s.panel.pictureCount, 0)
+    }
+
+    // MARK: quotes, pictures, the head and the panel
+
+    func testAReplyQuotesWhatItAnswers() throws {
+        let s = try foldScreen()
+        let reply = try XCTUnwrap(bubbles(s).first { $0.id == 10 })
+        let q = try XCTUnwrap(reply.quote)
+        XCTAssertEqual(q.seq, 9)
+        XCTAssertEqual(q.who, "你")
+        XCTAssertTrue(q.text.hasPrefix("我看了一下这条消息"))
+        XCTAssertLessThanOrEqual(q.text.count, 60, "a quote is a line")
+        let gone = screen([msg(5, "architect", "re", replyTo: 2)])
+        XCTAssertEqual(bubbles(gone).first?.quote, ChannelQuote(seq: 2, who: "#2", text: ""), "an answer to a message that is not held")
+        let pics = screen([msg(1, "reviewer", "", images: ["p1"]), msg(2, "you", "ok", replyTo: 1)])
+        XCTAssertEqual(bubbles(pics).last?.quote?.text, "[图片]")
+    }
+
+    func testPicturesAreCarriedAndCounted() throws {
+        let s = try foldScreen()
+        XCTAssertEqual(bubbles(s).first { $0.id == 5 }?.images.count, 2)
+        XCTAssertEqual(s.panel.pictureCount, 2)
+    }
+
+    func testTheHeadAndThePanel() throws {
+        var deck = try fixture("deck-channel-fold", Deck.self)
+        let s = screen([], deck: deck)
+        XCTAssertEqual(s.title, "fold")
+        XCTAssertEqual(s.members.count, 8)
+        XCTAssertEqual(s.stateLine, "8 位成员", "nobody works")
+        XCTAssertEqual(s.placeholder, "发消息给 fold")
+        XCTAssertTrue(s.members.allSatisfy { $0.status == "空闲" })
+        // two work, one needs the person; the lead is tagged
+        deck.projects[0].agents[0].shown = "running"
+        deck.projects[0].agents[0].tool = "Bash"
+        deck.projects[0].agents[0].target = "go test"
+        deck.projects[0].agents[1].shown = "running"
+        deck.projects[0].agents[2].shown = "waiting"
+        deck.channels[0].lead = deck.projects[0].agents[0].id
+        let t = screen([], deck: deck)
+        XCTAssertEqual(t.stateLine, "2 个在工作")
+        XCTAssertEqual(t.members[0].status, "在工作 · Bash go test")
+        XCTAssertEqual(t.members[2].status, "在等你")
+        XCTAssertEqual(t.members.filter(\.isLead).map(\.name), ["architect"])
+        XCTAssertEqual(t.panel.members, t.members)
+        XCTAssertFalse(t.panel.paused)
+        XCTAssertTrue(ChannelMapping.screen(channel: "fold", messages: [], deck: deck, paused: true).panel.paused)
+    }
+
+    func testBeforeTheDeckComesTheChannelIsStillThere() {
+        let s = ChannelMapping.screen(channel: "fold", messages: [msg(1, "architect", "hi")], deck: nil, calendar: cal, now: now)
+        XCTAssertEqual(s.title, "fold")
+        XCTAssertTrue(s.members.isEmpty)
+        XCTAssertEqual(s.stateLine, "")
+        XCTAssertEqual(bubbles(s).count, 1)
+    }
+}
