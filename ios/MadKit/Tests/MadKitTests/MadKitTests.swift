@@ -99,118 +99,18 @@ final class FailingProtocol: URLProtocol {
 }
 
 final class SnapshotTests: XCTestCase {
-    let sample = """
-    {
-      "projects": [
-        {"name": "mad", "path": "/x/mad", "branch": "main", "changed": 2, "ahead": 0,
-         "future": {"a": 1},
-         "agents": [
-           {"id": "claude-3fe9", "kind": "claude", "name": "ios", "status": "working", "shown": "working", "cost": 1.5},
-           {"id": "codex-1", "kind": "codex", "title": "fix tests", "status": "idle", "shown": "done", "done": true}
-         ], "rollup": {}},
-        {"name": "empty", "path": "/x/e"}
-      ],
-      "bus": [], "board": [], "spend": {}, "timers": [],
-      "inbox": {"items": [
-        {"key": "perm:1", "kind": "permission", "title": "kim", "context": "Bash", "text": "go test ./...", "blocks": true, "acts": []},
-        {"key": "done:2", "kind": "finished", "title": "gus", "acts": []}
-      ], "needs": 1},
-      "working": ["claude-3fe9"], "states": [], "at": "2026-10-31T13:00:00Z"
-    }
-    """
-
-    func testDecodesSubsetAndIgnoresUnknown() throws {
-        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(sample.utf8))
-        XCTAssertEqual(s.projects.map(\.name), ["mad", "empty"])
-        XCTAssertEqual(s.agentCount, 2)
-        XCTAssertEqual(s.projects[0].agents[0].label, "ios")
-        XCTAssertEqual(s.projects[0].agents[1].label, "fix tests")
-        XCTAssertEqual(s.projects[0].agents[1].state, "done")
-        XCTAssertEqual(s.inbox.count, 2)
-        XCTAssertEqual(s.needs, 1)
-        XCTAssertEqual(s.waiting.map(\.key), ["perm:1"])
-        XCTAssertTrue(s.waiting[0].blocks)
+    func testReadsTheMachineNameAndIgnoresTheRest() throws {
+        let json = """
+        {"machine": " Heng’s MacBook Pro ", "projects": [{"name": "mad", "agents": []}],
+         "inbox": {"items": [], "needs": 0}, "future": {"a": 1}}
+        """
+        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(s.machine, "Heng’s MacBook Pro")
     }
 
-    func testEmptyObject() throws {
-        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data("{}".utf8))
-        XCTAssertEqual(s.agentCount, 0)
-        XCTAssertEqual(s.needs, 0)
-    }
-
-    func testNeedsLargerThanItemsIsClamped() {
-        let s = DeckSnapshot(projects: [], inbox: [.init(key: "a", title: "t")], needs: 5)
-        XCTAssertEqual(s.waiting.count, 1)
-    }
-}
-
-final class InboxTests: XCTestCase {
-    let sample = """
-    {"inbox": {"needs": 2, "items": [
-      {"key": "perm:1", "kind": "permission", "agent": "claude-1", "title": "kim", "context": "Bash",
-       "text": "go test ./...", "mono": true, "where": "/x", "since": "2026-10-31T13:00:00.123456+08:00",
-       "blocks": true, "part": 0.5, "tasks": [{"id": "t1", "title": "x"}],
-       "acts": [{"verb": "allow", "label": "Allow", "primary": true, "row": true},
-                {"verb": "always", "label": "Always"},
-                {"verb": "deny", "label": "Deny", "input": true}],
-       "open": {"agent": "claude-1"}},
-      {"key": "q:2", "kind": "question", "title": "gus", "body": "pick one", "full": true,
-       "since": "2026-10-31T13:01:00Z",
-       "acts": [{"verb": "answer", "label": "Yes", "option": "yes"}, {"verb": "open", "label": "Open"}],
-       "open": {"channel": "plan"}},
-      {"key": "n:3", "kind": "from-the-future", "title": "?", "acts": [], "open": {"page": "board"}, "extra": 1}
-    ]},
-    "projects": [{"name": "p", "agents": [{"id": "claude-1", "name": "ios", "status": "working"}]}]}
-    """
-
-    func testDecodesEveryKindTolerantly() throws {
-        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(sample.utf8))
-        XCTAssertEqual(s.inbox.map(\.kind), ["permission", "question", "from-the-future"])
-        XCTAssertEqual(s.waiting.map(\.key), ["perm:1", "q:2"])
-        XCTAssertEqual(s.finished.map(\.key), ["n:3"])
-        let p = s.inbox[0]
-        XCTAssertTrue(p.mono)
-        XCTAssertTrue(p.blocks)
-        XCTAssertNotNil(p.since)
-        XCTAssertEqual(p.acts.map(\.verb), ["allow", "always", "deny"])
-        XCTAssertTrue(p.acts[0].primary)
-        XCTAssertTrue(p.acts[2].input)
-        XCTAssertEqual(p.open.agent, "claude-1")
-        XCTAssertEqual(s.agent(id: p.agent)?.label, "ios")
-        XCTAssertNil(s.agent(id: "nobody"))
-        XCTAssertTrue(s.inbox[1].full)
-        XCTAssertNotNil(s.inbox[1].since)
-        XCTAssertEqual(s.inbox[1].acts[0].option, "yes")
-        XCTAssertTrue(s.inbox[1].acts[1].isOpen)
-        XCTAssertEqual(s.inbox[2].open.page, "board")
-    }
-
-    func testActRequest() throws {
-        let m = try mac("https://box.ts.net/#token=\(tok)")
-        let r = MadClient(mac: m).actRequest(key: "perm:1", verb: "deny", option: nil, text: "not now")
-        XCTAssertEqual(r.httpMethod, "POST")
-        XCTAssertEqual(r.url?.absoluteString, "https://box.ts.net/api/inbox")
-        XCTAssertEqual(r.value(forHTTPHeaderField: "Authorization"), "Bearer \(tok)")
-        XCTAssertEqual(r.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertEqual(String(data: r.httpBody ?? Data(), encoding: .utf8),
-                       #"{"key":"perm:1","text":"not now","verb":"deny"}"#)
-    }
-
-    private func response(_ code: Int) -> URLResponse {
-        HTTPURLResponse(url: URL(string: "https://x")!, statusCode: code, httpVersion: nil, headerFields: nil)!
-    }
-
-    func testActStatusMapping() {
-        XCTAssertNoThrow(try MadClient.checkAct(Data(), response(204)))
-        XCTAssertThrowsError(try MadClient.checkAct(Data("Already handled\n".utf8), response(409))) {
-            XCTAssertEqual($0 as? ConnectionError, .conflict("Already handled"))
-        }
-        XCTAssertThrowsError(try MadClient.checkAct(Data(), response(403))) {
-            XCTAssertEqual($0 as? ConnectionError, .refused)
-        }
-        XCTAssertThrowsError(try MadClient.checkAct(Data("bad verb".utf8), response(400))) {
-            XCTAssertEqual($0 as? ConnectionError, .unexpected("bad verb"))
-        }
+    func testNoOrBlankMachineIsNil() throws {
+        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data("{}".utf8)).machine)
+        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine": "  "}"#.utf8)).machine)
     }
 }
 
@@ -325,16 +225,44 @@ final class PairExchangeTests: XCTestCase {
 }
 
 final class MachineNameTests: XCTestCase {
-    func testSnapshotMachine() throws {
-        let s = try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine":" Heng's MacBook Pro "}"#.utf8))
-        XCTAssertEqual(s.machine, "Heng's MacBook Pro")
-        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data("{}".utf8)).machine)
-        XCTAssertNil(try JSONDecoder().decode(DeckSnapshot.self, from: Data(#"{"machine":""}"#.utf8)).machine)
-    }
-
     func testEmbeddedDeckURL() throws {
         let m = try mac("https://box.ts.net:7443/#token=\(tok)")
         XCTAssertEqual(m.embeddedDeckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=app")
         XCTAssertEqual(m.deckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)")
+    }
+}
+
+final class WebBridgeTests: XCTestCase {
+    func testSwitchMacIsRead() {
+        XCTAssertEqual(DeckMessage.parse(["type": "switchMac"]), .switchMac)
+        XCTAssertEqual(DeckMessage.parse(["type": "switchMac", "extra": 1] as [String: Any]), .switchMac)
+    }
+
+    func testUnknownOrMalformedMessagesAreIgnored() {
+        XCTAssertNil(DeckMessage.parse(["type": "openSettings"]))
+        XCTAssertNil(DeckMessage.parse(["type": 5]))
+        XCTAssertNil(DeckMessage.parse(["kind": "switchMac"]))
+        XCTAssertNil(DeckMessage.parse("switchMac"))
+        XCTAssertNil(DeckMessage.parse(NSNull()))
+        XCTAssertNil(DeckMessage.parse([1, 2]))
+    }
+
+    func testOriginComparesSchemeHostAndPort() {
+        let base = WebOrigin(URL(string: "https://box.tail1.ts.net:7443")!)
+        XCTAssertEqual(base, WebOrigin(scheme: "HTTPS", host: "Box.Tail1.ts.net", port: 7443))
+        XCTAssertNotEqual(base, WebOrigin(scheme: "https", host: "box.tail1.ts.net", port: 443))
+        XCTAssertNotEqual(base, WebOrigin(scheme: "http", host: "box.tail1.ts.net", port: 7443))
+        XCTAssertNotEqual(base, WebOrigin(scheme: "https", host: "evil.example", port: 7443))
+        XCTAssertNotEqual(base, WebOrigin(scheme: "https", host: "box.tail1.ts.net.evil.example", port: 7443))
+    }
+
+    func testDefaultPortsAreTheSameWhetherNamedOrNot() {
+        // WebKit's security origin says port 0 for the scheme's own.
+        XCTAssertEqual(WebOrigin(URL(string: "https://xyz.trycloudflare.com")!),
+                       WebOrigin(scheme: "https", host: "xyz.trycloudflare.com", port: 0))
+        XCTAssertEqual(WebOrigin(URL(string: "https://xyz.trycloudflare.com:443")!),
+                       WebOrigin(scheme: "https", host: "xyz.trycloudflare.com", port: 0))
+        XCTAssertEqual(WebOrigin(URL(string: "http://127.0.0.1")!), WebOrigin(scheme: "http", host: "127.0.0.1", port: 0))
+        XCTAssertNotEqual(WebOrigin(URL(string: "http://127.0.0.1")!), WebOrigin(scheme: "https", host: "127.0.0.1", port: 0))
     }
 }

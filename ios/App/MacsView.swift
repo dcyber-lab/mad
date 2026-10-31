@@ -9,12 +9,18 @@ struct MacsView: View {
     @State private var renaming: Mac?
     @State private var newName = ""
     @State private var problem: String?
-    @State private var path: [Mac] = []
+    @State private var path: [Mac]
     @State private var retrying: Set<UUID> = []
     @Environment(\.scenePhase) private var scenePhase
     /// Looked at again whenever the app appears or comes back, so a build left
     /// running that crosses the 2-day line shows its note.
     @State private var expiry: String?
+
+    /// `opening` is the Mac last used: the app starts inside it, and on the list
+    /// when there is none.
+    init(opening: Mac? = nil) {
+        _path = State(initialValue: opening.map { [$0] } ?? [])
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -129,15 +135,10 @@ struct MacsView: View {
     }
 
     /// Debug builds only, for driving the app from the command line:
-    /// `-pairLink <url>` pairs, `-openMac YES` then opens the first Mac,
-    /// `-fixture inbox -openMac YES` opens a sample Mac (see Fixture).
+    /// `-pairLink <url>` pairs, `-openMac YES` then opens the first Mac.
     private func launchHooks() {
         #if DEBUG
         let d = UserDefaults.standard
-        if Fixture.snapshot() != nil, d.bool(forKey: "openMac"), path.isEmpty {
-            path = [Fixture.mac]
-            return
-        }
         Task {
             if let text = d.string(forKey: "pairLink"), store.macs.isEmpty,
                let link = try? Pairing.parse(text, allowLocalHTTP: true) {

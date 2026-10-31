@@ -6,7 +6,7 @@ struct MadApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MacsView().environmentObject(store)
+            MacsView(opening: store.lastMac).environmentObject(store)
         }
     }
 }

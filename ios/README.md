@@ -6,15 +6,14 @@ and shows the full deck page in a second tab. The README at the top of the
 repository tells how to build and install it; this file is for working on it.
 
 - `MadKit/` is a Swift package with the core, tested with `swift test` on the
-  Mac (no simulator needed): pairing-link parsing (`Pairing`), the `/api/deck`,
-  `/api/inbox` and `/api/pair` client (`MadClient`, `PendingPairing`), snapshot
-  and inbox decoding (`DeckSnapshot`), conversations (`ChatEntry`,
-  `ChatTranscript`, `ChatSession`), usage and how its resets are worded
-  (`Usage`, `UsageWording`), and `PairingBook`, the rules for the paired Macs.
-- `App/` is the SwiftUI app: the Macs list (`MacsView`), an opened Mac with
-  its Needs you and Deck tabs and the Usage page (`MacView`, `NeedsView`,
-  `UsageView`, `MacModel`), an agent's conversation, opened from a card's Open
-  button (`ChatView`), the camera (`ScannerScreen`) and storage (`MacStore`).
+  Mac (no simulator needed): pairing-link parsing (`Pairing`), the pairing
+  exchange (`PendingPairing`), `PairingBook`, the rules for the paired Macs,
+  the Mac's name from `/api/deck` (`MadClient`, `DeckSnapshot`), what the page
+  may say to the app (`DeckMessage`, `WebOrigin`) and the provisioning
+  profile's expiry (`ProvisioningProfile`).
+- `App/` is the SwiftUI app: the Macs list (`MacsView`), an opened Mac, which is
+  the deck page in a full-screen web view (`MacView`, `MacModel` with
+  `DeckWebHost`), the camera (`ScannerScreen`) and storage (`MacStore`).
 - `project.yml` is the XcodeGen spec. The `.xcodeproj` is generated and
   gitignored.
 
@@ -75,6 +74,19 @@ network: the token is saved before it is sent, a failed save never loses the old
 token, a late answer for a deleted pairing installs nothing, and a re-pair keeps
 a name only when the person renamed the Mac.
 
+## The page and the app
+
+The app has no screens of its own after pairing: the page is the app, and the
+only thing it asks of the app is to go back to the Macs list. It posts
+`window.webkit.messageHandlers.mad.postMessage({type: "switchMac"})`. The app
+reads a message only from the main frame of the paired Mac's own origin
+(scheme, host and port), ignores any other type, and ignores anything else.
+Links to other origins, and `window.open`, open in the system browser. The web
+view keeps no data (a non-persistent store), so the page's own copy of the token
+goes with it; the Keychain holds the only lasting one. The page is loaded with
+`#token=<t>&embed=app` in the fragment, and with the app's insets off: it keeps
+clear of the status bar and the home indicator itself.
+
 ## Debug builds
 
 Debug builds only (none of this is compiled into Release):
@@ -83,19 +95,12 @@ Debug builds only (none of this is compiled into Release):
   `http://localhost…`, to run against a local `mad desktop -serve` (the
   Info.plist allows local networking; Release takes https only).
 - Launch arguments, e.g. `xcrun simctl launch <device> dev.mad.ios -openMac YES`:
-  - `-profileHoursLeft N` shows the note for a profile with N hours left,
   - `-pairLink <url>` pairs when no Mac is stored yet,
   - `-openMac YES` opens the first Mac,
-  - `-startTab deck` starts on the Deck tab,
-  - `-openAgent <id>` opens that agent's conversation,
-  - `-openUsage YES` opens the Usage page,
-  - `-expandTools YES` starts every tool call in a conversation open,
-  - `-fixture inbox` shows a sample Mac, "Studio", with one inbox item of each
-    kind, without a server; acts send nothing and say so. Use it with
-    `-openMac YES`, and with it a sample conversation for every agent and sample
-    usage. `-fixtureSkip N` leaves out the first N items, to see the ones below
-    the fold; `-fixture longlabel` is one item with very long buttons.
+  - `-profileHoursLeft N` shows the note for a profile with N hours left,
+  - `-debugSwitchMac YES` has the page post `switchMac` to the app six seconds
+    after a Mac opens, to see the way back to the list work.
 
 Never point a test at the real deck's server and tap an act: allow, deny and
-reply answer real agents. Use `-fixture inbox`, or an isolated server (a
-temporary `XDG_STATE_HOME`, its own port).
+reply answer real agents. Use an isolated server (a temporary
+`XDG_STATE_HOME`, its own port).

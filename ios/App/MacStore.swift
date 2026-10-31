@@ -47,6 +47,8 @@ final class MacStore: ObservableObject {
     private let defaults = UserDefaults.standard
     private let key = "macs"
     private let pendingKey = "pending"
+    private let lastKey = "lastMac"
+    private var lastMacID: UUID?
 
     init() {
         let secrets = Keychain()
@@ -72,6 +74,7 @@ final class MacStore: ObservableObject {
         book = PairingBook(secrets: secrets, macs: macs, pending: pending,
                            deviceName: UIDevice.current.name,
                            makeToken: Self.randomToken, send: { try await $0.pair() })
+        lastMacID = defaults.string(forKey: lastKey).flatMap(UUID.init)
         book.onChange = { [weak self] in self?.persist() }
         forward = book.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
@@ -80,6 +83,14 @@ final class MacStore: ObservableObject {
     func complete(_ p: PairingBook.Pending) async throws { try await book.complete(p) }
     func drop(_ p: PairingBook.Pending) { book.drop(p) }
     func rename(_ mac: Mac, to name: String) { book.rename(mac, to: name) }
+    /// The Mac last opened: the app opens it again on launch.
+    var lastMac: Mac? { macs.first { $0.id == lastMacID } }
+
+    func opened(_ mac: Mac) {
+        lastMacID = mac.id
+        defaults.set(mac.id.uuidString, forKey: lastKey)
+    }
+
     func adoptMachineName(_ name: String?, for mac: Mac) { book.adoptMachineName(name, for: mac) }
 
     func dropPending(at offsets: IndexSet) {
@@ -87,7 +98,10 @@ final class MacStore: ObservableObject {
     }
 
     func delete(at offsets: IndexSet) {
-        for m in offsets.map({ macs[$0] }) { book.remove(m) }
+        for m in offsets.map({ macs[$0] }) {
+            if m.id == lastMacID { lastMacID = nil; defaults.removeObject(forKey: lastKey) }
+            book.remove(m)
+        }
     }
 
     /// 16 random bytes as 32 lowercase hex digits.
