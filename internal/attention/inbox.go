@@ -23,7 +23,7 @@ const (
 	KindPermission Kind = "permission" // may it use a tool (or carry out a plan)
 	KindQuestion   Kind = "question"   // it asked, maybe with options
 	// Something else waits on the person.
-	KindAsk     Kind = "ask"     // an @you or a message in their DM, unanswered
+	KindAsk     Kind = "ask"     // an @you or a message in their DM, until read or answered
 	KindSkill   Kind = "skill"   // a skill an agent saved, to approve
 	KindBudget  Kind = "budget"  // the day's budget for mad's own work: near or spent
 	KindCheckin Kind = "checkin" // a check-in that could not go out
@@ -98,6 +98,8 @@ type Open struct {
 	Agent   string `json:"agent,omitempty"`
 	Channel string `json:"channel,omitempty"`
 	Page    string `json:"page,omitempty"` // PageSkills or PageBoard
+	// Seq, with Channel: the message to scroll to.
+	Seq int `json:"seq,omitempty"`
 }
 
 const (

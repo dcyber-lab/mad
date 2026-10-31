@@ -306,3 +306,37 @@ func TestBoardStalled(t *testing.T) {
 	t.Cleanup(func() { FollowUp = old })
 	wantCard(t, board(t, 2*time.Hour, idle), written.ID, ColDoing, "")
 }
+
+// An @you is a mention: once the person has read it, it leaves the board
+// unanswered; a message after it asks again.
+func TestBoardAskClearsWhenRead(t *testing.T) {
+	setup(t)
+	fakeTurn(t, map[string]*status.Turn{})
+	mustCreate(t, "dev", idArch, idBuild)
+	first := mustPost(t, "dev", arch, "@you progress (13:33):")
+	asks := func() int {
+		n := 0
+		for _, c := range board(t, time.Minute, nil) {
+			if c.Kind == CardAsk {
+				n++
+			}
+		}
+		return n
+	}
+	if asks() != 1 {
+		t.Fatal("unread @you is not asked")
+	}
+	if err := MarkRead(You, "dev", first.Seq-1); err != nil || asks() != 1 {
+		t.Fatalf("read short of it: %d asks, err %v", asks(), err)
+	}
+	if err := MarkRead(You, "dev", first.Seq); err != nil {
+		t.Fatal(err)
+	}
+	if asks() != 0 {
+		t.Error("read @you, still asked")
+	}
+	mustPost(t, "dev", arch, "@you and the index?")
+	if asks() != 1 {
+		t.Error("a new @you after the read is not asked")
+	}
+}
