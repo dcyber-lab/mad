@@ -35,9 +35,10 @@ public struct MadClient: Sendable {
 
     /// The request for a path. The token travels in the Authorization
     /// header, never in the URL, so it stays out of logs and history.
-    public func request(_ path: String) -> URLRequest {
+    public func request(_ path: String, query: [URLQueryItem] = []) -> URLRequest {
         var c = URLComponents(url: mac.baseURL, resolvingAgainstBaseURL: false)!
         c.path = path
+        if !query.isEmpty { c.queryItems = query }
         var r = URLRequest(url: c.url!)
         r.setValue("Bearer " + mac.token, forHTTPHeaderField: "Authorization")
         r.timeoutInterval = 10
@@ -78,6 +79,107 @@ public struct MadClient: Sendable {
         case 403: throw ConnectionError.refused
         case 409: throw ConnectionError.conflict(message.isEmpty ? "It is not waiting on you any more." : message)
         default: throw ConnectionError.unexpected(message.isEmpty ? "The Mac answered HTTP \(http.statusCode)." : message)
+        }
+    }
+
+    // MARK: Conversations
+
+    /// GET /api/chat: the first look has no file and from=0; the next ones
+    /// pass the `file` and `offset` of the answer before.
+    public func chatRequest(agent: String, file: String, from: Int64) -> URLRequest {
+        request("/api/chat", query: [URLQueryItem(name: "id", value: agent),
+                                     URLQueryItem(name: "file", value: file),
+                                     URLQueryItem(name: "from", value: String(from))])
+    }
+
+    public func chat(agent: String, file: String = "", from: Int64 = 0) async throws -> ChatPage {
+        let (data, response) = try await run(chatRequest(agent: agent, file: file, from: from))
+        try Self.check(data, response, [200])
+        return try Self.decodeJSON(ChatPage.self, data)
+    }
+
+    /// GET /api/live: held until the message changed after `since`.
+    public func liveRequest(agent: String, since: Int64) -> URLRequest {
+        var r = request("/api/live", query: [URLQueryItem(name: "id", value: agent),
+                                             URLQueryItem(name: "since", value: String(since))])
+        r.timeoutInterval = 60 // the server holds it open
+        return r
+    }
+
+    /// The message being written, or nil when nothing streams (204): ask again.
+    public func live(agent: String, since: Int64) async throws -> LiveMessage? {
+        let (data, response) = try await run(liveRequest(agent: agent, since: since))
+        return try Self.decodeLive(data, response)
+    }
+
+    public static func decodeLive(_ data: Data, _ response: URLResponse) throws -> LiveMessage? {
+        if (response as? HTTPURLResponse)?.statusCode == 204 { return nil }
+        try check(data, response, [200])
+        return try decodeJSON(LiveMessage.self, data)
+    }
+
+    /// POST /api/send?id=<id> {"text"}. The agent must be in window mode.
+    public func sendRequest(agent: String, text: String) -> URLRequest {
+        var r = request("/api/send", query: [URLQueryItem(name: "id", value: agent)])
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text], options: [.sortedKeys])
+        return r
+    }
+
+    public func send(agent: String, text: String) async throws {
+        let (data, response) = try await run(sendRequest(agent: agent, text: text))
+        try Self.check(data, response, [204, 200])
+    }
+
+    /// POST /api/mode?id=<id>&mode=window: what the page does before it sends.
+    public func modeRequest(agent: String, mode: String = "window") -> URLRequest {
+        var r = request("/api/mode", query: [URLQueryItem(name: "id", value: agent),
+                                             URLQueryItem(name: "mode", value: mode)])
+        r.httpMethod = "POST"
+        return r
+    }
+
+    public func setMode(agent: String, mode: String = "window") async throws {
+        let (data, response) = try await run(modeRequest(agent: agent, mode: mode))
+        try Self.check(data, response, [204, 200])
+    }
+
+    /// POST /api/interrupt?id=<id>, no body: stops what it does now.
+    public func interruptRequest(agent: String) -> URLRequest {
+        var r = request("/api/interrupt", query: [URLQueryItem(name: "id", value: agent)])
+        r.httpMethod = "POST"
+        return r
+    }
+
+    public func interrupt(agent: String) async throws {
+        let (data, response) = try await run(interruptRequest(agent: agent))
+        try Self.check(data, response, [204, 200])
+    }
+
+    private func run(_ r: URLRequest) async throws -> (Data, URLResponse) {
+        do { return try await session.data(for: r) } catch { throw ConnectionError.offline }
+    }
+
+    /// Maps a status to the error the person should read; `ok` are the ones that pass.
+    /// 403 is a refused token, 409 carries the server's message.
+    public static func check(_ data: Data, _ response: URLResponse, _ ok: Set<Int>) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw ConnectionError.unexpected("Not an HTTP answer.")
+        }
+        if ok.contains(http.statusCode) { return }
+        let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch http.statusCode {
+        case 403: throw ConnectionError.refused
+        case 409: throw ConnectionError.conflict(message.isEmpty ? "The Mac could not do that now." : message)
+        case 404: throw ConnectionError.unexpected(message.isEmpty ? "No such agent." : message)
+        default: throw ConnectionError.unexpected(message.isEmpty ? "The Mac answered HTTP \(http.statusCode)." : message)
+        }
+    }
+
+    static func decodeJSON<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
+        do { return try JSONDecoder().decode(type, from: data) } catch {
+            throw ConnectionError.unexpected("This does not look like mad's answer.")
         }
     }
 

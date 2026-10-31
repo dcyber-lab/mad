@@ -13,7 +13,11 @@ struct MacView: View {
 
     /// `macs` is not a screen: choosing it goes back to the Macs list, so the
     /// way back stays obvious while the Deck tab hides the navigation bar.
-    enum Tab { case needs, deck, macs }
+    enum Tab { case needs, agents, deck, macs }
+
+    /// The agent whose conversation is open, if any.
+    struct AgentRef: Identifiable, Hashable { var id: String }
+    @State private var chatAgent: AgentRef? = MacView.firstAgent
 
     /// The name as it stands now: the store may have renamed it since this screen opened.
     private var title: String { store.macs.first { $0.id == model.mac.id }?.name ?? model.mac.name }
@@ -21,19 +25,38 @@ struct MacView: View {
     /// Debug builds only: `-startTab deck` opens on the Deck tab.
     private static var firstTab: Tab {
         #if DEBUG
-        if UserDefaults.standard.string(forKey: "startTab") == "deck" { return .deck }
+        switch UserDefaults.standard.string(forKey: "startTab") {
+        case "deck": return .deck
+        case "agents": return .agents
+        default: break
+        }
         #endif
         return .needs
+    }
+
+    /// Debug builds only: `-openAgent <id>` opens that agent's conversation.
+    private static var firstAgent: AgentRef? {
+        #if DEBUG
+        return UserDefaults.standard.string(forKey: "openAgent").map(AgentRef.init)
+        #else
+        return nil
+        #endif
     }
 
     init(mac: Mac) { _model = StateObject(wrappedValue: MacModel(mac: mac)) }
 
     var body: some View {
         TabView(selection: $tab) {
-            NeedsView(model: model, openDeck: { tab = .deck })
+            NeedsView(model: model, openItem: { item in
+                // An item about an agent opens its conversation; the rest, the page.
+                if let id = item.open.agent { chatAgent = AgentRef(id: id) } else { tab = .deck }
+            })
                 .tabItem { Label("Needs you", systemImage: "tray") }
                 .badge(model.needs)
                 .tag(Tab.needs)
+            AgentsView(model: model, open: { chatAgent = AgentRef(id: $0.id) })
+                .tabItem { Label("Agents", systemImage: "person.2") }
+                .tag(Tab.agents)
             DeckTab(model: model)
                 .tabItem { Label("Deck", systemImage: "square.grid.2x2") }
                 .tag(Tab.deck)
@@ -49,6 +72,7 @@ struct MacView: View {
                 lastTab = new
             }
         }
+        .navigationDestination(item: $chatAgent) { ChatScreen(mac: model, agentID: $0.id) }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         // The page's own header is enough on the Deck tab.

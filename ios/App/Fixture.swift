@@ -19,11 +19,27 @@ enum Fixture {
           "machine": "Heng's MacBook Pro",
           "projects": [
             {"name": "mad", "agents": [
-              {"id": "claude-3fe9", "name": "ios", "status": "working", "shown": "working"},
-              {"id": "claude-91ab", "name": "kim", "status": "waiting", "shown": "needs-you"},
-              {"id": "claude-77c0", "name": "gus", "status": "waiting", "shown": "needs-you"},
-              {"id": "codex-2d", "name": "ada", "status": "idle", "shown": "done"}
+              {"id": "claude-3fe9", "kind": "claude", "name": "ios", "status": "running", "shown": "running", "mode": "window", "headless": true},
+              {"id": "claude-91ab", "kind": "claude", "name": "kim", "status": "waiting", "shown": "waiting", "mode": "window", "headless": true},
+              {"id": "claude-77c0", "kind": "claude", "name": "gus", "status": "waiting", "shown": "waiting", "mode": "window", "headless": true},
+              {"id": "codex-2d", "kind": "codex", "name": "ada", "status": "idle", "shown": "finished", "headless": true},
+              {"id": "claude-b1", "kind": "claude", "name": "builder", "status": "running", "shown": "running", "team": "ship", "mode": "window", "headless": true},
+              {"id": "claude-r1", "kind": "claude", "name": "reviewer", "status": "idle", "shown": "idle", "team": "ship", "mode": "window", "headless": true}
+            ]},
+            {"name": "payments", "agents": [
+              {"id": "pi-9", "kind": "pi", "status": "idle", "shown": "idle"},
+              {"id": "sh-4", "kind": "shell", "title": "psql console", "status": "asleep", "shown": "asleep"}
             ]}
+          ],
+          "teams": [{"name": "ship", "project": "mad", "members": ["claude-b1", "claude-r1"]}],
+          "states": [
+            {"state": "waiting", "word": "Needs you", "tone": "needs"},
+            {"state": "running", "word": "Working", "tone": "working"},
+            {"state": "finished", "word": "Finished", "tone": "finished"},
+            {"state": "idle", "word": "Idle", "tone": "quiet"},
+            {"state": "asleep", "word": "Asleep", "tone": "quiet"},
+            {"state": "starting", "word": "Starting", "tone": "quiet"},
+            {"state": "stopped", "word": "Stopped", "tone": "quiet"}
           ],
           "inbox": {"needs": 6, "items": [
             {"key": "perm:1", "kind": "permission", "agent": "claude-91ab", "title": "kim", "context": "Bash",
@@ -79,6 +95,36 @@ enum Fixture {
         snap.needs = max(0, snap.needs - skip)
         return snap
     }
+    /// A sample conversation for any agent: a user message, markdown, a call
+    /// with a result, a failed call, an image, and a message still being written.
+    static func chat(for agentID: String, now: Date = Date()) -> (page: ChatPage, live: LiveMessage?)? {
+        guard UserDefaults.standard.string(forKey: "fixture") == "inbox" else { return nil }
+        let json = """
+        {"file": "sample", "offset": 1, "reset": true, "entries": [
+          {"kind": "user", "text": "Can you make the export read from the snapshot, and run the tests?"},
+          {"kind": "text", "msg": "m1", "text": "Sure. I'll switch the **export** to read `snapshot.csv`, then run the suite.\\n\\n- update `export.go`\\n- run `go test ./...`"},
+          {"kind": "tool", "tool": "Edit", "label": "internal/export/export.go", "id": "c1", "msg": "m1",
+           "input": "- rows := db.Live()\\n+ rows := db.Snapshot()"},
+          {"kind": "result", "id": "c1", "text": "File updated."},
+          {"kind": "tool", "tool": "Bash", "label": "go test ./...", "id": "c2", "msg": "m1", "input": "go test ./..."},
+          {"kind": "result", "id": "c2", "error": true,
+           "text": "--- FAIL: TestExport (0.02s)\\n    export_test.go:41: want 12 rows, got 11\\nFAIL\\nFAIL\\texample/internal/export\\t0.31s"},
+          {"kind": "text", "msg": "m2", "text": "One test fails: the snapshot has 11 rows and the test expects 12. I'll look at the fixture next."},
+          {"kind": "user", "text": "Here is what I see on the report page.", "images": [{"mime": "image/png", "url": "/api/image?x=1"}]},
+          {"kind": "user", "text": "ok, go ahead"},
+          {"kind": "text", "msg": "m3", "text": "Looking now."},
+          {"kind": "tool", "tool": "Read", "label": "internal/export/export_test.go", "id": "c3", "msg": "m3"}
+        ]}
+        """
+        let liveJSON = """
+        {"id": "m4", "version": 1, "done": false, "blocks": [
+          {"kind": "thinking", "text": "The fixture lists twelve ids"},
+          {"kind": "text", "text": "The test's fixture lists **twelve** ids, but the snapshot export drops the one with an empty name. That is the"}
+        ]}
+        """
+        guard let page = try? JSONDecoder().decode(ChatPage.self, from: Data(json.utf8)) else { return nil }
+        return (page, try? JSONDecoder().decode(LiveMessage.self, from: Data(liveJSON.utf8)))
+    }
 }
 #else
 import Foundation
@@ -87,5 +133,6 @@ import MadKit
 enum Fixture {
     static let mac = Mac(name: "", baseURL: URL(string: "https://127.0.0.1:1")!, token: "")
     static func snapshot() -> DeckSnapshot? { nil }
+    static func chat(for agentID: String) -> (page: ChatPage, live: LiveMessage?)? { nil }
 }
 #endif

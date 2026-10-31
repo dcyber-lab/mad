@@ -6,31 +6,47 @@ import Foundation
 public struct DeckSnapshot: Equatable, Decodable, Sendable {
     public struct Agent: Equatable, Decodable, Identifiable, Sendable {
         public var id: String
+        public var kind: String?
         public var name: String?
         public var title: String?
         public var status: String
         public var shown: String?
+        /// The team it is a member of, if any.
+        public var team: String?
+        /// "window" when it runs in window mode (its conversation can be written to).
+        public var mode: String?
+        public var headless: Bool
 
-        /// What to call it: the user's name, else the conversation's title, else the id.
+        /// What to call it: the user's name, else the conversation's title,
+        /// else its kind, else the id.
         public var label: String {
             if let n = name, !n.isEmpty { return n }
             if let t = title, !t.isEmpty { return t }
+            if let k = kind, !k.isEmpty { return k }
             return id
         }
+
+        public var inWindowMode: Bool { mode == "window" }
         /// The state to draw.
         public var state: String { shown ?? status }
 
-        enum CodingKeys: String, CodingKey { case id, name, title, status, shown }
+        enum CodingKeys: String, CodingKey { case id, kind, name, title, status, shown, team, mode, headless }
         public init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             id = try c.decode(String.self, forKey: .id)
+            kind = try c.decodeIfPresent(String.self, forKey: .kind)
+            team = try c.decodeIfPresent(String.self, forKey: .team)
+            mode = try c.decodeIfPresent(String.self, forKey: .mode)
+            headless = try c.decodeIfPresent(Bool.self, forKey: .headless) ?? false
             name = try c.decodeIfPresent(String.self, forKey: .name)
             title = try c.decodeIfPresent(String.self, forKey: .title)
             status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
             shown = try c.decodeIfPresent(String.self, forKey: .shown)
         }
-        public init(id: String, name: String? = nil, title: String? = nil, status: String, shown: String? = nil) {
-            self.id = id; self.name = name; self.title = title; self.status = status; self.shown = shown
+        public init(id: String, kind: String? = nil, name: String? = nil, title: String? = nil, status: String,
+                    shown: String? = nil, team: String? = nil, mode: String? = nil, headless: Bool = false) {
+            self.id = id; self.kind = kind; self.name = name; self.title = title; self.status = status
+            self.shown = shown; self.team = team; self.mode = mode; self.headless = headless
         }
     }
 
@@ -46,6 +62,42 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
             agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
         }
         public init(name: String, agents: [Agent]) { self.name = name; self.agents = agents }
+    }
+
+    /// A team's agents in a project.
+    public struct Team: Equatable, Decodable, Identifiable, Sendable {
+        public var name: String
+        public var project: String
+        public var members: [String]
+        public var id: String { project + "\u{1}" + name }
+
+        enum CodingKeys: String, CodingKey { case name, project, members }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            name = try c.decode(String.self, forKey: .name)
+            project = try c.decodeIfPresent(String.self, forKey: .project) ?? ""
+            members = try c.decodeIfPresent([String].self, forKey: .members) ?? []
+        }
+        public init(name: String, project: String, members: [String]) {
+            self.name = name; self.project = project; self.members = members
+        }
+    }
+
+    /// How one shown state reads: the deck's word for it, and its tone.
+    public struct Look: Equatable, Decodable, Sendable {
+        public var state: String
+        public var word: String
+        /// working, needs, finished, quiet or error.
+        public var tone: String
+
+        enum CodingKeys: String, CodingKey { case state, word, tone }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            state = try c.decode(String.self, forKey: .state)
+            word = try c.decodeIfPresent(String.self, forKey: .word) ?? state
+            tone = try c.decodeIfPresent(String.self, forKey: .tone) ?? "quiet"
+        }
+        public init(state: String, word: String, tone: String) { self.state = state; self.word = word; self.tone = tone }
     }
 
     /// One thing the person can do to an inbox item. The item describes its
@@ -142,29 +194,27 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
             self.acts = acts; self.open = open
         }
 
-        /// Go's RFC 3339 times, with or without fractional seconds.
-        static func date(_ s: String) -> Date? {
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let d = f.date(from: s) { return d }
-            f.formatOptions = [.withInternetDateTime]
-            return f.date(from: s)
-        }
+        static func date(_ s: String) -> Date? { InboxDates.parse(s) }
     }
 
     public var projects: [Project]
+    public var teams: [Team]
+    /// How each shown state is worded, most urgent first.
+    public var states: [Look]
     /// The Mac's friendly name; nil from a server that does not send it.
     public var machine: String?
     /// The inbox's items: the first `needs` need the person, the rest finished unseen.
     public var inbox: [InboxItem]
     public var needs: Int
 
-    enum CodingKeys: String, CodingKey { case projects, inbox, machine }
+    enum CodingKeys: String, CodingKey { case projects, inbox, machine, teams, states }
     enum InboxKeys: String, CodingKey { case items, needs }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []
+        teams = try c.decodeIfPresent([Team].self, forKey: .teams) ?? []
+        states = try c.decodeIfPresent([Look].self, forKey: .states) ?? []
         let m = try c.decodeIfPresent(String.self, forKey: .machine)?.trimmingCharacters(in: .whitespacesAndNewlines)
         machine = (m?.isEmpty ?? true) ? nil : m
         if let ib = try? c.nestedContainer(keyedBy: InboxKeys.self, forKey: .inbox) {
@@ -176,8 +226,11 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
         }
     }
 
-    public init(projects: [Project], inbox: [InboxItem], needs: Int, machine: String? = nil) {
+    public init(projects: [Project], inbox: [InboxItem], needs: Int, machine: String? = nil,
+                teams: [Team] = [], states: [Look] = []) {
         self.machine = machine
+        self.teams = teams
+        self.states = states
         self.projects = projects; self.inbox = inbox; self.needs = needs
     }
 
@@ -187,10 +240,40 @@ public struct DeckSnapshot: Equatable, Decodable, Sendable {
     /// The items that finished unseen.
     public var finished: [InboxItem] { Array(inbox.dropFirst(min(max(needs, 0), inbox.count))) }
 
+    /// The deck's word for a shown state ("Working", "Needs you"); the state itself when unknown.
+    public func word(for state: String) -> String {
+        states.first { $0.state == state }?.word ?? state.prefix(1).uppercased() + state.dropFirst()
+    }
+
+    /// The tone of a shown state: working, needs, finished, quiet or error.
+    public func tone(for state: String) -> String {
+        states.first { $0.state == state }?.tone ?? "quiet"
+    }
+
+    /// An agent's place in the Agents list: working first, then what needs
+    /// the person, then the rest as the deck orders its states.
+    public func rank(of agent: Agent) -> Int {
+        let s = agent.state
+        if tone(for: s) == "working" { return 0 }
+        if tone(for: s) == "needs" { return 1 }
+        return 2 + (states.firstIndex { $0.state == s } ?? states.count)
+    }
+
     /// The agent an item is about, for its name.
     public func agent(id: String?) -> Agent? {
         guard let id else { return nil }
         for p in projects { if let a = p.agents.first(where: { $0.id == id }) { return a } }
         return nil
+    }
+}
+
+/// Go's RFC 3339 times, with or without fractional seconds.
+enum InboxDates {
+    static func parse(_ s: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: s) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: s)
     }
 }
