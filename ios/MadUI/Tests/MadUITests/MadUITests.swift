@@ -282,3 +282,89 @@ final class HomeSampleTests: XCTestCase {
         }
     }
 }
+
+final class ConversationTests: XCTestCase {
+    func testToolSummaryAndLabel() {
+        XCTAssertEqual(ConvTool(name: "Bash", label: "go test ./...").summary, "Bash · go test ./...")
+        XCTAssertEqual(ConvTool(name: "Read").summary, "Read")
+        XCTAssertEqual(ConvTool(name: "Bash", label: "ls", result: "ok").accessibilityLabel, "tool Bash · ls")
+        XCTAssertEqual(ConvTool(name: "Bash", label: "ls", result: "no", error: true).accessibilityLabel, "tool Bash · ls, failed")
+        XCTAssertEqual(ConvTool(name: "Edit", label: "a.go").accessibilityLabel, "tool Edit · a.go, running")
+    }
+
+    func testToolDetailAndRunning() {
+        XCTAssertFalse(ConvTool(name: "Read").hasDetail)
+        XCTAssertTrue(ConvTool(name: "Read", input: "a").hasDetail)
+        XCTAssertTrue(ConvTool(name: "Read", result: "x").hasDetail)
+        XCTAssertTrue(ConvTool(name: "Read").running)
+        XCTAssertFalse(ConvTool(name: "Read", result: "").running)
+        XCTAssertFalse(ConvTool(name: "Read", error: true).running)
+    }
+
+    func testMarkdownBlocksSplitOnFences() {
+        XCTAssertEqual(Markdown.blocks("a\n\n```go\nx := 1\n\ny\n```\nb"), [.text("a"), .code("x := 1\n\ny"), .text("b")])
+        XCTAssertEqual(Markdown.blocks(""), [])
+        XCTAssertEqual(Markdown.blocks("```\nopen"), [.code("open")], "an unclosed fence is code to the end")
+        XCTAssertEqual(Markdown.blocks("- a\n  - b\n# T"), [.text("• a\n  • b\n**T**")])
+        XCTAssertEqual(Markdown.blocks("#hash stays"), [.text("#hash stays")])
+    }
+
+    func testMarkdownPlain() {
+        XCTAssertEqual(Markdown.plain("a **b** `c`\n```\nx\n```\nd"), "a b c code block d")
+        XCTAssertEqual(Markdown.plain("[site](https://x.y) here"), "site here")
+    }
+
+    func testEntryLabels() {
+        XCTAssertEqual(ConvEntry.user("1", "hi").accessibilityLabel(agent: "ios"), "you, hi")
+        XCTAssertEqual(ConvEntry.user("1", "hi", images: [ConvImage(), ConvImage()]).accessibilityLabel(agent: "ios"), "you, hi, 2 images")
+        XCTAssertEqual(ConvEntry.user("1", "", images: [ConvImage()]).accessibilityLabel(agent: "ios"), "you, 1 image")
+        XCTAssertEqual(ConvEntry.text("2", "**done**").accessibilityLabel(agent: "ios"), "ios, done")
+        XCTAssertEqual(ConvEntry(id: "3", .image(ConvImage(alt: "shot.png"))).accessibilityLabel(agent: "ios"), "ios, image, shot.png")
+        XCTAssertEqual(ConvEntry.earlier().accessibilityLabel(agent: "ios"), "更早的消息")
+    }
+
+    func testStateLineAndDot() {
+        var c = AgentConversation(title: "ios", agentID: "a")
+        XCTAssertEqual(c.stateLine, "空闲")
+        XCTAssertFalse(c.needsYou)
+        c.state = .working
+        XCTAssertEqual(c.stateLine, "在工作")
+        c.ask = AskCard(id: "x", title: "t", acts: [])
+        XCTAssertEqual(c.stateLine, "在等你处理", "a pending ask is what the line says, even while it works")
+        XCTAssertTrue(c.needsYou)
+        c.ask = nil
+        c.state = .needsYou
+        XCTAssertTrue(c.needsYou)
+    }
+
+    func testComposerRules() {
+        var c = AgentConversation(title: "ios", agentID: "a", state: .working)
+        XCTAssertEqual(c.composerPrompt, "发消息给 ios")
+        XCTAssertTrue(c.showsInterrupt(draft: ""))
+        XCTAssertTrue(c.showsInterrupt(draft: "  \n"))
+        XCTAssertFalse(c.showsInterrupt(draft: "wait"), "typing turns interrupt into send")
+        XCTAssertTrue(c.canSubmit(draft: "wait"))
+        XCTAssertFalse(c.canSubmit(draft: " "))
+        c.state = .idle
+        XCTAssertFalse(c.showsInterrupt(draft: ""))
+        c.canSend = false
+        XCTAssertFalse(c.canSubmit(draft: "hello"))
+    }
+
+    func testAskLabel() {
+        XCTAssertEqual(AskCard(id: "a", title: "想运行一条命令", detail: "ls -la", acts: []).accessibilityLabel, "needs you, 想运行一条命令, ls -la")
+        XCTAssertEqual(AskCard(id: "a", title: "用哪种图表？", acts: []).accessibilityLabel, "needs you, 用哪种图表？")
+    }
+
+    func testSampleCoversWhatTheBriefAsks() {
+        let m = SampleConversation.model
+        XCTAssertNotNil(m.ask)
+        XCTAssertEqual(m.ask?.acts.map(\.label), ["允许", "总是允许", "拒绝"])
+        XCTAssertEqual(m.ask?.acts.filter(\.primary).count, 1)
+        let tools = m.entries.compactMap { e -> ConvTool? in if case let .tool(t) = e.content { t } else { nil } }
+        XCTAssertTrue(tools.contains { $0.error && $0.result != nil })
+        XCTAssertTrue(tools.contains { !$0.error && $0.result != nil })
+        XCTAssertEqual(Set(m.entries.map(\.id)).count, m.entries.count, "entry ids are unique")
+        XCTAssertNotNil(m.live)
+    }
+}

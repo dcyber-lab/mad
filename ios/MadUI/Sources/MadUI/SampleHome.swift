@@ -47,9 +47,9 @@ public enum SampleHome {
         usage: "Claude 5 小时 42% · 本周 71%")
 }
 
-/// The characters, the phone's list and the Mac's sidebar, one at a time.
+/// The characters, the phone's list, the Mac's sidebar and the agent conversation, one at a time.
 public struct MadUIGallery: View {
-    public enum Page: String, CaseIterable { case characters, home, sidebar }
+    public enum Page: String, CaseIterable { case characters, home, sidebar, agent, detail }
 
     @State private var page: Page
     @State private var selection: HomeRow.ID? = "ios"
@@ -70,6 +70,8 @@ public struct MadUIGallery: View {
                 Text("the phone list is iOS only")
                 #endif
             case .sidebar: HomeSidebar(model: SampleHome.model, selection: $selection)
+            case .agent: ConversationGallery()
+            case .detail: ConversationGallery(detail: true)
             }
         }
     }
