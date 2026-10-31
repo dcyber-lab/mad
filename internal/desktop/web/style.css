@@ -1571,3 +1571,4 @@ html.ptype #brand .mname { display: inline-flex; align-items: center; min-width:
 /* a menu of many buttons stacks them */
 html.ptype .dlg:has(.dacts .btn:nth-child(4)) .dacts { flex-direction: column; align-items: stretch; }
 html.ptype .dlg:has(.dacts .btn:nth-child(4)) .dacts .btn { width: 100%; justify-content: center; }
+html.ptype .dlg .dacts .btn.sep { margin-top: 14px; }

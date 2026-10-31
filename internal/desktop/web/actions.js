@@ -1056,6 +1056,10 @@ $("#embed-menu").onclick = async () => {
       { label: "技能", value: "skills" },
       { label: "手机和已配对设备", value: "phone" },
       ...(embed ? [{ label: "切换 Mac", value: "mac" }] : []),
+      { label: "添加项目", cls: "sep", value: "project" },
+      { label: `主题：${theme}`, value: "theme" },
+      // #embed=app from a link in a browser: the app's own page is not there to leave it
+      ...(embed && !window.webkit?.messageHandlers?.mad ? [{ label: "显示完整页面", value: "full" }] : []),
       { label: "关闭", cls: "primary", value: null },
     ],
   });
@@ -1064,6 +1068,8 @@ $("#embed-menu").onclick = async () => {
   else if (v === "skills") $("#skills").click();
   else if (v === "phone") phoneDialog();
   else if (v === "mac") switchMac();
+  else if (v === "full") leaveEmbed();
+  else if (v) $({ project: "#addproject", theme: "#theme" }[v]).click();
 };
 $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();
