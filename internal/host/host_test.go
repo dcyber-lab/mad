@@ -80,6 +80,8 @@ func fakeClaude() {
 				if json.Unmarshal(in.Bytes(), &a) == nil && a["type"] == "control_response" {
 					_, _ = record.Write(append(in.Bytes(), '\n'))
 					break
+				} else if a["type"] == "control_request" {
+					_, _ = record.Write(append(in.Bytes(), '\n')) // one sent while it waits
 				}
 			}
 			ev(map[string]any{"type": "message_stop"})
@@ -409,4 +411,27 @@ func TestRender(t *testing.T) {
 	if n := strings.Count(out, "\r\n") + 1; n != 12 {
 		t.Errorf("%d lines for a pane of 12", n)
 	}
+}
+
+// A mode set before the first message stands once claude's init, which
+// reports the mode it started in, comes back; claude is told again.
+func TestClaudePermissionSurvivesInit(t *testing.T) {
+	h, rec := fakeHost(t)
+	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
+	if err := h.do(Command{Type: "permission", Mode: "bypassPermissions"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.send("hi", nil); err != nil {
+		t.Fatal(err)
+	}
+	s := waitState(t, h, "its init", func(s State) bool { return s.Session == "s1" && len(s.Requests) == 1 })
+	if s.Permission != "bypassPermissions" {
+		t.Errorf("permission %q after init", s.Permission)
+	}
+	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if b, _ := os.ReadFile(rec); strings.Count(string(b), `"subtype":"set_permission_mode"`) >= 2 {
+			return
+		}
+	}
+	t.Errorf("the mode was not sent again:\n%s", strings.Join(lines(t, rec), "\n"))
 }

@@ -32,6 +32,7 @@ type claude struct {
 	mu      sync.Mutex
 	in      io.Writer
 	asks    map[string]claudeAsk // open permission requests, by request id
+	chosen  string               // the mode the person set, which claude's own report must not undo
 	seq     int
 	stream  *live.Stream
 }
@@ -122,7 +123,15 @@ func (c *claude) line(data []byte) {
 		if m.Subtype == "init" {
 			c.mu.Lock()
 			c.stream = live.NewStream(c.h.hub, c.h.agent, m.SessionID)
+			chosen := c.chosen
 			c.mu.Unlock()
+			// It reports the mode it started in, which a switch made
+			// before its first message may not have reached: the
+			// person's choice stands, and is sent again.
+			if chosen != "" && m.Mode != chosen {
+				m.Mode = chosen
+				go func() { _ = c.control(map[string]any{"subtype": "set_permission_mode", "mode": chosen}) }()
+			}
 			c.h.update(func(s *State) {
 				s.Session, s.Model = m.SessionID, m.Model
 				if m.Mode != "" {
@@ -166,6 +175,11 @@ func (c *claude) line(data []byte) {
 			}
 			// Ready: it says who it is (system init) only once given a
 			// message.
+			c.mu.Lock()
+			if c.chosen != "" {
+				r.Mode = c.chosen
+			}
+			c.mu.Unlock()
 			c.h.update(func(s *State) {
 				s.Models, s.Permissions = models, claudePermissions
 				if r.Mode != "" {
@@ -350,6 +364,9 @@ func (c *claude) setModel(model string) error {
 func (c *claude) setPermission(mode string) error {
 	err := c.control(map[string]any{"subtype": "set_permission_mode", "mode": mode})
 	if err == nil {
+		c.mu.Lock()
+		c.chosen = mode
+		c.mu.Unlock()
 		c.h.update(func(s *State) { s.Permission = mode })
 	}
 	return err
