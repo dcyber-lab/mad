@@ -4,7 +4,8 @@ import SwiftUI
 /// What waits on the person: the inbox's items, each drawing its own acts.
 struct NeedsView: View {
     @ObservedObject var model: MacModel
-    let openDeck: () -> Void
+    /// An item's "open" act: where it is settled at length.
+    let openItem: (DeckSnapshot.InboxItem) -> Void
 
     @State private var asking: (item: DeckSnapshot.InboxItem, act: DeckSnapshot.Act)?
     @State private var typed = ""
@@ -50,7 +51,7 @@ struct NeedsView: View {
         ForEach(items) { item in
             ItemCard(item: item, agent: snap.agent(id: item.agent), busy: model.busy.contains(item.key)) { act in
                 if act.isOpen {
-                    openDeck()
+                    openItem(item)
                 } else if act.input {
                     typed = ""
                     asking = (item, act)

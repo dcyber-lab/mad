@@ -25,7 +25,7 @@ final class MacModel: ObservableObject {
     /// person renamed the Mac.
     var onMachineName: (String?) -> Void = { _ in }
 
-    private let client: MadClient
+    let client: MadClient
     private(set) lazy var web: DeckWebHost = DeckWebHost(url: mac.embeddedDeckURL)
     /// Debug builds only: a sample snapshot instead of a live Mac; acts send nothing.
     private let fixture: Bool
@@ -46,6 +46,11 @@ final class MacModel: ObservableObject {
     }
 
     var needs: Int { snapshot?.needs ?? 0 }
+
+    /// Debug builds only: a sample conversation to read without a live Mac.
+    func sampleChat(for agentID: String) -> (page: ChatPage, live: LiveMessage?)? {
+        fixture ? Fixture.chat(for: agentID) : nil
+    }
 
     func refresh() async {
         if fixture { return }
