@@ -6,6 +6,7 @@
 #
 #   ONLY="UsageTests AppTests"   run only these test classes
 #   FIXTURE_ROOT=<dir>           a checkout that has internal/desktop/fixture (default: this one)
+#   SIM_NAME=<name>              the simulator to use or make (default: "mad UITest")
 #
 # One simulator, one xcodebuild, one server at a time: nothing runs in parallel.
 set -u
@@ -14,10 +15,22 @@ ROOT=$PWD
 FIXTURE_ROOT=${FIXTURE_ROOT:-$ROOT}
 RESULTS=ios/build/uitest-results
 REPORT=ios/build/uitest-report
-SIM_NAME="mad UITest"
+# The dedicated simulator. SIM_NAME=<name> uses (and makes) another, so two runs never share one.
+SIM_NAME="${SIM_NAME:-mad UITest}"
 SERVER_BIN=ios/build/fixture-server
 
 die() { printf 'make ios-uitest: %s\n' "$1" >&2; exit 1; }
+
+# The tests boot, rotate, install into and erase the app of the simulator they run in, so it must be
+# one made for them: a name starting with "mad UITest". Another name could be the person's own.
+case "$SIM_NAME" in
+    "mad 体验"|"iPhone 17")
+        die "SIM_NAME=${SIM_NAME} is a simulator for using, not for tests (they would change it). Use a name that starts with \"mad UITest\", for example \"mad UITest mine\"." ;;
+    "mad UITest"*) ;;
+    *) die "SIM_NAME=${SIM_NAME} does not start with \"mad UITest\": the tests boot and change the simulator they use, so it must be one made for them." ;;
+esac
+# UITEST_GUARD_ONLY=1 stops here, for the guard's own test (ios/scripts/uitest_guard_test.sh).
+[ -n "${UITEST_GUARD_ONLY:-}" ] && exit 0
 
 command -v xcodegen >/dev/null || die "xcodegen is missing: brew install xcodegen"
 [ -d "$FIXTURE_ROOT/internal/desktop/fixture" ] || die "no internal/desktop/fixture in $FIXTURE_ROOT: the fixture server has not landed (set FIXTURE_ROOT to a checkout that has it)"
@@ -113,7 +126,7 @@ wanted() {
 
 # a test class and the scenario its server serves
 for pair in "EdgeHomeTests edge-home" "EmptyTests empty" "ManyChannelsTests many-channels" \
-            "ChannelFoldTests channel-fold" "UsageTests usage" "AppTests edge-home" "PairingTests pairing" "PairingRetryTests pairing"; do
+            "ChannelFoldTests channel-fold" "UsageTests usage" "AppTests edge-home" "NativeFeelTests empty" "PairingTests pairing" "PairingRetryTests pairing"; do
     set -- $pair
     wanted "$1" || continue
     start_server "$2" 0 || { FAILED=$((FAILED + 1)); continue; }

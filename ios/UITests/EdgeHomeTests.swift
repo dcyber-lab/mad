@@ -114,4 +114,19 @@ final class EdgeHomeTests: MadUITestCase {
         XCTAssertTrue(screenFrame.contains(caret.frame), "▾ is off the screen in landscape")
         shot("landscape")
     }
+
+    // The same check as in a channel: no name or preview line of a row may run past the screen's edge.
+
+    func testNoPartOfTheListCrossesTheScreenEdgeInPortrait() {
+        let past = partsPastTheScreenEdge()
+        XCTAssertTrue(past.isEmpty, "\(past.count) part(s) of the list cross the screen edge in portrait:\n" + past.prefix(12).joined(separator: "\n"))
+    }
+
+    func testNoPartOfTheListCrossesTheScreenEdgeInLandscape() {
+        rotateToLandscape()
+        XCTAssertTrue(element("切换 Mac").firstMatch.waitForExistence(timeout: 10))
+        shot("list, landscape")
+        let past = partsPastTheScreenEdge()
+        XCTAssertTrue(past.isEmpty, "\(past.count) part(s) of the list cross the screen edge in landscape:\n" + past.prefix(12).joined(separator: "\n"))
+    }
 }
