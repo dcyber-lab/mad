@@ -693,7 +693,8 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
 }
 .popup[hidden] { display: none; }
 .popup li { display: flex; align-items: flex-start; gap: 10px; padding: 7px 10px; border-radius: 9px; cursor: pointer; }
-.popup li:hover { background: var(--raise); }
+.popup li:hover, .popup li:focus-visible { background: var(--raise); }
+.popup li:focus { outline: none; }
 .popup li.off { opacity: 0.45; cursor: default; }
 .popup li.off:hover { background: none; }
 .popup li.danger { color: var(--stopped); }

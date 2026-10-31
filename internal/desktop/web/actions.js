@@ -8,12 +8,24 @@
 
 // popup shows a menu of items by anchor (an element, or a {x, y} point):
 // each {label, desc, icon, checked, danger, disabled, onclick}, or "-" for
-// a rule. A pick, a click elsewhere or Esc closes it.
+// a rule. A pick, a click elsewhere or Esc closes it. By keyboard: the first
+// item has the focus; Up, Down, Home and End move, Enter or Space picks, Esc
+// closes and gives the focus back, and Tab leaves and closes.
+let popupBack = null; // what had the focus before the menu: the anchor, if an element
 function popup(anchor, items, opts = {}) {
   const box = $("#popup");
+  popupBack = anchor.focus ? anchor : document.activeElement;
+  box.setAttribute("role", "menu");
   box.replaceChildren(...items.map((it) => {
-    if (it === "-") return el("li", "rule");
+    if (it === "-") {
+      const rule = el("li", "rule");
+      rule.setAttribute("role", "separator");
+      return rule;
+    }
     const li = el("li", [it.danger && "danger", it.disabled && "off", it.checked && "on"].filter(Boolean).join(" "));
+    li.setAttribute("role", "menuitem");
+    li.tabIndex = -1;
+    if (it.disabled) li.setAttribute("aria-disabled", "true");
     li.append(it.icon ? icon(it.icon) : el("span", "noicon"));
     const t = el("span", "t");
     t.append(el("span", "l", it.label));
@@ -38,11 +50,35 @@ function popup(anchor, items, opts = {}) {
   if (opts.above || y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
   box.style.left = `${Math.min(Math.max(8, x), innerWidth - w - 8)}px`;
   box.style.top = `${y}px`;
+  box.querySelector('li[role="menuitem"]:not(.off)')?.focus({ preventScroll: true });
 }
 
-function closePopup() {
-  $("#popup").hidden = true;
+// closePopup hides the menu; back gives the focus to what had it before.
+function closePopup(back) {
+  const box = $("#popup");
+  const was = !box.hidden;
+  box.hidden = true;
+  if (was && back && popupBack?.isConnected) popupBack.focus({ preventScroll: true });
 }
+$("#popup").addEventListener("keydown", (e) => {
+  const items = [...$("#popup").querySelectorAll('li[role="menuitem"]:not(.off)')];
+  const at = items.indexOf(document.activeElement);
+  const go = (i) => { e.preventDefault(); items[(i + items.length) % items.length]?.focus({ preventScroll: true }); };
+  if (e.key === "ArrowDown") go(at + 1);
+  else if (e.key === "ArrowUp") go(at < 0 ? -1 : at - 1);
+  else if (e.key === "Home") go(0);
+  else if (e.key === "End") go(items.length - 1);
+  else if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    document.activeElement?.click();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    closePopup(true);
+  } else if (e.key === "Tab") {
+    closePopup(true); // the focus is back on the anchor before Tab moves it on
+  }
+});
 document.addEventListener("mousedown", (e) => {
   if (!$("#popup").hidden && !$("#popup").contains(e.target)) closePopup();
 }, true);
@@ -1077,7 +1113,7 @@ $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#popup").hidden) {
-    closePopup();
+    closePopup(true);
     e.stopPropagation();
     return;
   }

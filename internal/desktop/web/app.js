@@ -154,6 +154,7 @@ function drawMachine() {
 }
 
 // drawUsageLine is the one quiet line at the sidebar's bottom; it opens the usage page.
+$("#usageline").onclick = () => openUsage();
 function drawUsageLine() {
   const b = $("#usageline");
   const kind = (deck.quota || {}).claude ? "claude" : Object.keys(deck.quota || {})[0];
