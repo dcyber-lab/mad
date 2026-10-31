@@ -136,3 +136,40 @@ final class StateTests: XCTestCase {
         XCTAssertEqual(CharacterMotion.blink(at: CharacterMotion.blinkPeriod * 0.94), 0.1, accuracy: 0.001)
     }
 }
+
+final class HomeModelTests: XCTestCase {
+    let model = SampleHome.model
+
+    func rows(_ m: HomeModel) -> [String] { m.sections.flatMap(\.rows).map(\.id) }
+
+    func testEmptyQueryKeepsEverything() {
+        XCTAssertEqual(model.filtered(by: "  "), model)
+    }
+
+    func testMatchesNameAndPreviewIgnoringCase() {
+        XCTAssertEqual(rows(model.filtered(by: "MAD IDEAS")), ["stop0001-cccc"])
+        XCTAssertTrue(rows(model.filtered(by: "ghostty")).contains("ime00001-iiii"))
+    }
+
+    func testTeamRowMatchesItsMembersAndShowsThem() {
+        let found = model.filtered(by: "builder")
+        let ios = found.sections.flatMap(\.rows).first { $0.id == "ios" }
+        XCTAssertEqual(ios?.preview, "builder: 在写代码")
+        XCTAssertEqual(ios?.name, "ios") // only the preview changes
+    }
+
+    func testSectionsWithoutRowsGoAway() {
+        XCTAssertEqual(model.filtered(by: "输入法").sections.map(\.id), ["ime"])
+        XCTAssertTrue(model.filtered(by: "zzzz-no-such").sections.isEmpty)
+    }
+
+    func testUntitledAgentIsNamedByToolAndId() {
+        let r = model.sections[1].rows.first { $0.id == "unti0001-eeee" }!
+        XCTAssertEqual(r.title, "codex unti0001")
+    }
+
+    func testMenuGroupsCoverTheItems() {
+        XCTAssertEqual(Set(HomeMenuItem.phone.flatMap { $0 }), Set(HomeMenuItem.allCases))
+        XCTAssertFalse(HomeMenuItem.sidebar.flatMap { $0 }.contains(.switchMac))
+    }
+}

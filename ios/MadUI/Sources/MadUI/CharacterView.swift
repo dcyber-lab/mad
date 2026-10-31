@@ -8,14 +8,18 @@ public struct CharacterView: View {
     let look: CharacterLook
     let state: CharacterState
     let size: CGFloat
+    let dot: Bool?
     static let margin: CGFloat = 0.25
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(id: String, kind: String, state: CharacterState, size: CGFloat) {
-        self.init(look: CharacterLook(id: id, kind: kind), state: state, size: size)
+    /// dot: whether the red dot shows; by default, when the state is needs-you.
+    /// A row says it itself when something waits on the person without the agent's state saying so.
+    public init(id: String, kind: String, state: CharacterState, size: CGFloat, dot: Bool? = nil) {
+        self.init(look: CharacterLook(id: id, kind: kind), state: state, size: size, dot: dot)
     }
 
-    init(look: CharacterLook, state: CharacterState, size: CGFloat) {
+    init(look: CharacterLook, state: CharacterState, size: CGFloat, dot: Bool? = nil) {
+        self.dot = dot
         self.look = look
         self.state = state
         self.size = size
@@ -39,6 +43,6 @@ public struct CharacterView: View {
         .accessibilityElement()
         .accessibilityLabel(state.word)
         .accessibilityAddTraits(.isImage)
-        .cornerDot(state == .needsYou, size: size)
+        .cornerDot(dot ?? (state == .needsYou), size: size)
     }
 }
