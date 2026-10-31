@@ -62,4 +62,28 @@ final class ProvisioningProfileTests: XCTestCase {
         let year = nov7.addingTimeInterval(365 * 86_400)
         XCTAssertNil(ProvisioningProfile.expiryNotice(expiration: year, now: nov7))
     }
+
+    func testExpiryStatesAndTheirWords() {
+        let before = { (d: Double) in ProvisioningProfile.expiry(expiration: self.nov7, now: self.nov7.addingTimeInterval(-d * 86_400)) }
+        XCTAssertNil(before(3))
+        XCTAssertEqual(before(2), .daysLeft(2))
+        XCTAssertEqual(before(0.4), .daysLeft(1))
+        XCTAssertEqual(ProvisioningProfile.expiry(expiration: nov7, now: nov7.addingTimeInterval(1)), .expired)
+        XCTAssertEqual(ProvisioningProfile.Expiry.daysLeft(2).chinese, "这个版本 2 天后失效：在 Mac 上执行 make ios-device 续期")
+        XCTAssertEqual(ProvisioningProfile.Expiry.expired.chinese, "这个版本已失效：在 Mac 上执行 make ios-device 续期")
+        XCTAssertEqual(ProvisioningProfile.Expiry.daysLeft(1).english, "This build expires in 1 day: run make ios-device on the Mac to renew.")
+    }
+
+    func testADismissalLastsTheDay() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let morning = ISO8601DateFormatter().date(from: "2026-10-31T08:00:00Z")!
+        let night = ISO8601DateFormatter().date(from: "2026-10-31T23:59:00Z")!
+        let nextDay = ISO8601DateFormatter().date(from: "2026-11-01T00:01:00Z")!
+        let key = ExpiryDismissal.dayKey(morning, calendar: cal)
+        XCTAssertEqual(key, "2026-10-31")
+        XCTAssertTrue(ExpiryDismissal.isDismissed(storedDay: key, now: night, calendar: cal))
+        XCTAssertFalse(ExpiryDismissal.isDismissed(storedDay: key, now: nextDay, calendar: cal), "the next day it shows again")
+        XCTAssertFalse(ExpiryDismissal.isDismissed(storedDay: nil, now: morning, calendar: cal))
+    }
 }
