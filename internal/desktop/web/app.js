@@ -1118,6 +1118,7 @@ function open(id) {
     parts: new Map(), // message id → its parts the transcript has (claude)
     partIDs: new Set(), // parts the transcript has, by their own id (codex)
     msg: null, version: 0, msgAt: 0, follow: null, // the message being written (/api/live)
+    mdParts: new Map(), mdMsg: "", liveFrame: 0, // its rendered text parts, by place; a frame drawing it
   };
   opened.set(id, o);
   return o;
@@ -1535,7 +1536,7 @@ async function follow(id, o) {
           o.version = m.version;
           o.msg = m;
           o.msgAt = Date.now();
-          drawLive(o);
+          scheduleLive(o);
         }
         continue;
       }
@@ -1564,6 +1565,10 @@ function drawLive(o) {
   const m = o.msg;
   const fresh = m && m.id && !(m.done && Date.now() - o.msgAt > 5000);
   const hostCodex = windowed(agents.get(o.id)) && agents.get(o.id)?.kind === "codex";
+  if (m && m.id !== o.mdMsg) {
+    o.mdParts.clear();
+    o.mdMsg = m.id;
+  }
   let shown = false;
   if (fresh) {
     const had = o.parts.get(m.id) || 0;
@@ -1573,7 +1578,7 @@ function drawLive(o) {
       if (i < had || b.id && (o.partIDs.has(b.id) || o.calls.has(b.id))) continue;
       if (b.kind === "text" && (b.text || "").trim()) {
         const n = el("div", `msg from-agent${b.done ? "" : " streaming"}`);
-        n.append(md(b.text));
+        n.append(mdPart(o, i, b.text));
         box.append(n);
         shown = true;
       } else if (b.kind === "thinking" && !b.done) {
@@ -1615,6 +1620,32 @@ function drawLive(o) {
     box.append(n);
   }
   if (atEnd) o.chat.scrollTop = o.chat.scrollHeight;
+}
+
+// mdPart renders text part i of the message being written. A part that has
+// not changed since the last look keeps its rendering, so only the part
+// still being written is parsed again.
+function mdPart(o, i, text) {
+  const hit = o.mdParts.get(i);
+  if (hit && hit.text === text) return hit.node;
+  const node = md(text);
+  o.mdParts.set(i, { text, node });
+  return node;
+}
+
+// scheduleLive draws the message being written at the next frame, so the
+// events that arrive within one frame are drawn once.
+function scheduleLive(o) {
+  if (o.liveFrame) return;
+  o.liveFrame = requestAnimationFrame(() => {
+    o.liveFrame = 0;
+    if (opened.get(o.id) !== o) return;
+    try {
+      drawLive(o);
+    } catch (err) {
+      console.error("live", err);
+    }
+  });
 }
 
 // hint picks what a call is pointed at out of its input as far as it
@@ -1704,11 +1735,7 @@ function hostState(id, o, s) {
     o.msg = { ...m, blocks: m.blocks || [] };
     o.msgAt = old ? 0 : Date.now();
   }
-  try {
-    drawLive(o);
-  } catch (err) {
-    console.error("live", err);
-  }
+  scheduleLive(o);
   drawAsks(o);
   if (id === current) drawQueue();
 }
