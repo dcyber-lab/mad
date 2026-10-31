@@ -256,6 +256,61 @@
         },
         "kind": "text",
         "text": "第 3 条也上线了，三条全部完成。"
+      },
+      {
+        "seq": 9,
+        "at": "-1m",
+        "from": {
+          "id": "you",
+          "label": "you"
+        },
+        "kind": "text",
+        "text": "我看了一下这条消息，其实还有一件事想确认：手机上的群聊里，如果有人回复我很长的一段话，引用的那一行会不会把气泡撑得比屏幕还宽，文字被切掉看不见？请检查一下这种情况，包括很长的英文单词和链接，比如 https://example.com/some/really/long/path/that/keeps/going/and/going/without/a/single/space/to/break/on"
+      },
+      {
+        "seq": 10,
+        "at": "-1m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "reply_to": 9,
+        "text": "好的，我让 builder 去查，今天内会有结果。"
+      },
+      {
+        "seq": 11,
+        "at": "-1m",
+        "from": {
+          "id": "fold0002-aaaa",
+          "label": "builder",
+          "kind": "codex"
+        },
+        "kind": "text",
+        "text": "修改在这里：[https://github.com/dcyber-lab/mad/pull/88/files/9fc79bc3e9db46209eeb50363e9caeb2c6889fa7979b81afa6b19c5df8ce1a00#diff-0123456789abcdef0123456789abcdef](https://github.com/dcyber-lab/mad/pull/88/files/9fc79bc3e9db46209eeb50363e9caeb2c6889fa7979b81afa6b19c5df8ce1a00#diff-0123456789abcdef0123456789abcdef) 看第二处。"
+      },
+      {
+        "seq": 12,
+        "at": "-1m",
+        "from": {
+          "id": "fold0003-aaaa",
+          "label": "reviewer",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "这是一整段没有任何空格也没有标点的很长的中文说明用来确认气泡里的文字会在边缘换行而不是被切掉或者把整个气泡撑得比屏幕还要宽所以请认真看一下每一行的最右边是不是都还在屏幕里面"
+      },
+      {
+        "seq": 13,
+        "at": "-1m",
+        "from": {
+          "id": "fold0005-aaaa",
+          "label": "tester",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "命令：`go test -race ./internal/desktop/... -run TestSomethingWithAVeryLongNameThatNeverEndsAndKeepsGoingForever -count=1 -v`\n\n```\nGOFLAGS=-mod=mod go test -race ./internal/desktop/fixture/ ./internal/desktop/ ./internal/cli/ ./internal/bus/ 2>&1 | tail -n 40\n```"
       }
     ]
   }

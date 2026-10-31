@@ -543,7 +543,8 @@ function quoteOf(seq) {
   if (parent) {
     const who = parent.querySelector(".bmeta b")?.textContent || "";
     const said = parent.querySelector(".btext")?.textContent || parent.textContent;
-    q.append(el("b", "", who || `#${seq}`), " ", snippet(said));
+    // The quote's text is the part that gives way (ellipsized), not the bubble.
+    q.append(el("b", "", who || `#${seq}`), " ", el("span", "bqt", snippet(said)));
     let n = parent.querySelector(".bcount");
     if (!n) {
       n = el("button", "bcount");
@@ -558,7 +559,7 @@ function quoteOf(seq) {
     n.dataset.n = String(+n.dataset.n + 1);
     n.textContent = `${n.dataset.n} repl${n.dataset.n === "1" ? "y" : "ies"}`;
   } else {
-    q.append(`↩ #${seq}`);
+    q.append(el("span", "bqt", `↩ #${seq}`));
   }
   q.title = "show what it answers";
   q.onclick = () => jumpTo(seq);
