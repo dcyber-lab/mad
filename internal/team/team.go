@@ -1,6 +1,8 @@
 package team
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/bus"
@@ -297,7 +300,7 @@ func Start(o Options) (*Started, error) {
 	for i, r := range tpl.Roles {
 		agentName := r.Name
 		if taken[agentName] {
-			agentName = r.Name + "-" + name
+			agentName = r.Name + "-" + agentSuffix(name)
 		}
 		args := append(r.Args(perm), r.WorktreeArgs(branchDir(branch, dir))...)
 		a, err := spawn(drive.Spec{Kind: r.Kind, Model: r.Model, Name: agentName, Dir: dir, Args: args, Role: r.Name, Team: name}, o.Kinds)
@@ -367,16 +370,13 @@ func teamName(name, goal string, teams []Record) (string, error) {
 		return exists
 	}
 	if name = normalName(name); name != "" {
-		if !nameRe.MatchString(name) {
-			return "", fmt.Errorf("team name %q: lowercase letters, digits and dashes", name)
-		}
 		if taken(name) {
 			return "", fmt.Errorf("a team or channel called %s exists; pick another name", name)
 		}
 		return name, nil
 	}
 	base := strings.TrimPrefix(run.BranchFor(goal, now()), "run/")
-	if !nameRe.MatchString(base) {
+	if !validName(base) {
 		base = "team"
 	}
 	name = base
@@ -386,23 +386,58 @@ func teamName(name, goal string, teams []Record) (string, error) {
 	return name, nil
 }
 
-// normalName is a typed team name as names go: lowercase, with spaces
-// and underscores as dashes. A phone capitalizes the first letter.
-// Other characters (Chinese, say) are dropped: the name goes into agent
-// names, and an @mention takes ASCII only. Nothing left means the name
-// comes from the goal.
+// maxName is the most characters a team name has: it is a file name.
+const maxName = 40
+
+// normalName is a typed team name as names go: lowercase, with spaces,
+// underscores and punctuation as dashes, and letters and digits of any
+// script kept (支付重构). It is the channel's id as well (bus.Slug). Nothing
+// left means the name comes from the goal.
 func normalName(name string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == '-' || r == '_' || r == ' ' || r == '\t':
-			b.WriteRune('-')
+	r := []rune(bus.Slug(name))
+	if len(r) > maxName {
+		r = r[:maxName]
+	}
+	return strings.Trim(string(r), "-")
+}
+
+// validName tells a name normalName made: letters and digits of any
+// script, and dashes between.
+func validName(name string) bool {
+	if name == "" || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
+		return false
+	}
+	for _, r := range name {
+		if r != '-' && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+			return false
 		}
 	}
-	parts := strings.FieldsFunc(b.String(), func(r rune) bool { return r == '-' })
-	return strings.Join(parts, "-")
+	return true
+}
+
+// agentSuffix is what tells a team's agents from others' of the same role
+// (architect-ios). An @mention takes ASCII only, so a name with other
+// characters gives its ASCII words, if any, and a short hash of the name:
+// 开发ios gives ios-3fa2, 支付重构 gives t-9c1e. The same name always gives
+// the same suffix.
+func agentSuffix(name string) string {
+	ascii := true
+	for _, r := range name {
+		if r > unicode.MaxASCII {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return name
+	}
+	words := strings.FieldsFunc(name, func(r rune) bool { return r > unicode.MaxASCII || r == '-' })
+	sum := sha1.Sum([]byte(name))
+	words = append(words, hex.EncodeToString(sum[:])[:4])
+	if len(words) == 1 {
+		words = []string{"t", words[0]}
+	}
+	return strings.Join(words, "-")
 }
 
 // setAgent records the agent of a team's role.

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -273,12 +274,15 @@ func undelivered(ch string, dropped []Message) []Message {
 	return out[max(0, len(out)-maxHeld):]
 }
 
-// slug makes a channel id of a name: lower case letters, digits and dashes.
-func slug(name string) string {
+// Slug makes a channel id of a name: lower case letters and digits (of
+// any script: a channel may be called 支付重构) joined by single dashes.
+// Everything else, a slash or an emoji included, is a separator, so an id
+// is a safe file name.
+func Slug(name string) string {
 	var b strings.Builder
 	dash := false
 	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
 			if dash && b.Len() > 0 {
 				b.WriteByte('-')
 			}
@@ -355,7 +359,7 @@ func Find(id string) (Channel, bool, error) {
 // Create makes a channel named name, with members (agent ids) and its
 // creator among them.
 func Create(name, topic string, members []string, by From) (Channel, error) {
-	id := slug(name)
+	id := Slug(name)
 	if id == "" {
 		return Channel{}, fmt.Errorf("%q is no name for a channel", name)
 	}

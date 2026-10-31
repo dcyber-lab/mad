@@ -45,8 +45,10 @@ func mentionsIn(st *state.State, text string) ([]string, error) {
 		}
 	}
 	boundary := func(s string) bool { // s follows a name
+		// Names are ASCII, and a Chinese writer types no space after one
+		// (@architect你好): only an ASCII character goes on a name.
 		r, _ := utf8.DecodeRuneInString(s)
-		return s == "" || !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-')
+		return s == "" || r > unicode.MaxASCII || !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-')
 	}
 	lower := asciiLower(text) // same byte offsets as text
 	code := codeMask(text)
