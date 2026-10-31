@@ -903,7 +903,6 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   .chat .log { padding: 18px 14px 28px; }
   #chanlog { padding: 16px 14px 28px; }
   #chanhead { padding: 8px 14px; }
-  #chanhead .cwho { display: none; }
   #chanhead .cwhat b { display: none; }
   #chanhead .chmore { display: none; }
   #chanhead.bare { display: none; }
@@ -1600,3 +1599,23 @@ html:not(.ptype) #ptitle .pt { overflow: hidden; white-space: nowrap; text-overf
 html:not(.ptype) #ptitle .ps { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12.5px; color: var(--text-3); }
 #brand { overflow: hidden; }
 #brand .mname { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The channel's members as one strip, and a folded agent message (bus.js). */
+#chanhead .cwho { background: none; border: 0; padding: 4px 2px; border-radius: 14px; font: inherit; color: inherit; cursor: pointer; align-items: center; min-height: 36px; }
+#chanhead .cwho:hover { background: var(--raise); }
+#chanhead .cwho .avatar { pointer-events: none; }
+#chanhead .cwho .cmore { font-size: 12px; color: var(--text-3); padding: 0 4px; }
+.bmsg.fold:not(.open) .btext, .bmsg.fold:not(.open) .imgs, .bmsg.fold:not(.open) .bquote { display: none; }
+.bmsg.fold.open .bsum { display: none; }
+.bmsg.fold:not(.open) .bless { display: none; }
+.bmsg.fold:not(.open) .bcount { display: none; }
+.bmsg.fold:not(.open) .bmeta { margin-bottom: 0; }
+.bsum { display: flex; align-items: baseline; gap: 10px; min-width: 0; cursor: pointer; }
+.bsum .bsumt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-2); font-size: 14.5px; }
+.bmore, .bless { flex: none; font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 4px 0; cursor: pointer; }
+.bless { margin-top: 2px; }
+/* A handoff or a result is a bordered body beside its avatar: the generic .card (a padded, bordered column) is not also its row. */
+.bmsg.card, .bmsg.card:hover { flex-direction: row; padding: 0; gap: 10px; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; cursor: default; }
+.bmsg.card.fold:not(.open) .bbody { padding: 8px 12px; }
+html.ptype .bsum .bsumt { font-size: 16px; }
+html.ptype .bmore, html.ptype .bless { font-size: 15px; min-height: 36px; padding: 6px 0; }
