@@ -4,7 +4,7 @@ import SwiftUI
 /// An agent's conversation, drawn from its transcript.
 struct ChatScreen: View {
     @ObservedObject var mac: MacModel
-    @StateObject private var chat: ChatModel
+    @StateObject private var chat: ChatSession
     @Environment(\.scenePhase) private var scenePhase
     @State private var draft = ""
 
@@ -13,8 +13,8 @@ struct ChatScreen: View {
     init(mac: MacModel, agentID: String) {
         self.mac = mac
         self.agentID = agentID
-        _chat = StateObject(wrappedValue: ChatModel(agentID: agentID, client: mac.client,
-                                                    sample: mac.sampleChat(for: agentID)))
+        _chat = StateObject(wrappedValue: ChatSession(agentID: agentID, api: mac.client,
+                                                      sample: mac.sampleChat(for: agentID)))
     }
 
     private var agent: DeckSnapshot.Agent? { mac.snapshot?.agent(id: agentID) }
@@ -25,7 +25,9 @@ struct ChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            LinkBanner(link: chat.problem.map { _ in mac.link } ?? .ok)
+            if let p = chat.problem {
+                ChatProblem(text: p) { Task { await chat.look() } }
+            }
             transcript
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -84,7 +86,12 @@ struct ChatScreen: View {
                     ProgressView().controlSize(.small)
                     Text("Working").font(.footnote).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Interrupt", systemImage: "stop.circle") { Task { await chat.interrupt() } }
+                    Button("Interrupt", systemImage: "stop.circle") {
+                        Task {
+                            await chat.interrupt()
+                            UINotificationFeedbackGenerator().notificationOccurred(chat.notice == nil ? .success : .error)
+                        }
+                    }
                         .font(.footnote)
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
@@ -99,8 +106,13 @@ struct ChatScreen: View {
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
                     Button {
-                        let text = draft
-                        Task { if await chat.send(text, agent: agent) { draft = "" } }
+                        let sent = draft
+                        Task {
+                            let ok = await chat.send(sent)
+                            UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
+                            // Only what went out is cleared: the next message typed meanwhile stays.
+                            if ok { draft = ChatSession.draftAfterSend(sent: sent, current: draft) }
+                        }
                     } label: {
                         Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
                     }
@@ -110,6 +122,22 @@ struct ChatScreen: View {
             }
         }
         .background(.bar)
+    }
+}
+
+/// Why the conversation cannot be read, with a way to try again.
+struct ChatProblem: View {
+    let text: String
+    let retry: () -> Void
+
+    var body: some View {
+        HStack {
+            Label(text, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+            Spacer()
+            Button("Retry", action: retry).font(.footnote.weight(.semibold))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.orange.opacity(0.15))
     }
 }
 
