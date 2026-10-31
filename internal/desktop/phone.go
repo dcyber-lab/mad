@@ -58,16 +58,20 @@ func (s *Server) phoneQR(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(png)
 }
 
-// pair trades a pairing code for a device's token. It has no token to
+// pair pairs a device, with the token it made, by a pairing code. It has no token to
 // ask for: the code, good once and for minutes, is the credential.
 func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Code, Name string }
+	var in struct{ Code, Name, Token string }
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if json.NewDecoder(r.Body).Decode(&in) != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	token, id, err := phone.Pair(in.Code, in.Name)
+	id, err := phone.Pair(in.Code, in.Name, in.Token)
+	if errors.Is(err, phone.ErrBadToken) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if errors.Is(err, phone.ErrBadCode) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -76,7 +80,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, map[string]string{"token": token, "id": id})
+	reply(w, map[string]string{"id": id})
 }
 
 // phoneDevices lists the paired phones (GET) or removes one (DELETE ?id=).

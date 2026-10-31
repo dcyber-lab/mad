@@ -92,8 +92,8 @@ func pairedDevice(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, _, err := phone.Pair(code, "test phone")
-	if err != nil {
+	tok := "00112233445566778899aabbccddeeff"
+	if _, err := phone.Pair(code, "test phone", tok); err != nil {
 		t.Fatal(err)
 	}
 	return tok
@@ -151,23 +151,30 @@ func TestPairEndpoint(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/pair", strings.NewReader(body)))
 		return w
 	}
+	const tok = "0123456789abcdef0123456789abcdef"
 	code, _ := phone.PairCode()
-	w := post(`{"code":"` + code + `","name":"iPhone Safari"}`)
+	w := post(`{"code":"` + code + `","name":"iPhone Safari","token":"` + tok + `"}`)
 	var out struct{ Token, ID string }
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || len(out.Token) != 32 || out.ID == "" {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.ID == "" || out.Token != "" {
 		t.Fatalf("pair: %d %s", w.Code, w.Body)
 	}
-	if w := post(`{"code":"` + code + `","name":"x"}`); w.Code != 403 {
-		t.Errorf("a used code: %d", w.Code)
+	// The answer lost: the same pair again gets the same device.
+	if w := post(`{"code":"` + code + `","name":"iPhone Safari","token":"` + tok + `"}`); w.Code != 200 || !strings.Contains(w.Body.String(), out.ID) {
+		t.Errorf("a replay: %d %s", w.Code, w.Body)
 	}
-	if w := post(`{"code":"nope"}`); w.Code != 403 {
+	if w := post(`{"code":"` + code + `","name":"x","token":"ffffffffffffffffffffffffffffffff"}`); w.Code != 403 {
+		t.Errorf("a used code, another token: %d", w.Code)
+	}
+	if w := post(`{"code":"nope","token":"` + tok + `"}`); w.Code != 403 {
 		t.Errorf("a wrong code: %d", w.Code)
 	}
-	r := httptest.NewRequest("GET", "/api/deck?token="+out.Token, nil)
+	if w := post(`{"code":"` + code + `","token":"short"}`); w.Code != 400 {
+		t.Errorf("a bad token: %d", w.Code)
+	}
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, r)
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/deck?token="+tok, nil))
 	if rec.Code != 200 {
-		t.Errorf("the new token: %d", rec.Code)
+		t.Errorf("the device's own token: %d", rec.Code)
 	}
 }
 

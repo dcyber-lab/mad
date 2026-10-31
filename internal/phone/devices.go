@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -36,6 +37,7 @@ type Device struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	TokenHash string    `json:"token_hash"`
+	CodeHash  string    `json:"code_hash,omitempty"` // of the pairing code it came in with
 	Created   time.Time `json:"created"`
 	LastSeen  time.Time `json:"last_seen"`
 }
@@ -191,10 +193,25 @@ func PairCode() (string, error) {
 	return code, err
 }
 
-// Pair takes a pairing code, once, and gives the device its token. The
-// code is used up before the device is made: a failure between the two
-// costs a new scan, never a code that works twice.
-func Pair(code, name string) (token, id string, err error) {
+// saveDevices writes the devices file; tests replace it to fail.
+var saveDevices = func(devs []Device) error { return writeJSON(paths.PhoneDevices(), devs) }
+
+// ErrBadToken is a token that is not 32 lowercase hex digits.
+var ErrBadToken = errors.New("a device's token is 32 lowercase hex digits, made on the device")
+
+var tokenRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// Pair takes a pairing code, once, for the device whose own token this is
+// (made on the device, so it is the same in a retry); only its hash is
+// kept. The code is used up before the device is made: a failure between
+// the two costs a new scan, never a code that works for another. A retry
+// of a pair whose answer was lost, with the same code and the same token,
+// finds the device and gets its id again; the same code with another
+// token is refused.
+func Pair(code, name, token string) (id string, err error) {
+	if !tokenRe.MatchString(token) {
+		return "", ErrBadToken
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "phone"
@@ -208,7 +225,11 @@ func Pair(code, name string) (token, id string, err error) {
 		if err != nil {
 			return err
 		}
-		h := sum(code)
+		devs, err := loadDevices()
+		if err != nil {
+			return err
+		}
+		h, th := sum(code), sum(token)
 		var rest []pairEntry
 		found := false
 		for _, p := range live {
@@ -219,7 +240,18 @@ func Pair(code, name string) (token, id string, err error) {
 			}
 		}
 		if !found {
+			for _, d := range devs {
+				if d.CodeHash == h && d.TokenHash == th {
+					id = d.ID
+					return nil
+				}
+			}
 			return ErrBadCode
+		}
+		for _, d := range devs {
+			if d.TokenHash == th {
+				return ErrBadCode // that token is another device's
+			}
 		}
 		if err := writeJSON(paths.PhonePairs(), rest); err != nil {
 			return err
@@ -229,23 +261,42 @@ func Pair(code, name string) (token, id string, err error) {
 				return err
 			}
 		}
-		if token, err = randHex(); err != nil {
-			return err
-		}
 		if id, err = randHex(); err != nil {
 			return err
 		}
 		id = id[:8]
-		devs, err := loadDevices()
-		if err != nil {
-			return err
-		}
-		return writeJSON(paths.PhoneDevices(), append(devs, Device{ID: id, Name: name, TokenHash: sum(token), Created: now, LastSeen: now}))
+		return saveDevices(append(devs, Device{ID: id, Name: name, TokenHash: th, CodeHash: h, Created: now, LastSeen: now}))
 	})
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	return token, id, nil
+	return id, nil
+}
+
+// ErrDeviceGone is a subscribe from a device that is no longer paired.
+var ErrDeviceGone = errors.New("that device is no longer paired")
+
+// SubscribeDevice keeps a Web Push subscription for the device sub.Device
+// ("" is the master token's, which is always there), unless it was revoked
+// meanwhile: under the lock Revoke holds, so a subscribe can't land after
+// its cleanup.
+func SubscribeDevice(sub push.Subscription) error {
+	return locked(func() error {
+		if sub.Device != "" {
+			devs, err := loadDevices()
+			if err != nil {
+				return err
+			}
+			ok := false
+			for _, d := range devs {
+				ok = ok || d.ID == sub.Device
+			}
+			if !ok {
+				return ErrDeviceGone
+			}
+		}
+		return push.Subscribe(sub)
+	})
 }
 
 // Devices are the paired phones, oldest first.
@@ -281,13 +332,15 @@ func Revoke(idOrName string) (Device, error) {
 			return fmt.Errorf("no paired device %q (mad phone devices)", idOrName)
 		}
 		gone = devs[at]
+		// Notifications carry what agents wrote: not to a device cut off.
+		// Its push goes first, so a failure leaves the device to revoke
+		// again.
+		if err := push.UnsubscribeDevice(gone.ID); err != nil {
+			return err
+		}
 		return writeJSON(paths.PhoneDevices(), append(devs[:at:at], devs[at+1:]...))
 	})
-	if err != nil {
-		return gone, err
-	}
-	// Notifications carry what agents wrote: not to a device cut off.
-	return gone, push.UnsubscribeDevice(gone.ID)
+	return gone, err
 }
 
 // The devices as the server last read them: the file is read again when
