@@ -55,6 +55,13 @@ func (in *interrupts) claim(id string, now time.Time) bool {
 	return true
 }
 
+// release forgets agent id's claim: nothing was sent to it.
+func (in *interrupts) release(id string) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	delete(in.last, id)
+}
+
 // interrupt answers POST /api/interrupt?id=: stop what agent id does now,
 // as Esc does in its TUI, from the window or the phone. In window mode its
 // host interrupts the turn; run as its TUI, its pane gets Esc while it
@@ -62,7 +69,8 @@ func (in *interrupts) claim(id string, now time.Time) bool {
 //
 //	204: done
 //	404: no such agent
-//	409: it is not working, or was interrupted a moment ago
+//	409: it is not working, shows a prompt (Esc would cancel it, not
+//	     interrupt: its text says so), or was interrupted a moment ago
 func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	var mode, st string
@@ -90,10 +98,15 @@ func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	} else {
 		err = errNotWorking
 	}
+	if err != nil {
+		s.interrupts.release(id) // nothing was sent: it may be asked again
+	}
 	switch {
 	case err == nil:
 		changed()
 		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, attention.ErrAsks):
+		fail(w, http.StatusConflict, err)
 	case errors.Is(err, attention.ErrGone), errors.Is(err, errNotWorking):
 		fail(w, http.StatusConflict, errNotWorking)
 	default:

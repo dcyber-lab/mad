@@ -418,25 +418,33 @@ func TestKeysRouteUnreadable(t *testing.T) {
 }
 
 // Esc goes to a TUI only while it works: its screen says Esc interrupts
-// it, or its tracker says it runs; never onto a prompt.
+// it, or its tracker says it runs; never onto a prompt, read or not.
 func TestInterruptPane(t *testing.T) {
 	k := newKeyed(t, "", transcript.Info{})
 	for _, c := range []struct {
 		name, screen string
 		working      bool
-		sent         []string
+		err          error
 	}{
-		{"codex says so", fixture(t, "codex-working.txt"), false, []string{"%7 Escape"}},
+		{"codex says so", fixture(t, "codex-working.txt"), false, nil},
 		// claude 2.1.312 no longer says "esc to interrupt" while it works
-		{"claude runs", fixture(t, "claude-working.txt"), true, []string{"%7 Escape"}},
-		{"claude, not running", fixture(t, "claude-working.txt"), false, nil},
-		{"idle", fixture(t, "claude-idle.txt"), false, nil},
-		{"asking", fixture(t, "claude-bash.txt"), true, nil},
-		{"said long ago", "press esc to interrupt it\n" + strings.Repeat("a line\n", statusLines) + "❯ ", false, nil},
+		{"claude runs", fixture(t, "claude-working.txt"), true, nil},
+		{"claude, not running", fixture(t, "claude-working.txt"), false, ErrGone},
+		{"idle", fixture(t, "claude-idle.txt"), false, ErrGone},
+		{"said long ago", "press esc to interrupt it\n" + strings.Repeat("a line\n", statusLines) + "❯ ", false, ErrGone},
+		{"asking", fixture(t, "claude-bash.txt"), true, ErrAsks},
+		{"asking, too long to read", fixture(t, "claude-bash-long.txt"), true, ErrAsks},
+		{"a form", fixture(t, "claude-ask-two.txt"), true, ErrAsks},
+		{"codex asking", fixture(t, "codex-approval.txt"), true, ErrAsks},
+		{"a choice, no footer", "⏺ Pick one\n❯ 1. Red\n  2. Green", true, ErrAsks},
 	} {
 		k.screen, k.sent = c.screen, nil
 		err := InterruptPane("%7", c.working)
-		if !reflect.DeepEqual(k.sent, c.sent) || (c.sent == nil) != errors.Is(err, ErrGone) {
+		want := []string{"%7 Escape"}
+		if c.err != nil {
+			want = nil
+		}
+		if !reflect.DeepEqual(k.sent, want) || !errors.Is(err, c.err) {
 			t.Errorf("%s: %v, sent %q", c.name, err, k.sent)
 		}
 	}
