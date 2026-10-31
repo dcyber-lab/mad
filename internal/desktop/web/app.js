@@ -145,11 +145,12 @@ function money(v) {
 // the app for another Mac.
 function drawMachine() {
   const n = $("#brand .mname");
-  n.replaceChildren(deck.machine || "mad");
+  // the name gives way (an ellipsis); the ▾ beside it stays
+  n.replaceChildren(el("span", "mtext", deck.machine || "mad"));
   if (embed) {
     const c = el("span", "mcaret", "▾");
     c.onclick = (e) => { e.stopPropagation(); switchMac(); };
-    n.append(" ", c);
+    n.append(c);
   }
 }
 
