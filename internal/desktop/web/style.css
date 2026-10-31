@@ -1513,36 +1513,61 @@ html.ptype .phonebox .pdev { font-size: 14px; }
 .bmsg .cimg { max-width: min(100%, 280px); max-height: 240px; }
 .bmsg.mine .imgs { justify-content: flex-end; }
 
-/* ---- the calm list: a working avatar moves, a team is one row ---- */
+/* ---- the calm list: characters, a red dot where something waits ---- */
 
-html.ptype .avatar.s-running { animation: breathe 2.6s ease-in-out infinite; }
-html.ptype .avatar.s-waiting { box-shadow: 0 0 0 2px var(--waiting); }
-@keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--kc) 70%, transparent); }
-  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--kc) 14%, transparent); }
+html.ptype .avatar.chara { background: none; border-radius: 0; width: 46px; height: 46px; font-size: 0; overflow: visible; opacity: 1; }
+html.ptype .avatar.chara.small { width: 30px; height: 30px; }
+html.ptype .avatar.chara svg { width: 100%; height: 100%; display: block; overflow: visible; }
+html.ptype .chara .body { fill: var(--c); }
+html.ptype .chara .face .eye { fill: #1d1d1f; }
+html.ptype .chara .face .mo { fill: none; stroke: #1d1d1f; stroke-width: 2; stroke-linecap: round; }
+html.ptype .chara .face .eye.mo { stroke-width: 2.2; }
+html.ptype .chara .face circle:not(.eye) { fill: #1d1d1f; }
+html.ptype .chara .tile { fill: var(--raise-2); }
+html.ptype .chara .hash { fill: var(--text-3); font: 700 20px var(--font); }
+html.ptype .chara .mini .eye, html.ptype .chara .eye { transform-box: fill-box; transform-origin: center; }
+html.ptype .chara.s-running svg { transform-origin: 50% 100%; animation: hop 1.15s ease-in-out infinite; }
+html.ptype .chara.s-running .eye { animation: blink 2.8s infinite; }
+html.ptype .chara.group.s-running svg { animation: none; }
+html.ptype .chara.group.s-running .mini { transform-box: fill-box; transform-origin: 50% 100%; animation: hop 1.15s ease-in-out infinite; }
+html.ptype .chara.group.s-running .mini.m2 { animation-delay: 0.2s; }
+html.ptype .chara.group.s-running .mini.m3 { animation-delay: 0.4s; }
+@keyframes hop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  45% { transform: translateY(-3px) scale(0.97, 1.04); }
+  60% { transform: translateY(0) scale(1.05, 0.95); }
 }
+@keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(0.1); } }
 @media (prefers-reduced-motion: reduce) {
-  html.ptype .avatar.s-running { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--kc) 70%, transparent); }
+  html.ptype .chara *, html.ptype .chara svg { animation: none !important; }
 }
-html.ptype .row .avatar .dot { display: none; }
-html.ptype .row:has(.tstack) { grid-template-columns: auto minmax(0, 1fr) auto; }
-html.ptype .tstack { grid-row: 1 / span 2; display: flex; align-items: center; flex: none; padding: 3px; border-radius: 14px; }
-html.ptype .tstack .avatar {
-  width: 28px; height: 28px; border-radius: 9px; font-size: 13px; border: 2px solid var(--row, var(--bg)); box-sizing: content-box;
-  background: color-mix(in srgb, var(--kc) 18%, var(--row, var(--bg))); animation: none; box-shadow: none;
+html.ptype .avatar.chara .dot { display: none; }
+html.ptype .avatar .rdot {
+  position: absolute; top: 0; right: 0; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff3b30; border: 2.5px solid var(--row, var(--bg));
 }
-html.ptype .tstack .avatar + .avatar { margin-left: -10px; }
-html.ptype .tstack .avatar:nth-child(1) { z-index: 3; }
-html.ptype .tstack .avatar:nth-child(2) { z-index: 2; }
-html.ptype .tstack .avatar:nth-child(3) { z-index: 1; }
-/* the team's ring: it breathes while a member works, orange and still when one needs you */
-html.ptype .tstack.s-running { --kc: var(--running); animation: breathe 2.6s ease-in-out infinite; }
-html.ptype .tstack.s-waiting { box-shadow: 0 0 0 2px var(--waiting); }
-@media (prefers-reduced-motion: reduce) {
-  html.ptype .tstack.s-running { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--running) 70%, transparent); }
-}
-html.ptype .row .rt .cnt {
-  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center;
-  font-size: 13px; font-weight: 600; color: var(--primary-fg); background: var(--accent);
-}
-html.ptype .teamrow.unread .nm { font-weight: 700; }
+html.ptype .row .avatar.chara { width: 46px; height: 46px; border-radius: 0; }
+html.ptype .row { grid-template-columns: 46px minmax(0, 1fr) auto; column-gap: 14px; }
+html.ptype .row .t1 { font-size: 17px; }
+html.ptype .row .t2 { font-size: 14px; }
+html.ptype .row.s-stopped .avatar, html.ptype .row.s-asleep .avatar { opacity: 0.5; }
+html.ptype .row .rt .cnt { display: none; }
+
+/* the header: the Mac's name, then search, new chat, more */
+html.ptype #brand .mark, html.ptype #brand .mword, html.ptype #conn, html.ptype #boardbtn { display: none; }
+html.ptype #brand .mname { font-size: 20px; font-weight: 700; }
+html.ptype .mcaret { color: var(--text-3); font-size: 15px; padding: 6px 8px; }
+html.ptype #sidebar header { padding-left: 20px; }
+
+/* sections are small gray labels */
+html.ptype .chead { color: var(--text-3); padding: 14px 12px 4px; }
+html.ptype .chead > .i { display: none; }
+html.ptype .chead b { color: var(--text-3); font-weight: 500; font-size: 13px; }
+html.ptype .project > .head .chev, html.ptype .project > .head .hacts, html.ptype .project > .head .rollup { display: none; }
+html.ptype .project > .head { padding: 14px 12px 4px; min-height: 0; }
+html.ptype .project > .head b { color: var(--text-3); font-weight: 500; font-size: 13px; }
+html.ptype #brand { flex: 1; min-width: 0; white-space: nowrap; }
+html.ptype #brand .mname { display: inline-flex; align-items: center; min-width: 0; }
+/* a menu of many buttons stacks them */
+html.ptype .dlg:has(.dacts .btn:nth-child(4)) .dacts { flex-direction: column; align-items: stretch; }
+html.ptype .dlg:has(.dacts .btn:nth-child(4)) .dacts .btn { width: 100%; justify-content: center; }

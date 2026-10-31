@@ -1043,30 +1043,27 @@ $("#addproject").onclick = () => addProject();
 
 // In the app the footer's icon row is not drawn: what was there that suits
 // it (adding a project, Skills, the theme, how many agents) is in this menu.
-// On a phone's width outside the app it holds only Usage: the footer has the rest.
+// The phone's header menu: the pages and what the footer's icons were.
 const drawEmbedMenu = () => { $("#embed-menu").hidden = !(embed || phone.matches); };
 drawEmbedMenu();
 phone.addEventListener("change", drawEmbedMenu);
 $("#embed-menu").onclick = async () => {
   const v = await dialog({
-    title: "mad",
-    body: embed ? el("p", "dtext muted", $("#summary").textContent) : null,
+    title: deck.machine || "mad",
     actions: [
-      { label: "Usage", value: "usage" },
-      ...(embed ? [
-        { label: "Add project", value: "project" },
-        { label: "Skills", value: "skills" },
-        { label: "Phone and paired devices", value: "phone" },
-        { label: `Theme: ${theme}`, value: "theme" },
-        { label: "Show full page", value: "full" },
-      ] : []),
-      { label: "Close", cls: "primary", value: null },
+      { label: "用量", value: "usage" },
+      { label: "看板", value: "board" },
+      { label: "技能", value: "skills" },
+      { label: "手机和已配对设备", value: "phone" },
+      ...(embed ? [{ label: "切换 Mac", value: "mac" }] : []),
+      { label: "关闭", cls: "primary", value: null },
     ],
   });
   if (v === "usage") openUsage();
+  else if (v === "board") openBoard();
+  else if (v === "skills") $("#skills").click();
   else if (v === "phone") phoneDialog();
-  else if (v === "full") leaveEmbed();
-  else if (v) $({ project: "#addproject", skills: "#skills", theme: "#theme" }[v]).click();
+  else if (v === "mac") switchMac();
 };
 $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();

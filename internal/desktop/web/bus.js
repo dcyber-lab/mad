@@ -17,7 +17,7 @@ function busChannel(id) {
 function channelsGroup(q) {
   const g = el("div", "busgroup");
   const head = el("div", "chead");
-  head.append(icon("chat"), el("b", "", "Channels"));
+  head.append(icon("chat"), el("b", "", ptypeOn() ? "群聊" : "Channels"));
   const plus = el("button", "icon-btn");
   plus.type = "button";
   plus.title = "a new channel or team";
@@ -45,7 +45,7 @@ function channelsGroup(q) {
     g.append(hint);
   }
   for (const c of list) {
-    if (c.team && ptypeOn()) {
+    if (ptypeOn()) {
       g.append(teamRow(c));
       continue;
     }
@@ -61,29 +61,35 @@ function channelsGroup(q) {
   return g;
 }
 
-// teamRow is a team and its channel as one row, on a phone: its members as
-// a stack of avatars (those that work move), its name, the unread badge, and
-// how its members stand in a word.
+// groupChar is a group chat's picture, on a phone: a tile with up to three
+// of its members' characters, small and huddled. They hop in turn while any
+// member works.
+function groupChar(members, small) {
+  const positions = [[3, 6, 24], [21, 3, 22], [12, 22, 26]];
+  const mem = [...members].sort((a, b) => ({ running: 0 }[shownStatus(a)] ?? 1) - ({ running: 0 }[shownStatus(b)] ?? 1)).slice(0, 3);
+  const working = mem.some((a) => shownStatus(a) === "running");
+  const v = el("span", `avatar chara group${small ? " small" : ""}${working ? " s-running" : ""}`);
+  const minis = mem.map((a, i) => `<g class="mini m${i + 1}">${charSVG(a.id, positions[i])}</g>`).join("");
+  v.innerHTML = `<svg viewBox="0 0 48 48"><rect class="tile" x="1" y="1" width="46" height="46" rx="15"/>${minis || '<text x="24" y="31" text-anchor="middle" class="hash">#</text>'}</svg>`;
+  return v;
+}
+
+// teamRow is a channel with its members as one row, on a phone: the group's
+// picture, its name, and its last message (else how its members stand). A
+// red dot when it @you or a member waits on you.
 function teamRow(c) {
-  const mem = (c.team.roles || []).map((r) => r.agent && agents.get(r.agent)).filter(Boolean);
-  const rank = (a) => ({ running: 0, waiting: 1 }[shownStatus(a)] ?? 2);
-  const stack = el("span", "tstack");
-  const shown = [...mem].sort((a, b) => rank(a) - rank(b)).slice(0, 3);
-  if (!shown.length) stack.append(el("span", "avatar", "#"));
-  for (const a of shown) stack.append(avatar(a));
+  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
+  const mem = ids.map((id) => id && agents.get(id)).filter(Boolean);
   const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
-  if (n("running")) stack.classList.add("s-running");
-  else if (n("waiting")) stack.classList.add("s-waiting");
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
-  const right = [];
-  if (c.paused) right.push(el("span", "pill needs", "paused"));
-  else if (c.unread) right.push(el("span", `cnt${c.mention ? " at" : ""}`, c.mention ? `@${c.unread}` : String(c.unread)));
-  const r = row({
-    key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}${c.unread ? " unread" : ""}`,
-    lead: stack, name: c.team.name, line: parts.join(" · ") || "idle", right, onclick: () => openChannel(c.id),
-    title: c.topic || c.title,
+  // a DM is its agent's own character; a channel, its members' tile
+  const lead = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
+  if (c.mention || (c.dm && c.unread) || mem.some((a) => needAgents.has(a.id))) lead.append(el("span", "rdot"));
+  return row({
+    key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
+    lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: String(typeof c.last === "string" ? c.last : c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
+    onclick: () => openChannel(c.id), title: c.topic || c.title,
   });
-  return r;
 }
 
 // openChannel shows channel id (or a DM of the person's, made with its
