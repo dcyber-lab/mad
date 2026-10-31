@@ -194,17 +194,26 @@ function chanTitle(id) {
   return other && agents.get(other) ? "@" + label(agents.get(other)) : id;
 }
 
+// chanTile is the channel's avatar: avatar() draws it (a team's members
+// huddled in one tile, where it does).
+function chanTile(id) {
+  const c = busChannel(id);
+  return avatar({ kind: "channel", icon: "#", id, members: ((c && c.members) || []).map((m) => m.id) }, true);
+}
+
 function drawChanHead() {
   const id = cv.open;
   if (!id) return;
   const c = busChannel(id);
   const head = $("#chanhead");
+  // The channel's tile, its name and its topic small beside them (the
+  // lead is in the members' list); a team's progress under them.
   const what = el("div", "cwhat");
-  what.append(el("b", "", chanTitle(id)));
-  if (c && c.topic) what.append(el("span", "muted", c.topic));
-  const lead = c && c.lead && agents.get(c.lead);
+  const ttl = el("div", "cttl");
+  ttl.append(chanTile(id), el("b", "", chanTitle(id).replace(/^[#@]/, "")));
+  if (c && c.topic) ttl.append(el("span", "muted", c.topic));
+  what.append(ttl);
   if (c && c.team) what.append(teamLine(c.team));
-  else if (lead) what.append(el("span", "muted", "lead " + label(lead)));
   // The members, in one place: a strip of their avatars (which show who
   // works), and a tap on it lists them with their state, to open one.
   const members = (c && c.members) || [];
@@ -253,7 +262,7 @@ function drawChanHead() {
   // only what more there is (a topic, a pause, a team or a lead).
   // On a phone and in the app the head has no more than the top bar has,
   // unless there is a topic or a pause to say.
-  head.classList.toggle("bare", !(c && (c.topic || c.paused || (!ptype && (c.team || lead || members.length)))));
+  head.classList.toggle("bare", !(c && (c.topic || c.paused || (!ptype && (c.team || members.length)))));
 }
 
 // STRIP_MAX is how many avatars the members' strip shows before "+n".
@@ -395,7 +404,6 @@ function busMessage(m) {
   if (m.kind === "done") meta.append(el("span", `pill ${h && h.status === "declined" ? "needs" : "done"}`, `${h ? h.id + " " : ""}${(h && h.status) || "done"}`));
   const text = el("div", "btext");
   text.append(md(mentionsBold(m.text || "")));
-  if (!document.documentElement.classList.contains("ptype")) body.append(meta);
   if (m.reply_to) {
     row.dataset.reply = m.reply_to;
     body.append(quoteOf(m.reply_to));
@@ -427,15 +435,11 @@ function busMessage(m) {
     body.append(imageRow(m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`)));
   }
   if (less) body.append(less);
-  if (document.documentElement.classList.contains("ptype")) {
-    // A bubble under its sender's name, as the phone's chat draws it: the
-    // name and time are outside the bubble, the text in it.
-    const col = el("div", "bcol");
-    col.append(meta, body);
-    row.append(col);
-  } else {
-    row.append(body);
-  }
+  // A bubble under its sender's name: the name and time are outside the
+  // bubble, the text in it.
+  const col = el("div", "bcol");
+  col.append(meta, body);
+  row.append(col);
   return row;
 }
 
