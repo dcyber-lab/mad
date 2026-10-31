@@ -233,7 +233,11 @@ func addMsg(ch string, msgs *[]Message, m Message) (Message, error) {
 			b.WriteByte('\n')
 		}
 		*msgs = kept
-		return m, writeAtomic(msgFile(ch), []byte(b.String()))
+		err := writeAtomic(msgFile(ch), []byte(b.String()))
+		if err == nil {
+			afterCompact()
+		}
+		return m, err
 	}
 	line, err := json.Marshal(m)
 	if err != nil {

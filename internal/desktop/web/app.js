@@ -59,6 +59,11 @@ const pairError = window.madPairError || "";
 // a tunnel holds it: Authorization: Bearer on a request, a subprotocol on
 // a websocket (a browser can't set headers there), a fetched blob for an
 // image (a src can't send one).
+// Pictures being read (actions.js): they count against a message's limit,
+// and the draft is not sent before they are in. Here, as drawSend, which
+// may run before actions.js has, reads it.
+let pendingReads = 0;
+
 function authFetch(url, opts = {}) {
   return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` } });
 }
@@ -2023,7 +2028,7 @@ function drawSend() {
     b.title = stop ? "Interrupt: stop what it does now (Esc)" : "send (Enter)";
     b.setAttribute("aria-label", stop ? "Interrupt" : "Send");
   }
-  b.disabled = !stop && !typed;
+  b.disabled = !stop && !typed || pendingReads > 0; // not before the pictures are read
   // How what is typed goes: run here, at once.
   const h = $("#hint");
   const here = windowed(agents.get(current));

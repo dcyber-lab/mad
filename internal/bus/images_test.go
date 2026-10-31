@@ -2,6 +2,7 @@ package bus
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -130,5 +131,122 @@ func TestPostImages(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("the named file is not readable: %v", err)
+	}
+}
+
+func setMtime(t *testing.T, id string, ago time.Duration) {
+	t.Helper()
+	p, _, ok := ImagePath(id)
+	if !ok {
+		t.Fatalf("no file for %s", id)
+	}
+	at := time.Now().Add(-ago)
+	if err := os.Chtimes(p, at, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Pictures no kept message names are removed, unless they are young (a post
+// in flight); the ones a message names stay, archived channels' too.
+func TestCollectImages(t *testing.T) {
+	setup(t)
+	mustCreate(t, "keep", idBuild)
+	keep, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{1, 0, 0, 255}))
+	orphan, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{2, 0, 0, 255}))
+	fresh, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{3, 0, 0, 255}))
+	if _, err := PostImages("keep", me, "@builder this one", 0, []Image{keep}); err != nil {
+		t.Fatal(err)
+	}
+	setMtime(t, keep.ID, time.Hour)
+	setMtime(t, orphan.ID, time.Hour)
+	// fresh: stored just now, named by no message yet.
+	n, err := CollectImages(ImageGCAge)
+	if err != nil || n != 1 {
+		t.Fatalf("collected %d, %v; want the orphan alone", n, err)
+	}
+	for id, want := range map[string]bool{keep.ID: true, orphan.ID: false, fresh.ID: true} {
+		if _, _, ok := ImagePath(id); ok != want {
+			t.Errorf("%s kept = %v, want %v", id[:8], ok, want)
+		}
+	}
+	// Named by a message in an archived channel: kept.
+	mustCreate(t, "old", idBuild)
+	oldPic, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{4, 0, 0, 255}))
+	if _, err := PostImages("old", me, "@builder before it closed", 0, []Image{oldPic}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Archive("old"); err != nil {
+		t.Fatal(err)
+	}
+	setMtime(t, oldPic.ID, time.Hour)
+	if n, _ := CollectImages(ImageGCAge); n != 0 {
+		t.Errorf("collected %d: an archived channel's picture is still named", n)
+	}
+	// At age 0 only the unnamed one goes: fresh.
+	if n, err := CollectImages(0); err != nil || n != 1 {
+		t.Errorf("at age 0: %d, %v; want the unnamed one alone", n, err)
+	}
+	if _, _, ok := ImagePath(fresh.ID); ok {
+		t.Error("the unnamed picture is still there")
+	}
+}
+
+// A post names pictures that are there: one collected meanwhile is an
+// error, not a message with a broken picture.
+func TestPostImagesGone(t *testing.T) {
+	setup(t)
+	mustCreate(t, "pics", idBuild)
+	im, _ := StoreImage(testPNG(t, 4, 4, color.RGBA{5, 0, 0, 255}))
+	setMtime(t, im.ID, time.Hour)
+	if _, err := CollectImages(ImageGCAge); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PostImages("pics", me, "@builder a picture that is gone", 0, []Image{im}); err == nil || !strings.Contains(err.Error(), "gone") {
+		t.Errorf("post with a collected picture: %v", err)
+	}
+}
+
+// The person's target is checked before anything is kept.
+func TestCheckReply(t *testing.T) {
+	setup(t)
+	mustCreate(t, "here", idBuild)
+	if err := CheckReply("here"); err != nil {
+		t.Errorf("a channel: %v", err)
+	}
+	if err := CheckReply("nowhere"); err == nil {
+		t.Error("a channel that is not there")
+	}
+	if err := CheckReply(DMChannel(idArch, idBuild)); err != ErrTheirDM {
+		t.Errorf("a DM of two agents: %v", err)
+	}
+	if err := CheckReply(DMChannel(You, idBuild)); err != nil {
+		t.Errorf("your DM with an agent, not made yet: %v", err)
+	}
+	if err := CheckReply(DMChannel(You, "dddd4444-0000-0000-0000-000000000009")); err == nil {
+		t.Error("a DM with no such agent")
+	}
+	if err := CheckDM(me, idRun); err == nil {
+		t.Error("a DM with an agent in a run")
+	}
+	if err := CheckDM(me, ""); err == nil {
+		t.Error("a DM with no one")
+	}
+}
+
+// A log cut down runs the collection.
+func TestCompactionCollects(t *testing.T) {
+	setup(t)
+	maxLines, keepLines = 20, 5
+	t.Cleanup(func() { maxLines, keepLines = 2000, 500 })
+	called := 0
+	old := afterCompact
+	afterCompact = func() { called++ }
+	t.Cleanup(func() { afterCompact = old })
+	mustCreate(t, "busy", idBuild)
+	for i := 0; i <= maxLines; i++ {
+		mustPost(t, "busy", me, fmt.Sprintf("message number %d here", i))
+	}
+	if called == 0 {
+		t.Error("cutting a log did not ask for the collection")
 	}
 }

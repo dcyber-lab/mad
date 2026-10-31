@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -171,9 +172,9 @@ type busPicture struct {
 	Data string `json:"data"`
 }
 
-// maxBusBody bounds a post with pictures: bus.MaxImages of bus.MaxImageBytes
-// in base64.
-const maxBusBody = 96 << 20
+// maxBusBody bounds a post with pictures: bus.MaxImages of
+// bus.MaxImageBytes in base64 (4 bytes for 3), and a megabyte for the rest.
+const maxBusBody = bus.MaxImages*(bus.MaxImageBytes/3+1)*4 + 1<<20
 
 // decodeBus reads a post's JSON body, which may hold pictures: bigger than
 // decode allows.
@@ -185,23 +186,51 @@ func decodeBus(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// keepPictures stores a post's pictures, or answers 400 and says no.
-func keepPictures(w http.ResponseWriter, in []busPicture) ([]bus.Image, bool) {
+// pictureBytes takes a post's pictures from base64, and keeps none of
+// them: how many, and how big each is claimed to be, are checked before
+// anything is decoded, and each is decoded and read for its type in turn.
+// What it returns is stored (bus.StoreImages) only when the post goes on.
+func pictureBytes(in []busPicture) ([][]byte, error) {
+	if len(in) > bus.MaxImages {
+		return nil, bus.TooManyImages()
+	}
+	for i, p := range in {
+		if base64.StdEncoding.DecodedLen(len(p.Data)) > bus.MaxImageBytes+2 {
+			return nil, fmt.Errorf("image %d is over the %d MB limit", i+1, bus.MaxImageBytes>>20)
+		}
+	}
 	var datas [][]byte
-	for _, p := range in {
+	for i, p := range in {
 		b, err := base64.StdEncoding.DecodeString(p.Data)
 		if err != nil {
-			fail(w, http.StatusBadRequest, errors.New("an image is not base64"))
-			return nil, false
+			return nil, fmt.Errorf("image %d is not base64", i+1)
+		}
+		if _, err := bus.CheckImage(b); err != nil {
+			return nil, fmt.Errorf("image %d: %w", i+1, err)
 		}
 		datas = append(datas, b)
 	}
+	return datas, nil
+}
+
+// keepPictures stores pictures that passed pictureBytes, for a post about
+// to be made; nil for none.
+func keepPictures(w http.ResponseWriter, datas [][]byte) ([]bus.Image, bool) {
 	imgs, err := bus.StoreImages(datas)
 	if err != nil {
 		fail(w, http.StatusBadRequest, err)
 		return nil, false
 	}
 	return imgs, true
+}
+
+// postFailed answers a refused post: forbidden for another's DM, else 400.
+func postFailed(w http.ResponseWriter, err error) {
+	if errors.Is(err, bus.ErrTheirDM) {
+		fail(w, http.StatusForbidden, err)
+		return
+	}
+	fail(w, http.StatusBadRequest, err)
 }
 
 // busImage answers GET /api/bus/image?id=: a picture of a message, by the
@@ -228,7 +257,18 @@ func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
 	if !decodeBus(w, r, &req) {
 		return
 	}
-	imgs, ok := keepPictures(w, req.Images)
+	// The target first, then the pictures: nothing is kept for a post that
+	// can't be made.
+	if err := bus.CheckReply(req.Channel); err != nil {
+		postFailed(w, err)
+		return
+	}
+	datas, err := pictureBytes(req.Images)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	imgs, ok := keepPictures(w, datas)
 	if !ok {
 		return
 	}
@@ -254,7 +294,16 @@ func (s *Server) busDM(w http.ResponseWriter, r *http.Request) {
 	if !decodeBus(w, r, &req) {
 		return
 	}
-	imgs, ok := keepPictures(w, req.Images)
+	if err := bus.CheckDM(bus.From{ID: bus.You, Label: bus.You}, req.To); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	datas, err := pictureBytes(req.Images)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	imgs, ok := keepPictures(w, datas)
 	if !ok {
 		return
 	}

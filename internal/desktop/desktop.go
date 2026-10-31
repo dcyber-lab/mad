@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/phone"
 )
@@ -274,6 +275,8 @@ func (s *Server) Serve(ctx context.Context, addr string, ready func(url string))
 	}
 	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go s.poll.Run(ctx)
+	// Pictures of messages that were cut from their logs, or never sent.
+	go func() { _, _ = bus.CollectImages(bus.ImageGCAge) }()
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
