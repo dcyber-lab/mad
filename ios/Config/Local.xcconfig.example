@@ -1,0 +1,3 @@
+// Copy to Local.xcconfig (gitignored) and fill in.
+DEVELOPMENT_TEAM = ABCDE12345
+MAD_BUNDLE_ID = com.example.mad
