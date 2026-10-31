@@ -381,8 +381,9 @@ Home Screen keeps it at hand as an app.
 - Only your own devices reach it over Tailscale, and they need a token
   too. A phone gets its own by pairing (below). The master token, kept in
   mad's state directory (`phone_token`), is what the local window uses and
-  what phones paired before devices still hold; delete the file to shut
-  those out, and the next `mad phone on` makes a new one.
+  what phones paired before devices still hold. To shut those out, run
+  `mad phone off`, delete the file, then `mad phone on`: the running
+  server keeps the old token until it is stopped.
 - It needs HTTPS certificates turned on in your tailnet (the Tailscale
   admin console, DNS page). mad says so if they are off.
 - While it serves the phone, a Mac stays awake (`caffeinate -i`): its
@@ -442,12 +443,15 @@ in [ios/](ios). It is not on the App Store: you build it yourself.
 - **Deck.** The full window, the same page as in Safari, for everything
   else: chat, the board, the sidebar.
 
-To build and run it in the simulator:
+To build it for the simulator:
 
 ```sh
 brew install xcodegen
 make ios         # swift test, xcodegen, and a simulator build
 ```
+
+`make ios` builds the app but does not install or launch it: open
+`ios/mad.xcodeproj` in Xcode and run it on a simulator or your phone.
 
 It needs Xcode with the iOS platform installed. `cd ios && xcodegen
 generate && open mad.xcodeproj` opens it in Xcode.

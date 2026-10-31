@@ -37,8 +37,9 @@ To run on a device, copy `Config/Local.xcconfig.example` to
 once, within 10 minutes. The app:
 
 1. makes a token of its own (16 random bytes, 32 lowercase hex digits),
-2. saves it to the Keychain as a pending pairing, with the code, before
-   sending anything,
+2. saves the token to the Keychain as a pending pairing before sending
+   anything (the code and the Mac's address go to UserDefaults: the code
+   is single-use, and a replay also needs the token),
 3. sends `POST /api/pair {"code","name","token"}` (the name is the iPhone's),
 4. on `200 {"id","machine"}` stores the Mac under the Mac's own name and drops
    the pending entry.
@@ -46,9 +47,12 @@ once, within 10 minutes. The app:
 If the answer is lost, the pending entry stays and the Macs list offers Retry,
 which sends the same code and token again; the Mac answers with the same id.
 A refusal (400 or 403) drops the entry: scan a new QR code. A `#token=` link
-(a token already made) is still accepted. Every request after pairing carries
-`Authorization: Bearer <token>`, never the token in the URL; the deck page gets
-`#token=<t>&embed=app` in the fragment.
+(a token already made) is still accepted. The app's own requests carry
+`Authorization: Bearer <token>`, never the token in the URL. The embedded deck
+page is different: it gets `#token=<t>&embed=app` in the fragment and, like the
+page in a browser, sends the token as `?token=` on its own requests and
+websockets, so those URLs carry it (over HTTPS, but a proxy that logs URLs
+would see it).
 
 `PairingBook` holds these rules and is tested with a fake Keychain and a fake
 network: the token is saved before it is sent, a failed save never loses the old
