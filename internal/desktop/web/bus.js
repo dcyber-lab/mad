@@ -266,6 +266,7 @@ async function loadChannel(first) {
   if (!cv.last && !$("#chanlog").children.length) {
     $("#chanlog").append(el("div", "note", id.startsWith("dm.") ? "Say something: it reaches the agent when its turn is over." : "Nothing said yet. @mention an agent to wake it."));
   }
+  drawReceipts(r.receipts || [], r.paused);
   if (cv.paused !== r.paused) {
     cv.paused = r.paused;
     drawChanHead();
@@ -321,6 +322,60 @@ function busMessage(m) {
   row.append(body);
   return row;
 }
+
+// drawReceipts puts under each of your messages who it woke and how far
+// it got: ◷ waiting (not yet in the agent's digest), ✓ delivered, ✓✓ read,
+// ↩ replied; or that it reached no one.
+function drawReceipts(list, paused) {
+  const mark = { waiting: "◷", delivered: "✓", read: "✓✓", replied: "↩" };
+  for (const rc of list) {
+    const row = $(`#chanlog .bmsg.mine[data-seq="${rc.seq}"]`);
+    if (!row) continue;
+    let line = row.querySelector(".brcpt");
+    if (!line) {
+      line = el("div", "brcpt");
+      row.querySelector(".bbody").append(line);
+    }
+    const parts = [];
+    for (const st of ["replied", "read", "delivered", "waiting"]) {
+      const names = rc.targets.filter((t) => t.state === st).map((t) => t.label);
+      if (names.length) parts.push(`${mark[st]} ${names.join(", ")} ${st}`);
+    }
+    const none = !rc.targets.length;
+    let text = none ? "reached no agent — @ someone to wake them" : parts.join(" · ");
+    if (paused && rc.targets.some((t) => t.state === "waiting")) text += " · held: the channel is paused";
+    line.classList.toggle("none", none);
+    if (line.textContent !== text) line.textContent = text;
+    line.title = none
+      ? "A line with no @mention wakes no one; agents see it only when they read the channel."
+      : "◷ waiting · ✓ delivered to the agent · ✓✓ read · ↩ replied";
+  }
+}
+
+// noWake tells whether text, posted in the open channel, would wake no
+// one: no @all and no @agent, as the bus counts them (a DM always wakes
+// the other side).
+function noWake(text) {
+  if (!text.trim() || !cv.open || cv.open.startsWith("dm.")) return false;
+  const names = [...agents.values()].map((a) => label(a)).concat(["all"]).sort((x, y) => y.length - x.length);
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp("(^|[\\s(\\[{<\"'*,;])@(" + names.map(esc).join("|") + ")(?![\\w-])", "i");
+  return !re.test(text);
+}
+
+// drawNoWake says beside the send button when the draft would wake no one.
+function drawNoWake() {
+  const who = $("#who");
+  if (!who) return;
+  let h = who.querySelector(".nowake");
+  if (!noWake($("#qinput").value)) return h && h.remove();
+  if (!h) {
+    h = el("span", "nowake", "no one will be woken");
+    h.title = "No @mention in it: agents see it only when they read the channel.";
+    who.append(h);
+  }
+}
+$("#qinput").addEventListener("input", drawNoWake);
 
 // quoteOf is what a reply answers: the message, quoted, which a click
 // shows; and the message counts its replies.
@@ -379,6 +434,7 @@ async function postChannel(text) {
   const id = cv.open;
   t.value = "";
   fitInput();
+  drawNoWake();
   try {
     const r = await api("POST", "/api/bus/post", {}, cv.reply ? { channel: id, text, reply_to: cv.reply.seq } : { channel: id, text });
     replyTo(null);
@@ -401,6 +457,7 @@ function drawChanWho() {
   what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"} · @ to wake one` : " · reaches it when its turn is over");
   who.replaceChildren(what);
   who.className = "";
+  drawNoWake();
 }
 
 // drawAgentMenu offers the agents as @ is typed in a channel: its

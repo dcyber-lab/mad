@@ -116,7 +116,49 @@ func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 	if msgs == nil {
 		msgs = []bus.Message{}
 	}
-	reply(w, map[string]any{"channel": ch, "messages": msgs, "last": last, "paused": c.Paused})
+	reply(w, map[string]any{"channel": ch, "messages": msgs, "last": last, "paused": c.Paused, "receipts": busReceipts(ch)})
+}
+
+// BusReceipt is how one of the person's messages stands: the agents it
+// wakes, each with its state (waiting, delivered, read, replied); none
+// when it wakes nobody.
+type BusReceipt struct {
+	Seq     int             `json:"seq"`
+	Targets []BusTargetInfo `json:"targets"`
+	Paused  bool            `json:"paused,omitempty"`
+}
+
+// BusTargetInfo is an agent a message wakes, by its label.
+type BusTargetInfo struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	State string `json:"state"`
+}
+
+// busReceipts is the receipts of the person's last messages in a channel;
+// all of them, each time, so a mark moves as the agent reads. None on an
+// error: the log is shown without marks.
+func busReceipts(ch string) []BusReceipt {
+	out := []BusReceipt{}
+	rs, err := bus.Receipts(ch, 20)
+	if err != nil || len(rs) == 0 {
+		return out
+	}
+	st, _ := state.Load()
+	for _, r := range rs {
+		br := BusReceipt{Seq: r.Seq, Paused: r.Paused, Targets: []BusTargetInfo{}}
+		for _, t := range r.Targets {
+			name := t.ID[:min(len(t.ID), 8)]
+			if st != nil {
+				if _, a := st.FindAgent(t.ID); a != nil {
+					name = drive.Label(a)
+				}
+			}
+			br.Targets = append(br.Targets, BusTargetInfo{t.ID, name, t.State})
+		}
+		out = append(out, br)
+	}
+	return out
 }
 
 // busPost answers POST /api/bus/post {channel, text}: the person posts,
