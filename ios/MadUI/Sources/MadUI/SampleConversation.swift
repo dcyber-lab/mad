@@ -30,6 +30,14 @@ public enum SampleConversation {
         ask: AskCard(id: "ask2", title: "用哪种图表？", acts: [
             AskAct(id: "bar", label: "柱状图", primary: true), AskAct(id: "line", label: "折线图"), AskAct(id: "other", label: "自己写…", input: true)]))
 
+    /// An act whose label a server made 140 characters long.
+    public static let longLabel = AgentConversation(
+        title: "ios", agentID: "ios00001-bbbb", kind: "codex", state: .needsYou, entries: Array(model.entries.prefix(3)),
+        ask: AskCard(id: "ask3", title: "想运行一条命令", detail: "rm -rf build", mono: true, acts: [
+            AskAct(id: "allow", label: "允许", primary: true),
+            AskAct(id: "always", label: "总是允许在这个项目里运行以 rm -rf 开头的命令，包括以后新增的子目录，并且不再询问我，直到我在设置里把它关掉为止，对所有用户都一样生效"),
+            AskAct(id: "deny", label: "拒绝")]))
+
     /// Stopped: it can't take messages.
     public static let stopped = AgentConversation(
         title: "输入法切换", agentID: "ime00001-iiii", kind: "claude", state: .stopped, entries: Array(model.entries.prefix(3)),
@@ -38,12 +46,13 @@ public enum SampleConversation {
 
 /// The phone's screen, the Mac's detail pane and the two other cases, one at a time.
 public struct ConversationGallery: View {
-    public enum Case: String, CaseIterable { case ask, question, stopped }
+    public enum Case: String, CaseIterable { case ask, question, long, stopped }
 
     @State private var which: Case
     public var detail: Bool
 
-    public init(which: Case = .ask, detail: Bool = false) {
+    /// The launch argument `-case long` picks the case to open on.
+    public init(which: Case = Case(rawValue: UserDefaults.standard.string(forKey: "case") ?? "") ?? .ask, detail: Bool = false) {
         _which = State(initialValue: which)
         self.detail = detail
     }
@@ -52,6 +61,7 @@ public struct ConversationGallery: View {
         switch which {
         case .ask: SampleConversation.model
         case .question: SampleConversation.asking
+        case .long: SampleConversation.longLabel
         case .stopped: SampleConversation.stopped
         }
     }
