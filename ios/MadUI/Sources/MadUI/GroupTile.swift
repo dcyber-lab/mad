@@ -25,9 +25,7 @@ public struct GroupTile: View {
     private var needsYou: Bool { members.contains { $0.state == .needsYou } }
 
     /// What the tile says: working, else needs you, else starting, else idle.
-    var word: String {
-        working ? "working" : needsYou ? "needs you" : members.contains { $0.state == .starting } ? "starting" : "idle"
-    }
+    var word: String { CharacterState.group(members.map(\.state)).word }
 
     /// Working members first, then the rest in order; three at most.
     var shown: [Member] {
