@@ -378,7 +378,7 @@ func ready(st *state.State, a *state.Agent, kinds []agent.Kind) (tmux.Pane, erro
 	switch h := status.ReadHook(a.ID); {
 	case started:
 		err = up(k, a, pane.ID, woke)
-	case k.Hooks && h != nil && h.State == status.Idle:
+	case k.Hooks && (h != nil && h.State == status.Idle || turnOver(a.ID, h)):
 		// Its turn is over, but claude goes on running the user's own
 		// Stop hooks for a while.
 		err = free(k, a, pane.ID, afterFor)
@@ -386,6 +386,15 @@ func ready(st *state.State, a *state.Agent, kinds []agent.Kind) (tmux.Pane, erro
 		err = free(k, a, pane.ID, quietFor+tick)
 	}
 	return pane, err
+}
+
+// turnOver says the agent's last turn has ended, though its Idle report
+// has not come: the reply is written before the report (WriteTurn comes
+// first), and Wait returns between the two. A message typed in the deck
+// since (a working report newer than the turn) is not over.
+func turnOver(id string, h *status.Hook) bool {
+	turn := status.ReadTurn(id)
+	return turn != nil && !pending(turn, h, status.SentAt(id))
 }
 
 // wake finds a's pane, starting or resuming a off stage when its process

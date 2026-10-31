@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"sync"
 )
 
 // A reply is read on its way back to the agent, as server-sent events
@@ -18,13 +19,18 @@ type events interface {
 // sseTap reads server-sent events.
 type sseTap struct {
 	io.ReadCloser
-	ev    events
+	ev events
+	// mu is held while buf, ended and ev are used: the proxy reads in one
+	// goroutine and closes from another.
+	mu    sync.Mutex
 	buf   []byte
 	ended bool
 }
 
 func (t *sseTap) Read(p []byte) (int, error) {
 	n, err := t.ReadCloser.Read(p)
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.buf = append(t.buf, bytes.ReplaceAll(p[:n], []byte("\r"), nil)...)
 	for {
 		i := bytes.Index(t.buf, []byte("\n\n"))
@@ -40,17 +46,19 @@ func (t *sseTap) Read(p []byte) (int, error) {
 		t.buf = t.buf[i+2:]
 	}
 	if err != nil {
-		t.end()
+		t.endLocked()
 	}
 	return n, err
 }
 
 func (t *sseTap) Close() error {
-	t.end()
+	t.mu.Lock()
+	t.endLocked()
+	t.mu.Unlock()
 	return t.ReadCloser.Close()
 }
 
-func (t *sseTap) end() {
+func (t *sseTap) endLocked() {
 	if !t.ended {
 		t.ended = true
 		t.ev.end()
@@ -62,7 +70,10 @@ func (t *sseTap) end() {
 // frames are as sent.
 type wsTap struct {
 	io.ReadWriteCloser
-	ev    events
+	ev events
+	// mu is held while the fields below and ev are used: the proxy reads
+	// in one goroutine and closes from another.
+	mu    sync.Mutex
 	buf   []byte // frames not whole yet
 	msg   []byte // a message in fragments
 	off   bool   // passed on only, from a message too big to read on
@@ -74,13 +85,15 @@ const maxMessage = 16 << 20
 
 func (t *wsTap) Read(p []byte) (int, error) {
 	n, err := t.ReadWriteCloser.Read(p)
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if !t.off {
 		t.buf = append(t.buf, p[:n]...)
 		for t.frame() {
 		}
 	}
 	if err != nil {
-		t.end()
+		t.endLocked()
 	}
 	return n, err
 }
@@ -113,7 +126,7 @@ func (t *wsTap) frame() bool {
 		mask, at = b[at:at+4], at+4
 	}
 	if size > maxMessage {
-		t.end()
+		t.endLocked()
 		t.off, t.buf = true, nil
 		return false
 	}
@@ -147,11 +160,13 @@ func (t *wsTap) frame() bool {
 }
 
 func (t *wsTap) Close() error {
-	t.end()
+	t.mu.Lock()
+	t.endLocked()
+	t.mu.Unlock()
 	return t.ReadWriteCloser.Close()
 }
 
-func (t *wsTap) end() {
+func (t *wsTap) endLocked() {
 	if !t.ended {
 		t.ended = true
 		t.ev.end()

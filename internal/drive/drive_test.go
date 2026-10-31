@@ -447,3 +447,37 @@ func TestTook(t *testing.T) {
 		t.Error("codex did not take the message typed in")
 	}
 }
+
+// Wait returns once the reply is written, a moment before the Stop report
+// that says idle: a send in between sees the turn as over, not the agent
+// as working; a working report newer than the turn is still working.
+func TestTurnOver(t *testing.T) {
+	useDeck(t)
+	const id = "agent-1"
+	t0 := time.Now()
+	if turnOver(id, nil) {
+		t.Error("no turn yet is not over")
+	}
+	if err := status.MarkSent(id, t0, "d"); err != nil {
+		t.Fatal(err)
+	}
+	running := &status.Hook{State: status.Running, Event: "UserPromptSubmit", At: t0.Add(time.Millisecond)}
+	if err := status.WriteTurn(id, &status.Turn{Reply: "r"}, t0.Add(2*time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	// The reply is in, the report that says idle is not: over.
+	if !turnOver(id, running) {
+		t.Error("a reply written before its Stop report: the turn is over")
+	}
+	// Typed in the deck since: working again.
+	if turnOver(id, &status.Hook{State: status.Running, Event: "UserPromptSubmit", At: t0.Add(time.Second)}) {
+		t.Error("a working report after the turn is not over")
+	}
+	// Sent since, the reply of the new one not in yet.
+	if err := status.MarkSent(id, t0.Add(time.Minute), "e"); err != nil {
+		t.Fatal(err)
+	}
+	if turnOver(id, running) {
+		t.Error("a message sent after the last reply is under way")
+	}
+}

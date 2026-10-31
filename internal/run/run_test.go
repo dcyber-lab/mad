@@ -355,6 +355,15 @@ func TestRunnerStoppedAfterSend(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Exec(r.ID, io.Discard) }()
 	for end := time.Now().Add(time.Minute); ; time.Sleep(100 * time.Millisecond) {
+		select {
+		case err := <-done:
+			// The runner left before the gate (another runner's lock, an
+			// error): say so now, with its log, not after a minute.
+			f, _ := Load(Dir(r))
+			log, _ := os.ReadFile(logPath(Dir(r)))
+			t.Fatalf("the runner ended before the gate: %v\nprogress: %+v\nlog:\n%s", err, f.Progress, log)
+		default:
+		}
 		if f, err := Load(Dir(r)); err == nil && f.Progress.Status == Waiting && strings.Contains(f.Progress.Waiting, "look it over") {
 			if e := f.Progress.Entries[0]; e.Status != "done" || e.Result != "The design is written." {
 				t.Errorf("the design came to %+v", e)
@@ -363,7 +372,8 @@ func TestRunnerStoppedAfterSend(t *testing.T) {
 		}
 		if time.Now().After(end) {
 			f, _ := Load(Dir(r))
-			t.Fatalf("never got to the gate: %+v", f.Progress)
+			log, _ := os.ReadFile(logPath(Dir(r)))
+			t.Fatalf("never got to the gate: %+v\nlog:\n%s", f.Progress, log)
 		}
 	}
 	if n := designs(); n != 1 {

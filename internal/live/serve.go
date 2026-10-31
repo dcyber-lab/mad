@@ -109,7 +109,9 @@ func Serve(ctx context.Context) error {
 	}
 
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	shut := make(chan struct{})
 	go func() {
+		defer close(shut)
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -118,6 +120,9 @@ func Serve(ctx context.Context) error {
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	// Serve returns as Shutdown starts: the hub is gone once it is done,
+	// its open connections closed, not before.
+	<-shut
 	return nil
 }
 
@@ -190,7 +195,9 @@ func codexBaseURLSet() bool {
 }
 
 func alive(addr string) bool {
-	c := http.Client{Timeout: 500 * time.Millisecond}
+	// A connection of its own: one kept from an earlier look may belong to
+	// a hub that is shutting down, and still answer.
+	c := http.Client{Timeout: 500 * time.Millisecond, Transport: &http.Transport{DisableKeepAlives: true}}
 	res, err := c.Get("http://" + addr + "/health")
 	if err != nil {
 		return false
