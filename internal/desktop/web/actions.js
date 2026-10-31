@@ -628,7 +628,22 @@ function drawActs() {
   $("#acts").hidden = !a && !(ch && !ch.dm);
   $("#changes").hidden = !a || !a.chat;
   $("#changes").classList.toggle("on", !!a && side.id === current);
+  // 对话 / 终端 / 改动: the conversation, its terminal, its changes
+  const diff = !!a && side.id === current;
+  $("#seg").hidden = !a;
+  for (const b of $("#seg").children) {
+    b.hidden = b.dataset.v !== "term" && !(a && a.chat);
+    b.classList.toggle("on", (b.dataset.v === "diff") === diff && b.dataset.v !== "term");
+  }
 }
+$("#seg").onclick = (e) => {
+  const v = e.target.closest("button")?.dataset.v;
+  const a = current && agents.get(current);
+  if (!a) return;
+  if (v === "term") openTerminal(a);
+  else if (v === "diff") { if (side.id !== current) openChanges(current); }
+  else if (v === "chat") closeChanges();
+};
 $("#changes").onclick = () => {
   if (side.id === current) closeChanges();
   else if (current) openChanges(current);
@@ -1043,33 +1058,20 @@ $("#addproject").onclick = () => addProject();
 
 // In the app the footer's icon row is not drawn: what was there that suits
 // it (adding a project, Skills, the theme, how many agents) is in this menu.
-// The phone's header menu: the pages and what the footer's icons were.
-const drawEmbedMenu = () => { $("#embed-menu").hidden = !(embed || phone.matches); };
-drawEmbedMenu();
-phone.addEventListener("change", drawEmbedMenu);
-$("#embed-menu").onclick = async () => {
-  const v = await dialog({
-    title: deck.machine || "mad",
-    actions: [
-      { label: "用量", value: "usage" },
-      { label: "看板", value: "board" },
-      { label: "技能", value: "skills" },
-      { label: "手机和已配对设备", value: "phone" },
-      ...(embed ? [{ label: "切换 Mac", value: "mac" }] : []),
-      { label: "添加项目", cls: "sep", value: "project" },
-      { label: `主题：${theme}`, value: "theme" },
-      // #embed=app from a link in a browser: the app's own page is not there to leave it
-      ...(embed && !window.webkit?.messageHandlers?.mad ? [{ label: "显示完整页面", value: "full" }] : []),
-      { label: "关闭", cls: "primary", value: null },
-    ],
-  });
-  if (v === "usage") openUsage();
-  else if (v === "board") openBoard();
-  else if (v === "skills") $("#skills").click();
-  else if (v === "phone") phoneDialog();
-  else if (v === "mac") switchMac();
-  else if (v === "full") leaveEmbed();
-  else if (v) $({ project: "#addproject", theme: "#theme" }[v]).click();
+// The header's menu: the pages, and what the footer's icons were.
+$("#embed-menu").onclick = () => {
+  popup($("#embed-menu"), [
+    { label: "用量", onclick: () => openUsage() },
+    { label: "看板", onclick: () => openBoard() },
+    { label: "技能", onclick: () => $("#skills").click() },
+    { label: "手机和已配对设备", onclick: () => phoneDialog() },
+    ...(embed ? [{ label: "切换 Mac", onclick: () => switchMac() }] : [{ label: "通知", onclick: () => $("#bell").click() }]),
+    "-",
+    { label: "添加项目", onclick: () => $("#addproject").click() },
+    { label: `主题：${theme}`, onclick: () => $("#theme").click() },
+    // #embed=app from a link in a browser: the app's own page is not there to leave it
+    ...(embed && !window.webkit?.messageHandlers?.mad ? [{ label: "显示完整页面", onclick: () => leaveEmbed() }] : []),
+  ], { right: true });
 };
 $("#phone").onclick = () => phoneDialog();
 $("#bell").onclick = () => notifyDialog();
