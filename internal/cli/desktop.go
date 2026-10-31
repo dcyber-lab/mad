@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,8 +29,9 @@ func desktopCmd(args []string, stdio IO) error {
 	noWindow := fs.Bool("no-window", false, "only serve; print the URL to open")
 	serve := fs.Bool("serve", false, "serve the phone (mad phone): its token, no window")
 	origin := fs.String("origin", "", "`host:port` the page is also opened from (mad phone)")
+	exitOnEOF := fs.Bool("exit-on-stdin-eof", false, "exit when standard input reaches EOF (for a parent that holds its write end: the server ends with the parent)")
 	fs.Usage = func() {
-		fmt.Fprintln(stdio.Err, "usage: mad desktop [-addr host:port] [-no-window]")
+		fmt.Fprintln(stdio.Err, "usage: mad desktop [-addr host:port] [-no-window] [-exit-on-stdin-eof]")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
@@ -41,6 +43,12 @@ func desktopCmd(args []string, stdio IO) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
+	if *exitOnEOF {
+		go func() {
+			_, _ = io.Copy(io.Discard, stdio.In)
+			stop()
+		}()
+	}
 	id := windowID()
 	// A window opens on the phone's server when it is up and answers to
 	// the phone's token, rather than on a server of its own with a second

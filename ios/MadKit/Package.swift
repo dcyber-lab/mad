@@ -7,6 +7,8 @@ let package = Package(
     products: [.library(name: "MadKit", targets: ["MadKit"])],
     targets: [
         .target(name: "MadKit"),
-        .testTarget(name: "MadKitTests", dependencies: ["MadKit"]),
+        // A stand-in for the app, for a test that kills it: it launches a server and waits.
+        .executableTarget(name: "launcher-probe", dependencies: ["MadKit"]),
+        .testTarget(name: "MadKitTests", dependencies: ["MadKit"], resources: [.copy("Fixtures")]),
     ]
 )

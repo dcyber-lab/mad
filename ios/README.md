@@ -87,6 +87,80 @@ goes with it; the Keychain holds the only lasting one. The page is loaded with
 `#token=<t>&embed=app` in the fragment, and with the app's insets off: it keeps
 clear of the status bar and the home indicator itself.
 
+## Native apps (the foundation)
+
+The iPhone app and the Mac app are meant to be native SwiftUI; the page stays as the fallback. They
+share three local packages:
+
+- `MadKit` (no UI; iOS 17+ and macOS 14+): the models of mad's JSON API, the client, the stores.
+- `MadUI` (SwiftUI; the same): the views, which take plain view-model structs (`HomeModel`,
+  `HomeSection`, `HomeRow`), never MadKit types.
+- `MadShell` (depends on both): the glue. `HomeMapping.model(from: Deck, fallbackName:) -> HomeModel`
+  maps a deck to what the home view shows (tested against the fixture decks), and
+  `NativeRoot(api:title:onSwitchMac:)` owns a `DeckStore`, polls it while the scene is active, and shows
+  `HomeSidebar` in a `NavigationSplitView` on the Mac, `HomeView` with the detail over it on the
+  iPhone. Channel and agent details are placeholders for now; the other agents' views plug in there,
+  mapping their store's messages to their own view-model structs the same way.
+
+In Debug builds, the iPhone app opens `NativeRoot` instead of the page with `-nativeHome YES`.
+
+`make ios` builds the iPhone app (simulator) and the Mac app. `make mac` builds the Mac app and opens
+it (`ios/build/mac/Build/Products/Debug/madmac.app`, signed to run locally, ad hoc, not sandboxed).
+
+### MadKit's contract
+
+Models (`Deck.swift`, `Bus.swift`, `Usage.swift`, `Chat.swift`), all `Decodable`, tolerant of
+unknown fields, missing ones defaulted, dates as `Date?` (Go's zero time is `nil`):
+
+| Type | What it is |
+| --- | --- |
+| `Deck` | `GET /api/deck`: `machine`, `projects`, `teams`, `channels` (the JSON's `bus`), `inbox`, `usage` (the JSON's `quota`), `states`, `working`, `at`; lookups `agent(id:)`, `channel(id:)`, `word(for:)`, `tone(for:)`, `agents` |
+| `Project`, `Agent`, `Team`, `StateCount` | a project with its agents; an agent has `id kind icon color name title status shown done cost role team chat headless mode since tool target reply last` and `label` (name, else title, else "kind id8"), `isNamed`, `state`, `inWindowMode` |
+| `Channel` | a channel or DM: `id title topic dm yours members last lastText lastAt unread mention listed paused lead team` (`Channel.Member`, `Channel.ChannelTeam`) |
+| `Look` | how a shown state reads: `state word tone glyph meaning` |
+| `Inbox`, `InboxItem`, `InboxAct`, `InboxOpen` | what waits on the person; an item describes its own acts (`verb label option input primary`) |
+| `Usage`, `UsageWindow`, `UsageWording` | a kind's subscription use, with "resets in 2h 10m, at 18:40" wording |
+| `BusMessage`, `MessagesPage`, `BusReceipt`, `BusImage` | `GET /api/bus/messages`: `seq at from kind text mentions replyTo handoff images`; `kind` is text, handoff, done, declined; the page has `last paused receipts` |
+| `PostResult`, `DMResult`, `PostImage` | what a post and a DM answer; a picture to send (`mime`, `data`) |
+| `ChatEntry`, `ChatPage`, `ChatTranscript`, `LiveMessage`, `LiveState` | an agent's conversation (`/api/chat`, `/api/live`) |
+
+The client is `MadClient(mac:session:)` (Bearer token in the header, never in the URL), and `MadAPI`
+is the protocol the stores take, so a test can fake the Mac: `deck()`, `messages(channel:since:)`,
+`post(channel:text:replyTo:images:)`, `dm(to:text:images:)`, `markRead(channel:seq:)`,
+`imageData(id:)`, `act(key:verb:option:text:)`, and the `ChatAPI` calls `chat`, `live`, `send`,
+`setMode`, `interrupt`. Errors are `ConnectionError` (`refused`, `offline`, `pairingRefused`,
+`conflict`, `unexpected`). A picture is `GET /api/bus/image?id=`, which needs the token: use
+`MadClient.imageRequest(id:)` or `imageData(id:)`, not the bare URL.
+
+Stores (`Stores.swift`): `@MainActor @Observable`; each has `run()`, which polls until the task is
+cancelled (start it with `.task { await store.run() }`, or `.task(id: scenePhase)` to stop it while the
+app is not active), and `refresh()`, one look.
+
+- `DeckStore(api:interval:)`: `deck: Deck?` (the last good look), `link: LinkState` (`connecting`, `ok`,
+  `refused`, `offline`, `failed(String)`), `agent(id:)`, `channel(id:)`. About once a second.
+- `ChannelStore(id:api:)`: `messages`, `last`, `paused`, `receipts`, `link`, `loaded`, `sending`;
+  `post(_:images:replyTo:)` (one at a time, then it looks), `markRead()`, `message(_ seq:)`. It asks
+  `since=last`, adds only numbers it does not have, and follows a full page of 200 at once.
+- `AgentStore(id:api:)`: `transcript`, `live`, `loaded`, `problem`, `sending`, `notice`; `send(_:)`,
+  `interrupt()`, `look()`, `dismissNotice()`. It wraps `ChatSession`.
+
+### Finding the server (the Mac app)
+
+`ServerModel` (in `MacApp/`) takes, in this order: a fixture server (below); the phone server on
+127.0.0.1:7484 with the token in `<state dir>/phone_token` (`$XDG_STATE_HOME/mad` or
+`~/.local/state/mad`) if it answers `/api/deck`; else it starts `mad desktop -no-window -addr
+127.0.0.1:0 -exit-on-stdin-eof` (the `mad` set in Settings, else the first on PATH), reads the URL and
+token it prints, and stops it when the app quits. The app holds the write end of the child's stdin, so
+if the app is killed the pipe closes and the child exits by itself. These are `LocalServer` and `ServerLauncher` in MadKit.
+
+### The fixture hook
+
+Both apps take a server to talk to instead of the real one: `MAD_FIXTURE_URL=<url>` in the environment,
+or the launch argument `-fixtureURL <url>` (`FixtureHook`). Run the server with
+`go run ./internal/desktop/fixture -addr 127.0.0.1:0 -scenario edge-home`. On the iPhone (Debug builds)
+it is opened at once as a Mac named "Fixture", and `-nativeHome YES` shows the native shell instead of
+the page. For the simulator pass the variable as `SIMCTL_CHILD_MAD_FIXTURE_URL`.
+
 ## UI tests
 
 `make ios-uitest` taps through the special cases of the app and its page in a simulator

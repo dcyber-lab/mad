@@ -22,17 +22,22 @@ demo:
 	python3 docs/demo/record.py $(DEMO_DIR)
 	python3 docs/demo/render.py $(DEMO_DIR)
 
-# The iOS app: test the core package, generate the Xcode project, build for
-# the simulator, ad hoc signed: an unsigned app has no Keychain, so it forgets
-# every pairing (see ios/README.md).
+# The apps: test the core package, generate the Xcode project, build the iPhone app for the
+# simulator (ad hoc signed: an unsigned app has no Keychain, so it forgets every pairing, see
+# ios/README.md) and the Mac app (signed to run locally).
 ios:
 	cd ios/MadKit && swift test
+	cd ios/MadUI && swift test
+	cd ios/MadShell && swift test
 	cd ios && xcodegen generate
 	xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
+	xcodebuild -project ios/mad.xcodeproj -scheme madmac -destination 'platform=macOS' -derivedDataPath ios/build/mac build
 
-# TEAM and DEVICE reach the script through the environment, never through quoted
-# shell text: a phone's name may hold an apostrophe.
-export TEAM DEVICE
+# Build the Mac app and open it. It finds mad's server by itself (see ios/README.md).
+mac:
+	cd ios && xcodegen generate
+	xcodebuild -project ios/mad.xcodeproj -scheme madmac -destination 'platform=macOS' -derivedDataPath ios/build/mac build
+	open ios/build/mac/Build/Products/Debug/madmac.app
 
 # Put the app on your iPhone with a free Apple ID: builds Release for the phone,
 # installs and launches it. DEVICE=<id|name> and TEAM=<id> pick a phone or a
@@ -46,4 +51,4 @@ ios-device:
 ios-uitest:
 	ios/scripts/uitest.sh
 
-.PHONY: build install test clean demo ios ios-device ios-uitest
+.PHONY: build install test clean demo ios mac ios-device ios-uitest
