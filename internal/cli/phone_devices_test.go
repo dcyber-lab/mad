@@ -13,7 +13,7 @@ func TestPhoneDevicesAndRevoke(t *testing.T) {
 		t.Errorf("none: %d %q", code, out)
 	}
 	c, _ := phone.PairCode()
-	_, id, err := phone.Pair(c, "Ann's iPhone")
+	id, err := phone.Pair(c, "Ann's iPhone", "0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)
 	}

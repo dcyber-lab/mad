@@ -3,7 +3,10 @@ package phone
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -23,14 +26,15 @@ func TestPairExchange(t *testing.T) {
 	if again, _ := PairCode(); again != code {
 		t.Errorf("a second code %q while %q is unused", again, code)
 	}
-	if _, _, err := Pair("0123456789abcdef0123456789abcdef", "x"); err != ErrBadCode {
+	if _, err := Pair("0123456789abcdef0123456789abcdef", "x", newTok()); err != ErrBadCode {
 		t.Errorf("a wrong code: %v", err)
 	}
-	tok, id, err := Pair(code, "Ann's iPhone")
+	tok := newTok()
+	id, err := Pair(code, "Ann's iPhone", tok)
 	if err != nil || len(tok) != 32 || id == "" {
 		t.Fatalf("pair: %q %q %v", tok, id, err)
 	}
-	if _, _, err := Pair(code, "again"); err != ErrBadCode {
+	if _, err := Pair(code, "again", newTok()); err != ErrBadCode {
 		t.Errorf("a used code: %v", err)
 	}
 	// A new code once the last was used.
@@ -65,7 +69,7 @@ func TestPairExpired(t *testing.T) {
 	if err := writeJSON(paths.PhonePairs(), old); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := Pair(code, "x"); err != ErrBadCode {
+	if _, err := Pair(code, "x", newTok()); err != ErrBadCode {
 		t.Errorf("an expired code: %v", err)
 	}
 	if again, _ := PairCode(); again == code {
@@ -84,7 +88,7 @@ func TestPairSingleUse(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, _, err := Pair(code, "p"); err == nil {
+			if _, err := Pair(code, "p", newTok()); err == nil {
 				mu.Lock()
 				won++
 				mu.Unlock()
@@ -101,7 +105,8 @@ func TestRevoke(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	pairOne := func(name string) (string, string) {
 		c, _ := PairCode()
-		tok, id, err := Pair(c, name)
+		tok := newTok()
+		id, err := Pair(c, name, tok)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +154,8 @@ func pairDevice(t *testing.T, name string) (token, id string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token, id, err = Pair(c, name); err != nil {
+	token = newTok()
+	if id, err = Pair(c, name, token); err != nil {
 		t.Fatal(err)
 	}
 	return token, id
@@ -186,15 +192,16 @@ func TestRevokeEqualSizeSameTick(t *testing.T) {
 func TestPairFailsClosed(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	code, _ := PairCode()
-	// The devices file can't be replaced: a directory is in its way.
-	if err := os.MkdirAll(paths.PhoneDevices(), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := Pair(code, "x"); err == nil {
+	// Making the device fails, after the code was used up.
+	old := saveDevices
+	saveDevices = func([]Device) error { return errors.New("disk full") }
+	t.Cleanup(func() { saveDevices = old })
+	tok := newTok()
+	if _, err := Pair(code, "x", tok); err == nil {
 		t.Fatal("paired with no place to keep the device")
 	}
-	os.Remove(paths.PhoneDevices())
-	if _, _, err := Pair(code, "x"); err != ErrBadCode {
+	saveDevices = old
+	if _, err := Pair(code, "x", tok); err != ErrBadCode {
 		t.Errorf("the code worked again after a failure: %v", err)
 	}
 	if _, err := os.Stat(paths.PhonePairShown()); err == nil {
@@ -211,7 +218,7 @@ func TestPairFilesCleanedAndErrors(t *testing.T) {
 	if err := writeJSON(paths.PhonePairs(), past); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := Pair("nope", "x"); err != ErrBadCode {
+	if _, err := Pair("nope", "x", newTok()); err != ErrBadCode {
 		t.Fatal(err)
 	}
 	var left []pairEntry
@@ -230,7 +237,7 @@ func TestPairFilesCleanedAndErrors(t *testing.T) {
 		t.Error("a corrupt devices file read as no devices")
 	}
 	c, _ := PairCode()
-	if _, _, err := Pair(c, "x"); err == nil || err == ErrBadCode {
+	if _, err := Pair(c, "x", newTok()); err == nil || err == ErrBadCode {
 		t.Errorf("pairing over a corrupt devices file: %v", err)
 	}
 	if Holds("anything") {
@@ -264,5 +271,116 @@ func TestRevokeEndsPush(t *testing.T) {
 	}
 	if len(got) != 2 || !strings.Contains(strings.Join(got, " "), "/b") || !strings.Contains(strings.Join(got, " "), "/c") {
 		t.Errorf("subscriptions left: %v", got)
+	}
+}
+
+func newTok() string {
+	t, _ := randHex()
+	return t
+}
+
+// A pair whose answer was lost is sent again, the same: it gets the same
+// device. The same code with another token gets nothing.
+func TestPairReplay(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	code, _ := PairCode()
+	tok := newTok()
+	id, err := Pair(code, "iPhone", tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := Pair(code, "iPhone", tok); err != nil || again != id {
+		t.Errorf("replay: %q, %v; want %q", again, err, id)
+	}
+	if len(mustDevices(t)) != 1 {
+		t.Errorf("a replay made a device: %d", len(mustDevices(t)))
+	}
+	if _, err := Pair(code, "thief", newTok()); err != ErrBadCode {
+		t.Errorf("a consumed code with another token: %v", err)
+	}
+	if _, err := Pair(code, "x", "NOT-HEX"); err != ErrBadToken {
+		t.Errorf("a bad token: %v", err)
+	}
+	// Another code with a token already taken is no pair.
+	c2, _ := PairCode()
+	if _, err := Pair(c2, "other", tok); err != ErrBadCode {
+		t.Errorf("a token of another device: %v", err)
+	}
+	// Revoked: the replay finds nothing.
+	if _, err := Revoke(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Pair(code, "iPhone", tok); err != ErrBadCode {
+		t.Errorf("replay after revoke: %v", err)
+	}
+	// Only hashes are kept.
+	b, _ := os.ReadFile(paths.PhoneDevices())
+	if strings.Contains(string(b), tok) {
+		t.Error("the token is kept")
+	}
+}
+
+// Revoke's push cleanup fails: the device stays, and revoking again works.
+func TestRevokeRetriedAfterPushFailure(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	tok, id := pairDevice(t, "iPhone")
+	if err := os.MkdirAll(filepath.Join(paths.StateDir(), "push_subscriptions.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Revoke(id); err == nil {
+		t.Fatal("revoked with the push file unreadable")
+	}
+	if !Holds(tok) || len(mustDevices(t)) != 1 {
+		t.Error("the device went with a failed cleanup")
+	}
+	os.Remove(filepath.Join(paths.StateDir(), "push_subscriptions.json"))
+	if _, err := Revoke(id); err != nil || Holds(tok) {
+		t.Errorf("retry: %v, held %v", err, Holds(tok))
+	}
+}
+
+func testSub(ep, dev string) push.Subscription {
+	var s push.Subscription
+	s.Endpoint = ep
+	s.Keys.P256dh = base64.RawURLEncoding.EncodeToString(append([]byte{4}, make([]byte, 64)...))
+	s.Keys.Auth = base64.RawURLEncoding.EncodeToString(make([]byte, 16))
+	s.Device = dev
+	return s
+}
+
+// A subscribe is before a revoke (and cleaned by it) or after it (and
+// refused): none lands after the cleanup.
+func TestSubscribeVsRevoke(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	_, id := pairDevice(t, "iPhone")
+	if err := SubscribeDevice(testSub("https://push.example/before", id)); err != nil {
+		t.Fatal(err)
+	}
+	if err := SubscribeDevice(testSub("https://push.example/master", "")); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_ = SubscribeDevice(testSub(fmt.Sprintf("https://push.example/race%d", i), id))
+		}(i)
+	}
+	if _, err := Revoke(id); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if err := SubscribeDevice(testSub("https://push.example/after", id)); err != ErrDeviceGone {
+		t.Errorf("subscribe after revoke: %v", err)
+	}
+	subs, _ := push.List()
+	for _, s := range subs {
+		if s.Device == id {
+			t.Errorf("a subscription of the revoked device is left: %s", s.Endpoint)
+		}
+	}
+	if len(subs) != 1 || subs[0].Endpoint != "https://push.example/master" {
+		t.Errorf("subscriptions: %+v", subs)
 	}
 }

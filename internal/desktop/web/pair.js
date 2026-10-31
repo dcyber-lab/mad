@@ -1,9 +1,13 @@
-// A pairing code in the URL's fragment (#pair=, from the QR code) is
-// traded for this device's own token before the page starts: the rest of
-// the scripts load once the trade is settled. The code stays in the URL
-// until it worked or was refused for good (403): a network failure leaves
-// it, with a Retry in the page, since the code works only once and the QR
-// code may be gone.
+// A pairing code in the URL's fragment (#pair=, from the QR code) pairs
+// this device before the page starts: the rest of the scripts load once
+// that is settled. The device makes its own token, once, and sends it with
+// the code; a retry sends the same pair, so an answer lost on the way
+// costs nothing (the server knows the pair it already took). The code
+// stays in the URL until it worked or was refused for good (403): a
+// network failure leaves it, with a Retry in the page, since the code works
+// only once and the QR code may be gone. On success the fragment holds
+// #token= for app.js, which keeps it, so the page is signed in even where
+// storage throws.
 "use strict";
 
 window.madPairError = "";
@@ -11,20 +15,27 @@ window.madPairError = "";
 // A block: its helpers stay out of the page's globals.
 {
 
+let made = ""; // see ownToken
+
 (async () => {
   const hash = new URLSearchParams(location.hash.slice(1));
   const code = hash.get("pair");
   if (code) {
+    const token = ownToken();
     for (;;) {
-      const r = await exchange(code);
-      if (r.token) {
-        try { localStorage.setItem("mad.token", r.token); } catch (_) { /* private window */ }
-        forget(hash);
+      const r = await exchange(code, token);
+      if (r.ok) {
+        try { sessionStorage.removeItem("mad.pairtoken"); } catch (_) { /* none */ }
+        hash.delete("pair");
+        hash.set("token", token);
+        replace(hash);
         break;
       }
       if (r.status === 403) {
         window.madPairError = "That pairing code was used or has expired: mad phone shows a new one.";
-        forget(hash);
+        try { sessionStorage.removeItem("mad.pairtoken"); } catch (_) { /* none */ }
+        hash.delete("pair");
+        replace(hash);
         break;
       }
       await retry(r.error);
@@ -46,18 +57,32 @@ function deviceName() {
   return `${os} ${br}`;
 }
 
-// exchange asks the server for the token, for at most 10 seconds.
-async function exchange(code) {
+// ownToken is this device's token: 16 random bytes as hex, made once per
+// page load and kept in sessionStorage too, so a reload mid-retry sends
+// the same one.
+function ownToken() {
+  if (made) return made;
+  try { made = sessionStorage.getItem("mad.pairtoken") || ""; } catch (_) { /* none */ }
+  if (!/^[0-9a-f]{32}$/.test(made)) {
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    made = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  }
+  try { sessionStorage.setItem("mad.pairtoken", made); } catch (_) { /* none */ }
+  return made;
+}
+
+// exchange pairs with the server, for at most 10 seconds.
+async function exchange(code, token) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 10000);
   try {
     const r = await fetch("/api/pair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, name: deviceName() }),
+      body: JSON.stringify({ code, name: deviceName(), token }),
       signal: ctl.signal,
     });
-    if (r.ok) return { status: r.status, token: (await r.json()).token };
+    if (r.ok) return { status: r.status, ok: true };
     return { status: r.status, error: `the server answered ${r.status}` };
   } catch (e) {
     return { status: 0, error: ctl.signal.aborted ? "no answer in 10 seconds" : String(e.message || e) };
@@ -66,9 +91,8 @@ async function exchange(code) {
   }
 }
 
-// forget takes the code out of the fragment, keeping its other parts.
-function forget(hash) {
-  hash.delete("pair");
+// replace puts hash in the URL's fragment, its other parts kept.
+function replace(hash) {
   const rest = hash.toString();
   history.replaceState(null, "", location.pathname + location.search + (rest ? `#${rest}` : ""));
 }

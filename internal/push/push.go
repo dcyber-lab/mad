@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -150,9 +151,24 @@ func List() ([]Subscription, error) {
 	return subs, json.Unmarshal(b, &subs)
 }
 
+// change replaces the subscriptions with f of them, holding a lock across
+// processes (the CLI's revoke and the server's subscribe both write the
+// file) and writing a file of its own name to rename into place.
 func change(f func([]Subscription) []Subscription) error {
 	subsMu.Lock()
 	defer subsMu.Unlock()
+	if err := os.MkdirAll(paths.StateDir(), 0o755); err != nil {
+		return err
+	}
+	lf, err := os.OpenFile(subsFile()+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
 	subs, err := List()
 	if err != nil {
 		return err
@@ -161,14 +177,19 @@ func change(f func([]Subscription) []Subscription) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(paths.StateDir(), 0o755); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(subsFile()), ".push-*")
+	if err != nil {
 		return err
 	}
-	tmp := subsFile() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
 		return err
 	}
-	return os.Rename(tmp, subsFile())
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), subsFile())
 }
 
 // Subscribe keeps s, in place of one of the same endpoint.

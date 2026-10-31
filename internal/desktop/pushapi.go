@@ -2,9 +2,11 @@ package desktop
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/phone"
 	"github.com/dcyber-lab/mad/internal/push"
 )
 
@@ -37,7 +39,11 @@ func (s *Server) pushSubscribe(w http.ResponseWriter, r *http.Request) {
 	// Bound to the device that asks, whatever the body says: revoking it
 	// ends its notifications too.
 	sub.Device = deviceOf(r)
-	if err := push.Subscribe(sub); err != nil {
+	if err := phone.SubscribeDevice(sub); err != nil {
+		if errors.Is(err, phone.ErrDeviceGone) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
