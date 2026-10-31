@@ -178,50 +178,12 @@ function switchMac() {
   window.webkit?.messageHandlers?.mad?.postMessage({ type: "switchMac" });
 }
 
-// avatar is agent a's kind as a tile in its color, with its status as a
-// dot on the corner. It carries the status itself: a card or a message
-// has no row around it to color the dot.
-// On a phone (html.ptype) it is a character instead: one of eight shapes
-// with a face and a color, picked by a stable hash of the agent's id, so an
-// agent looks the same everywhere. It hops and blinks while it works.
-const CHAR_SHAPES = [ // [name, face offset, svg of the body]
-  ["pebble", 0, '<circle class="body" cx="24" cy="26" r="18"/>'],
-  ["toast", 0, '<path class="body" d="M8 20 a10 10 0 0 1 10 -12 h12 a10 10 0 0 1 10 12 v16 a6 6 0 0 1 -6 6 h-20 a6 6 0 0 1 -6 -6 z"/>'],
-  ["bean", 0, '<ellipse class="body" cx="24" cy="27" rx="20" ry="15" transform="rotate(-8 24 27)"/>'],
-  ["drop", 4, '<path class="body" d="M24 5 C33 16 41 23 41 31 a17 17 0 0 1 -34 0 C7 23 15 16 24 5 z"/>'],
-  ["cat", 4, '<path class="body" d="M8 40 V16 L15 8 L20 14 h8 L33 8 L40 16 V40 a4 4 0 0 1 -4 4 h-24 a4 4 0 0 1 -4 -4 z"/>'],
-  ["hex", 0, '<path class="body" d="M24 6 l15 8.6 a4 4 0 0 1 2 3.5 v13.8 a4 4 0 0 1 -2 3.5 L24 44 l-15 -8.6 a4 4 0 0 1 -2 -3.5 V18.1 a4 4 0 0 1 2 -3.5 z"/>'],
-  ["puff", 0, '<path class="body" d="M12 40 a8 8 0 0 1 -3 -15 a10 10 0 0 1 14 -12 a10 10 0 0 1 16 6 a8 8 0 0 1 0 21 z"/>'],
-  ["sprout", 4, '<path d="M24 14 C22 8 16 6 12 8 C14 13 19 14 24 14 Z" fill="#59b85a"/><path d="M24 14 C26 7 32 5 36 7 C34 13 29 14 24 14 Z" fill="#7fd36b"/><rect class="body" x="9" y="14" width="30" height="29" rx="14.5"/>'],
-];
-const CHAR_FACES = [
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M21 29 q3 2.6 6 0"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><circle cx="24" cy="30" r="2"/>',
-  '<path class="eye mo" d="M16.5 23 q2.5 -2.6 5 0"/><path class="eye mo" d="M26.5 23 q2.5 -2.6 5 0"/><path class="mo" d="M22 29 h4"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M20 28.5 q2 2 4 0 q2 2 4 0"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><path class="mo" d="M26.5 23.5 h5"/><path class="mo" d="M21 28.5 q3 3 6 0"/>',
-];
-const CHAR_COLORS = ["#6f9bff", "#ffb36b", "#3dcf9c", "#b48cff", "#ff8fb3", "#ffd34e", "#5fd0e8", "#9be07f"];
-
-function charHash(key) {
-  let h = 2166136261;
-  for (const c of String(key)) h = Math.imul(h ^ c.codePointAt(0), 16777619) >>> 0;
-  return h;
-}
-
-// charLook is what a key looks like: its shape, face and color.
-function charLook(key) {
-  const h = charHash(key);
-  return { shape: CHAR_SHAPES[h % 8], face: CHAR_FACES[(h >>> 6) % 5], color: CHAR_COLORS[(h >>> 3) % 8] };
-}
-
-// charSVG is the character's drawing, 48 by 48; with box, nested at x y w.
-function charSVG(key, box) {
-  const l = charLook(key);
-  const body = `${l.shape[2]}<g transform="translate(0 ${l.shape[1]})" class="face">${l.face}</g>`;
-  return box
-    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`
-    : `<svg viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`;
+// avatar is agent a as a character (characters.js): one of eight shapes in a pastel, a face with an expression for
+// its state (moving, in its own way, while it works), picked by a stable hash of the agent's id, so an agent
+// looks the same everywhere.
+// charState is the state a character acts: work, need, stop, or idle.
+function charState(st) {
+  return st === "running" ? "work" : st === "waiting" ? "need" : st === "stopped" || st === "exited" ? "stop" : "idle";
 }
 
 // stateWord is what a character says about its agent, for a screen reader or a test:
@@ -253,7 +215,9 @@ function avatar(a, small) {
   if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
-  v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
+  const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : "");
+  v.innerHTML = charSVG(key, null, charExpr(state, key), state === "stop"); // our own constants and a hash: nothing of the page's data
+  charWake(v, () => charStart(v, key, state, { blink: !small }));
   v.setAttribute("role", "img");
   v.setAttribute("aria-label", stateWord(live ? shownStatus(live) : ""));
   return v;
