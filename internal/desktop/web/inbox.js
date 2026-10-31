@@ -346,7 +346,7 @@ async function act(it, a, text) {
   redraw();
   const what = text ? `${a.label}: “${text.length > 40 ? text.slice(0, 39) + "…" : text}”` : a.option && a.option !== a.label ? `${a.label}: ${a.option}` : a.label;
   try {
-    const r = await fetch(`/api/inbox?${new URLSearchParams({ token })}`, {
+    const r = await authFetch("/api/inbox", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: it.key, verb: a.verb, option: a.option || "", text: text || "" }),
     });

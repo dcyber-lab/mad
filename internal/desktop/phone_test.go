@@ -126,7 +126,7 @@ func TestDeviceAuth(t *testing.T) {
 		{"master, local", s.Token, nil, 200},
 		{"master through cloudflare", s.Token, cf, 403},
 		{"device, local", dev, nil, 200},
-		{"device through cloudflare", dev, cf, 200},
+		{"device through cloudflare, in the URL", dev, cf, 403},
 		{"unknown", "nope", cf, 403},
 	} {
 		if got := get(c.token, c.hdr); got != c.want {
@@ -313,4 +313,88 @@ func TestMachineNameSlowLookup(t *testing.T) {
 	}
 	close(release)
 	waitMachine(t, "Slow Mac")
+}
+
+// A token in a URL ends up in logs: through a tunnel it is refused, for a
+// device's token and the master's alike, while locally it still works
+// (old pages, the window); a header always does.
+func TestQueryTokenNotThroughCloudflare(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	h := s.Handler()
+	dev := pairedDevice(t)
+	get := func(url, bearer string, cf bool) int {
+		r := httptest.NewRequest("GET", url, nil)
+		if bearer != "" {
+			r.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		if cf {
+			r.Header.Set("Cf-Connecting-Ip", "203.0.113.9")
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for _, c := range []struct {
+		name   string
+		url    string
+		bearer string
+		cf     bool
+		want   int
+	}{
+		{"device in the URL, through the tunnel", "/api/deck?token=" + dev, "", true, 403},
+		{"master in the URL, through the tunnel", "/api/deck?token=" + s.Token, "", true, 403},
+		{"device in the URL, locally", "/api/deck?token=" + dev, "", false, 200},
+		{"master in the URL, locally", "/api/deck?token=" + s.Token, "", false, 200},
+		{"device in a header, through the tunnel", "/api/deck", dev, true, 200},
+		{"device in a header, also a token in the URL", "/api/deck?token=nope", dev, false, 200},
+		{"a wrong header is not rescued by the URL", "/api/deck?token=" + s.Token, "nope", false, 403},
+	} {
+		if got := get(c.url, c.bearer, c.cf); got != c.want {
+			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+// A browser can't set a header on a websocket: the token comes as the
+// subprotocol "mad.token.<token>", "mad" is the one selected, and the one
+// with the token is never echoed.
+func TestWebsocketSubprotocolToken(t *testing.T) {
+	isolate(t)
+	s := New(agent.Builtin())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	dev := pairedDevice(t)
+	ws := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/window?id=w1"
+	dial := func(protos ...string) (*websocket.Conn, *http.Response, error) {
+		return websocket.Dial(context.Background(), ws, &websocket.DialOptions{Subprotocols: protos})
+	}
+	for _, tok := range []string{dev, s.Token} {
+		c, resp, err := dial("mad", "mad.token."+tok)
+		if err != nil {
+			t.Fatalf("token by subprotocol: %v", err)
+		}
+		if got := resp.Header.Get("Sec-WebSocket-Protocol"); got != "mad" {
+			t.Errorf("selected %q, want mad alone", got)
+		}
+		if c.Subprotocol() != "mad" {
+			t.Errorf("subprotocol %q", c.Subprotocol())
+		}
+		c.CloseNow()
+	}
+	if _, _, err := dial("mad", "mad.token.nope"); err == nil {
+		t.Error("a wrong token in the subprotocol opened a websocket")
+	}
+	if _, _, err := dial("mad"); err == nil {
+		t.Error("no token opened a websocket")
+	}
+	// Through the tunnel the master token is refused, here as in a header.
+	r := httptest.NewRequest("GET", "/api/window?id=w1", nil)
+	r.Header.Set("Sec-WebSocket-Protocol", "mad, mad.token."+s.Token)
+	r.Header.Set("Cf-Connecting-Ip", "203.0.113.9")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != 403 {
+		t.Errorf("master token by subprotocol through the tunnel: %d", w.Code)
+	}
 }

@@ -16,7 +16,7 @@ const winId = (() => {
 })();
 function holdWindow() {
   if (!winId) return;
-  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/window?${new URLSearchParams({ token, id: winId })}`);
+  const ws = authSocket("/api/window", { id: winId });
   // The server went away or restarted: say so again when it is back.
   ws.onclose = () => setTimeout(holdWindow, 1000);
 }
@@ -54,6 +54,41 @@ const token = (() => {
 })();
 // Why pairing failed, as pair.js saw it.
 const pairError = window.madPairError || "";
+
+// The token travels in a header and nowhere else, so no log of a proxy or
+// a tunnel holds it: Authorization: Bearer on a request, a subprotocol on
+// a websocket (a browser can't set headers there), a fetched blob for an
+// image (a src can't send one).
+function authFetch(url, opts = {}) {
+  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` } });
+}
+function authSocket(path, params) {
+  const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}?${new URLSearchParams(params)}`;
+  return new WebSocket(url, ["mad", `mad.token.${token}`]);
+}
+// loadImage shows what url serves in img: fetched with the token, kept as
+// a blob URL that is let go of once img has left the page.
+const blobs = new Map(); // img → its object URL
+function loadImage(img, url) {
+  return authFetch(url)
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
+    .then((b) => {
+      const u = URL.createObjectURL(b);
+      blobs.get(img) && URL.revokeObjectURL(blobs.get(img));
+      blobs.set(img, u);
+      img.src = u;
+    })
+    .catch(() => img.removeAttribute("src"));
+}
+setInterval(() => {
+  const open = document.querySelector("#lightbox img")?.src;
+  for (const [img, u] of blobs) {
+    if (!img.isConnected && u !== open) {
+      URL.revokeObjectURL(u);
+      blobs.delete(img);
+    }
+  }
+}, 20000);
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -832,8 +867,8 @@ function drawWho(a) {
 
 async function queueCall(method, params, body, path = "/api/queue") {
   const id = current;
-  const qs = new URLSearchParams({ token, id, ...params });
-  const r = await fetch(`${path}?${qs}`, { method, body });
+  const qs = new URLSearchParams({ id, ...params });
+  const r = await authFetch(`${path}?${qs}`, { method, body });
   if (!r.ok) { $("#qerr").textContent = await r.text(); return false; }
   const q = await r.json();
   if (id === current) drawQueue(q);
@@ -936,7 +971,7 @@ const menu = { items: [], sel: 0, query: null, files: false };
 function commandsOf(id) {
   const c = commandLists.get(id);
   if (c && Date.now() - c.at < 60000) return c.pending || Promise.resolve(c.list);
-  const pending = fetch(`/api/commands?${new URLSearchParams({ token, id })}`)
+  const pending = authFetch(`/api/commands?${new URLSearchParams({ id })}`)
     .then((r) => (r.ok ? r.json() : []))
     .catch(() => [])
     .then((list) => {
@@ -1042,7 +1077,7 @@ async function drawFiles(w) {
   const where = nc.open ? { project: nc.project || "" } : { id: current };
   let list = [];
   try {
-    const r = await fetch(`/api/files?${new URLSearchParams({ token, ...where, q: w.query })}`);
+    const r = await authFetch(`/api/files?${new URLSearchParams({ ...where, q: w.query })}`);
     if (r.ok) list = await r.json();
   } catch (_) { /* offered nothing */ }
   const now = mentionWord($("#qinput"));
@@ -1175,7 +1210,7 @@ async function refresh() {
     toast(pairError, "err");
   }
   try {
-    const r = await fetch(`/api/deck?token=${encodeURIComponent(token)}`);
+    const r = await authFetch("/api/deck");
     if (!r.ok) throw new Error(r.status);
     deck = await r.json();
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
@@ -1406,7 +1441,7 @@ function drawTitle() {
 // focus: it neither notifies of nor puts to sleep one you look at.
 function seen() {
   if (current && document.hasFocus() && agents.get(current)) {
-    fetch(`/api/seen?${new URLSearchParams({ token, id: current })}`, { method: "POST" }).catch(() => {});
+    authFetch(`/api/seen?${new URLSearchParams({ id: current })}`, { method: "POST" }).catch(() => {});
   }
 }
 setInterval(seen, 5000);
@@ -1459,8 +1494,8 @@ async function loadChat(id, o) {
   if (o.loading) return;
   o.loading = true;
   try {
-    const qs = new URLSearchParams({ token, id, file: o.file, from: o.offset });
-    const r = await fetch(`/api/chat?${qs}`);
+    const qs = new URLSearchParams({ id, file: o.file, from: o.offset });
+    const r = await authFetch(`/api/chat?${qs}`);
     if (!r.ok) throw new Error(await r.text());
     const c = await r.json();
     if (c.reset) {
@@ -1570,8 +1605,8 @@ function imageNode(u) {
   const img = el("img", "cimg");
   img.loading = "lazy";
   img.alt = "";
-  img.src = `${u}&token=${encodeURIComponent(token)}`;
-  img.onclick = () => openLightbox(img.src);
+  loadImage(img, u);
+  img.onclick = () => img.src && openLightbox(img.src);
   // Grown as it came: a conversation read at its end stays there.
   img.onload = () => {
     const o = opened.get(current);
@@ -1662,7 +1697,7 @@ async function follow(id, o) {
   o.follow = stop;
   while (!stop.signal.aborted) {
     try {
-      const r = await fetch(`/api/live?${new URLSearchParams({ token, id, since: o.version })}`, { signal: stop.signal });
+      const r = await authFetch(`/api/live?${new URLSearchParams({ id, since: o.version })}`, { signal: stop.signal });
       if (r.status === 200) {
         const m = await r.json();
         if (m.version > o.version) {
@@ -1854,7 +1889,7 @@ async function claim(id, o, now) {
   if (!now && Date.now() - o.claimAt < 4000) return false;
   o.claimAt = Date.now();
   try {
-    const r = await fetch(`/api/mode?${new URLSearchParams({ token, id, mode: "window" })}`, { method: "POST" });
+    const r = await authFetch(`/api/mode?${new URLSearchParams({ id, mode: "window" })}`, { method: "POST" });
     if (!r.ok) return false;
   } catch (_) {
     return false;
@@ -1870,7 +1905,7 @@ async function claim(id, o, now) {
 // hostConnect keeps a websocket to agent id's host while its tab is open.
 function hostConnect(id, o) {
   if (o.hostWS || !opened.has(id)) return;
-  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/host?${new URLSearchParams({ token, id })}`);
+  const ws = authSocket("/api/host", { id });
   o.hostWS = ws;
   ws.onmessage = (ev) => {
     let m;
