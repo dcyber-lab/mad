@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
@@ -161,17 +163,76 @@ func busReceipts(ch string) []BusReceipt {
 	return out
 }
 
-// busPost answers POST /api/bus/post {channel, text}: the person posts,
-// in a channel or a DM of theirs.
+// busPicture is a picture sent with a post, as /api/send takes one: its
+// bytes in base64, without a data: prefix. What it is comes from the
+// bytes; the mime is not believed.
+type busPicture struct {
+	Mime string `json:"mime"`
+	Data string `json:"data"`
+}
+
+// maxBusBody bounds a post with pictures: bus.MaxImages of bus.MaxImageBytes
+// in base64.
+const maxBusBody = 96 << 20
+
+// decodeBus reads a post's JSON body, which may hold pictures: bigger than
+// decode allows.
+func decodeBus(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBusBody)).Decode(v); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return false
+	}
+	return true
+}
+
+// keepPictures stores a post's pictures, or answers 400 and says no.
+func keepPictures(w http.ResponseWriter, in []busPicture) ([]bus.Image, bool) {
+	var datas [][]byte
+	for _, p := range in {
+		b, err := base64.StdEncoding.DecodeString(p.Data)
+		if err != nil {
+			fail(w, http.StatusBadRequest, errors.New("an image is not base64"))
+			return nil, false
+		}
+		datas = append(datas, b)
+	}
+	imgs, err := bus.StoreImages(datas)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return nil, false
+	}
+	return imgs, true
+}
+
+// busImage answers GET /api/bus/image?id=: a picture of a message, by the
+// hash that names it.
+func (s *Server) busImage(w http.ResponseWriter, r *http.Request) {
+	path, mime, ok := bus.ImagePath(r.URL.Query().Get("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, r, path)
+}
+
+// busPost answers POST /api/bus/post {channel, text, images}: the person
+// posts, in a channel or a DM of theirs.
 func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Channel, Text string
-		ReplyTo       int `json:"reply_to"` // the seq of the message answered
+		ReplyTo       int          `json:"reply_to"` // the seq of the message answered
+		Images        []busPicture `json:"images"`
 	}
-	if !decode(w, r, &req) {
+	if !decodeBus(w, r, &req) {
 		return
 	}
-	res, err := bus.Reply(req.Channel, req.Text, req.ReplyTo)
+	imgs, ok := keepPictures(w, req.Images)
+	if !ok {
+		return
+	}
+	res, err := bus.ReplyImages(req.Channel, req.Text, req.ReplyTo, imgs)
 	switch {
 	case errors.Is(err, bus.ErrTheirDM):
 		fail(w, http.StatusForbidden, err)
@@ -183,14 +244,21 @@ func (s *Server) busPost(w http.ResponseWriter, r *http.Request) {
 	reply(w, res)
 }
 
-// busDM answers POST /api/bus/dm {to, text}: the person starts or goes on
-// with a DM with an agent; the DM's channel comes back.
+// busDM answers POST /api/bus/dm {to, text, images}: the person starts or
+// goes on with a DM with an agent; the DM's channel comes back.
 func (s *Server) busDM(w http.ResponseWriter, r *http.Request) {
-	var req struct{ To, Text string }
-	if !decode(w, r, &req) {
+	var req struct {
+		To, Text string
+		Images   []busPicture `json:"images"`
+	}
+	if !decodeBus(w, r, &req) {
 		return
 	}
-	ch, res, err := bus.DM(bus.From{ID: bus.You, Label: bus.You}, req.To, req.Text)
+	imgs, ok := keepPictures(w, req.Images)
+	if !ok {
+		return
+	}
+	ch, res, err := bus.DMImages(bus.From{ID: bus.You, Label: bus.You}, req.To, req.Text, imgs)
 	if err != nil {
 		fail(w, http.StatusBadRequest, err)
 		return

@@ -120,6 +120,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/push", s.auth(http.HandlerFunc(s.pushUnsubscribe)))
 	mux.Handle("POST /api/push/test", s.auth(http.HandlerFunc(s.pushTest)))
 	mux.Handle("GET /api/bus/messages", s.auth(http.HandlerFunc(s.busMessages)))
+	mux.Handle("GET /api/bus/image", s.auth(http.HandlerFunc(s.busImage)))
 	mux.Handle("POST /api/bus/post", s.auth(http.HandlerFunc(s.busPost)))
 	mux.Handle("POST /api/bus/dm", s.auth(http.HandlerFunc(s.busDM)))
 	mux.Handle("POST /api/bus/channel", s.auth(http.HandlerFunc(s.busCreate)))

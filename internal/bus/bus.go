@@ -77,6 +77,8 @@ type Message struct {
 	Mentions []string    `json:"mentions,omitempty"`
 	ReplyTo  int         `json:"reply_to,omitempty"`
 	Handoff  *HandoffRef `json:"handoff,omitempty"`
+	// Images are the pictures it carries (images.go).
+	Images []Image `json:"images,omitempty"`
 }
 
 // PostResult tells what a post did.
