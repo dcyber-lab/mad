@@ -49,6 +49,9 @@ type Server struct {
 	interrupts interrupts
 	// wins: the app windows open on this server (window_life.go).
 	wins windows
+	// revokeTick is how often a device's requests look for its revoking
+	// (revokeEvery); set before serving.
+	revokeTick time.Duration
 }
 
 // New makes a server with a fresh random token.
@@ -59,7 +62,7 @@ func New(kinds []agent.Kind) *Server {
 	}
 	l := newLooks()
 	return &Server{
-		Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, l), looks: l,
+		Token: hex.EncodeToString(b), kinds: kinds, poll: newPoller(kinds, l), looks: l, revokeTick: revokeEvery,
 		// Through the vars, which tests replace.
 		cmds: newAnswers(func(ctx context.Context, k, d string) ([]discover.Command, error) {
 			return findCommands(ctx, k, d)
@@ -159,8 +162,16 @@ func (s *Server) auth(h http.Handler) http.Handler {
 			return
 		}
 		ctx, cancel := context.WithCancel(r.Context())
-		defer cancel()
-		go watchDevice(ctx, cancel, got)
+		watched := make(chan struct{})
+		go func() {
+			defer close(watched)
+			watchDevice(ctx, cancel, got, s.revokeTick)
+		}()
+		// The watch ends with the request, and is gone before it returns.
+		defer func() {
+			cancel()
+			<-watched
+		}()
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -172,13 +183,13 @@ func viaCloudflare(r *http.Request) bool {
 	return r.Header.Get("Cf-Connecting-Ip") != "" || r.Header.Get("Cf-Ray") != ""
 }
 
-// revokeTick is how often a device's open requests look for its revoking.
-var revokeTick = time.Second
+// revokeEvery is how often a device's open requests look for its revoking.
+const revokeEvery = time.Second
 
 // watchDevice calls cancel once the device holding token is revoked, so
 // its websockets and streams end within a tick, not at its next request.
-func watchDevice(ctx context.Context, cancel context.CancelFunc, token string) {
-	t := time.NewTicker(revokeTick)
+func watchDevice(ctx context.Context, cancel context.CancelFunc, token string, tick time.Duration) {
+	t := time.NewTicker(tick)
 	defer t.Stop()
 	for {
 		select {

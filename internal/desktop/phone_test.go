@@ -173,10 +173,8 @@ func TestPairEndpoint(t *testing.T) {
 // a few ticks.
 func TestRevokeClosesWebsocket(t *testing.T) {
 	isolate(t)
-	old := revokeTick
-	revokeTick = 50 * time.Millisecond
-	t.Cleanup(func() { revokeTick = old })
 	s := New(agent.Builtin())
+	s.revokeTick = 50 * time.Millisecond
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	dev := pairedDevice(t)
