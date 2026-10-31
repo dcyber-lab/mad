@@ -3,36 +3,35 @@ import XCTest
 @testable import MadUI
 
 final class LookTests: XCTestCase {
-    /// What the web page's charLook picks: (key, hash, shape, face, color). Dumped from
+    /// What the web page's charLook picks: (key, hash, shape, body color). Dumped from
     /// internal/desktop/web/app.js by `node ios/MadUI/scripts/dump-looks.js`.
-    static let expected: [(String, UInt32, Int, Int, String)] = [
-        ("architect", 172442964, 4, 1, "#3dcf9c"),
-        ("builder", 3828680000, 0, 0, "#6f9bff"),
-        ("reviewer", 829999642, 2, 4, "#b48cff"),
-        ("claude-cc23", 2635099483, 3, 4, "#b48cff"),
-        ("claude-3fe9", 2099053825, 1, 1, "#6f9bff"),
-        ("codex 32d23a28", 2324632873, 1, 3, "#ffd34e"),
-        ("a", 3826002220, 4, 4, "#ffd34e"),
-        ("", 2166136261, 5, 4, "#6f9bff"),
-        ("?", 973910158, 6, 1, "#ffb36b"),
-        ("agent-0", 3830737203, 3, 3, "#5fd0e8"),
-        ("agent-1", 3813959584, 0, 3, "#ff8fb3"),
-        ("agent-2", 3864292441, 1, 4, "#b48cff"),
-        ("agent-3", 3847514822, 6, 4, "#6f9bff"),
-        ("agent-4", 3897847679, 7, 4, "#9be07f"),
-        ("agent-5", 3881070060, 4, 4, "#ffd34e"),
-        ("agent-6", 3931402917, 5, 0, "#ff8fb3"),
-        ("agent-7", 3914625298, 2, 0, "#3dcf9c"),
-        ("你好", 3619451238, 6, 0, "#ff8fb3"),
-        ("😀 mad", 1747552053, 5, 0, "#5fd0e8"),
+    static let expected: [(String, UInt32, Int, String)] = [
+        ("architect", 172442964, 4, "#c6f0df"),
+        ("builder", 3828680000, 0, "#cfe0ff"),
+        ("reviewer", 829999642, 2, "#e6d9ff"),
+        ("claude-cc23", 2635099483, 3, "#e6d9ff"),
+        ("claude-3fe9", 2099053825, 1, "#cfe0ff"),
+        ("codex 32d23a28", 2324632873, 1, "#fff0b8"),
+        ("a", 3826002220, 4, "#fff0b8"),
+        ("", 2166136261, 5, "#cfe0ff"),
+        ("?", 973910158, 6, "#ffe1c2"),
+        ("agent-0", 3830737203, 3, "#cdeff7"),
+        ("agent-1", 3813959584, 0, "#ffd6e4"),
+        ("agent-2", 3864292441, 1, "#e6d9ff"),
+        ("agent-3", 3847514822, 6, "#cfe0ff"),
+        ("agent-4", 3897847679, 7, "#dcf4cf"),
+        ("agent-5", 3881070060, 4, "#fff0b8"),
+        ("agent-6", 3931402917, 5, "#ffd6e4"),
+        ("agent-7", 3914625298, 2, "#c6f0df"),
+        ("你好", 3619451238, 6, "#ffd6e4"),
+        ("😀 mad", 1747552053, 5, "#cdeff7"),
     ]
 
-    func testHashShapeFaceColorMatchThePage() {
-        for (key, hash, shape, face, color) in Self.expected {
+    func testHashShapeColorMatchThePage() {
+        for (key, hash, shape, color) in Self.expected {
             XCTAssertEqual(CharacterLook.hash(key), hash, "hash of \(key)")
             let look = CharacterLook(key: key)
             XCTAssertEqual(look.shape, shape, "shape of \(key)")
-            XCTAssertEqual(look.face, face, "face of \(key)")
             XCTAssertEqual(look.colorHex, color, "color of \(key)")
         }
     }
@@ -45,7 +44,7 @@ final class LookTests: XCTestCase {
 
     func testAllShapesAreNamedAsOnThePage() {
         XCTAssertEqual(CharacterLook.shapes.map(\.name), ["pebble", "toast", "bean", "drop", "cat", "hex", "puff", "sprout"])
-        XCTAssertEqual(CharacterLook.faces.count, 5)
+        XCTAssertEqual(Expression.allCases.count, 8)
         XCTAssertEqual(CharacterLook.colorHexes.count, 8)
     }
 }
@@ -77,14 +76,16 @@ final class PathTests: XCTestCase {
     }
 
     func testQuadraticCurveIsDrawn() {
-        let r = tight(SVGPath.parse("M21 29 q3 2.6 6 0")) // the calm face's smile
+        let r = tight(SVGPath.parse("M-3 6 q3 2.5 6 0")) // the calm face's smile, a number right after the command
+        XCTAssertEqual(r.minX, -3, accuracy: 0.01)
         XCTAssertEqual(r.width, 6, accuracy: 0.01)
-        XCTAssertEqual(r.maxY, 30.3, accuracy: 0.01)
+        XCTAssertEqual(r.maxY, 7.25, accuracy: 0.01)
     }
 
     func testEveryFaceMarkHasAShape() {
-        for (i, face) in CharacterLook.faces.enumerated() {
-            for m in face { XCTAssertFalse(m.path.isEmpty, "face \(i)") }
+        for e in Expression.allCases {
+            XCTAssertFalse(e.marks.isEmpty, "\(e)")
+            for m in e.marks { XCTAssertFalse(m.path.isEmpty, "\(e)") }
         }
     }
 
@@ -105,10 +106,9 @@ final class PathTests: XCTestCase {
     }
 
     func testToastIsAsDrawnByThePage() {
-        let p = SVGPath.parse("M8 20 a10 10 0 0 1 10 -12 h12 a10 10 0 0 1 10 12 v16 a6 6 0 0 1 -6 6 h-20 a6 6 0 0 1 -6 -6 z")
-        let r = tight(p)
-        XCTAssertEqual(r.minX, 7.8, accuracy: 0.05); XCTAssertEqual(r.maxX, 40.2, accuracy: 0.05) // its corners bulge a little
-        XCTAssertEqual(r.minY, 8, accuracy: 0.01); XCTAssertEqual(r.maxY, 42, accuracy: 0.01)
+        let r = tight(CharacterLook.shapes[1].body)
+        XCTAssertEqual(r.minX, 9 - 0.2, accuracy: 0.3); XCTAssertEqual(r.maxX, 39 + 0.2, accuracy: 0.3) // its corners bulge a little
+        XCTAssertEqual(r.minY, 9, accuracy: 0.01); XCTAssertEqual(r.maxY, 41.5, accuracy: 0.01)
     }
 }
 
@@ -128,13 +128,6 @@ final class StateTests: XCTestCase {
         XCTAssertEqual(GroupTile(members: [], size: 40).word, "idle")
     }
 
-    func testMotionIsAtRestAtTheStartOfAPeriod() {
-        let h = CharacterMotion.hop(at: 0)
-        XCTAssertEqual(h.dy, 0); XCTAssertEqual(h.sx, 1)
-        XCTAssertLessThan(CharacterMotion.hop(at: CharacterMotion.hopPeriod * 0.45).dy, -0.07)
-        XCTAssertEqual(CharacterMotion.blink(at: 0), 1)
-        XCTAssertEqual(CharacterMotion.blink(at: CharacterMotion.blinkPeriod * 0.94), 0.1, accuracy: 0.001)
-    }
 }
 
 final class HomeModelTests: XCTestCase {

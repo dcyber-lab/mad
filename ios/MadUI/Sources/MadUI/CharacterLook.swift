@@ -1,15 +1,22 @@
 import SwiftUI
 
-/// What an agent looks like: one of eight shapes, one of five faces and one of
-/// eight colors, picked by a stable hash of its id. This is the web page's
-/// `charLook` (internal/desktop/web/app.js), so an agent looks the same on the
-/// page and in the apps. Keep the tables in step with it.
+/// What an agent looks like: one of eight shapes in one of eight colors, picked by a stable hash
+/// of its id (the web page's `charLook`, internal/desktop/web/app.js), so an agent looks the same on
+/// the page and in the apps. The shapes' drawing and the colors are the approved reference's.
+/// Its face is not part of the look: that changes with what it is doing (`Expression`).
 public struct CharacterLook: Equatable {
     public let shape: Int
-    public let face: Int
     public let color: Int
+    /// What its motion is drawn from: the page's key (the id, else the kind, else "?").
+    let key: String
+    let plan: CharacterPlan
 
-    init(shape: Int, face: Int, color: Int) { self.shape = shape; self.face = face; self.color = color }
+    init(shape: Int, color: Int, key: String? = nil) {
+        self.shape = shape
+        self.color = color
+        self.key = key ?? "shape\(shape)color\(color)"
+        plan = CharacterPlan(key: self.key)
+    }
 
     /// The page's key: the id, else the kind, else "?".
     public init(id: String, kind: String = "") {
@@ -18,9 +25,7 @@ public struct CharacterLook: Equatable {
 
     init(key: String) {
         let h = Self.hash(key)
-        shape = Int(h % 8)
-        face = Int((h >> 6) % 5)
-        color = Int((h >> 3) % 8)
+        self.init(shape: Int(h % 8), color: Int((h >> 3) % 8), key: key)
     }
 
     /// FNV-1a over the key's Unicode code points, 32 bits, as `charHash`.
@@ -31,67 +36,65 @@ public struct CharacterLook: Equatable {
     }
 
     public var shapeName: String { Self.shapes[shape].name }
+    /// The body's pastel.
     public var colorHex: String { Self.colorHexes[color] }
+    /// The strong color of the same hue, darkened 55%, that the face is drawn in.
+    var faceColor: Color { Color(hex: Self.mix(Self.strongHexes[color], 0.55)) }
 
-    // MARK: tables, from CHAR_SHAPES, CHAR_FACES and CHAR_COLORS
+    // MARK: tables, from SHAPES, COLORS and STRONG of the reference
 
     struct Shape {
         let name: String
+        /// Where the face sits, below the body's middle by this much.
         let faceOffset: CGFloat
         let body: Path
-        /// Leaves drawn behind the body, in fixed colors.
+        /// Leaves drawn behind the body, in fixed colors; they sway.
         let leaves: [(Path, Color)]
+        /// What the head turns about: the middle of the bottom of the head's bounds (body and leaves).
+        let pivot: CGPoint
+        /// What the leaves turn about, the same of their bounds.
+        let leafPivot: CGPoint
 
         init(_ name: String, _ faceOffset: CGFloat, _ body: Path, leaves: [(Path, Color)] = []) {
             self.name = name; self.faceOffset = faceOffset; self.body = body; self.leaves = leaves
+            func foot(_ r: CGRect) -> CGPoint { CGPoint(x: r.midX, y: r.maxY) }
+            var head = body
+            var leafPath = Path()
+            for (leaf, _) in leaves { head.addPath(leaf); leafPath.addPath(leaf) }
+            pivot = foot(head.cgPath.boundingBoxOfPath)
+            leafPivot = leaves.isEmpty ? .zero : foot(leafPath.cgPath.boundingBoxOfPath)
         }
         init(_ name: String, _ faceOffset: CGFloat, _ d: String) { self.init(name, faceOffset, SVGPath.parse(d)) }
     }
 
-    /// `<ellipse cx=24 cy=27 rx=20 ry=15 transform="rotate(-8 24 27)">`
-    private static let bean = Path(ellipseIn: CGRect(x: 4, y: 12, width: 40, height: 30)).applying(
+    /// `<ellipse cx=24 cy=27 rx=19 ry=14 transform="rotate(-8 24 27)">`
+    private static let bean = Path(ellipseIn: CGRect(x: 5, y: 13, width: 38, height: 28)).applying(
         CGAffineTransform(translationX: -24, y: -27)
             .concatenating(CGAffineTransform(rotationAngle: -8 * .pi / 180))
             .concatenating(CGAffineTransform(translationX: 24, y: 27)))
 
     static let shapes: [Shape] = [
-        Shape("pebble", 0, Path(ellipseIn: CGRect(x: 6, y: 8, width: 36, height: 36))),
-        Shape("toast", 0, "M8 20 a10 10 0 0 1 10 -12 h12 a10 10 0 0 1 10 12 v16 a6 6 0 0 1 -6 6 h-20 a6 6 0 0 1 -6 -6 z"),
+        Shape("pebble", 0, Path(ellipseIn: CGRect(x: 7, y: 9, width: 34, height: 34))),
+        Shape("toast", 0, "M9 20 a9.5 9.5 0 0 1 9.5 -11 h11 a9.5 9.5 0 0 1 9.5 11 v15.5 a6 6 0 0 1 -6 6 h-18 a6 6 0 0 1 -6 -6 z"),
         Shape("bean", 0, bean),
-        Shape("drop", 4, "M24 5 C33 16 41 23 41 31 a17 17 0 0 1 -34 0 C7 23 15 16 24 5 z"),
-        Shape("cat", 4, "M8 40 V16 L15 8 L20 14 h8 L33 8 L40 16 V40 a4 4 0 0 1 -4 4 h-24 a4 4 0 0 1 -4 -4 z"),
-        Shape("hex", 0, "M24 6 l15 8.6 a4 4 0 0 1 2 3.5 v13.8 a4 4 0 0 1 -2 3.5 L24 44 l-15 -8.6 a4 4 0 0 1 -2 -3.5 V18.1 a4 4 0 0 1 2 -3.5 z"),
-        Shape("puff", 0, "M12 40 a8 8 0 0 1 -3 -15 a10 10 0 0 1 14 -12 a10 10 0 0 1 16 6 a8 8 0 0 1 0 21 z"),
-        Shape("sprout", 4, Path(roundedRect: CGRect(x: 9, y: 14, width: 30, height: 29), cornerSize: CGSize(width: 14.5, height: 14.5)),
-              leaves: [(SVGPath.parse("M24 14 C22 8 16 6 12 8 C14 13 19 14 24 14 Z"), Color(hex: 0x59b85a)),
-                       (SVGPath.parse("M24 14 C26 7 32 5 36 7 C34 13 29 14 24 14 Z"), Color(hex: 0x7fd36b))]),
+        Shape("drop", 4, "M24 6 C33 16 40 23 40 31 a16 16 0 0 1 -32 0 C8 23 15 16 24 6 z"),
+        Shape("cat", 4, "M9 40 V17 L15 9 L20 14.5 h8 L33 9 L39 17 V40 a3.5 3.5 0 0 1 -3.5 3.5 h-23 a3.5 3.5 0 0 1 -3.5 -3.5 z"),
+        Shape("hex", 0, "M24 7 l14 8 a3.5 3.5 0 0 1 1.8 3 v13.6 a3.5 3.5 0 0 1 -1.8 3 L24 43 l-14 -8 a3.5 3.5 0 0 1 -1.8 -3 V18 a3.5 3.5 0 0 1 1.8 -3 z"),
+        Shape("puff", 0, "M12.5 40 a7.5 7.5 0 0 1 -3 -14.2 a9.6 9.6 0 0 1 13.6 -11.5 a9.6 9.6 0 0 1 15.4 5.8 a7.6 7.6 0 0 1 0 19.9 z"),
+        Shape("sprout", 4, Path(roundedRect: CGRect(x: 10, y: 15, width: 28, height: 28), cornerSize: CGSize(width: 14, height: 14)),
+              leaves: [(SVGPath.parse("M24 15 C22.5 9 17 7 12.5 8.5 C14 13.5 19 15 24 15 Z"), Color(hex: 0xbfe8b0)),
+                       (SVGPath.parse("M24 15 C25.5 8 31 6 35.5 7.5 C34 13.5 29 15 24 15 Z"), Color(hex: 0xd6f2c9))]),
     ]
 
-    static let colorHexes = ["#6f9bff", "#ffb36b", "#3dcf9c", "#b48cff", "#ff8fb3", "#ffd34e", "#5fd0e8", "#9be07f"]
+    static let colorHexes = ["#cfe0ff", "#ffe1c2", "#c6f0df", "#e6d9ff", "#ffd6e4", "#fff0b8", "#cdeff7", "#dcf4cf"]
+    static let strongHexes = ["#6f9bff", "#ffa04d", "#2fbf8c", "#a77bff", "#ff7aa5", "#f2bd1d", "#3fc3e0", "#7dcc5a"]
 
-    /// A face's marks. `eye` marks blink; `stroke` ones are drawn as lines, the rest filled.
-    struct Mark {
-        enum Kind { case eyeDot, eyeArc, mouth, mouthDot }
-        let kind: Kind
-        let path: Path
+    /// The reference's `mix(hex, t)`: each channel scaled by 1 - t (toward black), as a number 0xRRGGBB.
+    static func mix(_ hex: String, _ t: Double) -> UInt32 {
+        let n = UInt32(hex.dropFirst(), radix: 16)!
+        func ch(_ shift: UInt32) -> UInt32 { UInt32((Double((n >> shift) & 255) * (1 - t)).rounded()) }
+        return ch(16) << 16 | ch(8) << 8 | ch(0)
     }
-
-    static func dot(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) -> Path {
-        Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
-    }
-
-    static let faces: [[Mark]] = [
-        [Mark(kind: .eyeDot, path: dot(19, 23, 2.6)), Mark(kind: .eyeDot, path: dot(29, 23, 2.6)),
-         Mark(kind: .mouth, path: SVGPath.parse("M21 29 q3 2.6 6 0"))],
-        [Mark(kind: .eyeDot, path: dot(19, 23, 2.6)), Mark(kind: .eyeDot, path: dot(29, 23, 2.6)),
-         Mark(kind: .mouthDot, path: dot(24, 30, 2))],
-        [Mark(kind: .eyeArc, path: SVGPath.parse("M16.5 23 q2.5 -2.6 5 0")), Mark(kind: .eyeArc, path: SVGPath.parse("M26.5 23 q2.5 -2.6 5 0")),
-         Mark(kind: .mouth, path: SVGPath.parse("M22 29 h4"))],
-        [Mark(kind: .eyeDot, path: dot(19, 23, 2.6)), Mark(kind: .eyeDot, path: dot(29, 23, 2.6)),
-         Mark(kind: .mouth, path: SVGPath.parse("M20 28.5 q2 2 4 0 q2 2 4 0"))],
-        [Mark(kind: .eyeDot, path: dot(19, 23, 2.6)), Mark(kind: .mouth, path: SVGPath.parse("M26.5 23.5 h5")),
-         Mark(kind: .mouth, path: SVGPath.parse("M21 28.5 q3 3 6 0"))],
-    ]
 }
 
 extension Color {
