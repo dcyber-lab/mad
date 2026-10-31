@@ -40,4 +40,10 @@ export TEAM DEVICE
 ios-device:
 	ios/scripts/device.sh
 
-.PHONY: build install test clean demo ios ios-device
+# UI tests of the app and its page, in a simulator of their own ("mad UITest"), against
+# the fixture server, with a screenshot report in ios/build/uitest-report/index.html
+# (see ios/README.md). ONLY="UsageTests AppTests" runs some of the classes.
+ios-uitest:
+	ios/scripts/uitest.sh
+
+.PHONY: build install test clean demo ios ios-device ios-uitest

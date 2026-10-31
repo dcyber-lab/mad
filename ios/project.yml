@@ -22,7 +22,10 @@ targets:
       properties:
         CFBundleDisplayName: mad
         UILaunchScreen: {}
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSCameraUsageDescription: mad scans the QR code on your Mac to pair with it.
@@ -36,8 +39,28 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
+  madUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: mad
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: mad
+        PRODUCT_BUNDLE_IDENTIFIER: $(MAD_BUNDLE_ID).uitests
+        TARGETED_DEVICE_FAMILY: "1"
 schemes:
   mad:
     build:
       targets:
         mad: all
+  madUITests:
+    build:
+      targets:
+        mad: all
+        madUITests: [test]
+    test:
+      targets: [madUITests]

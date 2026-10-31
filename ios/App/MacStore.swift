@@ -52,6 +52,10 @@ final class MacStore: ObservableObject {
 
     init() {
         let secrets = Keychain()
+        #if DEBUG
+        // `-resetStore YES` (UI tests): forget every Mac and pending pairing first.
+        if UserDefaults.standard.bool(forKey: "resetStore") { Self.forgetEverything(secrets) }
+        #endif
         var macs: [Mac] = []
         var pending: [PairingBook.Pending] = []
         if let data = defaults.data(forKey: key),
@@ -83,6 +87,19 @@ final class MacStore: ObservableObject {
     func complete(_ p: PairingBook.Pending) async throws { try await book.complete(p) }
     func drop(_ p: PairingBook.Pending) { book.drop(p) }
     func rename(_ mac: Mac, to name: String) { book.rename(mac, to: name) }
+    #if DEBUG
+    private static func forgetEverything(_ secrets: Keychain) {
+        let d = UserDefaults.standard
+        if let data = d.data(forKey: "macs"), let list = try? JSONDecoder().decode([Stored].self, from: data) {
+            for s in list { secrets.delete(s.id.uuidString) }
+        }
+        if let data = d.data(forKey: "pending"), let list = try? JSONDecoder().decode([StoredPending].self, from: data) {
+            for s in list { secrets.delete("pending:" + s.id.uuidString) }
+        }
+        for k in ["macs", "pending", "lastMac", "expiryDismissedDay"] { d.removeObject(forKey: k) }
+    }
+    #endif
+
     /// The Mac last opened: the app opens it again on launch.
     var lastMac: Mac? { macs.first { $0.id == lastMacID } }
 
