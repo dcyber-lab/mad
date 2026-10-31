@@ -443,8 +443,9 @@ in [ios/](ios). It is not on the App Store: you build it yourself.
 - **Agents.** The agents of every project, working ones first. Tap one
   to read its conversation: what you said, what it said, each tool call
   as one row that opens to its input and result, and the reply as it is
-  being written. You can write to it there, and interrupt it while it
-  works.
+  being written. Agents that can run in window mode you can write to there and
+  interrupt while they work; for the others the conversation shows a hint,
+  and the Deck tab has the terminal.
 - **Deck.** The full window, the same page as in Safari, for everything
   else: the board, the sidebar, files and diffs.
 
