@@ -108,7 +108,7 @@ scenarios. It runs one scenario at a time, one simulator and one `xcodebuild` at
 The tests find things in the page by accessibility label and attach a screenshot to each
 case. When it ends, `ios/build/uitest-report/index.html` is a gallery of every screenshot,
 grouped by case, with a pass or fail and the failure message. `ONLY="UsageTests AppTests"`
-runs some classes only; `FIXTURE_ROOT=<dir>` takes the fixture server from another checkout.
+runs some classes only; `FIXTURE_ROOT=<dir>` takes the fixture server from another checkout. `SIM_NAME=<name>` uses (and makes) another simulator, so two runs do not share one; the name must start with "mad UITest" (anything else, your own simulators included, is refused before any simulator is touched; `bash ios/scripts/uitest_guard_test.sh` checks that).
 The tests are in `UITests/`; the harness is `scripts/uitest.sh` and `scripts/uitest_report.py`.
 The app takes `-resetStore YES` (Debug) so each case starts with no Mac paired.
 
