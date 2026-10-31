@@ -835,7 +835,8 @@ function permissionMenu(anchor, o) {
 
 function permissionName(hs) {
   const m = (hs.permissions || []).find((x) => x.value === hs.permission);
-  return m ? m.name || m.value : "";
+  // A mode the menu does not list (claude's own report) shows as it is.
+  return m ? m.name || m.value : hs.permission || "";
 }
 
 // ---- the phone: this window on it, over Tailscale (/api/phone) ----

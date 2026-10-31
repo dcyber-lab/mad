@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
@@ -38,6 +39,16 @@ func fakeClaude() {
 	out := json.NewEncoder(os.Stdout)
 	record, _ := os.OpenFile(os.Getenv("MAD_FAKE_OUT"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	defer record.Close()
+	// The mode it starts in, and a record of how it was started.
+	mode := "default"
+	for i, a := range os.Args {
+		if a == "--permission-mode" && i+1 < len(os.Args) {
+			mode = os.Args[i+1]
+		}
+	}
+	if f := os.Getenv("MAD_FAKE_ARGS"); f != "" {
+		_ = os.WriteFile(f, []byte(strings.Join(os.Args[1:], " ")), 0o600)
+	}
 	ev := func(e map[string]any) { _ = out.Encode(map[string]any{"type": "stream_event", "event": e}) }
 	turn := 0
 	for in.Scan() {
@@ -51,15 +62,31 @@ func fakeClaude() {
 			resp := map[string]any{}
 			if req["subtype"] == "initialize" {
 				resp["models"] = []map[string]any{{"value": "haiku", "displayName": "Haiku"}, {"value": "opus", "displayName": "Opus"}}
+				resp["current_permission_mode"] = mode
 			}
 			_, _ = record.Write(append(in.Bytes(), '\n'))
+			if req["subtype"] == "set_permission_mode" {
+				// As claude: "manual" is "default", and bypass is refused
+				// unless allowed at start (or MAD_FAKE_REFUSE says so).
+				to, _ := req["mode"].(string)
+				if to == "manual" {
+					to = "default"
+				}
+				if to == "bypassPermissions" && (os.Getenv("MAD_FAKE_REFUSE") != "" || !strings.Contains(strings.Join(os.Args, " "), "--allow-dangerously-skip-permissions")) {
+					_ = out.Encode(map[string]any{"type": "control_response", "response": map[string]any{
+						"subtype": "error", "request_id": m["request_id"], "error": "not launched with --dangerously-skip-permissions"}})
+					break
+				}
+				mode = to
+				resp["mode"] = to
+			}
 			_ = out.Encode(map[string]any{"type": "control_response", "response": map[string]any{
 				"subtype": "success", "request_id": m["request_id"], "response": resp}})
 		case "user":
 			turn++
 			_, _ = record.Write(append(in.Bytes(), '\n'))
 			_ = out.Encode(map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "claude-haiku-5-5",
-				"permissionMode": "default"})
+				"permissionMode": initMode(mode)})
 			ev(map[string]any{"type": "message_start", "message": map[string]any{"id": "msg" + string(rune('0'+turn))}})
 			ev(map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}})
 			ev(map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": "Hel"}})
@@ -111,7 +138,7 @@ func fakeHost(t *testing.T) (*Host, string) {
 	rec := filepath.Join(dir, "answers")
 	t.Setenv("MAD_FAKE_OUT", rec)
 	h := newHost("agent-1")
-	h.d = newClaude(h, os.Args[0], dir)
+	h.d = newClaude(h, os.Args[0], dir, "")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -206,8 +233,8 @@ func TestClaudeImagesAndPermission(t *testing.T) {
 	if err := h.do(Command{Type: "send", Text: "look", Images: []Image{{Mime: "image/png", Data: "QUJD"}}}); err != nil {
 		t.Fatal(err)
 	}
-	s := waitState(t, h, "its init", func(s State) bool { return s.Permission == "default" && len(s.Requests) == 1 })
-	if len(s.Permissions) != 4 || s.Permissions[3].Value != "bypassPermissions" {
+	s := waitState(t, h, "its init", func(s State) bool { return s.Permission == "auto" && len(s.Requests) == 1 })
+	if len(s.Permissions) != 5 || s.Permissions[0].Value != "auto" || s.Permissions[4].Value != "bypassPermissions" {
 		t.Errorf("permissions %+v", s.Permissions)
 	}
 	if err := h.d.answer(Answer{ID: s.Requests[0].ID, Allow: true}); err != nil {
@@ -416,6 +443,7 @@ func TestRender(t *testing.T) {
 // A mode set before the first message stands once claude's init, which
 // reports the mode it started in, comes back; claude is told again.
 func TestClaudePermissionSurvivesInit(t *testing.T) {
+	t.Setenv("MAD_FAKE_STALE", "1")
 	h, rec := fakeHost(t)
 	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
 	if err := h.do(Command{Type: "permission", Mode: "bypassPermissions"}); err != nil {
@@ -434,4 +462,110 @@ func TestClaudePermissionSurvivesInit(t *testing.T) {
 		}
 	}
 	t.Errorf("the mode was not sent again:\n%s", strings.Join(lines(t, rec), "\n"))
+}
+
+// A new window-mode claude starts in auto, as the TUI agents of run and
+// team do, with bypass allowed so that a switch to it is not refused.
+func TestClaudeStartsInAuto(t *testing.T) {
+	args := filepath.Join(t.TempDir(), "args")
+	t.Setenv("MAD_FAKE_ARGS", args)
+	h, _ := fakeHost(t)
+	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
+	if s := h.State(); s.Permission != "auto" {
+		t.Errorf("permission %q", s.Permission)
+	}
+	b, _ := os.ReadFile(args)
+	for _, want := range []string{"--permission-mode auto", "--allow-dangerously-skip-permissions"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("claude started with %q, no %q", b, want)
+		}
+	}
+}
+
+func TestClaudeFlags(t *testing.T) {
+	for _, tc := range []struct{ cmd, chosen, want, not string }{
+		{"claude", "", " --permission-mode auto", ""},
+		{"claude --permission-mode acceptEdits", "", "", "--permission-mode auto"},
+		{"claude --permission-mode acceptEdits", "plan", " --permission-mode plan", ""},
+		{"claude", "bypassPermissions", " --permission-mode bypassPermissions", "--permission-mode auto"},
+		{"claude --dangerously-skip-permissions", "", "", "--permission-mode"},
+	} {
+		f := newClaude(nil, tc.cmd, "", tc.chosen).flags()
+		if tc.want != "" && !strings.HasSuffix(f, tc.want) {
+			t.Errorf("%q chose %q: flags %q, want them to end %q", tc.cmd, tc.chosen, f, tc.want)
+		}
+		if tc.not != "" && strings.Contains(f, tc.not) {
+			t.Errorf("%q chose %q: flags %q have %q", tc.cmd, tc.chosen, f, tc.not)
+		}
+	}
+}
+
+// agentIn puts agent-1 in the state file, to see what is kept of it.
+func agentIn(t *testing.T) {
+	t.Helper()
+	if err := state.Update(func(st *state.State) error {
+		st.Projects = append(st.Projects, &state.Project{Path: t.TempDir(), Agents: []*state.Agent{{ID: "agent-1", Kind: "claude"}}})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func keptPermission(t *testing.T) string {
+	t.Helper()
+	st, err := state.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, a := st.FindAgent("agent-1")
+	return a.Permission
+}
+
+// A switch is kept as the mode claude names ("manual" is "default"), for a
+// host started again; bypass, allowed at start, is not refused.
+func TestClaudePermissionKept(t *testing.T) {
+	h, _ := fakeHost(t)
+	agentIn(t)
+	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
+	for _, c := range []struct{ ask, is string }{{"manual", "default"}, {"bypassPermissions", "bypassPermissions"}} {
+		if err := h.do(Command{Type: "permission", Mode: c.ask}); err != nil {
+			t.Fatal(err)
+		}
+		for end := time.Now().Add(5 * time.Second); time.Now().Before(end) && keptPermission(t) != c.is; time.Sleep(10 * time.Millisecond) {
+		}
+		if got := keptPermission(t); got != c.is {
+			t.Errorf("%s kept as %q, want %q", c.ask, got, c.is)
+		}
+		if s := h.State(); s.Permission != c.is || s.Error != "" {
+			t.Errorf("%s: permission %q, error %q", c.ask, s.Permission, s.Error)
+		}
+	}
+}
+
+// A switch claude refuses is undone, and the person told why: the menu does
+// not keep showing a mode claude is not in.
+func TestClaudePermissionRefused(t *testing.T) {
+	t.Setenv("MAD_FAKE_REFUSE", "1")
+	h, _ := fakeHost(t)
+	agentIn(t)
+	waitState(t, h, "ready", func(s State) bool { return s.Status == Idle })
+	if err := h.do(Command{Type: "permission", Mode: "bypassPermissions"}); err != nil {
+		t.Fatal(err)
+	}
+	s := waitState(t, h, "refused", func(s State) bool { return s.Error != "" })
+	if s.Permission != "auto" || !strings.Contains(s.Error, "bypassPermissions") {
+		t.Errorf("permission %q, error %q", s.Permission, s.Error)
+	}
+	if got := keptPermission(t); got == "bypassPermissions" {
+		t.Error("the refused mode was kept")
+	}
+}
+
+// initMode is the mode its init reports: MAD_FAKE_STALE has it still the one
+// it started in, as when a switch had not reached it.
+func initMode(mode string) string {
+	if os.Getenv("MAD_FAKE_STALE") != "" {
+		return "default"
+	}
+	return mode
 }

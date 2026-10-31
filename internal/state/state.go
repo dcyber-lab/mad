@@ -68,6 +68,9 @@ type Agent struct {
 	// Mode is how the agent runs in its pane: as its TUI (""), or headless
 	// under `mad host`, for the desktop window to draw (ModeWindow).
 	Mode string `json:"mode,omitempty"`
+	// Permission is the mode a window-mode claude agent was last set to
+	// (the host keeps it across restarts and resumes); empty until then.
+	Permission string `json:"permission,omitempty"`
 	// Run is the id of the run the agent works in, Role its part there.
 	Run  string `json:"run,omitempty"`
 	Role string `json:"role,omitempty"`
