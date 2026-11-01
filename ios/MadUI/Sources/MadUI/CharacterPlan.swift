@@ -123,6 +123,17 @@ struct CharacterPlan: Equatable {
         }
     }
 
+    /// Standing still (Reduce Motion, or nothing to animate): a working character keeps its focused
+    /// face, as on the page, so it does not look idle; the rest are as at rest, upright.
+    static func resting(_ state: CharacterState) -> Pose {
+        switch state {
+        case .working: return Pose(face: .focus)
+        case .needsYou: return Pose(face: .ask)
+        case .stopped: return Pose(face: .sleep)
+        case .idle, .starting: return Pose(face: .calm)
+        }
+    }
+
     func working(ms: Double) -> Pose {
         var p = Pose()
         let local = ms - delay

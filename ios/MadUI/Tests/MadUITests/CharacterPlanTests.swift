@@ -80,6 +80,14 @@ final class CharacterPlanTests: XCTestCase {
         XCTAssertEqual(p.pose(.starting, ms: 0).face, .calm)
     }
 
+    func testStillMeansUprightAndAWorkingOneStaysFocused() {
+        XCTAssertEqual(CharacterPlan.resting(.working), CharacterPlan.Pose(face: .focus), "not calm: that would look idle")
+        XCTAssertEqual(CharacterPlan.resting(.needsYou).face, .ask)
+        XCTAssertEqual(CharacterPlan.resting(.needsYou).tilt, 0)
+        XCTAssertEqual(CharacterPlan.resting(.stopped).face, .sleep)
+        XCTAssertEqual(CharacterPlan.resting(.idle).face, .calm)
+    }
+
     func testAWorkingOneWaitsOutItsDelayBeforeLookingAround() {
         let p = CharacterPlan(key: "architect")
         let early = p.working(ms: p.delay / 2)

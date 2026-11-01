@@ -55,8 +55,7 @@ public struct CharacterView: View {
     /// The character at `date`; nil is at rest (Reduce Motion, or stopped).
     private func canvas(at date: Date?) -> some View {
         let ms = date.map { $0.timeIntervalSince(since) * 1000 } ?? 0
-        var pose = look.plan.pose(date == nil ? Self.resting(state) : state, ms: ms)
-        if date == nil { pose.tilt = 0 } // still means upright
+        let pose = date == nil ? CharacterPlan.resting(state) : look.plan.pose(state, ms: ms)
         return Canvas { ctx, _ in
             var c = ctx
             // the canvas is larger than the box: like the page's svg, nothing clips a turn or a leaf's edge
@@ -64,10 +63,6 @@ public struct CharacterView: View {
         }
     }
 
-    /// With Reduce Motion a working character stands still, calm.
-    static func resting(_ state: CharacterState) -> CharacterState {
-        state == .working ? .idle : state
-    }
 }
 
 /// When an idle character's face changes: at each blink's start and end (and now).
