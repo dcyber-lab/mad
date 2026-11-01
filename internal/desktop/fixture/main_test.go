@@ -103,7 +103,7 @@ func TestMessagesAndImages(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Messages) != 9 || m.Last != 14 {
+	if len(m.Messages) != 18 || m.Last != 23 {
 		t.Errorf("after 5: %d messages, last %d", len(m.Messages), m.Last)
 	}
 	r, b = get(t, "channel-fold", "/api/bus/image?id=fx-before")
@@ -269,5 +269,43 @@ func TestChatIsReadOnce(t *testing.T) {
 	}
 	if len(again.Entries) != 0 || again.Reset {
 		t.Errorf("second look: %+v", again)
+	}
+}
+
+// A post to a channel is the next message after the last, and the messages after it carry it: a native client can be seen sending.
+func TestPostBecomesTheNextMessage(t *testing.T) {
+	h, err := newHandler("channel-fold", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/bus/post", "application/json", strings.NewReader(`{"channel":"fold","text":"hello there"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res struct{ Seq int }
+	_ = json.NewDecoder(r.Body).Decode(&res)
+	r.Body.Close()
+	// channel-fold ends at message 23 (its seq in the scenario), so a post is 24
+	if res.Seq != 24 {
+		t.Fatalf("seq %d, want 24", res.Seq)
+	}
+	r, err = http.Get(srv.URL + "/api/bus/messages?channel=fold&since=23")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var m struct {
+		Messages []struct {
+			Seq  int
+			Text string
+			From struct{ ID string }
+		}
+		Last int
+	}
+	_ = json.NewDecoder(r.Body).Decode(&m)
+	if len(m.Messages) != 1 || m.Messages[0].Seq != 24 || m.Messages[0].Text != "hello there" || m.Messages[0].From.ID != "you" || m.Last != 24 {
+		t.Errorf("after the post: %+v", m)
 	}
 }
