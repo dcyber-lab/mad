@@ -266,13 +266,12 @@ function actButton(it, a, where) {
 
 // actLabel is what act a's button says. The server's labels stay English (the
 // TUI draws them); this maps by the act's verb and flags, never by its text.
-// An act with no word here, such as an option's own label or "Open #chan",
-// keeps the server's.
+// An act with no word here, such as an option's own label, keeps the server's.
 function actLabel(a) {
   switch (a.verb) {
-    case "allow": return a.option ? a.label : "允许";
+    case "allow": return a.option ? a.label : a.kind === "plan" ? "批准计划" : "允许";
     case "always": return "总是允许";
-    case "deny": return a.input ? (a.row ? "继续规划" : "改为告诉它…") : a.row ? "拒绝" : "取消 (Esc)";
+    case "deny": return a.input ? (a.row ? "继续规划" : "改为告诉它…") : a.row ? "拒绝" : "取消";
     case "answer": return a.input ? "回复" : a.label;
     case "reply": return "回复";
     case "approve": return "批准";
@@ -283,6 +282,7 @@ function actLabel(a) {
     case "resume": return "继续";
     case "raise": return a.option ? `加 $${a.option}` : a.label;
     case "lift": return "今天不限";
+    case "open": return a.kind === "dm" ? "打开私信" : a.kind === "board" ? "打开看板" : a.kind === "read" ? "去看看" : a.target ? `打开 ${a.target}` : a.label;
   }
   return a.label;
 }

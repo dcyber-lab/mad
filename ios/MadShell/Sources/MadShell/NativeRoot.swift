@@ -120,11 +120,17 @@ struct Detail: View {
             } else if let agent = store.agent(id: id) {
                 AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb).id(agent.id)
             } else {
-                placeholder(id, "It is gone.")
+                placeholder(id, Self.goneNote(id))
             }
         } else {
             placeholder("mad", "选一个群聊或 agent")
         }
+    }
+
+    /// What a row that no longer exists says. Nothing is left of it to ask, so its id tells which it was:
+    /// an agent's ends in a hex tail ("codex-1a2b"), a channel's is the name it was given.
+    static func goneNote(_ id: String) -> String {
+        id.range(of: #"-[0-9a-f]{4}$"#, options: .regularExpression) != nil ? "这个 agent 已经不在了" : "这个群已经不在了"
     }
 
     private func placeholder(_ title: String, _ note: String) -> some View {

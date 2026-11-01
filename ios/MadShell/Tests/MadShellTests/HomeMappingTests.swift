@@ -142,3 +142,11 @@ final class WebMenuTests: XCTestCase {
         XCTAssertEqual(NativeRoot.webView(for: .addProject), .addproject)
     }
 }
+
+final class GoneNoteTests: XCTestCase {
+    func testAGoneRowSaysWhichItWas() {
+        XCTAssertEqual(Detail.goneNote("fold"), "这个群已经不在了")
+        XCTAssertEqual(Detail.goneNote("ios"), "这个群已经不在了")
+        XCTAssertEqual(Detail.goneNote("need0001-bbbb"), "这个 agent 已经不在了")
+    }
+}

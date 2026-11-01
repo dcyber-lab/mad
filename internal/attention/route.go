@@ -56,7 +56,7 @@ func (r hostRoute) acts() []Act {
 	switch r.ask.Kind {
 	case status.AskPlan:
 		return []Act{
-			{Verb: VerbAllow, Label: "Approve plan", Row: true, Primary: true},
+			{Verb: VerbAllow, Label: "Approve plan", Kind: KindPlan, Row: true, Primary: true},
 			{Verb: VerbDeny, Label: "Keep planning", Input: true, Row: true},
 		}
 	case status.AskQuestion:
@@ -104,7 +104,7 @@ func (r hostRoute) do(a Answer, _ *Facts) error {
 type openRoute struct{ label string }
 
 func (r openRoute) acts() []Act {
-	return []Act{{Verb: VerbOpen, Label: r.label, Row: true, Primary: true}}
+	return []Act{{Verb: VerbOpen, Label: r.label, Target: r.label, Row: true, Primary: true}}
 }
 func (r openRoute) do(Answer, *Facts) error { return ErrNotOffered }
 
@@ -270,14 +270,15 @@ func (r busRoute) theirs() bool {
 }
 
 func (r busRoute) acts() []Act {
-	open := "Open #" + r.channel
+	open := Act{Verb: VerbOpen, Label: "Open #" + r.channel, Target: "#" + r.channel}
 	if strings.HasPrefix(r.channel, "dm.") {
-		open = "Open DM"
+		open = Act{Verb: VerbOpen, Label: "Open DM", Kind: KindDM}
 	}
 	if r.theirs() {
-		return []Act{{Verb: VerbOpen, Label: open, Row: true, Primary: true}}
+		open.Row, open.Primary = true, true
+		return []Act{open}
 	}
-	return []Act{{Verb: VerbReply, Label: "Reply", Input: true, Row: true, Primary: true}, {Verb: VerbOpen, Label: open}}
+	return []Act{{Verb: VerbReply, Label: "Reply", Input: true, Row: true, Primary: true}, open}
 }
 
 func (r busRoute) do(a Answer, _ *Facts) error {
@@ -292,7 +293,7 @@ func (r busRoute) do(a Answer, _ *Facts) error {
 type skillRoute struct{ slug string }
 
 func (r skillRoute) acts() []Act {
-	return []Act{{Verb: VerbApprove, Label: "Approve", Row: true, Primary: true}, {Verb: VerbDiscard, Label: "Discard"}, {Verb: VerbOpen, Label: "Read it"}}
+	return []Act{{Verb: VerbApprove, Label: "Approve", Row: true, Primary: true}, {Verb: VerbDiscard, Label: "Discard"}, {Verb: VerbOpen, Label: "Read it", Kind: KindRead}}
 }
 
 func (r skillRoute) do(a Answer, _ *Facts) error {
@@ -313,7 +314,7 @@ func (budgetRoute) acts() []Act {
 	return []Act{
 		{Verb: VerbRaise, Label: "Raise by $" + n, Option: n, Row: true, Primary: true},
 		{Verb: VerbLift, Label: "Lift for today"},
-		{Verb: VerbOpen, Label: "Open board"},
+		{Verb: VerbOpen, Label: "Open board", Kind: KindBoard},
 	}
 }
 
@@ -332,7 +333,7 @@ func (budgetRoute) do(a Answer, _ *Facts) error {
 type timerRoute struct{ timer, label string }
 
 func (r timerRoute) acts() []Act {
-	return []Act{{Verb: VerbSend, Label: "Send now", Row: true, Primary: true}, {Verb: VerbDrop, Label: "Drop"}, {Verb: VerbOpen, Label: "Open " + r.label}}
+	return []Act{{Verb: VerbSend, Label: "Send now", Row: true, Primary: true}, {Verb: VerbDrop, Label: "Drop"}, {Verb: VerbOpen, Label: "Open " + r.label, Target: r.label}}
 }
 
 func (r timerRoute) do(a Answer, f *Facts) error {
@@ -346,7 +347,7 @@ func (r timerRoute) do(a Answer, f *Facts) error {
 type channelRoute struct{ channel string }
 
 func (r channelRoute) acts() []Act {
-	return []Act{{Verb: VerbResume, Label: "Resume", Row: true, Primary: true}, {Verb: VerbOpen, Label: "Open #" + r.channel}}
+	return []Act{{Verb: VerbResume, Label: "Resume", Row: true, Primary: true}, {Verb: VerbOpen, Label: "Open #" + r.channel, Target: "#" + r.channel}}
 }
 
 func (r channelRoute) do(Answer, *Facts) error { return resume(r.channel) }
@@ -357,7 +358,7 @@ func (r channelRoute) do(Answer, *Facts) error { return resume(r.channel) }
 type seenRoute struct{ label, pane string }
 
 func (r seenRoute) acts() []Act {
-	acts := []Act{{Verb: VerbOpen, Label: "Open " + r.label, Row: true, Primary: true}}
+	acts := []Act{{Verb: VerbOpen, Label: "Open " + r.label, Target: r.label, Row: true, Primary: true}}
 	if r.pane != "" {
 		acts = append(acts, Act{Verb: VerbSeen, Label: "Mark seen"})
 	}

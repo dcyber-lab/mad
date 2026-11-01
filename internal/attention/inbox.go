@@ -142,7 +142,22 @@ type Act struct {
 	// Enter does.
 	Row     bool `json:"row,omitempty"`
 	Primary bool `json:"primary,omitempty"`
+	// Kind says which act of its verb this is where the verb alone does not
+	// (an Allow that approves a plan, an Open that goes to a DM), and Target
+	// what an Open goes to ("#ios", an agent's name), so a client can word
+	// the button in its own language without matching Label. Both are
+	// optional: a client that knows neither keeps Label.
+	Kind   string `json:"kind,omitempty"`
+	Target string `json:"target,omitempty"`
 }
+
+// The Kinds of act.
+const (
+	KindPlan  = "plan"  // allow: approves the plan
+	KindDM    = "dm"    // open: a direct message
+	KindBoard = "board" // open: the board
+	KindRead  = "read"  // open: a skill, to read it
+)
 
 // Inbox is every item, in the order Next walks them: what needs the
 // person (blocking first, then oldest first), then what finished unseen

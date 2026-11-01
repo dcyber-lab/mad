@@ -549,10 +549,10 @@ function drawHomeNow() {
   const work = (deck.working || []).map((id) => agents.get(id)).filter(Boolean);
   const h = el("div", "home");
   const head = el("div", "hhead");
-  head.append(el("h1", "", "Overview"));
+  head.append(el("h1", "", "概览"));
   const sub = el("span", "hsub");
-  sub.append(`${agents.size} agents in ${deck.projects.length} project${deck.projects.length === 1 ? "" : "s"} · `,
-    el("b", "tone-needs", `${needs.length} need you`), " · ", el("b", "tone-working", `${work.length} working`), " · ", el("b", "tone-finished", `${fin.length} finished`));
+  sub.append(`${deck.projects.length} 个项目 · ${agents.size} 个 agent · `,
+    el("b", "tone-needs", `${needs.length} 个在等你`), " · ", el("b", "tone-working", `${work.length} 个在工作`), " · ", el("b", "tone-finished", `${fin.length} 个刚完成`));
   head.append(sub);
   const spend = spendMeter(deck.spend);
   if (spend) head.append(spend);
@@ -572,20 +572,20 @@ function drawHomeNow() {
   };
   const nothing = (t) => { const c = el("div", "icard idle"); c.append(el("div", "body muted", t)); return c; };
   const grid = (cls, cards) => { const g = el("div", cls); g.append(...cards); return g; };
-  const next = button("Next", "sm", nextItem);
+  const next = button("下一个", "sm", nextItem);
   next.append(el("kbd", "", "⌥N"));
-  h.append(sect("Needs you", "needs", needs.length, needs.length ? next : null,
-    needs.length ? grid("cards", needs.map((it) => itemCard(it))) : nothing("Nothing needs you.")));
+  h.append(sect("在等你", "needs", needs.length, needs.length ? next : null,
+    needs.length ? grid("cards", needs.map((it) => itemCard(it))) : nothing("没有在等你的")));
   // the longest at work first; the sidebar has the rest
-  const moreBtn = (name, n, shown) => n > shown ? button(ib.more[name] ? "Fewer" : `${n - shown} more`, "sm ghost", () => { ib.more[name] = !ib.more[name]; drawSidebar(); }) : null;
-  h.append(sect("Working", "working", work.length, moreBtn("homeWork", work.length, 3),
-    work.length ? grid("cards", work.slice(0, ib.more.homeWork ? 99 : 3).map(workCard)) : nothing("No agent is working.")));
-  const all = seenActs().length ? button("Mark all seen", "sm ghost", markAllSeen) : null;
-  h.append(sect("Recently finished", "finished", fin.length, all || moreBtn("homeFin", fin.length, 4),
-    fin.length ? grid("cards four", fin.slice(0, ib.more.homeFin ? 99 : 4).map((it) => itemCard(it))) : nothing("Nothing finished since you looked.")));
+  const moreBtn = (name, n, shown) => n > shown ? button(ib.more[name] ? "收起" : `还有 ${n - shown} 个`, "sm ghost", () => { ib.more[name] = !ib.more[name]; drawSidebar(); }) : null;
+  h.append(sect("在工作", "working", work.length, moreBtn("homeWork", work.length, 3),
+    work.length ? grid("cards", work.slice(0, ib.more.homeWork ? 99 : 3).map(workCard)) : nothing("没有 agent 在工作")));
+  const all = seenActs().length ? button("全部标为已看", "sm ghost", markAllSeen) : null;
+  h.append(sect("刚完成", "finished", fin.length, all || moreBtn("homeFin", fin.length, 4),
+    fin.length ? grid("cards four", fin.slice(0, ib.more.homeFin ? 99 : 4).map((it) => itemCard(it))) : nothing("上次看过之后没有新完成的")));
   const keys = el("div", "keys");
   const k = (ks, t) => { const s = el("span", ""); s.append(...ks.map((x) => el("kbd", "", x)), ` ${t}`); return s; };
-  keys.append(k(["⌥", "N"], "next"), k(["⌘", "N"], "new chat"), k(["⌘", "K"], "search"), k(["⌥", "B"], "board"));
+  keys.append(k(["⌥", "N"], "下一个"), k(["⌘", "N"], "新对话"), k(["⌘", "K"], "搜索"), k(["⌥", "B"], "看板"));
   h.append(keys);
   charAdopt(box, [h]); // what moves keeps moving
   box.replaceChildren(h);
@@ -706,7 +706,8 @@ function drawQueue(fresh) {
     drawSend();
     return;
   }
-  $("#qinput").placeholder = "Message the agent, or / for commands";
+  const nm = a ? label(a) : "agent";
+  $("#qinput").placeholder = `发消息给 ${nm.length > 28 ? nm.slice(0, 27) + "…" : nm}，输入 / 用命令`;
   if (!a) return;
   const q = fresh || a.queue || { items: [] };
   if (fresh) a.queue = fresh;
@@ -1496,12 +1497,12 @@ function codeBlock(pre) {
   head.append(el("span", "", (/language-([\w+#.-]+)/.exec(code.className) || [])[1] || "text"));
   const copy = el("button");
   copy.type = "button";
-  copy.append(icon("copy"), el("span", "", "Copy"));
+  copy.append(icon("copy"), el("span", "", "复制"));
   copy.onclick = async () => {
     try {
       await navigator.clipboard.writeText(code.textContent);
-      copy.lastChild.textContent = "Copied";
-      setTimeout(() => { copy.lastChild.textContent = "Copy"; }, 1500);
+      copy.lastChild.textContent = "已复制";
+      setTimeout(() => { copy.lastChild.textContent = "复制"; }, 1500);
     } catch (_) { /* no clipboard here */ }
   };
   head.append(copy);
@@ -2047,7 +2048,7 @@ function drawSend() {
   if (b.classList.contains("stop") !== stop || !b.firstChild) {
     b.classList.toggle("stop", stop);
     b.replaceChildren(icon(stop ? "stop" : "send"));
-    b.title = stop ? "Interrupt: stop what it does now (Esc)" : "send (Enter)";
+    b.title = stop ? "打断：马上停下它在做的事 (Esc)" : "发送 (Enter)";
     b.setAttribute("aria-label", stop ? "Interrupt" : "Send");
   }
   b.disabled = !stop && !typed || pendingReads > 0; // not before the pictures are read
@@ -2057,8 +2058,8 @@ function drawSend() {
   const key = nc.open || cv.open ? "now" : busy && (here || !typed) ? "stop" : here ? "now" : "queue";
   if (h.dataset.key !== key) {
     h.dataset.key = key;
-    h.replaceChildren({ queue: "Sent when its turn is over", now: "Sent now", stop: "Esc interrupts it" }[key] + " · ",
-      el("kbd", "", "⇧"), el("kbd", "", "↵"), " new line");
+    h.replaceChildren({ queue: "它忙完后发送", now: "发送", stop: "Esc 打断它" }[key] + " · ",
+      el("kbd", "", "⇧"), el("kbd", "", "↵"), " 换行");
   }
 }
 
