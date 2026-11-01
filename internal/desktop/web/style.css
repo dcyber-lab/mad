@@ -1499,14 +1499,14 @@ html.ptype .phonebox .pdev { font-size: 14px; }
 .avatar.chara { background: none; border-radius: 0; width: 40px; height: 40px; font-size: 0; overflow: visible; opacity: 1; }
 .avatar.chara.small { width: 28px; height: 28px; }
 .avatar.chara svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.chara .body { fill: var(--fill); }
+.chara .c-body { fill: var(--fill); }
 .chara svg g { transform-box: fill-box; }
 /* the face: strokes and dots in a deep shade of the bot's strong color; no outline on the body */
-.chara .ink { fill: none; stroke: var(--face); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
-.chara .dot, .chara text { fill: var(--face); }
-.chara .tile { fill: var(--raise-2); }
-.chara .hash { fill: var(--text-3); font: 700 20px var(--font); }
-.avatar.chara .dot { display: none; }
+.chara .c-ink { fill: none; stroke: var(--face); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.chara .c-eye, .chara text { fill: var(--face); }
+.chara .c-tile { fill: var(--raise-2); }
+.chara .c-hash { fill: var(--text-3); font: 700 20px var(--font); }
+.avatar.chara > .dot { display: none; }
 .avwrap { position: relative; display: grid; flex: none; }
 /* a group tile keeps the 4px that .group gives it (as it had on its own), so its dot is 4px down to stay on the tile's corner */
 .avwrap.ofgroup > .rdot { top: 4px; }

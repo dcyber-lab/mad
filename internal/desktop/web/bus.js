@@ -58,12 +58,13 @@ function groupChar(members, small) {
   const mem = [...members].sort((a, b) => ({ running: 0 }[shownStatus(a)] ?? 1) - ({ running: 0 }[shownStatus(b)] ?? 1)).slice(0, 3);
   const working = members.some((a) => shownStatus(a) === "running");
   const v = el("span", `avatar chara group${small ? " small" : ""}${working ? " s-running" : ""}`);
-  const minis = mem.map((a, i) => `<g class="mini m${i + 1}">${charSVG(a.id, positions[i], charExpr(charState(shownStatus(a)), a.id), charState(shownStatus(a)) === "stop")}</g>`).join("");
+  v.dataset.ck = `g:${mem.map((a) => `${a.id}:${shownStatus(a)}`).join(",")}|${small ? 1 : 0}`;
+  const minis = mem.map((a, i) => `<g class="c-mini">${charSVG(a.id, positions[i], charExpr(charState(shownStatus(a)), a.id), charState(shownStatus(a)) === "stop")}</g>`).join("");
   v.setAttribute("role", "img");
   v.setAttribute("aria-label", working ? "working" : members.some((a) => shownStatus(a) === "waiting") ? "needs you"
     : members.some((a) => shownStatus(a) === "starting") ? "starting" : "idle");
-  v.innerHTML = `<svg viewBox="0 0 48 48"><rect class="tile" x="1" y="1" width="46" height="46" rx="15"/>${minis || '<text x="24" y="31" text-anchor="middle" class="hash">#</text>'}</svg>`;
-  charWake(v, () => v.querySelectorAll(".mini").forEach((m, i) => charStart(m, mem[i].id, charState(shownStatus(mem[i])), { blink: false, watch: v })));
+  v.innerHTML = `<svg viewBox="0 0 48 48"><rect class="c-tile" x="1" y="1" width="46" height="46" rx="15"/>${minis || '<text x="24" y="31" text-anchor="middle" class="c-hash">#</text>'}</svg>`;
+  charWake(v, () => v.querySelectorAll(".c-mini").forEach((m, i) => charStart(m, mem[i].id, charState(shownStatus(mem[i])), { blink: false, watch: v })));
   return v;
 }
 
