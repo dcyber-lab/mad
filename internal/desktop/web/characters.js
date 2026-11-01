@@ -112,8 +112,7 @@ const EXPR = {
 // charExpr is the expression a character of key has in state ("work", "need", "idle" or "stop"), before it
 // moves: a working one starts with the first of its own order (still, with reduced motion, "focus").
 function charExpr(state, key) {
-  const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  return state === "work" ? (still ? "focus" : plan(key).order[0]) : state === "need" ? "ask" : state === "stop" ? "sleep" : "calm";
+  return state === "work" ? (charReduced.matches ? "focus" : plan(key).order[0]) : state === "need" ? "ask" : state === "stop" ? "sleep" : "calm";
 }
 
 // charSVG is the character of key, 48 by 48 (nested at x y with width w when box is given): its body in
