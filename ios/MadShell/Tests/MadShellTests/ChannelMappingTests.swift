@@ -37,6 +37,23 @@ private func bubbles(_ s: ChannelScreen) -> [ChannelBubble] {
 }
 
 final class ChannelMappingTests: XCTestCase {
+    /// A message that arrives leaves every row it did not touch with the id it had: the list keeps those rows
+    /// (a changed id would build them again), whether the message joins a run, starts one, is the person's, or comes after a quiet while.
+    func testRowIdsStayTheSameWhenAMessageArrives() {
+        var all = [msg(1, "architect", at: "2026-11-01T07:00:00+08:00"), msg(2, "builder", at: "2026-11-01T07:01:00+08:00"),
+                   msg(3, "builder", at: "2026-11-01T07:02:00+08:00"), msg(4, "you", at: "2026-11-01T07:03:00+08:00")]
+        let more = [msg(5, "you", at: "2026-11-01T07:04:00+08:00"), msg(6, "builder", at: "2026-11-01T07:05:00+08:00"),
+                    msg(7, "builder", at: "2026-11-01T07:06:00+08:00"), msg(8, "architect", at: "2026-11-01T08:30:00+08:00"),
+                    msg(9, "system", kind: "system", at: "2026-11-01T08:31:00+08:00")]
+        for next in more {
+            let before = screen(all).items.map(\.id)
+            all.append(next)
+            let after = screen(all).items.map(\.id)
+            XCTAssertEqual(Array(after.prefix(before.count)), before, "message \(next.seq) changed the ids of the rows before it")
+            XCTAssertEqual(Set(after).count, after.count, "message \(next.seq) made two rows with one id")
+        }
+    }
+
     private func foldScreen() throws -> ChannelScreen {
         let page = try fixture("messages-channel-fold", MessagesPage.self)
         return screen(page.messages, deck: try fixture("deck-channel-fold", Deck.self))

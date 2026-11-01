@@ -112,6 +112,53 @@ struct BottomKeeper {
     private var close: Bool { abs(resizedAt.timeIntervalSince(leftAt)) < 0.4 }
 }
 
+/// Whether the person is at the bottom of a list that follows new messages. A message that arrives pushes the marker at
+/// the end out of view for a moment, and the list follows it: that is not the person scrolling away, so a marker that
+/// leaves within `window` of a follow is judged once the window is over (still out: they did scroll; back: they did not).
+struct BottomWatch {
+    static let window: TimeInterval = 0.5
+
+    private(set) var shown = true
+    private var followedAt = Date.distantPast
+    private var resizedAt = Date.distantPast
+    private var leftAt = Date.distantPast
+
+    enum Left: Equatable {
+        /// The person has left the bottom.
+        case now
+        /// Look again after this many seconds: `stillLeft` then says.
+        case recheck(after: TimeInterval)
+    }
+
+    mutating func appeared() { shown = true }
+
+    /// The list followed a new message to the bottom.
+    mutating func followed(at now: Date = Date()) { followedAt = now }
+
+    /// The marker left the screen.
+    mutating func disappeared(at now: Date = Date()) -> Left {
+        shown = false
+        leftAt = now
+        let wait = Self.window - now.timeIntervalSince(followedAt)
+        return wait > 0 ? .recheck(after: wait) : .now
+    }
+
+    /// The scroll view's size changed (the keyboard, the composer, the window).
+    mutating func resized(at now: Date = Date()) { resizedAt = now }
+
+    /// The marker is out, and it left within a moment of a size change: the resize moved it, not the person.
+    var leftWithResize: Bool { !shown && abs(leftAt.timeIntervalSince(resizedAt)) < 0.4 }
+
+    /// At a recheck: the marker is still out.
+    var stillLeft: Bool { !shown }
+
+    /// The list's last row is on screen but well above the viewport's foot: the offset was left past the end of the
+    /// content (the viewport grew), and an empty band shows under the last message.
+    static func pastEnd(markerShown: Bool, markerFoot: CGFloat, viewportHeight: CGFloat) -> Bool {
+        markerShown && viewportHeight > 0 && markerFoot < viewportHeight - 40
+    }
+}
+
 /// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
 /// its state line: one place the person already looks, and no second floating thing.
 public struct MadLinkNote: Equatable, Sendable {
@@ -146,5 +193,13 @@ struct PillSubline: View {
         } else if !text.isEmpty {
             Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
         }
+    }
+}
+
+extension View {
+    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
+    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
+    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
+        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
     }
 }
