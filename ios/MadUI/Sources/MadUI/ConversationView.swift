@@ -20,6 +20,10 @@ public struct ConversationView: View {
     @State private var endFoot: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var bottomInset: CGFloat = 0
+    /// See ChannelView: at its end when last judged with the same viewport and inset.
+    @State private var endLatch = true
+    @State private var judgedViewport: CGFloat = -1
+    @State private var judgedInset: CGFloat = -1
     #endif
 
     public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true) {
@@ -113,7 +117,11 @@ public struct ConversationView: View {
                             Color.clear.onAppear { endFoot = g.frame(in: .named("conversationList")).maxY; endShown = true; judgeEnd() }
                                 .onChange(of: g.frame(in: .named("conversationList")).maxY) { _, y in endFoot = y; judgeEnd() }
                         })
-                        .onDisappear { endShown = false; atEnd = false }
+                        .onDisappear {
+                            endShown = false
+                            atEnd = false
+                            if judgedViewport == viewportHeight && judgedInset == bottomInset { endLatch = false }
+                        }
                         #endif
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
@@ -145,12 +153,17 @@ public struct ConversationView: View {
             .coordinateSpace(name: "conversationList")
             .background(GeometryReader { g in
                 Color.clear.onAppear { viewportHeight = g.size.height; bottomInset = g.safeAreaInsets.bottom; judgeEnd() }
-                    .onChange(of: g.size.height) { _, h in viewportHeight = h; judgeEnd() }
+                    .onChange(of: g.size.height) { _, h in
+                        viewportHeight = h
+                        judgeEnd()
+                        if endLatch { proxy.scrollTo("end", anchor: .bottom) }
+                    }
                     .onChange(of: g.safeAreaInsets.bottom) { _, inset in
                         // the keyboard, the ask card or the composer changed what covers the foot: a list at its end is put
                         // back at its end once
                         bottomInset = inset
-                        if atEnd { proxy.scrollTo("end", anchor: .bottom) } else { judgeEnd() }
+                        judgeEnd()
+                        if endLatch { proxy.scrollTo("end", anchor: .bottom) }
                     }
             })
             #endif
@@ -178,6 +191,9 @@ public struct ConversationView: View {
     /// down by the head, the composer and the keyboard).
     private func judgeEnd() {
         atEnd = endShown && endFoot <= viewportHeight + 2
+        if judgedViewport == viewportHeight && judgedInset == bottomInset { endLatch = atEnd }
+        judgedViewport = viewportHeight
+        judgedInset = bottomInset
     }
     #endif
 
