@@ -512,10 +512,12 @@ func post(sp postSpec) (PostResult, error) {
 	return res, nil
 }
 
-// youRe finds @you in a message: after the start, a space or a (half or full width) parenthesis, and not
-// followed by a letter, digit, _ or -, so "（@you" counts and "@you-x" does not. The page's rule is the same
-// (bus.js YOU_MENTION), as native's is.
-var youRe = regexp.MustCompile(`(?i)(^|[\s(（])@you($|[^\w-])`)
+// youRe finds @you in a message: at the start, or after a space (any Unicode space: \s alone is ASCII) or a
+// (half or full width) parenthesis; and not followed by an ASCII letter, digit, _ or -, so "（@you" and
+// "@you请看" count and "@you-x" does not. Go has no lookahead, so the end is matched ($ or a character that
+// is not one of those). The page's rule is the same (bus.js YOU_MENTION), as native's is; testdata/at-you.json
+// is the table all three are held to.
+var youRe = regexp.MustCompile(`(?i)(^|[\s\p{Zs}(（])@you($|[^A-Za-z0-9_-])`)
 
 // tell lets the person know about a message for them, as the deck's
 // notifications do (on their phone too); replaced in tests.

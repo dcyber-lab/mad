@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"encoding/json"
 	"image/color"
 	"os"
 	"regexp"
@@ -221,29 +222,27 @@ func TestPageHidesTheSameKinds(t *testing.T) {
 	}
 }
 
-// The server finds @you as the page and native do: after the start, a space or a (half or full width)
-// parenthesis; not before anything else, and not followed by a letter, digit, _ or -.
+// The server finds @you by the one table the page and native are held to too (testdata/at-you.json).
 func TestAtYouRule(t *testing.T) {
-	for text, want := range map[string]bool{
-		"@you":           true,
-		"@you 请看一下":      true,
-		"请看 @you，谢谢":     true,
-		"(@you)":         true,
-		"（@you）看一下":      true,
-		"@YOU":           true,
-		"@you.":          true,
-		"@you-x":         false,
-		"@you_x":         false,
-		"@youth":         false,
-		"@you2":          false,
-		"mail@you.com":   false,
-		"a@you":          false,
-		"请@you":          false,
-		"@your reviewer": false,
-		"@you\n下一行":      true,
-	} {
-		if got := youRe.MatchString(text); got != want {
-			t.Errorf("%q: found=%v, want %v", text, got, want)
+	b, err := os.ReadFile("testdata/at-you.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var table struct {
+		Cases []struct {
+			Text string
+			Want bool
+		}
+	}
+	if err := json.Unmarshal(b, &table); err != nil {
+		t.Fatal(err)
+	}
+	if len(table.Cases) < 20 {
+		t.Fatalf("the table has %d cases", len(table.Cases))
+	}
+	for _, c := range table.Cases {
+		if got := youRe.MatchString(c.Text); got != c.Want {
+			t.Errorf("%q: found=%v, want %v", c.Text, got, c.Want)
 		}
 	}
 }

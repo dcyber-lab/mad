@@ -770,7 +770,8 @@ function timeLine(at) {
 // (a test keeps the two the same). So is a lapsed notice (a system line about a handoff). Whatever @mentions
 // the person stays, of any kind, and so do mad's pause and resume notes.
 const QUIET_KINDS = ["handoff", "done", "declined", "timer", "nudge"];
-const YOU_MENTION = /(^|[\s(（])@you(?![\w-])/i;
+// The same rule as the server's bus.youRe: internal/bus/testdata/at-you.json is the table both are held to.
+const YOU_MENTION = /(^|[\s\p{Zs}(（])@you(?![A-Za-z0-9_-])/iu;
 function quiet(m) {
   if (YOU_MENTION.test(m.text || "")) return false;
   if (m.kind === "system") return !!m.handoff;
@@ -933,7 +934,7 @@ function foldSummary(m) {
   const c = busChannel(cv.open);
   if (c && c.dm && c.yours) return "";
   const text = (m.text || "").trim();
-  if (/(^|[\s(（])@you(?![\w-])/i.test(text)) return "";
+  if (YOU_MENTION.test(text)) return "";
   const lines = text.split("\n").filter((l) => l.trim());
   if (lines.length <= 3 && text.length <= 280) return "";
   return firstSentence(lines[0] || "");
