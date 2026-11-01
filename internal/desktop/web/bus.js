@@ -23,13 +23,13 @@ function channelsGroup(q) {
   head.append(icon("chat"), el("b", "", "群聊"));
   const plus = el("button", "icon-btn");
   plus.type = "button";
-  plus.title = "a new channel or team";
+  plus.title = "新群聊或新小组";
   plus.append(icon("plus"));
   plus.onclick = (e) => {
     e.stopPropagation();
     popup(plus, [
-      { label: "New channel", desc: "agents and you talk in it", icon: "chat", onclick: () => createChannel() },
-      { label: "New team", desc: "agents in roles start together, with a lead", icon: "agent", onclick: () => newTeam() },
+      { label: "新群聊", desc: "你和 agent 在里面聊", icon: "chat", onclick: () => createChannel() },
+      { label: "新小组", desc: "按角色分工的 agent 一起开工，有一个组长", icon: "agent", onclick: () => newTeam() },
     ], { right: true });
   };
   const all = deck.bus || [];
@@ -43,7 +43,7 @@ function channelsGroup(q) {
   const at = (c) => Date.parse(c.last_at) || 0;
   list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
   if (!all.length) {
-    const hint = el("div", "chan none", "Talk with your agents: + makes a channel or a team.");
+    const hint = el("div", "chan none", "和 agent 聊天：点 + 新建群聊或小组。");
     hint.onclick = () => createChannel();
     g.append(hint);
   }
@@ -104,7 +104,7 @@ function teamRow(c, found) {
   const mem = chanAgents(c);
   const live = chanLive(c);
   const n = (s) => live.filter((a) => shownStatus(a) === s).length;
-  const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
+  const parts = [n("waiting") ? `${n("waiting")} 个在等你` : "", n("running") ? `${n("running")} 个在工作` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
   const lead = chanDot(c) ? withDot(face) : face;
@@ -177,11 +177,11 @@ function replyTo(m) {
   if (!m) return bar.replaceChildren();
   const x = el("button", "icon-btn");
   x.type = "button";
-  x.title = "not a reply (Esc)";
+  x.title = "不是回复 (Esc)";
   x.append(icon("x"));
   x.onclick = () => replyTo(null);
   const what = el("span", "rq");
-  what.append(el("b", "", "Replying to " + (m.from.id === "you" ? "yourself" : m.from.label)), " ", snippet(m.text));
+  what.append(el("b", "", "回复 " + (m.from.id === "you" ? "你自己" : m.from.label)), " ", snippet(m.text));
   bar.replaceChildren(icon("chat"), what, x);
   if (!phone.matches) $("#qinput").focus();
 }
@@ -194,7 +194,7 @@ function snippet(text) {
 // jumpTo scrolls to message seq in the channel shown, and marks it a moment.
 function jumpTo(seq) {
   const t = $(`#chanlog [data-seq="${seq}"]`);
-  if (!t) return toast(`#${seq} is further back`);
+  if (!t) return toast(`#${seq} 在更早的消息里`);
   t.scrollIntoView({ block: "center", behavior: "smooth" });
   t.classList.remove("flash");
   void t.offsetWidth;
@@ -572,11 +572,11 @@ window.addEventListener("keydown", (e) => {
 function chanMenu(c, anchor) {
   const lead = c.lead && agents.get(c.lead);
   const items = [{
-    label: "Post the progress report", desc: "the board's line for it, from mad: it wakes no one", icon: "todo",
+    label: "发进度报告", desc: "看板上它的那一行，由 mad 发出：不会叫醒任何人", icon: "todo",
     onclick: async () => {
       try {
         const r = await api("POST", "/api/bus/report", {}, { channel: c.id });
-        if (!r.line) toast(`Nothing open in #${c.id}`);
+        if (!r.line) toast(`#${c.id} 里没有未完成的事`);
         loadChannel(false);
       } catch (e) {
         toast(e.message, "err");
@@ -585,7 +585,7 @@ function chanMenu(c, anchor) {
   }];
   if (lead) {
     items.push({
-      label: `Ask ${label(lead)} for a summary`, desc: "what is done, in progress, blocked, and waits for you", icon: "question",
+      label: `请 ${label(lead)} 做个总结`, desc: "做完了什么、在做什么、卡在哪、什么在等你", icon: "question",
       onclick: async () => {
         try {
           await api("POST", "/api/bus/post", {}, { channel: c.id, text: `@${label(lead)} please post a short progress summary of #${c.id}: what is done, what is in progress and who has it, what is blocked, and what waits for me. Keep the board current with task_set.` });
@@ -596,13 +596,13 @@ function chanMenu(c, anchor) {
       },
     });
   }
-  items.push({ label: "Routine here…", desc: "post in it on a schedule", icon: "play", onclick: () => routineDialog(c.id) });
+  items.push({ label: "在这里设例行任务…", desc: "按时间表在群里发消息", icon: "play", onclick: () => routineDialog(c.id) });
   const others = (c.members || []).filter((m) => m.id !== c.lead && agents.has(m.id));
   if (others.length) {
     items.push({
-      label: lead ? "Another lead…" : "Make one the lead…", desc: "the agent that answers for its work", icon: "agent",
+      label: lead ? "换个组长…" : "选一个组长…", desc: "为这件事的进展负责的 agent", icon: "agent",
       onclick: () => setTimeout(() => popup(anchor, others.map((m) => ({
-        label: m.label, desc: "the lead",
+        label: m.label, desc: "组长",
         onclick: async () => {
           try {
             await api("POST", "/api/bus/lead", {}, { channel: c.id, agent: m.id });
@@ -637,12 +637,14 @@ async function loadChannel(first) {
     cv.last = m.seq;
   }
   if (!cv.last && !$("#chanlog").children.length) {
-    $("#chanlog").append(el("div", "note", id.startsWith("dm.") ? "Say something: it reaches the agent when its turn is over." : "Nothing said yet. @mention an agent to wake it."));
+    $("#chanlog").append(el("div", "note", id.startsWith("dm.") ? "说点什么：它忙完之后会看到。" : "还没人说话。@ 一个 agent 可以叫醒它。"));
   }
   if (cv.paused !== r.paused) {
     cv.paused = r.paused;
     drawChanHead();
   }
+  cv.receipts = r.receipts || [];
+  drawReceipts(cv.receipts, r.paused);
   if (cv.jump) {
     const s = cv.jump;
     cv.jump = 0;
@@ -653,11 +655,105 @@ async function loadChannel(first) {
 
 // ---- the messages ----
 
+// drawReceipts keeps the receipt line under the person's latest own message, and only that one (receipts.js
+// has the words). When a newer message of theirs is drawn, the old line goes and the new bubble gets its
+// line, empty and already 20px tall, in this one pass; the line's word is patched in place when the receipt
+// arrives or changes, never the bubble.
+function drawReceipts(list, paused) {
+  const log = $("#chanlog");
+  const mine = log.querySelectorAll(".cmsg.mine");
+  const row = mine[mine.length - 1];
+  for (const l of log.querySelectorAll(".crcpt")) if (!row || l.parentElement !== row) closeReceiptCard(l.parentElement), l.remove();
+  if (!row) return;
+  let line = row.querySelector(".crcpt");
+  if (!line) {
+    line = el("button", "crcpt");
+    line.type = "button";
+    line.append(el("span", "crw"));
+    line.onclick = (e) => {
+      e.stopPropagation();
+      toggleReceiptCard(row);
+    };
+    row.append(line);
+  }
+  const rc = list.find((r) => r.seq === Number(row.dataset.seq));
+  if (!rc) return;
+  const sum = receiptSummary(rc.targets, paused);
+  fillReceipt(line, sum);
+  if (row.querySelector(".rcard")) drawReceiptCard(row, sum);
+}
+
+// fillReceipt writes the summary into the line: its word (a change fades in over 150ms), its colour, its
+// title and its label for a screen reader. The one place the line's look is made.
+function fillReceipt(line, sum) {
+  const w = line.firstChild;
+  if (w.textContent !== sum.word) {
+    const fresh = !!w.textContent;
+    w.textContent = sum.word;
+    if (fresh && w.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) w.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease-in-out" });
+  }
+  line.classList.toggle("blue", sum.tone === "blue");
+  line.classList.add("has");
+  if (line.title !== sum.title) line.title = sum.title;
+  line.setAttribute("aria-label", sum.label);
+  line.setAttribute("aria-haspopup", "true");
+}
+
+// toggleReceiptCard opens the card of who under the line, or closes it.
+function toggleReceiptCard(row) {
+  if (row.querySelector(".rcard")) return closeReceiptCard(row);
+  const line = row.querySelector(".crcpt");
+  if (!line || !line.classList.contains("has")) return;
+  const rc = (cv.receipts || []).find((r) => r.seq === Number(row.dataset.seq));
+  drawReceiptCard(row, receiptSummary(rc && rc.targets, cv.paused));
+  const card = row.querySelector(".rcard");
+  line.setAttribute("aria-expanded", "true");
+  card.scrollIntoView({ block: "nearest" });
+}
+
+// drawReceiptCard (re)draws the card's rows: the character, the name and how far it got.
+function drawReceiptCard(row, sum) {
+  let card = row.querySelector(".rcard");
+  if (!card) {
+    card = el("div", "rcard");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", "谁收到了");
+    row.append(card);
+  }
+  const kids = sum.rows.map((r) => {
+    const item = el("div", "rrow");
+    const a = agents.get(r.id) || { id: r.id, kind: "?" };
+    item.append(avatar(a, true), el("span", "rname", r.label), el("span", "rstate", r.text));
+    return item;
+  });
+  kids.push(el("div", "rfoot", sum.footer));
+  if (sum.held && !sum.none) kids.push(el("div", "rfoot", RECEIPT_WORDS.held));
+  card.replaceChildren(...kids);
+  if (sum.none) card.classList.add("plain");
+  else card.classList.remove("plain");
+}
+
+function closeReceiptCard(row) {
+  if (!row) return;
+  const card = row.querySelector(".rcard");
+  if (card) card.remove();
+  const line = row.querySelector(".crcpt");
+  if (line) line.removeAttribute("aria-expanded");
+}
+document.addEventListener("click", (e) => {
+  for (const card of document.querySelectorAll("#chanlog .rcard")) if (!card.contains(e.target)) closeReceiptCard(card.parentElement);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const card of document.querySelectorAll("#chanlog .rcard")) closeReceiptCard(card.parentElement);
+});
+
+
 // timeLine is the centred time between messages that are far apart: today's
 // as "今天 21:05", yesterday's, or the date.
 function timeLine(at) {
   const d = new Date(at);
-  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const hm = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(new Date()) - day(d)) / 864e5);
   const when = days === 0 ? "今天" : days === 1 ? "昨天" : `${d.getMonth() + 1}月${d.getDate()}日`;
@@ -700,7 +796,7 @@ function drawMessage(m) {
     const a = agents.get(m.from.id) || { kind: m.from.kind || "?", id: m.from.id, icon: m.from.id === "mad" ? "m" : "" };
     const v = avatar(a, true);
     if (agents.has(m.from.id)) {
-      v.title = "open it";
+      v.title = "打开";
       v.onclick = () => show(m.from.id);
     }
     const stack = el("div", "cstack");
@@ -867,8 +963,8 @@ function drawNoWake() {
   let h = who.querySelector(".nowake");
   if (!noWake($("#qinput").value)) return h && h.remove();
   if (!h) {
-    h = el("span", "nowake", "no one will be woken");
-    h.title = "No @mention in it: agents see it only when they read the channel.";
+    h = el("span", "nowake", "不会叫醒任何人");
+    h.title = "没有 @ 任何人：agent 只有读群聊时才会看到。";
     who.append(h);
   }
 }
@@ -885,7 +981,7 @@ function quoteOf(seq) {
   } else {
     q.append("↩ 更早的消息");
   }
-  q.title = "show what it answers";
+  q.title = "看它回复的是哪条";
   q.onclick = () => jumpTo(seq);
   return q;
 }
@@ -897,7 +993,7 @@ function agentLabel(id) {
 
 function clock(at) {
   const d = new Date(at);
-  return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return isNaN(d) ? "" : d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 // mentionsBold marks @label in markdown text, the agents' labels first
@@ -943,7 +1039,7 @@ function drawChanWho() {
   // how many can be @-woken: the agents that are there (a role not started, or gone, is not)
   const n = g ? g.rows.filter((r) => agents.has(r.m.id) && (!g.split || r.team)).length : 0;
   const helpers = g && g.helpers.length ? ` · ${g.helpers.length} 帮手` : "";
-  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"}${helpers} · @ to wake one` : " · reaches it when its turn is over");
+  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} 个 agent${helpers} · @ 可以叫醒一个` : " · 它忙完之后会看到");
   who.replaceChildren(what);
   who.className = "";
   drawNoWake();
@@ -967,7 +1063,7 @@ function drawAgentMenu(w) {
   const box = $("#qmenu");
   box.replaceChildren(...all.map((a, i) => {
     const li = el("li", "file");
-    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", members.has(a.id) ? "in the channel" : `${a.kind} · ${a.project.name}`));
+    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", members.has(a.id) ? "已在群里" : `${a.kind} · ${a.project.name}`));
     li.onmousedown = (e) => {
       e.preventDefault();
       menu.sel = i;
@@ -983,9 +1079,9 @@ function drawAgentMenu(w) {
 async function createChannel() {
   const body = el("div", "");
   const name = el("input", "say wide");
-  name.placeholder = "name, e.g. api-redesign";
+  name.placeholder = "名字，比如 api-redesign";
   const topic = el("input", "say wide");
-  topic.placeholder = "what it is for (optional)";
+  topic.placeholder = "用来做什么（可不填）";
   const pick = el("div", "suggest");
   const chosen = new Set();
   for (const a of [...agents.values()].filter((x) => x.chat && (!x.role || x.team))) {
@@ -996,8 +1092,8 @@ async function createChannel() {
     row.append(box, avatar(a, true), el("span", "t", label(a)), el("span", "muted", a.project.name));
     pick.append(row);
   }
-  body.append(name, topic, el("p", "dtext muted", "Agents in it read it when they want; an @mention wakes one."), pick);
-  const v = await dialog({ title: "A new channel", body, actions: [{ label: "Cancel", value: null }, { label: "Create", cls: "primary", value: "ok" }], ready: () => name.focus() });
+  body.append(name, topic, el("p", "dtext muted", "群里的 agent 想看的时候会看；@ 某个 agent 会叫醒它。"), pick);
+  const v = await dialog({ title: "新群聊", body, actions: [{ label: "取消", value: null }, { label: "创建", cls: "primary", value: "ok" }], ready: () => name.focus() });
   if (v !== "ok" || !name.value.trim()) return;
   try {
     const c = await api("POST", "/api/bus/channel", {}, { name: name.value.trim(), topic: topic.value.trim(), members: [...chosen] });

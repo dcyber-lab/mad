@@ -103,7 +103,7 @@ public struct ChannelView: View {
                           dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
                 VStack(alignment: .leading, spacing: 0) {
                     Text(screen.title).font(MadType.title).lineLimit(1)
-                    if !screen.stateLine.isEmpty { Text(screen.stateLine).font(MadType.label).foregroundStyle(.secondary).lineLimit(1) }
+                    PillSubline(text: screen.stateLine)
                 }
                 #if os(iOS)
                 Spacer(minLength: 0)
@@ -198,7 +198,8 @@ public struct ChannelView: View {
                 Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
                     viewport = size
                     if keeper.resized() { stick(proxy) }
-                    settle(proxy, following: nearBottom || watch.shown)
+                    watch.resized()
+                    settle(proxy)
                 }
             })
             #if os(macOS)
@@ -216,6 +217,7 @@ public struct ChannelView: View {
             .simultaneousGesture(edgeOpen)
             #endif
             .defaultScrollAnchor(.bottom)
+            .pinnedToBottomThroughResizes()
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
@@ -230,13 +232,13 @@ public struct ChannelView: View {
     /// Once the layout has had time to settle after a resize (the keyboard comes in several steps, a third-party one
     /// with its own height, and the composer grows with it): a list that was at the bottom is at the bottom again,
     /// and a list that shows no row at all (an offset left past the content) is put right whatever it was doing.
-    private func settle(_ proxy: ScrollViewProxy, following: Bool) {
+    private func settle(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             let blank = realized.count <= 0 && !screen.items.isEmpty
             // the marker's foot well above the viewport's: an offset left past the end of the content (the viewport grew
             // as the keyboard went away), an empty band under the last message
             let pastEnd = BottomWatch.pastEnd(markerShown: watch.shown, markerFoot: realized.markerFoot, viewportHeight: viewport.height)
-            if blank || pastEnd || (following && !watch.shown) { stick(proxy) }
+            if blank || pastEnd || watch.leftWithResize { stick(proxy) }
         }
     }
 

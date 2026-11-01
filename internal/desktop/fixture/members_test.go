@@ -195,7 +195,7 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			if rep.Sections[2].Title != "这个群" {
 				t.Errorf("third heading %q", rep.Sections[2].Title)
 			}
-			if !strings.Contains(rep.Who, "3 agents · 3 帮手") {
+			if !strings.Contains(rep.Who, "3 个 agent · 3 帮手") {
 				t.Errorf("under the message box: %q", rep.Who)
 			}
 			// What is done and what waits counts everyone, helpers too: kim, a helper, needs the person and ops, another,

@@ -39,15 +39,19 @@ public final class PairingBook: ObservableObject {
     private let send: (PendingPairing) async throws -> PairResult
     private let makeToken: () throws -> String
     private let deviceName: String
+    /// Where what the device keeps of each Mac is (`SnapshotCache`): a Mac's folder goes when it is removed.
+    private let cacheRoot: URL
     private var inFlight: Set<UUID> = []
 
     public init(secrets: SecretStore, macs: [Mac] = [], pending: [Pending] = [], deviceName: String,
+                cacheRoot: URL = SnapshotCache.defaultRoot,
                 makeToken: @escaping () throws -> String,
                 send: @escaping (PendingPairing) async throws -> PairResult) {
         self.secrets = secrets
         self.macs = macs
         self.pending = pending
         self.deviceName = deviceName
+        self.cacheRoot = cacheRoot
         self.makeToken = makeToken
         self.send = send
     }
@@ -143,6 +147,7 @@ public final class PairingBook: ObservableObject {
     public func remove(_ mac: Mac) {
         guard let i = macs.firstIndex(where: { $0.id == mac.id }) else { return }
         secrets.delete(mac.id.uuidString)
+        SnapshotCache.clear(mac: mac, root: cacheRoot)
         macs.remove(at: i)
         onChange()
     }

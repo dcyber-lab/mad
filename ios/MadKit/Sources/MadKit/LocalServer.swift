@@ -4,12 +4,17 @@ import Foundation
 public struct Endpoint: Equatable, Sendable {
     public var base: URL
     public var token: String
-    public init(base: URL, token: String) { self.base = base; self.token = token }
+    /// The id its Mac gets (and what is kept of it on the device is kept under): the same on every start.
+    public var macID: UUID
+    public init(base: URL, token: String, macID: UUID = Mac.localID) { self.base = base; self.token = token; self.macID = macID }
 
     /// This server as a Mac the client can talk to.
-    public func mac(named name: String = "This Mac") -> Mac { Mac(name: name, baseURL: base, token: token) }
-    /// A client for it.
-    public func client(session: URLSession = .shared) -> MadClient { MadClient(mac: mac(), session: session) }
+    public func mac(named name: String = "This Mac") -> Mac { Mac(id: macID, name: name, baseURL: base, token: token) }
+    /// A client for it, keeping what it sees on the device (see `SnapshotCache`).
+    public func client(session: URLSession = .shared) -> MadClient {
+        let m = mac()
+        return MadClient(mac: m, session: session, cache: SnapshotCache.standard(for: m))
+    }
 }
 
 /// Finding the server of the Mac the app runs on: the phone server if it is up, else one of its own.
@@ -80,9 +85,9 @@ public enum LocalServer {
 
         public var errorDescription: String? {
             switch self {
-            case .madNotFound: return "mad was not found. Install it, or set its path in Settings."
-            case .failed(let why): return "mad could not start: \(why)"
-            case .timeout: return "mad did not say where it listens."
+            case .madNotFound: return "没有找到 mad：请先安装它，或在设置里指定它的路径。"
+            case .failed(let why): return "mad 启动失败：\(why)"
+            case .timeout: return "mad 没有报告它监听的地址：请重启这个应用再试。"
             }
         }
     }
@@ -240,6 +245,6 @@ public enum FixtureHook {
         guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
         while s.hasSuffix("/") { s.removeLast() }
         guard let url = URL(string: s), url.scheme == "http" || url.scheme == "https", url.host != nil else { return nil }
-        return Endpoint(base: url, token: token)
+        return Endpoint(base: url, token: token, macID: Mac.fixtureID)
     }
 }

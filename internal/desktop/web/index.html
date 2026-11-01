@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -20,16 +20,16 @@
 <div id="app">
   <aside id="sidebar">
     <header>
-      <span class="brand" id="brand" title="the overview"><span class="mark">m</span><span class="mword">mad</span><span class="mname"></span></span>
-      <span id="conn" class="conn" title="connection to mad"></span>
-      <button id="boardbtn" type="button" class="icon-btn" title="the task board (Alt-B)"><span data-icon="todo"></span></button>
-      <button id="searchbtn" type="button" class="icon-btn" title="search agents" aria-label="搜索"><span data-icon="search"></span></button>
-      <button id="newchat" type="button" class="icon-btn" title="a new conversation (⌘N)" aria-label="新建"><span data-icon="compose"></span></button>
-      <button id="embed-menu" type="button" class="icon-btn" title="more" aria-label="更多"><span data-icon="more"></span></button>
+      <span class="brand" id="brand" title="概览"><span class="mark">m</span><span class="mword">mad</span><span class="mname"></span></span>
+      <span id="conn" class="conn" title="和 mad 的连接"></span>
+      <button id="boardbtn" type="button" class="icon-btn" title="任务看板 (Alt-B)"><span data-icon="todo"></span></button>
+      <button id="searchbtn" type="button" class="icon-btn" title="搜索 agent" aria-label="搜索"><span data-icon="search"></span></button>
+      <button id="newchat" type="button" class="icon-btn" title="新对话 (⌘N)" aria-label="新建"><span data-icon="compose"></span></button>
+      <button id="embed-menu" type="button" class="icon-btn" title="更多" aria-label="更多"><span data-icon="more"></span></button>
     </header>
     <label class="search">
       <span class="ico" data-icon="search"></span>
-      <input id="filter" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false">
+      <input id="filter" type="search" placeholder="搜索 agent" autocomplete="off" spellcheck="false">
       <kbd id="filterKey">⌘K</kbd>
     </label>
     <div id="chips" hidden></div>
@@ -39,18 +39,18 @@
       <button id="usageline" type="button" class="usageline" hidden></button>
       <div class="foot">
         <span class="muted" id="summary"></span>
-        <button id="addproject" type="button" class="icon-btn" title="add a project"><span data-icon="folderplus"></span></button>
-        <button id="skills" type="button" class="icon-btn" title="skills"><span data-icon="skill"></span></button>
-        <button id="phone" type="button" class="icon-btn" title="on your phone"><span data-icon="phone"></span></button>
-        <button id="bell" type="button" class="icon-btn" title="notifications on this device"><span data-icon="bell"></span></button>
-        <button id="theme" type="button" class="icon-btn" title="theme"></button>
+        <button id="addproject" type="button" class="icon-btn" title="添加项目"><span data-icon="folderplus"></span></button>
+        <button id="skills" type="button" class="icon-btn" title="技能"><span data-icon="skill"></span></button>
+        <button id="phone" type="button" class="icon-btn" title="在手机上"><span data-icon="phone"></span></button>
+        <button id="bell" type="button" class="icon-btn" title="这台设备上的通知"><span data-icon="bell"></span></button>
+        <button id="theme" type="button" class="icon-btn" title="主题"></button>
       </div>
     </footer>
   </aside>
-  <div id="resizer" title="drag to resize"></div>
+  <div id="resizer" title="拖动调整宽度"></div>
   <main id="main">
     <div id="bar" hidden>
-      <button id="back" type="button" class="icon-btn" title="back to the list"><span data-icon="left"></span></button>
+      <button id="back" type="button" class="icon-btn" title="回到列表"><span data-icon="left"></span></button>
       <div id="ptitle"></div>
       <div id="tabs"></div>
       <div id="acts" hidden>
@@ -59,8 +59,8 @@
           <button type="button" data-v="term">终端</button>
           <button type="button" data-v="diff">改动</button>
         </div>
-        <button id="changes" type="button" class="bar-btn" title="what it changed in its directory"><span data-icon="diff"></span>Changes</button>
-        <button id="more" type="button" class="icon-btn" title="more"><span data-icon="more"></span></button>
+        <button id="changes" type="button" class="bar-btn" title="它在目录里改了什么"><span data-icon="diff"></span>改动</button>
+        <button id="more" type="button" class="icon-btn" title="更多"><span data-icon="more"></span></button>
       </div>
     </div>
     <div id="body">
@@ -69,16 +69,16 @@
           <div id="empty">
             <div class="hero">
               <div class="mark big">m</div>
-              <h1>Your agents, in one place</h1>
-              <p class="muted">Start a conversation, or pick an agent on the left: it runs here,
-                what it writes drawn as it writes, what it asks answered in place.</p>
-              <button id="emptynew" type="button" class="btn primary">New chat</button>
+              <h1>你的 agent，都在这里</h1>
+              <p class="muted">开一段新对话，或者在左边选一个 agent：它就在这里运行，
+                写的内容边写边显示，它的提问也在这里直接回答。</p>
+              <button id="emptynew" type="button" class="btn primary">新对话</button>
             </div>
             <div id="home" hidden></div>
             <div class="keys muted">
-              <span><kbd>⌘</kbd> <kbd>N</kbd> new chat</span>
-              <span><kbd>Alt</kbd> <kbd>N</kbd> next that needs you</span>
-              <span><kbd>⌘</kbd> <kbd>K</kbd> search</span>
+              <span><kbd>⌘</kbd> <kbd>N</kbd> 新对话</span>
+              <span><kbd>Alt</kbd> <kbd>N</kbd> 下一个在等你的</span>
+              <span><kbd>⌘</kbd> <kbd>K</kbd> 搜索</span>
             </div>
           </div>
           <section id="chanview" hidden>
@@ -90,7 +90,7 @@
           <section id="usageview" hidden></section>
           <section id="new" hidden>
             <div class="newhead">
-              <h1 id="newtitle">What should we work on?</h1>
+              <h1 id="newtitle">想做点什么？</h1>
               <p id="newsub" class="muted"></p>
             </div>
           </section>
@@ -103,14 +103,14 @@
             <div id="qreply" hidden></div>
             <ol id="qitems"></ol>
             <div id="qimgs"></div>
-            <textarea id="qinput" rows="1" placeholder="Message the agent, or / for commands"></textarea>
+            <textarea id="qinput" rows="1" placeholder="发消息给 agent，输入 / 用命令"></textarea>
             <div class="cbar">
-              <button id="attach" type="button" class="icon-btn" title="attach images (or paste them)"><span data-icon="attach"></span></button>
+              <button id="attach" type="button" class="icon-btn" title="添加图片（也可以直接粘贴）"><span data-icon="attach"></span></button>
               <span id="who"></span>
               <span class="grow"></span>
-              <span id="hint" class="hintline muted">Sent when its turn is over · <kbd>⇧</kbd><kbd>↵</kbd> new line</span>
-              <button id="qpause" type="button" class="icon-btn" title="hold the queued messages"></button>
-              <button id="qsend" type="button" class="send" title="send (Enter)" disabled></button>
+              <span id="hint" class="hintline muted">它忙完后发送 · <kbd>⇧</kbd><kbd>↵</kbd> 换行</span>
+              <button id="qpause" type="button" class="icon-btn" title="暂停排队的消息"></button>
+              <button id="qsend" type="button" class="send" title="发送 (Enter)" disabled></button>
             </div>
             <input id="imgpick" type="file" accept="image/*" multiple hidden>
           </div>

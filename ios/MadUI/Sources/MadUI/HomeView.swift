@@ -50,11 +50,10 @@ public struct HomeView: View {
                     .accessibilityLabel("\(model.machine), switch Mac")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { searching = true } label: { Image(systemName: "magnifyingglass") }
+                    Button { searching = true } label: { Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .medium)) }
                         .accessibilityLabel("搜索")
-                    Button(action: actions.newChat) { Image(systemName: "plus") }
-                        .accessibilityLabel("新建")
-                    HomeMenu(groups: menu, action: actions.menu)
+                    HomeNewMenu(action: actions.create)
+                    HomeMenu(groups: menu, action: actions.menu, font: .system(size: 17, weight: .medium))
                 }
             }
         }
@@ -62,10 +61,43 @@ public struct HomeView: View {
 }
 #endif
 
+/// The + menu: what the page's + starts. Each item is the app's to carry out (the page's dialog, for now).
+struct HomeNewMenu: View {
+    /// How the + is drawn: as a toolbar's glyph beside 🔍 and ⋯, or as the Mac sidebar's round button.
+    enum Style { case toolbar, round }
+
+    let action: (HomeNewItem) -> Void
+    var style = Style.toolbar
+
+    var body: some View {
+        Menu {
+            ForEach(HomeNewItem.allCases, id: \.self) { item in
+                Button { action(item) } label: { Label(item.title, systemImage: item.symbol) }
+            }
+        } label: {
+            switch style {
+            case .toolbar:
+                Image(systemName: "plus").font(.system(size: 17, weight: .medium))
+            case .round:
+                // the whole ring is the button, as for hide and 🔍: the circle is in the label, not around the menu
+                Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundStyle(.primary)
+                    .frame(width: 30, height: 30)
+                    .background(Color.chatComposer, in: Circle())
+                    .overlay(Circle().strokeBorder(Color.chatLine.opacity(0.7)))
+                    .contentShape(Circle())
+            }
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel("新建")
+    }
+}
+
 /// The ⋯ menu: the items in groups, a divider between groups.
 struct HomeMenu: View {
     let groups: [[HomeMenuItem]]
     let action: (HomeMenuItem) -> Void
+    /// The glyph's font (the phone's toolbar draws it as it draws 🔍 and +).
+    var font: Font?
 
     var body: some View {
         Menu {
@@ -74,7 +106,7 @@ struct HomeMenu: View {
                 ForEach(group, id: \.self) { item in Button(item.title) { action(item) } }
             }
         } label: {
-            Image(systemName: "ellipsis")
+            Image(systemName: "ellipsis").font(font)
         }
         .accessibilityLabel("更多")
     }

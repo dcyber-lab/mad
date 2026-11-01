@@ -120,6 +120,8 @@ struct BottomWatch {
 
     private(set) var shown = true
     private var followedAt = Date.distantPast
+    private var resizedAt = Date.distantPast
+    private var leftAt = Date.distantPast
 
     enum Left: Equatable {
         /// The person has left the bottom.
@@ -136,9 +138,16 @@ struct BottomWatch {
     /// The marker left the screen.
     mutating func disappeared(at now: Date = Date()) -> Left {
         shown = false
+        leftAt = now
         let wait = Self.window - now.timeIntervalSince(followedAt)
         return wait > 0 ? .recheck(after: wait) : .now
     }
+
+    /// The scroll view's size changed (the keyboard, the composer, the window).
+    mutating func resized(at now: Date = Date()) { resizedAt = now }
+
+    /// The marker is out, and it left within a moment of a size change: the resize moved it, not the person.
+    var leftWithResize: Bool { !shown && abs(leftAt.timeIntervalSince(resizedAt)) < 0.4 }
 
     /// At a recheck: the marker is still out.
     var stillLeft: Bool { !shown }
@@ -147,5 +156,50 @@ struct BottomWatch {
     /// content (the viewport grew), and an empty band shows under the last message.
     static func pastEnd(markerShown: Bool, markerFoot: CGFloat, viewportHeight: CGFloat) -> Bool {
         markerShown && viewportHeight > 0 && markerFoot < viewportHeight - 40
+    }
+}
+
+/// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
+/// its state line: one place the person already looks, and no second floating thing.
+public struct MadLinkNote: Equatable, Sendable {
+    public var text: String
+    public var symbol: String
+    public init(text: String, symbol: String) { self.text = text; self.symbol = symbol }
+}
+
+private struct LinkNoteKey: EnvironmentKey { static let defaultValue: MadLinkNote? = nil }
+
+extension EnvironmentValues {
+    /// Set by the window when the Mac cannot be reached, refuses the token or fails; nil when all is well.
+    public var madLinkNote: MadLinkNote? {
+        get { self[LinkNoteKey.self] }
+        set { self[LinkNoteKey.self] = newValue }
+    }
+}
+
+/// The second line of a name pill: how the channel or agent stands, or, when the link is bad, that.
+struct PillSubline: View {
+    let text: String
+    @Environment(\.madLinkNote) private var note
+
+    var body: some View {
+        if let note {
+            HStack(spacing: 4) {
+                Image(systemName: note.symbol).font(.system(size: 11))
+                Text(note.text).lineLimit(1).truncationMode(.tail)
+            }
+            .font(MadType.label)
+            .foregroundStyle(.orange)
+        } else if !text.isEmpty {
+            Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+}
+
+extension View {
+    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
+    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
+    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
+        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
     }
 }
