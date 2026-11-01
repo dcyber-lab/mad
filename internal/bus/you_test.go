@@ -164,7 +164,8 @@ func TestHiddenKindsAreNotTheirs(t *testing.T) {
 		put(t, "ops", Message{From: from, Kind: kind, Text: "Re-review the handoff, it lapsed", Handoff: ref})
 	}
 	put(t, "ops", Message{From: mad, Kind: "system", Text: "h-1 lapsed", Handoff: ref, Mentions: []string{idArch}})
-	put(t, "ops", Message{From: mad, Kind: "system", Text: "Resumed by a person."})
+	put(t, "ops", Message{From: mad, Kind: "system", Text: "Resumed by a person.", Event: EventResumed})
+	put(t, "ops", Message{From: mad, Kind: "system", Text: "Older messages were dropped; the last 500 are kept.", Event: EventTrimmed})
 	y, err := YourChannels()
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +177,7 @@ func TestHiddenKindsAreNotTheirs(t *testing.T) {
 	if o.LastLine != "architect: the deploy is green" {
 		t.Errorf("the last line is %q, want the last visible message", o.LastLine)
 	}
-	if o.Last != 8 {
+	if o.Last != 9 {
 		t.Errorf("last = %d: it is still the number of the last message, hidden or not", o.Last)
 	}
 	// an @you keeps its kind's weight: it is a message like any other, whatever its kind

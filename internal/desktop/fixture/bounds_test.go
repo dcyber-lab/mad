@@ -692,16 +692,59 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				  drawMessage(m(103, 9, "text", "builder", "b"));
 				  drawMessage(m(104, 40, "handoff", "architect", "h"));
 				  drawMessage(m(105, 12, "text", "builder", "c"));
-				  return { times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
+				  const trim = (seq, text) => drawMessage({ seq, at: new Date(base + 13 * 60e3).toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, event: "trimmed" });
+				  trim(106, "Older messages were dropped; the last 500 are kept.");
+				  trim(107, "Older messages were dropped; the last 400 are kept.");
+				  drawMessage(m(108, 14, "text", "builder", "d"));
+				  return { first: log.firstElementChild.className + ":" + log.firstElementChild.dataset.seq, notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
 				})()`)
 				if err != nil {
 					t.Fatal(err)
 				}
-				var synth struct{ Times, Groups, Msgs int }
+				var synth struct {
+					Times, Groups, Msgs int
+					Notes               []string
+					First               string
+				}
 				if err := json.Unmarshal(v, &synth); err != nil {
 					t.Fatal(err)
 				}
-				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 3 {
+				// notes written before the event field existed are told by their text, and a trim note is first
+				var old struct {
+					Notes []string
+					First string
+				}
+				v, err = c.eval(`(() => {
+				  const log = document.querySelector("#chanlog");
+				  log.replaceChildren(); cv.run = null; cv.lastAt = 0;
+				  const sys = (seq, text, extra) => drawMessage({ seq, at: new Date().toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, ...extra });
+				  drawMessage({ seq: 200, at: new Date().toISOString(), from: { id: "you", label: "you" }, kind: "text", text: "hi" });
+				  sys(201, "Paused: 30 posts by agents with no word from a person. It waits for a person.");
+				  sys(202, "Resumed by a person.");
+				  sys(203, "Older messages were dropped; the last 500 are kept.");
+				  sys(204, "Something else mad said");
+				  sys(205, "Paused: h-1 lapsed", { handoff: { id: "h-1", to: "x", status: "lapsed" } });
+				  return { notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), first: log.firstElementChild.className };
+				})()`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(v, &old); err != nil {
+					t.Fatal(err)
+				}
+				if got := strings.Join(old.Notes, "|"); got != "更早的消息已清理|群已暂停|群已恢复|Something else mad said" || old.First != "csys trimmed" {
+					t.Errorf("old notes read %q (first item %q), want 更早的消息已清理 first, then 群已暂停|群已恢复|Something else mad said", got, old.First)
+				}
+				if theme == "light" && w == 390 {
+					shot("trim-note-390-light")
+				}
+				if synth.First != "csys trimmed:107" {
+					t.Errorf("the first item is %q: the latest trim note must be the list's first item, above the oldest message and its time line", synth.First)
+				}
+				if len(synth.Notes) != 1 || synth.Notes[0] != "更早的消息已清理" {
+					t.Errorf("the trim note reads %v, want 更早的消息已清理", synth.Notes)
+				}
+				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 4 {
 					t.Errorf("a hidden message came between builder's: %+v, want one time line, one run, three bubbles", synth)
 				}
 			})

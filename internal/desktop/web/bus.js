@@ -778,6 +778,18 @@ function quiet(m) {
   return QUIET_KINDS.includes(m.kind);
 }
 
+// noteEvent is what mad's note m is, by meaning: its event, or for a note written before the field existed
+// (history only) what its English text starts with. "" for any other system line.
+function noteEvent(m) {
+  if (m.event) return m.event;
+  if (m.kind !== "system" || m.handoff) return "";
+  const t = m.text || "";
+  if (/^Paused\b/.test(t)) return "paused";
+  if (/^Resumed\b/.test(t)) return "resumed";
+  if (/^Older messages were dropped/.test(t)) return "trimmed";
+  return "";
+}
+
 // drawMessage draws message m at the end of the log: the person's on the
 // right, the bus's own lines in the middle, an agent's in a run with its
 // other messages in a row, which share the name and the character (beside
@@ -793,9 +805,18 @@ function drawMessage(m) {
   }
   log.querySelector(".note")?.remove();
   if (m.kind === "system") {
-    // mad's pause and resume notes are drawn in Chinese by what they mean; an older note has no event
-    const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复" }[m.event] || m.text);
+    // mad's pause, resume and trim notes are drawn in Chinese by what they mean
+    const event = noteEvent(m);
+    const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复", trimmed: "更早的消息已清理" }[event] || m.text);
     s.dataset.seq = m.seq;
+    if (event === "trimmed") {
+      // It is about the start of the channel, not the moment it was written: the first item, above the oldest
+      // message kept and its time line, whatever its seq. Only the latest counts. It breaks no run.
+      for (const old of log.querySelectorAll(".csys.trimmed")) old.remove();
+      s.classList.add("trimmed");
+      log.prepend(s);
+      return;
+    }
     log.append(s);
     cv.run = null;
     return;

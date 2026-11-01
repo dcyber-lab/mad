@@ -77,8 +77,8 @@ type Message struct {
 	Mentions []string    `json:"mentions,omitempty"`
 	ReplyTo  int         `json:"reply_to,omitempty"`
 	Handoff  *HandoffRef `json:"handoff,omitempty"`
-	// Event says what mad's own note is, by meaning: "paused" or "resumed" (EventPaused, EventResumed). Views
-	// draw their own words for it (群已暂停, 群已恢复) and fall back to Text for a note without it (an older one).
+	// Event says what mad's own note is, by meaning: "paused", "resumed" or "trimmed" (EventPaused,
+	// EventResumed, EventTrimmed). Views draw their own words for it (群已暂停, 群已恢复, 更早的消息已清理) and fall back to Text for a note without it (an older one).
 	Event string `json:"event,omitempty"`
 	// Images are the pictures it carries (images.go).
 	Images []Image `json:"images,omitempty"`
@@ -224,7 +224,7 @@ func addMsg(ch string, msgs *[]Message, m Message) (Message, error) {
 		}
 		kept = append(kept, Message{
 			Seq: m.Seq + 1, At: m.At, From: From{ID: system, Label: system, Kind: "system"}, Kind: "system",
-			Text: text,
+			Text: text, Event: EventTrimmed,
 		})
 		var b strings.Builder
 		for _, k := range kept {
@@ -535,10 +535,12 @@ func PostSystem(channel, text string) error {
 	return err
 }
 
-// The Event of mad's notes that a channel's pause and resume leave in it.
+// The Event of mad's notes that a channel leaves in itself: its pause and resume, and the clearing of its
+// oldest messages.
 const (
 	EventPaused  = "paused"
 	EventResumed = "resumed"
+	EventTrimmed = "trimmed"
 )
 
 func systemMsg(text string) Message {

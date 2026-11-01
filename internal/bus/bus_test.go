@@ -539,6 +539,9 @@ func TestCompaction(t *testing.T) {
 	if len(msgs) != 6 || last != 22 || msgs[0].Seq != 17 || msgs[5].Kind != "system" || msgs[5].Seq != 22 {
 		t.Errorf("after: %+v %d", msgs, last)
 	}
+	if msgs[5].Event != EventTrimmed {
+		t.Errorf("the trim note says what it is by meaning: event %q", msgs[5].Event)
+	}
 	if r := mustPost(t, "long", me, "message 22 after the cut"); r.Seq != 23 {
 		t.Errorf("seq after compaction = %d", r.Seq)
 	}
