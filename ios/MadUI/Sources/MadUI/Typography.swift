@@ -98,6 +98,9 @@ extension View {
     func hugging(maxWidth: CGFloat) -> some View { MaxWidthLayout(maxWidth: maxWidth) { self } }
 }
 
+#if os(macOS)
+// What the Mac's list uses to stay at its bottom as the person resizes the window. The iPhone's list is full-bleed and
+// needs none of it: the keyboard changes its inset, not its size.
 /// A list that was at its bottom when its window was resized is at its bottom after: the view that leaves the
 /// bottom within a moment of the resize is put back. (The marker row at the end of the list reports leaving.)
 struct BottomKeeper {
@@ -158,6 +161,8 @@ struct BottomWatch {
         markerShown && viewportHeight > 0 && markerFoot < viewportHeight - 40
     }
 }
+
+#endif
 
 /// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
 /// its state line: one place the person already looks, and no second floating thing.

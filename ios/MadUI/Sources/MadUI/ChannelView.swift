@@ -13,11 +13,20 @@ public struct ChannelView: View {
     @State private var gallery = false
     @State private var nearBottom = true
     @State private var viewport = CGSize.zero
+    #if os(iOS)
+    // The list is full-bleed: the head, the composer and the keyboard are insets over it, and the end marker is still
+    // realized while it sits under them. The end is judged by where the marker's foot is against the visible part.
+    @State private var markerShown = true
+    @State private var markerFoot: CGFloat = 0
+    @State private var bottomInset: CGFloat = 0
+    #endif
+    #if os(macOS)
+    // The Mac's window is resized by the person and keeps its list at the bottom through that (see `BottomWatch`).
     @State private var keeper = BottomKeeper()
-    /// The marker's whereabouts and when the list last followed a message (see `BottomWatch`).
     @State private var watch = BottomWatch()
     /// How many rows the lazy list has made now (not state: counting must not draw the view again).
     @State private var realized = RealizedRows()
+    #endif
     @State private var expanded: Set<Int> = []
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
@@ -62,20 +71,31 @@ public struct ChannelView: View {
 
     // MARK: the chat
 
+    private var composerRow: some View {
+        // the composer has the message column's edges, exactly
+        ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
+                        replying: $replying, send: actions.send)
+            .frame(maxWidth: MadColumn.maxWidth)
+            .padding(.horizontal, MadColumn.side)
+            .frame(maxWidth: .infinity)
+    }
+
     private var chat: some View {
+        #if os(iOS)
+        // The list is full-bleed and never changes its frame: the head and the composer are insets of it, so the keyboard
+        // changes the list's inset (the list stays where it is under it), a composer that grows goes up over the list, and
+        // what scrolls under the head is blurred by its material, not cut.
+        messages
+            .safeAreaInset(edge: .top, spacing: 0) { head.background(.ultraThinMaterial) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.ultraThinMaterial) }
+            .background(Color.clear)
+        #else
         VStack(spacing: 0) {
-            #if os(iOS)
-            head
-            #endif
             messages
-            // the composer has the message column's edges, exactly
-            ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
-                            replying: $replying, send: actions.send)
-                .frame(maxWidth: MadColumn.maxWidth)
-                .padding(.horizontal, MadColumn.side)
-                .frame(maxWidth: .infinity)
+            composerRow
         }
         .background(Color.clear)
+        #endif
     }
 
     /// The head: back (phone), the tile with the name and how many work, ⓘ. On the Mac it is the window's
@@ -147,12 +167,21 @@ public struct ChannelView: View {
                     // new message) leaves the other rows alone.
                     ForEach(screen.items) { item in
                         DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
+                            #if os(macOS)
                             .onAppear { realized.count += 1 }
                             .onDisappear { realized.count -= 1 }
+                            #endif
                     }
                     // The last row of the lazy stack: it appears and disappears as the scroll brings it
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
+                        #if os(iOS)
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { markerFoot = g.frame(in: .named(Self.space)).maxY; markerShown = true; judge() }
+                                .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in markerFoot = y; judge() }
+                        })
+                        .onDisappear { markerShown = false; nearBottom = false }
+                        #else
                         .background(GeometryReader { g in
                             // where the marker's foot is in the scroll view, kept without drawing the view again
                             Color.clear.onAppear { realized.markerFoot = g.frame(in: .named(Self.space)).maxY }
@@ -168,6 +197,7 @@ public struct ChannelView: View {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + after + 0.02) { if watch.stillLeft { left(proxy) } }
                             }
                         }
+                        #endif
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
                 .background(GeometryReader { g in
@@ -204,12 +234,32 @@ public struct ChannelView: View {
                 }
             }
             .background(GeometryReader { g in
-                Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
+                Color.clear.onAppear {
+                    viewport = g.size
+                    #if os(iOS)
+                    bottomInset = g.safeAreaInsets.bottom
+                    judge() // the marker's foot may have been measured before the viewport was
+                    #endif
+                }
+                #if os(iOS)
+                .onChange(of: g.safeAreaInsets.bottom) { _, inset in
+                    // the keyboard, the composer growing or the ask card changed what covers the list's foot: a list that was
+                    // at its end is put back at its end once (the offset is kept through the change)
+                    bottomInset = inset
+                    if nearBottom { stick(proxy) } else { judge() }
+                }
+                #endif
+                .onChange(of: g.size) { _, size in
                     viewport = size
+                    #if os(iOS)
+                    judge()
+                    #endif
+                    #if os(macOS)
                     // a list at its bottom stays there as the viewport changes: put back at once, not after a wait
                     if nearBottom || keeper.resized() { stick(proxy) }
                     watch.resized()
                     settle(proxy)
+                    #endif
                 }
             })
             #if os(macOS)
@@ -227,14 +277,19 @@ public struct ChannelView: View {
             .simultaneousGesture(edgeOpen)
             #endif
             .defaultScrollAnchor(.bottom)
-            .pinnedToBottomThroughResizes()
+            .pinnedToBottomThroughResizes() // iOS 18 and the Mac: the system keeps the bottom through size changes
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
                 // No animation: a lazy list scrolled under an animation while its rows are measured draws
                 // gaps, and the new message pushing the marker out would flash the way-down button.
-                if nearBottom || mine { watch.followed(); stick(proxy) }
+                if nearBottom || mine {
+                    #if os(macOS)
+                    watch.followed()
+                    #endif
+                    stick(proxy)
+                }
             }
         }
     }
@@ -259,6 +314,7 @@ public struct ChannelView: View {
         return line
     }
 
+    #if os(macOS)
     /// Once the layout has had time to settle after a resize (the keyboard comes in several steps, a third-party one
     /// with its own height, and the composer grows with it): a list that was at the bottom is at the bottom again,
     /// and a list that shows no row at all (an offset left past the content) is put right whatever it was doing.
@@ -278,6 +334,16 @@ public struct ChannelView: View {
         nearBottom = false
         if keeper.leftBottom() { stick(proxy) }
     }
+
+    #endif
+
+    #if os(iOS)
+    /// At the end: the marker is realized and its foot is within the list's visible height. (`viewport` is the list's own
+    /// frame, which the head, the composer and the keyboard already cut down: a marker realized under them is below it.)
+    private func judge() {
+        nearBottom = markerShown && markerFoot <= viewport.height + 2
+    }
+    #endif
 
     /// Back to the bottom once the layout has settled (after a resize that moved it).
     private func stick(_ proxy: ScrollViewProxy) {
@@ -467,4 +533,6 @@ private struct DrawnOnChange<Content: View>: View, Equatable {
 }
 
 /// A count the view keeps without being drawn again for it.
+#if os(macOS)
 private final class RealizedRows { var count = 0; var markerFoot: CGFloat = .infinity }
+#endif
