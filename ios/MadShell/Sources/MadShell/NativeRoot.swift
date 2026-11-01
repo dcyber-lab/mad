@@ -70,7 +70,10 @@ public struct NativeRoot: View {
                 guard scenePhase == .active else { return }
                 await store.run()
             }
+            #if os(iOS)
+            // a thin bar across the top; the Mac's is a capsule in the detail pane (MacShell)
             .overlay(alignment: .top) { LinkNote(link: store.link) }
+            #endif
             #if DEBUG && os(macOS)
             .task { await DebugWindow.runIfAsked() }
             #endif
@@ -81,7 +84,8 @@ public struct NativeRoot: View {
 
     @ViewBuilder private var content: some View {
         #if os(macOS)
-        MacShell(model: model, selection: $selection, actions: actions) {
+        MacShell(model: model, selection: $selection, actions: actions, link: store.link,
+                 rowOpen: selection.map { drawsOwnHead($0) } ?? false) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb)
         }
         #else
@@ -150,12 +154,26 @@ public struct LinkNote: View {
     }
 
     private func note(_ text: String, _ icon: String) -> some View {
+        #if os(macOS)
+        // a small floating capsule, like the name pill: it covers no more than itself, and a long text is cut at the end
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+            Text(text).lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: 13)) // MadType.label
+        .foregroundStyle(.orange)
+        .padding(.horizontal, 14).padding(.vertical, 7)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        #else
         Label(text, systemImage: icon)
             .font(.subheadline)
             .foregroundStyle(.orange)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.regularMaterial)
+        #endif
     }
 }
 
