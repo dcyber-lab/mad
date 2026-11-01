@@ -151,7 +151,7 @@ final class ChannelMappingTests: XCTestCase {
     func testAChannelOfOnlyHiddenMessagesSaysTheAgentsWorkInTheBackground() {
         let s = screen([handoffMessage(1), msg(2, "builder", "ok", kind: "done")])
         XCTAssertEqual(s.items, [.note(id: "quiet", text: "agent 们在后台协作，有事会在这里 @ 你。")])
-        XCTAssertEqual(screen([]).items, [.note(id: "empty", text: "还没人说话…")], "a channel nobody has spoken in")
+        XCTAssertEqual(screen([]).items, [.note(id: "empty", text: "还没人说话。@ 一个 agent 可以叫醒它。")], "a channel nobody has spoken in")
         XCTAssertEqual(ChannelMapping.screen(channel: "fold", messages: [], deck: nil, loaded: false, calendar: cal, now: now).items, [],
                        "before the first look it is not known to be empty")
         // and a hidden message that arrives later changes nothing on screen
@@ -166,9 +166,15 @@ final class ChannelMappingTests: XCTestCase {
             msg(1, "mad", "Paused: waiting for you", kind: "system", event: "paused"),
             msg(2, "mad", "Resumed by a person.", kind: "system", event: "resumed"),
             msg(3, "mad", "Paused by an older mad.", kind: "system"),
+            msg(4, "mad", "Resumed by a person.", kind: "system"),
+            msg(5, "mad", "Some other line of mad's.", kind: "system"),
         ])
+        // history: a note with no event is told by its text; any other system line keeps its text
         XCTAssertEqual(s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } },
-                       ["群已暂停", "群已恢复", "Paused by an older mad."])
+                       ["群已暂停", "群已恢复", "群已暂停", "群已恢复", "Some other line of mad's."])
+        // an old trim note goes first too
+        let t = screen([msg(1, "architect", "one"), msg(2, "mad", "Older messages were dropped (the log was trimmed).", kind: "system")])
+        XCTAssertEqual(t.items.first, .note(id: "trimmed", text: "更早的消息已清理"))
         // and the field is read from the server's JSON
         let m = try JSONDecoder().decode(BusMessage.self, from: Data(#"{"seq":4,"kind":"system","text":"x","event":"paused"}"#.utf8))
         XCTAssertEqual(m.event, "paused")
@@ -252,7 +258,8 @@ final class ChannelMappingTests: XCTestCase {
 
     func testSystemLinesAreNotesAndHaveNoCharacter() {
         let s = screen([msg(1, "architect", "one"), msg(2, "mad", "Paused: waiting for you", kind: "system")])
-        XCTAssertEqual(s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } }, ["Paused: waiting for you"])
+        XCTAssertEqual(s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } }, ["群已暂停"],
+                       "a pause note of mad's, told by its text when it has no event")
         XCTAssertEqual(s.panel.pictureCount, 0)
     }
 

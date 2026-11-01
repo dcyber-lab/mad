@@ -25,11 +25,14 @@ public enum ChannelMapping {
         // are built from what is, and a reply keeps its quote of a message that is not (it looks in `sorted`).
         // The note that older messages were dropped is not at its place: the latest of them is the first item, above the
         // oldest message held.
-        let trimmed = sorted.last { $0.kind == "system" && $0.event == "trimmed" }
-        let visible = sorted.filter { !isHidden($0) && $0.event != "trimmed" }
+        let trimmed = sorted.last { effectiveEvent($0) == "trimmed" }
+        let visible = sorted.filter { !isHidden($0) && effectiveEvent($0) != "trimmed" }
         var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
         // nothing yet, or only the agents' own work so far: say so, quietly, rather than showing a blank
-        if items.isEmpty { if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] } else if loaded { items = [.note(id: emptyID.none, text: noneNote)] } }
+        if items.isEmpty {
+            if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] }
+            else if loaded { items = [.note(id: emptyID.none, text: channel?.dm == true ? noneNoteDM : noneNote)] }
+        }
         if let trimmed { items.insert(.note(id: "trimmed", text: noteText(trimmed)), at: 0) }
         let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
@@ -55,7 +58,9 @@ public enum ChannelMapping {
 
     /// What an empty-looking channel says when everything in it is hidden, and when nobody has said anything.
     public static let quietNote = "agent 们在后台协作，有事会在这里 @ 你。"
-    public static let noneNote = "还没人说话…"
+    /// As the page says them: a channel nobody has spoken in, and a DM.
+    public static let noneNote = "还没人说话。@ 一个 agent 可以叫醒它。"
+    public static let noneNoteDM = "说点什么：它忙完之后会看到。"
     /// The ids of those two lines (`ChannelItem.note`): the view draws them as one quiet line a third of the way down.
     public static let emptyID = (quiet: "quiet", none: "empty")
 
@@ -181,9 +186,20 @@ public enum ChannelMapping {
         return out
     }
 
+    /// What happened, for a note of mad's own: its `event`, and for the notes written before there was one (history) the
+    /// start of their text, as the page tells them. Empty for every other message, and for any other system line.
+    static func effectiveEvent(_ m: BusMessage) -> String {
+        guard m.kind == "system", m.handoff == nil else { return "" }
+        if !m.event.isEmpty { return m.event }
+        if m.text.hasPrefix("Paused") { return "paused" }
+        if m.text.hasPrefix("Resumed") { return "resumed" }
+        if m.text.hasPrefix("Older messages were dropped") { return "trimmed" }
+        return ""
+    }
+
     /// What mad's own note says, in Chinese where it is known what happened (the server's English otherwise).
     static func noteText(_ m: BusMessage) -> String {
-        switch m.event {
+        switch effectiveEvent(m) {
         case "paused": "群已暂停"
         case "resumed": "群已恢复"
         case "trimmed": "更早的消息已清理"
