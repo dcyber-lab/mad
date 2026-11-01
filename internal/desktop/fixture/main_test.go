@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -244,5 +245,29 @@ func TestUnknownScenario(t *testing.T) {
 	}
 	if _, err := newHandler("../x", ""); err == nil {
 		t.Error("a path was taken for a name")
+	}
+}
+
+// A conversation is read once in full; asked again from its end it has nothing new, so a poll does not repeat it.
+func TestChatIsReadOnce(t *testing.T) {
+	var first, again struct {
+		File    string
+		Offset  int64
+		Reset   bool
+		Entries []struct{ Kind string }
+	}
+	_, b := get(t, "edge-home", "/api/chat?id=need0001-bbbb&file=&from=0")
+	if err := json.Unmarshal(b, &first); err != nil {
+		t.Fatal(err)
+	}
+	if !first.Reset || len(first.Entries) < 5 || first.File == "" {
+		t.Fatalf("first look: %+v", first)
+	}
+	_, b = get(t, "edge-home", fmt.Sprintf("/api/chat?id=need0001-bbbb&file=%s&from=%d", first.File, first.Offset))
+	if err := json.Unmarshal(b, &again); err != nil {
+		t.Fatal(err)
+	}
+	if len(again.Entries) != 0 || again.Reset {
+		t.Errorf("second look: %+v", again)
 	}
 }

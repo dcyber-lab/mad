@@ -5,6 +5,8 @@ import Foundation
 public struct ChatImage: Equatable, Decodable, Sendable {
     public var mime: String?
     public var url: String?
+
+    public init(mime: String? = nil, url: String? = nil) { self.mime = mime; self.url = url }
 }
 
 /// One thing a conversation shows (discover.Entry): kinds are strings and
