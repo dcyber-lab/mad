@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1020,7 +1021,10 @@ func TestGitInfoInRows(t *testing.T) {
 	old := gitStatus
 	t.Cleanup(func() { gitStatus = old })
 	var asked []string
+	var mu sync.Mutex // the dirs are read a few at a time
 	gitStatus = func(dir string) (gitInfo, bool) {
+		mu.Lock()
+		defer mu.Unlock()
 		asked = append(asked, dir)
 		return gitInfo{}, false
 	}

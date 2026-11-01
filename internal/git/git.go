@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Info summarizes a checkout for display.
@@ -28,6 +29,34 @@ func Status(dir string) (info Info, ok bool) {
 		return Info{}, false
 	}
 	return parseStatus(string(out)), true
+}
+
+// statusAtOnce is how many checkouts StatusAll reads at a time: a large
+// repository's status takes a good part of a second, and one after another
+// a deck of them would take longer than the poll that asks.
+const statusAtOnce = 4
+
+// StatusAll reads every one of dirs with status (Status, or a stand-in),
+// a few at a time; a dir outside a work tree is left out.
+func StatusAll(dirs []string, status func(string) (Info, bool)) map[string]Info {
+	out := make(map[string]Info, len(dirs))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, statusAtOnce)
+	for _, d := range dirs {
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer func() { <-slots; wg.Done() }()
+			if info, ok := status(d); ok {
+				mu.Lock()
+				out[d] = info
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return out
 }
 
 func parseStatus(out string) Info {

@@ -240,13 +240,11 @@ func (p *poller) Poll(now time.Time) {
 	}
 	if now.Sub(p.lastGit) >= gitEvery {
 		p.lastGit = now
-		gits := map[string]git.Info{}
+		var dirs []string
 		for _, pr := range st.Projects {
-			if info, ok := git.Status(pr.Path); ok {
-				gits[pr.Path] = info
-			}
+			dirs = append(dirs, pr.Path)
 		}
-		p.gits = gits
+		p.gits = git.StatusAll(dirs, git.Status)
 	}
 
 	queues, _ := queue.All()
