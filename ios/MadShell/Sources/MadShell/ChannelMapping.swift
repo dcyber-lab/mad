@@ -124,6 +124,7 @@ public enum ChannelMapping {
                       calendar: Calendar, now: Date) -> [ChannelItem] {
         var out: [ChannelItem] = []
         let bySeq = Dictionary(messages.map { ($0.seq, $0) }, uniquingKeysWith: { a, _ in a })
+        let lastOwnSeq = messages.last { $0.from.isYou }?.seq
         let receiptOf = Dictionary(receipts.map { ($0.seq, $0) }, uniquingKeysWith: { a, _ in a })
         var previous: BusMessage?
         var openRun = false // the last item is a run a message may join
@@ -139,7 +140,10 @@ public enum ChannelMapping {
                 openRun = false
             }
             var bubble = Self.bubble(m, by: bySeq, channel: channel, deck: deck)
-            if m.from.isYou, let r = receiptOf[m.seq] { bubble.receipt = receipt(r, paused: paused) }
+            if m.from.isYou && m.seq == lastOwnSeq {
+                bubble.lastOwn = true
+                if let r = receiptOf[m.seq] { bubble.receipt = receipt(r, paused: paused, kind: { deck?.agent(id: $0)?.kind ?? "" }) }
+            }
             if m.from.isYou {
                 out.append(.mine(bubble))
                 openRun = false
@@ -182,16 +186,13 @@ public enum ChannelMapping {
                       fold: fold(m, channel: channel, deck: deck))
     }
 
-    /// The line under one of the person's messages: whom it woke, each at the furthest step it reached; `paused` is
-    /// whether the channel is paused (a message still waiting is then held).
-    public static func receipt(_ r: BusReceipt, paused: Bool) -> ChannelReceipt {
-        if r.targets.isEmpty { return ChannelReceipt(wokeNobody: true) }
+    /// What a message of the person's reached: each agent it woke at the furthest step it got to. `kind` says what
+    /// kind an agent is (for its character on the card); `paused` is whether the channel is paused.
+    public static func receipt(_ r: BusReceipt, paused: Bool, kind: (String) -> String = { _ in "" }) -> ChannelReceipt {
         let steps: [String: ChannelReceipt.Step] = ["replied": .replied, "read": .read, "delivered": .delivered, "waiting": .waiting]
-        let parts = ChannelReceipt.Step.allCases.compactMap { step -> ChannelReceipt.Part? in
-            let names = r.targets.filter { steps[$0.state] == step }.map(\.label)
-            return names.isEmpty ? nil : ChannelReceipt.Part(step: step, names: names)
-        }
-        return ChannelReceipt(parts: parts, held: paused && r.targets.contains { $0.state == "waiting" })
+        return ChannelReceipt(targets: r.targets.map {
+            ChannelReceipt.Target(id: $0.id, kind: kind($0.id), name: $0.label, step: steps[$0.state] ?? .waiting)
+        }, paused: paused)
     }
 
     static func quote(of m: BusMessage, by bySeq: [Int: BusMessage]) -> ChannelQuote? {

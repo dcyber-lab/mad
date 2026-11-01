@@ -41,78 +41,50 @@ final class ChannelMappingTests: XCTestCase {
 
     private func target(_ label: String, _ state: String) -> BusReceipt.Target { .init(id: "id-\(label)", label: label, state: state) }
 
-    func testReceiptSaysEachStepWithItsNamesFurthestFirst() {
-        let r = BusReceipt(seq: 1, targets: [target("builder", "read"), target("architect", "replied"), target("tester", "read"), target("ops", "waiting"), target("qa", "delivered")])
-        let receipt = ChannelMapping.receipt(r, paused: false)
-        XCTAssertEqual(receipt.parts.map(\.step), [.replied, .read, .delivered, .waiting])
-        XCTAssertEqual(receipt.parts.map(\.names), [["architect"], ["builder", "tester"], ["qa"], ["ops"]])
-        XCTAssertEqual(receipt.line, "↩ 已回复 architect · ✓✓ 已读 builder、tester · ✓ 已送达 qa · ◷ 待送达 ops")
-        XCTAssertFalse(receipt.held)
+    func testTargetsKeepTheirIdsAndTheKindTheDeckKnowsAndComeFurthestFirst() {
+        let r = BusReceipt(seq: 1, targets: [target("ops", "waiting"), target("builder", "read"), target("architect", "replied"), target("qa", "delivered")])
+        let receipt = ChannelMapping.receipt(r, paused: false, kind: { $0 == "id-builder" ? "codex" : "claude" })
+        XCTAssertEqual(receipt.targets.map(\.name), ["architect", "builder", "qa", "ops"])
+        XCTAssertEqual(receipt.targets.map(\.step), [.replied, .read, .delivered, .waiting])
+        XCTAssertEqual(receipt.targets.map(\.id), ["id-architect", "id-builder", "id-qa", "id-ops"])
+        XCTAssertEqual(receipt.targets[1].kind, "codex")
+        XCTAssertEqual(receipt.targets[0].kind, "claude")
     }
 
-    func testReceiptWithNoTargetsSaysNobodyWasWoken() {
-        let receipt = ChannelMapping.receipt(BusReceipt(seq: 1), paused: false)
-        XCTAssertTrue(receipt.wokeNobody)
-        XCTAssertEqual(receipt.line, "没有叫醒谁，@ 一个 agent 才会叫醒它")
-        XCTAssertFalse(ChannelMapping.receipt(BusReceipt(seq: 1), paused: true).held, "nobody waits: nothing is held")
-    }
-
-    func testPausedChannelHoldsOnlyWhatStillWaits() {
-        let waiting = ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("builder", "read"), target("ops", "waiting")]), paused: true)
-        XCTAssertTrue(waiting.held)
-        XCTAssertEqual(waiting.line, "✓✓ 已读 builder · ◷ 待送达 ops · 群已暂停，消息先存着")
-        let none = ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("builder", "read")]), paused: true)
-        XCTAssertFalse(none.held)
-        XCTAssertEqual(none.line, "✓✓ 已读 builder")
-        XCTAssertFalse(ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("ops", "waiting")]), paused: false).held)
-    }
-
-    func testReceiptsSitUnderTheirOwnMessagesOnly() {
-        let all = [msg(1, "architect"), msg(2, "you"), msg(3, "builder"), msg(4, "you")]
-        let receipts = [BusReceipt(seq: 2, targets: [target("builder", "read")]), BusReceipt(seq: 3, targets: [target("x", "read")]), BusReceipt(seq: 9)]
+    func testOnlyTheLatestOwnMessageHasTheLine() {
+        let all = [msg(1, "you"), msg(2, "architect"), msg(3, "you"), msg(4, "builder")]
+        let receipts = [BusReceipt(seq: 1, targets: [target("builder", "read")]), BusReceipt(seq: 3, targets: [target("builder", "delivered")])]
         let s = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: receipts, calendar: cal, now: now)
-        let byID = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0.receipt) })
-        XCTAssertEqual(byID[2]??.line, "✓✓ 已读 builder")
-        XCTAssertNil(byID[1] ?? nil, "an agent's message has no receipt")
-        XCTAssertNil(byID[3] ?? nil, "a receipt for a message that is not the person's is not drawn")
-        XCTAssertNil(byID[4] ?? nil, "a message with no receipt has no line")
+        let byID = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0) })
+        XCTAssertFalse(byID[1]!.lastOwn)
+        XCTAssertNil(byID[1]!.receipt, "an older own message has none")
+        XCTAssertTrue(byID[3]!.lastOwn)
+        XCTAssertEqual(byID[3]!.receipt?.word, "未读")
+        XCTAssertFalse(byID[4]!.lastOwn, "an agent's message has no line")
     }
 
-    /// A look that moves a receipt on changes that one row and no other: the ids stay, only the bubble's receipt differs.
-    func testAReceiptMovingOnChangesOnlyItsOwnRow() {
-        let all = [msg(1, "architect"), msg(2, "you"), msg(3, "builder")]
-        func items(_ state: String) -> [ChannelItem] {
-            ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", state)])],
-                                  calendar: cal, now: now).items
-        }
-        let a = items("delivered"), b = items("read")
-        XCTAssertEqual(a.map(\.id), b.map(\.id))
-        XCTAssertEqual(zip(a, b).filter { $0 != $1 }.count, 1)
+    func testTheLineIsThereBeforeItsReceiptComes() {
+        let s = ChannelMapping.screen(channel: "fold", messages: [msg(1, "you")], deck: nil, calendar: cal, now: now)
+        let b = bubbles(s)[0]
+        XCTAssertTrue(b.lastOwn)
+        XCTAssertNil(b.receipt, "reserved, empty")
     }
 
-    func testTheTailMovesWhenTheLastOwnMessageGetsItsReceipt() {
-        let all = [msg(1, "architect"), msg(2, "you")]
-        let bare = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, calendar: cal, now: now)
-        let withLine = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", "waiting")])],
-                                            calendar: cal, now: now)
-        XCTAssertNotEqual(bare.tail, withLine.tail, "the view follows a row that grew at the bottom")
-    }
-
-    /// A message that arrives leaves every row it did not touch with the id it had: the list keeps those rows
-    /// (a changed id would build them again), whether the message joins a run, starts one, is the person's, or comes after a quiet while.
-    func testRowIdsStayTheSameWhenAMessageArrives() {
-        var all = [msg(1, "architect", at: "2026-11-01T07:00:00+08:00"), msg(2, "builder", at: "2026-11-01T07:01:00+08:00"),
-                   msg(3, "builder", at: "2026-11-01T07:02:00+08:00"), msg(4, "you", at: "2026-11-01T07:03:00+08:00")]
-        let more = [msg(5, "you", at: "2026-11-01T07:04:00+08:00"), msg(6, "builder", at: "2026-11-01T07:05:00+08:00"),
-                    msg(7, "builder", at: "2026-11-01T07:06:00+08:00"), msg(8, "architect", at: "2026-11-01T08:30:00+08:00"),
-                    msg(9, "system", kind: "system", at: "2026-11-01T08:31:00+08:00")]
-        for next in more {
-            let before = screen(all).items.map(\.id)
-            all.append(next)
-            let after = screen(all).items.map(\.id)
-            XCTAssertEqual(Array(after.prefix(before.count)), before, "message \(next.seq) changed the ids of the rows before it")
-            XCTAssertEqual(Set(after).count, after.count, "message \(next.seq) made two rows with one id")
-        }
+    /// A send moves the line from the old message to the new one in one look: the old row loses it, the new one has it, and
+    /// no other row differs. A receipt moving on changes only its own row and not the tail the list follows.
+    func testASendMovesTheLineInOneLookAndAReceiptMovingOnDoesNotMoveTheTail() {
+        let before = [msg(1, "architect"), msg(2, "you")]
+        let after = before + [msg(3, "you")]
+        let r = [BusReceipt(seq: 2, targets: [target("builder", "read")])]
+        let a = ChannelMapping.screen(channel: "fold", messages: before, deck: nil, receipts: r, calendar: cal, now: now)
+        let b = ChannelMapping.screen(channel: "fold", messages: after, deck: nil, receipts: r, calendar: cal, now: now)
+        XCTAssertEqual(Array(b.items.map(\.id).prefix(a.items.count)), a.items.map(\.id))
+        XCTAssertEqual(zip(a.items, b.items).filter { $0 != $1 }.count, 1, "only the old own message changed (it lost the line)")
+        XCTAssertNotEqual(a.tail, b.tail)
+        let moved = ChannelMapping.screen(channel: "fold", messages: before, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", "replied")])],
+                                          calendar: cal, now: now)
+        XCTAssertEqual(a.tail, moved.tail, "a receipt moving on must not make the list follow (a person reading above is left alone)")
+        XCTAssertEqual(zip(a.items, moved.items).filter { $0 != $1 }.count, 1)
     }
 
     private func foldScreen() throws -> ChannelScreen {

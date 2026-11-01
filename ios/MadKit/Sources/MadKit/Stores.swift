@@ -49,12 +49,20 @@ public final class DeckStore {
     public func refresh() async {
         do {
             let d = try await api.deck()
-            deck = d
+            apply(d)
             link = .ok
         } catch {
             if Task.isCancelled { return }
             link = LinkState(error)
         }
+    }
+
+    /// Takes a look in: a deck that differs from the one held only in the time the Mac made it (`at`) is no news, and
+    /// publishing it would draw every screen that reads the deck once a second.
+    func apply(_ d: Deck) {
+        var held = d
+        held.at = deck?.at
+        if held != deck { deck = d }
     }
 
     /// Looks, waits `interval`, looks again, until the task is cancelled.

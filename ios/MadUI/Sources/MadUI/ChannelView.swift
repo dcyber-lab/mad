@@ -270,19 +270,13 @@ public struct ChannelView: View {
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):
-            // against the column's right edge, as wide as its text; under it, how far it got with the agents
-            VStack(alignment: .trailing, spacing: 3) {
+            // against the column's right edge, as wide as its text; under the latest one, the word for how far it got
+            VStack(alignment: .trailing, spacing: 4) {
                 HStack(spacing: 0) {
                     Spacer(minLength: MadColumn.gutter)
                     bubble(b, mine: true, who: "自己")
                 }
-                if let receipt = b.receipt {
-                    Text(receipt.line)
-                        .font(MadType.small).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, 2)
-                }
+                if b.lastOwn { ReceiptLine(receipt: b.receipt) }
             }
             .padding(.top, 6)
         case .run(let run):

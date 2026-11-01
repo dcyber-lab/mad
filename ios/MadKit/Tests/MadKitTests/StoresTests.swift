@@ -44,6 +44,27 @@ private func msg(_ seq: Int, _ text: String = "m", from: String = "kim") -> BusM
 
 @MainActor
 final class DeckStoreTests: XCTestCase {
+    /// A look that differs from the last only in the time the Mac made it tells nobody: every screen that reads the
+    /// deck would be drawn again once a second for nothing.
+    func testADeckThatDiffersOnlyInItsTimeIsNotNews() async {
+        let mac = FakeMac()
+        var a = Deck(machine: "Studio"), same = Deck(machine: "Studio"), changed = Deck(machine: "Studio")
+        a.at = Date(timeIntervalSince1970: 100); same.at = Date(timeIntervalSince1970: 101)
+        changed.at = Date(timeIntervalSince1970: 102); changed.working = ["x"]
+        mac.deckAnswers = [.success(a), .success(same), .success(changed)]
+        let s = DeckStore(api: mac)
+        await s.refresh()
+        var heard = 0
+        func watch() { withObservationTracking { _ = s.deck } onChange: { heard += 1 } }
+        watch()
+        await s.refresh()
+        XCTAssertEqual(heard, 0, "the same deck, an instant later, was announced")
+        XCTAssertEqual(s.deck?.at, a.at, "the first time stays")
+        await s.refresh()
+        XCTAssertEqual(heard, 1, "a changed deck is news")
+        XCTAssertEqual(s.deck?.working, ["x"])
+    }
+
     func testALookFillsTheDeckAndSetsTheLinkOK() async {
         let mac = FakeMac()
         mac.deckAnswers = [.success(Deck(machine: "Studio", projects: [Project(name: "p", agents: [Agent(id: "a1", name: "ios")])]))]

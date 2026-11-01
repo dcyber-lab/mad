@@ -53,6 +53,9 @@ public struct ChannelBubble: Identifiable, Equatable, Sendable {
     public var fold: Fold?
     /// How far the person's own message got with the agents it woke; nil when none is known (not theirs, or too old).
     public var receipt: ChannelReceipt?
+    /// The person's latest own message: it alone has the line for a receipt (empty until one comes), so a send changes
+    /// the old row and the new one in the same update.
+    public var lastOwn: Bool
 
     public struct Fold: Equatable, Sendable {
         public var head: String
@@ -60,42 +63,71 @@ public struct ChannelBubble: Identifiable, Equatable, Sendable {
         public init(head: String, summary: String) { self.head = head; self.summary = summary }
     }
 
-    public init(id: Int, text: String, images: [String] = [], quote: ChannelQuote? = nil, fold: Fold? = nil, receipt: ChannelReceipt? = nil) {
+    public init(id: Int, text: String, images: [String] = [], quote: ChannelQuote? = nil, fold: Fold? = nil, receipt: ChannelReceipt? = nil,
+                lastOwn: Bool = false) {
         self.id = id; self.text = text; self.images = images; self.quote = quote; self.fold = fold; self.receipt = receipt
+        self.lastOwn = lastOwn
     }
 }
 
-/// Who the person's message woke and how far it got with each: the line under the message. The looks of the
-/// marks are the designer's to decide; `line` is the words, and the glyphs in it stand in until then.
+/// Who the person's message woke and how far it got with each: the one word under their latest message, and the card
+/// of who behind it (the page's receipts.js has the same words).
 public struct ChannelReceipt: Equatable, Sendable {
-    /// How far a message got, furthest first.
+    /// How far a message got with one agent, furthest first.
     public enum Step: Int, CaseIterable, Sendable { case replied, read, delivered, waiting }
-    public struct Part: Equatable, Sendable {
+    public struct Target: Equatable, Sendable, Identifiable {
+        public var id: String
+        public var kind: String
+        public var name: String
         public var step: Step
-        public var names: [String]
-        public init(step: Step, names: [String]) { self.step = step; self.names = names }
+        public init(id: String, kind: String = "", name: String, step: Step) { self.id = id; self.kind = kind; self.name = name; self.step = step }
+        /// Read or replied.
+        var seen: Bool { step == .replied || step == .read }
     }
-    /// One part for each step somebody is at, furthest first.
-    public var parts: [Part]
+    /// Those the message woke, furthest step first (the order they came in within a step).
+    public var targets: [Target]
+    /// The channel is paused.
+    public var paused: Bool
+    public init(targets: [Target] = [], paused: Bool = false) {
+        self.targets = Step.allCases.flatMap { s in targets.filter { $0.step == s } }
+        self.paused = paused
+    }
+
     /// The message woke nobody.
-    public var wokeNobody: Bool
-    /// Somebody still waits and the channel is paused: the message is kept, not delivered.
-    public var held: Bool
-    public init(parts: [Part] = [], wokeNobody: Bool = false, held: Bool = false) { self.parts = parts; self.wokeNobody = wokeNobody; self.held = held }
+    public var wokeNobody: Bool { targets.isEmpty }
+    /// Paused, with someone still waiting: the message is kept, not delivered.
+    public var held: Bool { paused && targets.contains { $0.step == .waiting } }
+    private var unseen: Int { targets.filter { !$0.seen }.count }
+    /// Somebody has not seen it yet, and it was delivered or on its way to someone: drawn in the send blue.
+    public var isUnread: Bool { !wokeNobody && !held && !targets.allSatisfy { $0.step == .waiting } && unseen > 0 }
 
-    /// The line, in the page's words (the one place they are kept for the native views).
-    public var line: String {
-        if wokeNobody { return "没有叫醒谁，@ 一个 agent 才会叫醒它" }
-        var text = parts.map { "\(Self.mark($0.step)) \(Self.word($0.step)) \($0.names.joined(separator: "、"))" }.joined(separator: " · ")
-        if held { text += " · 群已暂停，消息先存着" }
-        return text
+    /// The word, by precedence: nobody woken, held, all still waiting, some unseen (a count when several were woken),
+    /// everyone seen (replied, read, or all read).
+    public var word: String {
+        if wokeNobody { return "没有叫醒谁" }
+        if held { return "群已暂停，恢复后送达" }
+        if targets.allSatisfy({ $0.step == .waiting }) { return "待送达" }
+        if unseen > 0 { return targets.count == 1 ? "未读" : "\(unseen) 个未读" }
+        if targets.contains(where: { $0.step == .replied }) { return "已回复" }
+        return targets.count == 1 ? "已读" : "全部已读"
     }
 
-    private static func mark(_ s: Step) -> String {
-        switch s { case .replied: "↩"; case .read: "✓✓"; case .delivered: "✓"; case .waiting: "◷" }
+    /// What VoiceOver says: each one's standing in words.
+    public var spoken: String {
+        if wokeNobody { return word }
+        let each = targets.map { "\($0.name) \($0.seen ? Self.state($0.step) : "未读")" }.joined(separator: "，")
+        return held ? each + "，" + word : each
     }
-    private static func word(_ s: Step) -> String {
-        switch s { case .replied: "已回复"; case .read: "已读"; case .delivered: "已送达"; case .waiting: "待送达" }
+
+    /// One row of the card: where this agent stands.
+    public static func state(_ s: Step) -> String {
+        switch s { case .replied: "已回复"; case .read: "已读"; case .delivered: "已送达，还没看"; case .waiting: "待送达 · 忙完这一轮就会收到" }
+    }
+
+    /// The card's footer, and what it says when nobody was woken.
+    public var footer: String {
+        if wokeNobody { return "没有 @ 任何 agent，所以没有叫醒谁。@ 一个 agent 才会叫醒它。" }
+        return held ? "只显示被 @ 到的 agent\n群已暂停，恢复后送达" : "只显示被 @ 到的 agent"
     }
 }
 
@@ -176,7 +208,6 @@ public struct ChannelScreen: Equatable, Sendable {
         switch items.last {
         case nil: ""
         case .run(let r)?: "r\(r.id).\(r.bubbles.last?.id ?? 0)"
-        case .mine(let b)?: "m\(b.id).\(b.receipt?.line ?? "")"
         case let item?: item.id
         }
     }
