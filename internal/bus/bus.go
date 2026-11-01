@@ -77,6 +77,9 @@ type Message struct {
 	Mentions []string    `json:"mentions,omitempty"`
 	ReplyTo  int         `json:"reply_to,omitempty"`
 	Handoff  *HandoffRef `json:"handoff,omitempty"`
+	// Event says what mad's own note is, by meaning: "paused" or "resumed" (EventPaused, EventResumed). Views
+	// draw their own words for it (群已暂停, 群已恢复) and fall back to Text for a note without it (an older one).
+	Event string `json:"event,omitempty"`
 	// Images are the pictures it carries (images.go).
 	Images []Image `json:"images,omitempty"`
 }
@@ -532,6 +535,12 @@ func PostSystem(channel, text string) error {
 	return err
 }
 
+// The Event of mad's notes that a channel's pause and resume leave in it.
+const (
+	EventPaused  = "paused"
+	EventResumed = "resumed"
+)
+
 func systemMsg(text string) Message {
 	return Message{From: From{ID: system, Label: system, Kind: "system"}, Kind: "system", Text: text}
 }
@@ -583,6 +592,7 @@ func Resume(channel string) error {
 		}
 		c.Paused = false
 		m := systemMsg("Resumed by a person.")
+		m.Event = EventResumed
 		m.From = From{ID: You, Label: You, Kind: "system"} // a person's word ends the count of quiet posts
 		members = append(members, c.Members...)
 		_, err := addMsg(channel, &msgs, m)

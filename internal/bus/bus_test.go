@@ -407,6 +407,10 @@ func TestResume(t *testing.T) {
 	if c, _, _ := Find("busy"); !c.Paused {
 		t.Fatal("not paused")
 	}
+	// mad's note says what it is by meaning, for views that draw their own words.
+	if msgs, _ := readMsgs("busy"); msgs[len(msgs)-1].Kind != "system" || msgs[len(msgs)-1].Event != EventPaused {
+		t.Errorf("the pause note: %+v", msgs[len(msgs)-1])
+	}
 	// The pause holds what waits in it back.
 	text, upto, ok, _ := Compose(idBuild, now())
 	if ok {
@@ -417,6 +421,9 @@ func TestResume(t *testing.T) {
 	}
 	if c, _, _ := Find("busy"); c.Paused {
 		t.Error("not resumed")
+	}
+	if msgs, _ := readMsgs("busy"); msgs[len(msgs)-1].Event != EventResumed {
+		t.Errorf("the resume note: %+v", msgs[len(msgs)-1])
 	}
 	text, _, ok, _ = Compose(idBuild, now())
 	if !ok || !strings.HasPrefix(text, "[mad bus] 3 messages") {
