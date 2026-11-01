@@ -11,7 +11,12 @@ public struct ConversationView: View {
     @ScaledMetric(relativeTo: .body) private var avatar: CGFloat = 26
     /// The message column's width: a bubble takes a share of it.
     @State private var columnWidth: CGFloat = 0
+    #if os(macOS)
     @State private var keeper = BottomKeeper()
+    #else
+    /// The end marker is on screen: new things are followed only then.
+    @State private var atEnd = true
+    #endif
 
     public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true) {
         self.model = model
@@ -19,12 +24,9 @@ public struct ConversationView: View {
         self.showsBack = showsBack
     }
 
-    public var body: some View {
+    /// What waits on the person, then the composer.
+    private var bottomBar: some View {
         VStack(spacing: 0) {
-            #if os(iOS)
-            ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb)
-            #endif
-            messages
             if let ask = model.ask {
                 // from the bubbles' left edge, as wide as its content up to what a bubble may be
                 HStack(spacing: 0) {
@@ -41,13 +43,26 @@ public struct ConversationView: View {
             }
             composer
         }
-        #if os(macOS)
-        .background(Color.chatBackdrop)
+    }
+
+    public var body: some View {
+        #if os(iOS)
+        // Full-bleed: the list keeps its frame when the keyboard comes and goes; the head and the bottom bar are insets of
+        // it with a material behind them, so what scrolls under them is blurred, never cut.
+        messages
+            .safeAreaInset(edge: .top, spacing: 0) {
+                ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb).background(.bar)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar.background(.bar) }
+            .background(.background)
+            .environment(\.convImageLoader, actions.loadImage)
         #else
-        .background(.background)
-        #endif
+        VStack(spacing: 0) {
+            messages
+            bottomBar
+        }
+        .background(Color.chatBackdrop)
         .environment(\.convImageLoader, actions.loadImage)
-        #if os(macOS)
         // no bar: the agent's name floats at the top as a small pill, with the way to its terminal and changes beside it.
         // It hugs its text but never passes the pane (less the side margins): a long title is cut at the end.
         .overlay(alignment: .top) {
@@ -87,7 +102,12 @@ public struct ConversationView: View {
                             .id("live")
                     }
                     Color.clear.frame(height: 1).id("end")
+                        #if os(macOS)
                         .onDisappear { if keeper.leftBottom() { DispatchQueue.main.async { proxy.scrollTo("end") } } }
+                        #else
+                        .onAppear { atEnd = true }
+                        .onDisappear { atEnd = false }
+                        #endif
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
                 .background(GeometryReader { g in
@@ -104,14 +124,16 @@ public struct ConversationView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboardIfAvailable()
-            .onChange(of: model.entries.count) { _, _ in proxy.scrollTo("end") }
-            .onChange(of: model.live) { _, _ in proxy.scrollTo("end") }
-            .onChange(of: model.ask) { _, _ in proxy.scrollTo("end") }
+            .onChange(of: model.entries.count) { _, _ in follow(proxy) }
+            .onChange(of: model.live) { _, _ in follow(proxy) }
+            .onChange(of: model.ask) { _, _ in follow(proxy) }
+            #if os(macOS)
             .background(GeometryReader { g in
                 Color.clear.onChange(of: g.size) { _, _ in
                     if keeper.resized() { DispatchQueue.main.async { proxy.scrollTo("end") } }
                 }
             })
+            #endif
             #if os(macOS)
             // the list fades out under the name, which floats over it
             .overlay(alignment: .top) {
@@ -120,6 +142,15 @@ public struct ConversationView: View {
             }
             #endif
         }
+    }
+
+    /// A new entry, the message being written or a question is followed when the person is at the end of the list
+    /// (on the Mac: always, as before).
+    private func follow(_ proxy: ScrollViewProxy) {
+        #if os(iOS)
+        guard atEnd else { return }
+        #endif
+        proxy.scrollTo("end")
     }
 
     // MARK: composer

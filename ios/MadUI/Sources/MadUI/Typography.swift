@@ -98,6 +98,9 @@ extension View {
     func hugging(maxWidth: CGFloat) -> some View { MaxWidthLayout(maxWidth: maxWidth) { self } }
 }
 
+#if os(macOS)
+// What the Mac's list uses to stay at its bottom as the person resizes the window. The iPhone's list is full-bleed and
+// needs none of it: the keyboard changes its inset, not its size.
 /// A list that was at its bottom when its window was resized is at its bottom after: the view that leaves the
 /// bottom within a moment of the resize is put back. (The marker row at the end of the list reports leaving.)
 struct BottomKeeper {
@@ -159,6 +162,15 @@ struct BottomWatch {
     }
 }
 
+extension View {
+    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
+    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
+    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
+        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
+    }
+}
+#endif
+
 /// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
 /// its state line: one place the person already looks, and no second floating thing.
 public struct MadLinkNote: Equatable, Sendable {
@@ -193,13 +205,5 @@ struct PillSubline: View {
         } else if !text.isEmpty {
             Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
         }
-    }
-}
-
-extension View {
-    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
-    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
-    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
-        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
     }
 }
