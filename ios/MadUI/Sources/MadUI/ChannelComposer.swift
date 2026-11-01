@@ -49,7 +49,6 @@ struct ChannelComposer: View {
         VStack(alignment: .leading, spacing: 6) {
             if let q = replying { replyBar(q) }
             if !images.isEmpty { thumbnails }
-            if !matches.isEmpty { mentionList }
             field
             if let note { Text(note).font(MadType.small).foregroundStyle(.red) }
         }
@@ -61,6 +60,17 @@ struct ChannelComposer: View {
         #else
         .padding(.bottom, 8)
         #endif
+        // the @ list floats over the messages, its foot 8pt above the composer: the messages keep their size
+        .overlay(alignment: .topLeading) {
+            if !matches.isEmpty {
+                // A zero-height line along the composer's top edge: the list stands on it (its foot 8pt above the
+                // edge) and grows upward over the messages, at its own height.
+                Color.clear.frame(height: 0)
+                    .overlay(alignment: .bottomLeading) {
+                        mentionList.fixedSize(horizontal: false, vertical: true).padding(.bottom, 8)
+                    }
+            }
+        }
         .photosPicker(isPresented: $picking, selection: $picked, maxSelectionCount: max(1, ChannelLimits.images - images.count), matching: .images)
         .onChange(of: picked) { _, items in loadPicked(items) }
         .onChange(of: text) { _, _ in pick = 0 }
@@ -146,13 +156,17 @@ struct ChannelComposer: View {
                         if !m.role.isEmpty, m.role != m.name { Text(m.role).font(MadType.small).foregroundStyle(.secondary) }
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(i == min(pick, matches.count - 1) ? Color.chatCard : Color.clear)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    // the selected one as the sidebar's open row is drawn: a soft rounded rect, inset
+                    .background(i == min(pick, matches.count - 1) ? Color.primary.opacity(0.08) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.horizontal, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(.vertical, 4)
         .background(Color.chatComposer, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.chatLine))
         .shadow(color: .black.opacity(0.08), radius: 8, y: 2)

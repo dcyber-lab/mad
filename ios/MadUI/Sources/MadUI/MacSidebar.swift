@@ -64,7 +64,8 @@ public struct MacSidebar: View {
         .background(Color.chatSidebar)
     }
 
-    /// The row the window's controls are on: round buttons at the right, the traffic lights' room at the left.
+    /// The row the window's controls are on: round buttons at the right on the traffic lights' line (their centre is
+    /// 16pt below the top), the traffic lights' room at the left.
     private var band: some View {
         HStack(spacing: 10) {
             Spacer(minLength: 0)
@@ -76,13 +77,13 @@ public struct MacSidebar: View {
             round("plus", "新建", actions.newChat)
         }
         .padding(.horizontal, 14)
-        .frame(height: 52)
+        .frame(height: 32)
     }
 
     private func round(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(.primary)
-                .frame(width: 34, height: 34)
+                .frame(width: 30, height: 30)
                 .background(Color.chatComposer, in: Circle())
                 .overlay(Circle().strokeBorder(Color.chatLine.opacity(0.7)))
         }
@@ -94,10 +95,12 @@ public struct MacSidebar: View {
     private var identity: some View {
         VStack(spacing: 8) {
             GroupTile(members: faces, size: 72, dot: false)
-            Text(model.machine).font(MadType.label.weight(.semibold)).lineLimit(1).truncationMode(.tail).padding(.horizontal, 18)
+            // up to two lines, centred; cut only past that
+            Text(model.machine).font(MadType.label.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 18)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 4).padding(.bottom, 10)
+        .padding(.top, 20).padding(.bottom, 10)
     }
 
     private var faces: [GroupTile.Member] {
@@ -108,7 +111,12 @@ public struct MacSidebar: View {
     private var footer: some View {
         HStack(spacing: 10) {
             if let usage = model.usage {
-                Text(usage).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+                // "Claude 5 小时 42% · 本周 71%": a click opens 用量
+                Button { actions.menu(.usage) } label: {
+                    Text(usage).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("用量，\(usage)")
             }
             Spacer(minLength: 0)
             HomeMenu(groups: menu, action: actions.menu)

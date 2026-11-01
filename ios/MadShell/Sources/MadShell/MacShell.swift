@@ -17,6 +17,8 @@ struct MacShell<Detail: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The resize cursor is pushed while the pointer is on the sidebar's edge; hiding the sidebar under it pops it.
     @State private var onEdge = false
+    /// Where the traffic lights end (the window's left edge to the green one): the shown toggle is 12pt after it.
+    @State private var lightsEdge: CGFloat = 72
     @State private var open = true
     @State private var dragFrom: Double?
 
@@ -46,17 +48,18 @@ struct MacShell<Detail: View>: View {
             if !open {
                 Button { toggle() } label: {
                     Image(systemName: "sidebar.left").font(.system(size: 14, weight: .medium)).foregroundStyle(.primary)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 30, height: 30)
                         .background(.regularMaterial, in: Circle())
                         .overlay(Circle().strokeBorder(Color.chatLine.opacity(0.7)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("显示侧栏")
-                .padding(.leading, 88).padding(.top, 9)
+                // on the traffic lights' line (their centre is 16pt below the top), 12pt after the green one
+                .padding(.leading, lightsEdge + 12).padding(.top, 1)
                 .transition(.opacity)
             }
         }
-        .background(WindowStyle())
+        .background(WindowStyle { lightsEdge = $0 })
         .background {
             // ⌘\ hides and shows the sidebar
             Button("") { toggle() }.keyboardShortcut("\\", modifiers: .command).opacity(0).frame(width: 0, height: 0)
@@ -101,24 +104,54 @@ struct MacShell<Detail: View>: View {
     private func toggle() { open.toggle() }
 }
 
-/// The window without a title bar: its content goes to the top, under the traffic lights.
+/// The window without a title bar: its content goes to the top, under the traffic lights. It holds structurally:
+/// SwiftUI puts a toolbar, a title or a separator back at times (when the inspector opens, a row is switched, the
+/// window is resized or goes full screen), so the window is looked at after each update and put right when it
+/// is not, rather than once at some moments. It also says where the traffic lights end.
 private struct WindowStyle: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { Styler() }
+    let lights: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> NSView { Styler(lights: lights) }
     func updateNSView(_ view: NSView, context: Context) {}
 
     private final class Styler: NSView {
+        let lights: (CGFloat) -> Void
+        private var observer: NSObjectProtocol?
+        private var lastEdge: CGFloat = 0
+
+        init(lights: @escaping (CGFloat) -> Void) {
+            self.lights = lights
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
+
         override func viewDidMoveToWindow() {
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+            guard let window else { return }
+            observer = NotificationCenter.default.addObserver(forName: NSWindow.didUpdateNotification, object: window, queue: .main) { [weak self] _ in
+                self?.apply()
+            }
             apply()
-            // SwiftUI sets the window's title as it goes: take it away again once it has
-            for delay in [0.1, 0.5, 1.5] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.apply() } }
         }
 
         private func apply() {
             guard let window else { return }
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.toolbar = nil
+            if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
+            if window.titleVisibility != .hidden { window.titleVisibility = .hidden }
+            if window.titlebarSeparatorStyle != .none { window.titlebarSeparatorStyle = .none }
+            if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
+            if window.toolbar != nil { window.toolbar = nil }
+            if let zoom = window.standardWindowButton(.zoomButton) {
+                let edge = zoom.convert(zoom.bounds, to: nil).maxX
+                if edge > 0, abs(edge - lastEdge) > 0.5 {
+                    lastEdge = edge
+                    lights(edge)
+                }
+            }
         }
     }
 }

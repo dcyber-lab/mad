@@ -38,6 +38,7 @@ struct ChannelBubbleView: View {
             if !bubble.text.isEmpty {
                 Text(chatText(bubble.text, mine: mine))
                     .font(MadType.message)
+                    .lineSpacing(MadType.messageLineSpacing)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -77,12 +78,12 @@ struct ChannelBubbleView: View {
 
     private func folded(_ fold: ChannelBubble.Fold) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            // as wide as its text (the chevron 10pt after it), as a bubble is, and no wider than a bubble may be
+            HStack(spacing: 10) {
                 (Text(fold.head).fontWeight(.semibold).foregroundColor(.primary) + Text(fold.head.isEmpty ? fold.summary : "  " + fold.summary))
                     .font(MadType.pill)
                     .lineLimit(expanded ? 3 : 1)
                     .truncationMode(.tail)
-                Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(MadType.small.weight(.semibold))
                     .rotationEffect(.degrees(expanded ? 90 : 0))
@@ -99,10 +100,10 @@ struct ChannelBubbleView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 11)
         .padding(.vertical, 6)
+        .hugging(maxWidth: maxWidth)
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.chatLine, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { toggle() } }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(fold.head + " " + fold.summary)
         .accessibilityHint(expanded ? "收起" : "展开")

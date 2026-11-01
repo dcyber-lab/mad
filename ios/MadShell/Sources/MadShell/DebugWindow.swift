@@ -35,7 +35,7 @@ enum DebugWindow {
         }
         try? await Task.sleep(for: .seconds(3)) // the content draws at its new size
         if let path = value("-windowInfo") {
-            try? (NSStringFromRect(window.frame) + " screens " + NSScreen.screens.map { NSStringFromRect($0.frame) + NSStringFromRect($0.visibleFrame) }.joined(separator: " | ") + " style \(window.styleMask.rawValue) full \(window.styleMask.contains(.fullScreen))").write(toFile: path + ".frame", atomically: true, encoding: .utf8)
+            try? (NSStringFromRect(window.frame) + " screens " + NSScreen.screens.map { NSStringFromRect($0.frame) + NSStringFromRect($0.visibleFrame) }.joined(separator: " | ") + " style \(window.styleMask.rawValue) full \(window.styleMask.contains(.fullScreen)) title \(window.titleVisibility.rawValue) transparent \(window.titlebarAppearsTransparent) separator \(window.titlebarSeparatorStyle.rawValue) toolbar \(window.toolbar == nil) layoutTop \(window.frame.height - window.contentLayoutRect.maxY)").write(toFile: path + ".frame", atomically: true, encoding: .utf8)
             try? String(window.windowNumber).write(toFile: path, atomically: true, encoding: .utf8)
         }
     }

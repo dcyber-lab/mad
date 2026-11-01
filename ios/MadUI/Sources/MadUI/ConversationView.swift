@@ -11,6 +11,7 @@ public struct ConversationView: View {
     @ScaledMetric(relativeTo: .body) private var avatar: CGFloat = 26
     /// The message column's width: a bubble takes a share of it.
     @State private var columnWidth: CGFloat = 0
+    @State private var keeper = BottomKeeper()
 
     public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true) {
         self.model = model
@@ -25,16 +26,26 @@ public struct ConversationView: View {
             #endif
             messages
             if let ask = model.ask {
-                AskCardView(card: ask, act: { actions.act(ask.id, $0, $1) })
-                    .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
-                    .frame(maxWidth: MadColumn.maxWidth)
-                    .padding(.horizontal, MadColumn.side)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 6)
+                // from the bubbles' left edge, as wide as its content up to what a bubble may be
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: MadColumn.gutter, height: 0)
+                    AskCardView(card: ask, act: { actions.act(ask.id, $0, $1) })
+                        .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
+                        .hugging(maxWidth: columnWidth > 0 ? MadColumn.bubble(in: columnWidth) : 480)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: MadColumn.maxWidth)
+                .padding(.horizontal, MadColumn.side)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 6)
             }
             composer
         }
+        #if os(macOS)
+        .background(Color.chatBackdrop)
+        #else
         .background(.background)
+        #endif
         .environment(\.convImageLoader, actions.loadImage)
         #if os(macOS)
         // no bar: the agent's name floats at the top as a small pill, with the way to its terminal and changes beside it.
@@ -76,6 +87,7 @@ public struct ConversationView: View {
                             .id("live")
                     }
                     Color.clear.frame(height: 1).id("end")
+                        .onDisappear { if keeper.leftBottom() { DispatchQueue.main.async { proxy.scrollTo("end") } } }
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
                 .background(GeometryReader { g in
@@ -95,6 +107,18 @@ public struct ConversationView: View {
             .onChange(of: model.entries.count) { _, _ in proxy.scrollTo("end") }
             .onChange(of: model.live) { _, _ in proxy.scrollTo("end") }
             .onChange(of: model.ask) { _, _ in proxy.scrollTo("end") }
+            .background(GeometryReader { g in
+                Color.clear.onChange(of: g.size) { _, _ in
+                    if keeper.resized() { DispatchQueue.main.async { proxy.scrollTo("end") } }
+                }
+            })
+            #if os(macOS)
+            // the list fades out under the name, which floats over it
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Color.chatBackdrop, Color.chatBackdrop.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 72).allowsHitTesting(false)
+            }
+            #endif
         }
     }
 
@@ -326,6 +350,7 @@ struct EntryView: View {
                         if !text.isEmpty {
                             Text(text)
                                 .font(MadType.message)
+                                .lineSpacing(MadType.messageLineSpacing)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 13)
@@ -338,7 +363,7 @@ struct EntryView: View {
             case let .text(markdown):
                 AgentRow(model: model, avatar: avatar, hugs: true) { MarkdownBubble(markdown: markdown) }
             case let .tool(tool):
-                AgentRow(model: model, avatar: avatar) { ToolRow(tool: tool) }
+                AgentRow(model: model, avatar: avatar, hugs: true) { ToolRow(tool: tool) }
             case let .image(image):
                 AgentRow(model: model, avatar: avatar) { ImageView(image: image) }
             case let .earlier(note):
@@ -381,7 +406,7 @@ struct MarkdownBubble: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(Markdown.blocks(markdown).enumerated()), id: \.offset) { _, block in
                 switch block {
-                case let .text(s): Text(Self.attributed(s)).font(MadType.message)
+                case let .text(s): Text(Self.attributed(s)).font(MadType.message).lineSpacing(MadType.messageLineSpacing)
                 case let .code(s): CodeBlock(code: s)
                 }
             }
@@ -462,7 +487,7 @@ struct ToolRow: View {
     }
 
     private var line: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             if tool.running {
                 ProgressView().controlSize(.mini)
             } else if tool.error {
@@ -472,7 +497,6 @@ struct ToolRow: View {
                 .font(MadType.pill)
                 .lineLimit(open ? nil : 1)
                 .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
             if tool.hasDetail {
                 Image(systemName: "chevron.right")
                     .font(MadType.label.weight(.semibold))
@@ -592,7 +616,6 @@ struct AskCardView: View {
         .onPreferenceChange(AskHeightKey.self) { contentHeight = $0 }
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.background))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(ConversationStyle.red.opacity(0.45), lineWidth: 1.5))
         .accessibilityElement(children: .contain)

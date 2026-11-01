@@ -23,6 +23,8 @@ enum MadType {
     static let small = Font.system(size: 13)
     /// The smallest: a tag.
     static let tag = Font.system(size: 12)
+    /// The extra space between the lines of what is said (15pt text on a 22 to 23pt pitch).
+    static let messageLineSpacing: CGFloat = 4
     /// Code in a bubble, and in a tool's input and result.
     static let code = Font.system(size: 13, design: .monospaced)
     static let codeSmall = Font.system(size: 12, design: .monospaced)
@@ -36,6 +38,7 @@ enum MadType {
     static let label = Font.caption
     static let small = Font.footnote
     static let tag = Font.caption2
+    static let messageLineSpacing: CGFloat = 0
     static let code = Font.system(.footnote, design: .monospaced)
     static let codeSmall = Font.system(.caption, design: .monospaced)
     #endif
@@ -93,4 +96,18 @@ struct MaxWidthLayout: Layout {
 extension View {
     /// As wide as its content needs, up to `maxWidth`.
     func hugging(maxWidth: CGFloat) -> some View { MaxWidthLayout(maxWidth: maxWidth) { self } }
+}
+
+/// A list that was at its bottom when its window was resized is at its bottom after: the view that leaves the
+/// bottom within a moment of the resize is put back. (The marker row at the end of the list reports leaving.)
+struct BottomKeeper {
+    private var resizedAt = Date.distantPast
+    private var leftAt = Date.distantPast
+
+    /// The scroll view's size changed.
+    mutating func resized() -> Bool { resizedAt = Date(); return close }
+    /// The marker row at the end of the list left the screen.
+    mutating func leftBottom() -> Bool { leftAt = Date(); return close }
+
+    private var close: Bool { abs(resizedAt.timeIntervalSince(leftAt)) < 0.4 }
 }

@@ -12,6 +12,8 @@ public struct ChannelView: View {
     @State private var panelOpen = false
     @State private var gallery = false
     @State private var nearBottom = true
+    @State private var viewport = CGSize.zero
+    @State private var keeper = BottomKeeper()
     @State private var expanded: Set<Int> = []
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
@@ -141,7 +143,10 @@ public struct ChannelView: View {
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
                         .onAppear { nearBottom = true }
-                        .onDisappear { nearBottom = false }
+                        .onDisappear {
+                            nearBottom = false
+                            if keeper.leftBottom() { stick(proxy) }
+                        }
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
                 .background(GeometryReader { g in
@@ -169,7 +174,18 @@ public struct ChannelView: View {
                     .transition(.opacity)
                 }
             }
+            .background(GeometryReader { g in
+                Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
+                    viewport = size
+                    if keeper.resized() { stick(proxy) }
+                }
+            })
             #if os(macOS)
+            // the list fades out under the name, which floats over it
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Color.chatBackdrop, Color.chatBackdrop.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 72).allowsHitTesting(false)
+            }
             .overlay(alignment: .top) { namePill }
             #endif
             #if os(iOS)
@@ -186,6 +202,11 @@ public struct ChannelView: View {
                 if nearBottom || mine { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
             }
         }
+    }
+
+    /// Back to the bottom once the layout has settled (after a resize that moved it).
+    private func stick(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async { proxy.scrollTo(Self.bottom, anchor: .bottom) }
     }
 
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
