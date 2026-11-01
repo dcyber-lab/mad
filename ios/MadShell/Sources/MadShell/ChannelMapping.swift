@@ -26,9 +26,16 @@ public enum ChannelMapping {
         let everyone = members + split.helpers
         let working = everyone.filter { $0.state == .working }.count
         let needing = everyone.filter { $0.state == .needsYou }.count
-        var line = members.isEmpty ? "" : working > 0 ? "\(working) 个在工作" : needing > 0 ? "\(needing) 个在等你" : "\(members.count) 位成员"
-        if !line.isEmpty, !split.helpers.isEmpty { line += " · \(split.helpers.count) 帮手" }
         let isPaused = paused || (channel?.paused ?? false)
+        // as the page's head says it: paused, else who waits and who works, else quiet
+        let line: String
+        if channel == nil { line = "" }
+        else if isPaused { line = "已暂停" }
+        else if channel?.dm == true { line = needing > 0 ? "在等你" : working > 0 ? "在工作" : "空闲" }
+        else {
+            let parts = [needing > 0 ? "\(needing) 个在等你" : "", working > 0 ? "\(working) 个在工作" : ""].filter { !$0.isEmpty }
+            line = parts.isEmpty ? "空闲" : parts.joined(separator: " · ")
+        }
         return ChannelScreen(
             title: title, members: members, helpers: split.helpers, stateLine: line, items: items,
             panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
@@ -55,14 +62,19 @@ public enum ChannelMapping {
 
     public static func split(channel: Channel?, deck: Deck?) -> MemberSplit {
         let all = members(channel: channel, deck: deck)
-        guard let roles = channel?.team?.roles, roles.contains(where: { !($0.agent ?? "").isEmpty }) else {
+        guard let roles = channel?.team?.roles, !roles.isEmpty else {
             return MemberSplit(team: all, helpers: [], sectioned: false)
         }
         // the lead first, the rest in the team's order
         let ordered = roles.filter(\.lead) + roles.filter { !$0.lead }
         var team: [ChannelMember] = []
         for r in ordered {
-            guard let id = r.agent, !id.isEmpty else { continue }
+            // a role with no agent yet, or whose agent is gone from the deck, stays as a faded row
+            func dim(_ id: String, _ status: String) -> ChannelMember {
+                ChannelMember(id: id, kind: "", state: .stopped, name: r.role, status: status, isLead: r.lead, role: r.role, dim: true)
+            }
+            guard let id = r.agent, !id.isEmpty else { team.append(dim("role:\(r.role)", "未启动")); continue }
+            if deck != nil, deck?.agent(id: id) == nil { team.append(dim(id, "已离开")); continue }
             var m: ChannelMember
             if let member = all.first(where: { $0.id == id }) {
                 m = member
@@ -70,7 +82,7 @@ public enum ChannelMapping {
                 let state = CharacterState(status: agent.state)
                 m = ChannelMember(id: id, kind: agent.kind, state: state, name: agent.label, status: statusText(agent, state), isLead: r.lead)
             } else {
-                continue // the role's agent is neither in the channel nor alive
+                team.append(dim(id, "已离开")); continue
             }
             m.role = r.role
             team.append(m)

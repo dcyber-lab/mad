@@ -14,9 +14,13 @@ public struct ChannelMember: Identifiable, Equatable, Sendable {
     public var isLead: Bool
     /// Its role in the channel's team ("架构师"); empty for a helper or a channel without a team.
     public var role: String
+    /// A role with no agent behind it (not started, or gone): a faded row that opens nothing.
+    public var dim: Bool
 
-    public init(id: String, kind: String, state: CharacterState, name: String, status: String = "", isLead: Bool = false, role: String = "") {
+    public init(id: String, kind: String, state: CharacterState, name: String, status: String = "", isLead: Bool = false, role: String = "",
+                dim: Bool = false) {
         self.id = id; self.kind = kind; self.state = state; self.name = name; self.status = status; self.isLead = isLead; self.role = role
+        self.dim = dim
     }
 }
 

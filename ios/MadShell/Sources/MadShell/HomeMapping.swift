@@ -40,21 +40,25 @@ public enum HomeMapping {
     /// item in the inbox (the page's `chanDot`).
     static func hasDot(_ c: Channel, needs: Set<String>) -> Bool {
         if c.mention || (c.dm && c.unread > 0) { return true }
-        let ids = c.team != nil ? (c.team?.roles ?? []).compactMap(\.agent) : c.members.map(\.id)
+        // everyone in the channel counts, the team's roles and the helpers it brought in
+        let ids = (c.team?.roles ?? []).compactMap(\.agent) + c.members.map(\.id)
         return ids.contains { needs.contains($0) }
     }
 
     static func chatRow(_ c: Channel, dot: Bool, deck: Deck) -> HomeRow {
         let ids = c.team != nil ? (c.team?.roles ?? []).compactMap(\.agent) : c.members.map(\.id)
         let labels = Dictionary(c.members.map { ($0.id, $0.label) }, uniquingKeysWith: { a, _ in a })
-        let members = ids.map { id -> HomeMember in
+        func member(_ id: String) -> HomeMember {
             let agent = deck.agent(id: id)
             return HomeMember(id: id, kind: agent?.kind ?? c.members.first { $0.id == id }?.kind ?? "",
                               state: agent.map { CharacterState(status: $0.state) } ?? .idle,
                               name: labels[id] ?? agent?.label ?? id, preview: agent?.last ?? "")
         }
+        let members = ids.map(member)
+        // a team channel's other members whose agent exists: out of the tile, in the state
+        let helpers = c.team == nil ? [] : c.members.map(\.id).filter { id in !ids.contains(id) && deck.agent(id: id) != nil }.map(member)
         return HomeRow(id: c.id, kind: c.dm ? .dm : .channel, name: c.dm ? c.title : c.id, preview: c.lastText,
-                       needsYou: dot, members: members)
+                       needsYou: dot, members: members, helpers: helpers)
     }
 
     static func agentRow(_ a: Agent, deck: Deck, needs: Set<String>) -> HomeRow {
