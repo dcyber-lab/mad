@@ -223,3 +223,18 @@ Debug builds only (none of this is compiled into Release):
 Never point a test at the real deck's server and tap an act: allow, deny and
 reply answer real agents. Use an isolated server (a temporary
 `XDG_STATE_HOME`, its own port).
+
+### The Mac window, for screenshots
+
+Debug builds of the Mac app take `-windowSize 1200x800` (leaves full screen and sizes the window), `-windowAppearance
+light|dark`, `-sidebarWidth 300` and `-windowInfo <path>`, which writes the window's number there once it is
+drawn: `screencapture -x -o -l $(cat <path>) shot.png` then takes it (the shell has the permission the app lacks).
+With `-fixtureURL <url> -nativeOpen <row id>` it opens a channel or an agent at once.
+
+### Type and the message column
+
+`MadType` (MadUI) is the one type scale: on the Mac the sizes are chosen (row names 16, messages 15, last lines
+and pills 14, labels 13), on the iPhone they are the text styles. `MadColumn` is the message column of a channel
+or a conversation: at most 820pt on the Mac (720 on the phone), centred, with 32pt (14) at the sides; the avatar
+is in a 34pt gutter, others' bubbles start after it, mine end at the right edge, a bubble is as wide as its text
+up to 75% of the column, and the lines (handoffs, tools) and the composer have the column's two edges.

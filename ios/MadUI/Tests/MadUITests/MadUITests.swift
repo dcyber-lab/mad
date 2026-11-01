@@ -409,3 +409,10 @@ final class ChannelTailTests: XCTestCase {
         XCTAssertEqual(screen([]).tail, "")
     }
 }
+
+final class ColumnTests: XCTestCase {
+    func testABubbleTakesAShareOfTheColumnAfterTheGutter() {
+        XCTAssertEqual(MadColumn.bubble(in: 834), (834 - MadColumn.gutter) * MadColumn.bubbleShare, accuracy: 0.01)
+        XCTAssertGreaterThanOrEqual(MadColumn.bubble(in: 0), 120, "an unmeasured column still leaves room for text")
+    }
+}

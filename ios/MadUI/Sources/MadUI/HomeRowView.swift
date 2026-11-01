@@ -18,12 +18,12 @@ struct HomeRowView: View {
                 .opacity(row.dimmed && row.state != .stopped ? 0.5 : 1)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.title)
-                    .font(.body.weight(.semibold))
+                    .font(MadType.rowName)
                     .lineLimit(1)
                     .opacity(row.dimmed ? 0.5 : 1)
                 if !row.preview.isEmpty {
                     Text(row.preview)
-                        .font(.subheadline)
+                        .font(MadType.rowLine)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

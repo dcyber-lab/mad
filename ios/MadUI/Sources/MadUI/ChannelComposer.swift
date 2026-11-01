@@ -29,7 +29,7 @@ struct ChannelComposer: View {
     var body: some View {
         if readOnly {
             Text("这是两个 agent 之间的对话，只能看。")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(MadType.small).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity).padding(12)
         } else {
             composer
@@ -45,6 +45,7 @@ struct ChannelComposer: View {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
                     .textFieldStyle(.plain)
+                    .font(MadType.message)
                     .focused($focused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -64,9 +65,9 @@ struct ChannelComposer: View {
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
             }
-            if let note { Text(note).font(.footnote).foregroundStyle(.red) }
+            if let note { Text(note).font(MadType.small).foregroundStyle(.red) }
         }
-        .padding(.horizontal, 12)
+        // no side padding of its own: the column the messages are in gives the edges
         .padding(.top, 8)
         .padding(.bottom, 8)
         #if os(macOS)
@@ -99,7 +100,7 @@ struct ChannelComposer: View {
     private func replyBar(_ q: ChannelQuote) -> some View {
         HStack(spacing: 8) {
             Rectangle().fill(Color.chatBlue).frame(width: 2, height: 16)
-            Text("回复 \(q.who)：\(q.text)").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            Text("回复 \(q.who)：\(q.text)").font(MadType.small).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 0)
             Button { replying = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                 .buttonStyle(.plain).accessibilityLabel("不回复")

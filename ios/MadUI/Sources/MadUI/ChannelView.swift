@@ -18,6 +18,8 @@ public struct ChannelView: View {
     @State private var drag: CGFloat = 0
     /// The message area's width: the right-edge swipe starts in its last 22 points.
     @State private var chatWidth: CGFloat = 0
+    /// The message column's width (inside its side padding): a bubble takes a share of it.
+    @State private var columnWidth: CGFloat = 0
 
     /// panelOpen: whether the 群信息 panel is open when the view first shows.
     public init(screen: ChannelScreen, actions: ChannelActions, panelOpen: Bool = false) {
@@ -26,13 +28,17 @@ public struct ChannelView: View {
         _panelOpen = State(initialValue: panelOpen)
     }
 
-    /// The message column is never wider than this on a wide window.
-    private static let column: CGFloat = 720
     private static let bottom = "bottom"
 
     public var body: some View {
         #if os(macOS)
         chat
+            // the head is the window's toolbar: the one bar above the channel, with no title of its own
+            .navigationTitle("")
+            .toolbar {
+                ToolbarItem(placement: .navigation) { nameButton }
+                ToolbarItem(placement: .primaryAction) { infoButton }
+            }
             .inspector(isPresented: $panelOpen) { panelView.inspectorColumnWidth(min: 260, ideal: 300, max: 380) }
             .sheet(isPresented: $gallery) { galleryView }
             .sheet(item: Binding(get: { viewing.map(Picked.init) }, set: { viewing = $0?.id })) { p in
@@ -56,15 +62,21 @@ public struct ChannelView: View {
 
     private var chat: some View {
         VStack(spacing: 0) {
+            #if os(iOS)
             head
+            #endif
             messages
+            // the composer has the message column's edges, exactly
             ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, replying: $replying, send: actions.send)
-                .frame(maxWidth: Self.column)
+                .frame(maxWidth: MadColumn.maxWidth)
+                .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
         }
         .background(Color.clear)
     }
 
+    /// The head: back (phone), the tile with the name and how many work, ⓘ. On the Mac it is the window's
+    /// toolbar, the only bar above the channel; on the phone a row of the view.
     private var head: some View {
         HStack(spacing: 10) {
             if let back = actions.back {
@@ -73,30 +85,40 @@ public struct ChannelView: View {
                 }
                 .buttonStyle(.plain).accessibilityLabel("返回")
             }
-            Button { panelOpen = true } label: {
-                HStack(spacing: 10) {
-                    GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 32,
-                              dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(screen.title).font(.headline).lineLimit(1)
-                        if !screen.stateLine.isEmpty { Text(screen.stateLine).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
-            .accessibilityHint("群信息")
-            Button { panelOpen.toggle() } label: {
-                Image(systemName: "info").font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
-                    .frame(width: 34, height: 34).background(Color.chatCard, in: Circle())
-            }
-            .buttonStyle(.plain).accessibilityLabel("群信息")
+            nameButton
+            infoButton
         }
         .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 10)
+    }
+
+    private var nameButton: some View {
+        Button { panelOpen = true } label: {
+            HStack(spacing: 10) {
+                GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 32,
+                          dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(screen.title).font(MadType.title).lineLimit(1)
+                    if !screen.stateLine.isEmpty { Text(screen.stateLine).font(MadType.label).foregroundStyle(.secondary).lineLimit(1) }
+                }
+                #if os(iOS)
+                Spacer(minLength: 0)
+                #endif
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
+        .accessibilityHint("群信息")
+    }
+
+    private var infoButton: some View {
+        Button { panelOpen.toggle() } label: {
+            Image(systemName: "info").font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
+                .frame(width: 34, height: 34).background(Color.chatCard, in: Circle())
+        }
+        .buttonStyle(.plain).accessibilityLabel("群信息")
     }
 
     private var messages: some View {
@@ -110,9 +132,12 @@ public struct ChannelView: View {
                         .onAppear { nearBottom = true }
                         .onDisappear { nearBottom = false }
                 }
-                .frame(maxWidth: Self.column)
+                .frame(maxWidth: MadColumn.maxWidth)
+                .background(GeometryReader { g in
+                    Color.clear.onAppear { columnWidth = g.size.width }.onChange(of: g.size.width) { _, w in columnWidth = w }
+                })
+                .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 14)
                 .padding(.top, 6)
                 .padding(.bottom, 10)
             }
@@ -135,12 +160,13 @@ public struct ChannelView: View {
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
         switch item {
         case .time(_, let text):
-            Text(text).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            Text(text).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
         case .note(_, let text):
-            Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
+            Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):
+            // against the column's right edge, as wide as its text
             HStack(spacing: 0) {
-                Spacer(minLength: 56)
+                Spacer(minLength: MadColumn.gutter)
                 bubble(b, mine: true, who: "自己")
             }
             .padding(.top, 6)
@@ -150,10 +176,11 @@ public struct ChannelView: View {
                     .onTapGesture { actions.openAgent(run.sender.id) }
                     .padding(.bottom, 2)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(run.sender.name).font(.caption).foregroundStyle(.secondary).padding(.leading, 4).lineLimit(1)
+                    Text(run.sender.name).font(MadType.label).foregroundStyle(.secondary).padding(.leading, 4).lineLimit(1)
                     ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
                 }
-                Spacer(minLength: 28)
+                // to the column's right edge (a Spacer here would add the HStack's spacing before it)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.top, 10)
         }
@@ -161,7 +188,7 @@ public struct ChannelView: View {
 
     private func bubble(_ b: ChannelBubble, mine: Bool, who: String) -> some View {
         ChannelBubbleView(
-            bubble: b, mine: mine, expanded: expanded.contains(b.id),
+            bubble: b, mine: mine, maxWidth: columnWidth > 0 ? MadColumn.bubble(in: columnWidth) : 480, expanded: expanded.contains(b.id),
             toggle: { if expanded.contains(b.id) { expanded.remove(b.id) } else { expanded.insert(b.id) } },
             reply: {
                 replying = ChannelQuote(seq: b.id, who: who, text: ChannelQuote.snippet(b.text.isEmpty ? "[图片]" : b.text))

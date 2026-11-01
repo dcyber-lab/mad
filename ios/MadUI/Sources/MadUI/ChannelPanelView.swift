@@ -28,9 +28,9 @@ struct ChannelPanelView: View {
                 VStack(spacing: 8) {
                     GroupTile(members: panel.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 64,
                               dot: (panel.members + panel.helpers).contains { $0.state == .needsYou })
-                    Text(panel.name).font(.title3.weight(.bold))
+                    Text(panel.name).font(MadType.title)
                     if !panel.topic.isEmpty {
-                        Text(panel.topic).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Text(panel.topic).font(MadType.rowLine).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -64,7 +64,7 @@ struct ChannelPanelView: View {
     }
 
     private func sectionTitle(_ s: String) -> some View {
-        Text(s).font(.footnote).foregroundStyle(.secondary)
+        Text(s).font(MadType.label).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.top, 16).padding(.bottom, 6)
     }
 
@@ -92,19 +92,19 @@ struct ChannelPanelView: View {
             CharacterView(id: m.id, kind: m.kind, state: m.state, size: 36)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text(m.role.isEmpty ? m.name : m.role).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(m.role.isEmpty ? m.name : m.role).font(MadType.rowName).lineLimit(1)
                     if m.isLead {
-                        Text("负责人").font(.caption2).padding(.horizontal, 7).padding(.vertical, 1)
+                        Text("负责人").font(MadType.tag).padding(.horizontal, 7).padding(.vertical, 1)
                             .background(Color.chatLine.opacity(0.7), in: Capsule()).foregroundStyle(.secondary)
                     }
                 }
                 if !m.status.isEmpty {
-                    Text(m.status).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    Text(m.status).font(MadType.small).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
             // its kind, if there is room: it is the kind that gives way
-            if !m.kind.isEmpty { Text(m.kind).font(.caption).foregroundStyle(.secondary).lineLimit(1).layoutPriority(-1) }
+            if !m.kind.isEmpty { Text(m.kind).font(MadType.label).foregroundStyle(.secondary).lineLimit(1).layoutPriority(-1) }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .opacity(m.dim ? 0.55 : 1)
@@ -117,10 +117,10 @@ struct ChannelPanelView: View {
     private func actionRow(_ title: String, detail: String, tint: Color = .primary, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(title).foregroundStyle(tint)
+                Text(title).font(MadType.message).foregroundStyle(tint)
                 Spacer()
-                if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(.secondary) }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                if !detail.isEmpty { Text(detail).font(MadType.small).foregroundStyle(.secondary) }
+                Image(systemName: "chevron.right").font(MadType.small.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12).padding(.vertical, 11)
             .contentShape(Rectangle())

@@ -10,6 +10,8 @@ import AppKit
 struct ChannelBubbleView: View {
     let bubble: ChannelBubble
     let mine: Bool
+    /// The widest the bubble may be (its column's share); it is as wide as its text up to that.
+    let maxWidth: CGFloat
     let expanded: Bool
     let toggle: () -> Void
     let reply: () -> Void
@@ -35,18 +37,18 @@ struct ChannelBubbleView: View {
             if let q = bubble.quote { quote(q) }
             if !bubble.text.isEmpty {
                 Text(chatText(bubble.text, mine: mine))
-                    .font(.body)
+                    .font(MadType.message)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !bubble.images.isEmpty { pictures }
         }
         .foregroundStyle(mine ? Color.white : Color.primary)
         .padding(.horizontal, picturesOnly ? 0 : 13)
         .padding(.vertical, picturesOnly ? 0 : 8)
+        .hugging(maxWidth: maxWidth)
         .background(picturesOnly ? Color.clear : (mine ? Color.chatBlue : Color.chatBubble), in: RoundedRectangle(cornerRadius: 18))
-        // as wide as its text, and no wider than its column
+        // as wide as its text, and no wider than its share of the column
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -54,13 +56,13 @@ struct ChannelBubbleView: View {
         HStack(spacing: 6) {
             Rectangle().fill(mine ? Color.white.opacity(0.7) : Color.secondary.opacity(0.5)).frame(width: 2)
             Text("\(q.who) \(q.text)")
-                .font(.footnote)
+                .font(MadType.small)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .opacity(0.8)
         }
+        // inside its own bubble: the bubble is as wide as its widest line, and the quote gives way at the end
         .frame(height: 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var pictures: some View {
@@ -77,17 +79,17 @@ struct ChannelBubbleView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 (Text(fold.head).fontWeight(.semibold).foregroundColor(.primary) + Text(fold.head.isEmpty ? fold.summary : "  " + fold.summary))
-                    .font(.subheadline)
+                    .font(MadType.pill)
                     .lineLimit(expanded ? 3 : 1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
+                    .font(MadType.small.weight(.semibold))
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
             if expanded {
                 Text(chatText(bubble.text, mine: false))
-                    .font(.callout)
+                    .font(MadType.detail)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -100,6 +102,7 @@ struct ChannelBubbleView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.chatLine, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { toggle() } }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(fold.head + " " + fold.summary)
         .accessibilityHint(expanded ? "收起" : "展开")

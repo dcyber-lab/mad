@@ -51,6 +51,9 @@ public struct NativeRoot: View {
                 await store.run()
             }
             .overlay(alignment: .top) { LinkNote(link: store.link) }
+            #if DEBUG && os(macOS)
+            .task { await DebugWindow.runIfAsked() }
+            #endif
     }
 
     /// Whether the row's own view draws its head and way back (a channel, an agent): the iPhone's bar stays out of it.
