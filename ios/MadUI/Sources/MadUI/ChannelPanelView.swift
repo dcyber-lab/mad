@@ -26,7 +26,8 @@ struct ChannelPanelView: View {
         ScrollView {
             VStack(spacing: 0) {
                 VStack(spacing: 8) {
-                    GroupTile(members: (panel.members + panel.helpers).map { ($0.id, $0.kind, $0.state) }, size: 64)
+                    GroupTile(members: panel.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 64,
+                              dot: (panel.members + panel.helpers).contains { $0.state == .needsYou })
                     Text(panel.name).font(.title3.weight(.bold))
                     if !panel.topic.isEmpty {
                         Text(panel.topic).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -77,7 +78,11 @@ struct ChannelPanelView: View {
         list {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, m in
                 if i > 0 { Divider().padding(.leading, 60) }
-                Button { close(); actions.openAgent(m.id) } label: { memberRow(m) }.buttonStyle(.plain)
+                if m.dim {
+                    memberRow(m)
+                } else {
+                    Button { close(); actions.openAgent(m.id) } label: { memberRow(m) }.buttonStyle(.plain)
+                }
             }
         }
     }
@@ -102,10 +107,11 @@ struct ChannelPanelView: View {
             if !m.kind.isEmpty { Text(m.kind).font(.caption).foregroundStyle(.secondary).lineLimit(1).layoutPriority(-1) }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
+        .opacity(m.dim ? 0.55 : 1)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(m.role.isEmpty ? m.name : "\(m.role)，\(m.name)")，\(m.isLead ? "负责人，" : "")\(m.status)")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(m.dim ? [] : .isButton)
     }
 
     private func actionRow(_ title: String, detail: String, tint: Color = .primary, _ action: @escaping () -> Void) -> some View {
