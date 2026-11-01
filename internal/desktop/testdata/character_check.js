@@ -2,7 +2,8 @@
 // digit, and that the vectors cover every style and every shape and color. Run by TestCharacters.
 "use strict";
 const assert = require("assert");
-const { charLook, plan, charSVG, EXPR, SHAPES, COLORS, STRONG, mix } = require("../web/characters.js");
+const C = require("../web/characters.js");
+const { charLook, plan, charSVG, EXPR, SHAPES, COLORS, STRONG, mix } = C;
 const vectors = require("../web/testdata/character-vectors.json");
 const fs = require("fs");
 
@@ -56,4 +57,64 @@ assert(rules >= 3, `only ${rules} stylesheet rules about the character's parts`)
 for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
   if (/display\s*:\s*none/.test(m[2]) && m[1].split(",").some((s) => /\.chara(?![\w-])/.test(s) && !/(\.group|\.dot|\[hidden\])/.test(s))) assert.fail(`"${m[1].trim()}" hides a character`);
 }
+// ---- what a place drawn again keeps ----
+
+// The key of a group tile has every member, not the three it shows: a fourth that changes is a new tile.
+{
+  const team = (shown4) => [{ id: "a", shown: "running" }, { id: "b", shown: "idle" }, { id: "c", shown: "idle" }, { id: "d", shown: shown4 }];
+  assert.notStrictEqual(C.charTileKey(team("idle"), false), C.charTileKey(team("waiting"), false), "a 4th member that starts to wait must make a new tile");
+  assert.notStrictEqual(C.charTileKey(team("idle"), false), C.charTileKey(team("stopped"), false), "a 4th member that stops must make a new tile");
+  assert.strictEqual(C.charTileKey(team("idle"), false), C.charTileKey(team("idle"), false));
+  assert.notStrictEqual(C.charTileKey(team("idle"), false), C.charTileKey(team("idle"), true));
+  // an agent: stopped and exited are different nodes, the same state is the same
+  assert.notStrictEqual(C.charAvatarKey("x", "stop", "stopped", false), C.charAvatarKey("x", "stop", "exited", false), "stopped to exited must make a new node");
+  assert.strictEqual(C.charAvatarKey("x", "work", "running", false), C.charAvatarKey("x", "work", "running", false));
+  assert.notStrictEqual(C.charAvatarKey("x", "work", "running", false), C.charAvatarKey("x", "idle", "idle", false));
+}
+
+// charAdopt, on a tiny tree: a character below a node, one passed itself, and the same look twice in order.
+{
+  class N {
+    constructor(ck, kids = []) { this.dataset = ck ? { ck } : {}; this.kids = kids; this.parent = null; kids.forEach((k) => { k.parent = this; }); }
+    get isAv() { return !!this.dataset.ck; }
+    matches() { return this.isAv; }
+    querySelectorAll() { const out = []; const walk = (n) => n.kids.forEach((k) => { if (k.isAv) out.push(k); walk(k); }); walk(this); return out; }
+    replaceWith(x) { const i = this.parent.kids.indexOf(this); this.parent.kids[i] = x; x.parent = this.parent; }
+  }
+  const old = new N("", [new N("", [new N("a|work|running|0"), new N("a|work|running|0"), new N("b|idle|idle|0")]), new N("c|need|waiting|1")]);
+  const [oa1, oa2, ob] = old.kids[0].kids, oc = old.kids[1];
+  // the new list: below a row, a, a again, b with another status (so a new one); and c passed directly
+  const na1 = new N("a|work|running|0"), na2 = new N("a|work|running|0"), nb = new N("b|idle|exited|0"), nc = new N("c|need|waiting|1");
+  const row = new N("", [na1, na2, nb]);
+  const nodes = C.charAdopt(old, [row, nc]);
+  assert.strictEqual(row.kids[0], oa1, "the first a is the one that was");
+  assert.strictEqual(row.kids[1], oa2, "the second a is the second that was");
+  assert.strictEqual(row.kids[2], nb, "b changed its status: a new node");
+  assert.strictEqual(nodes[1], oc, "a character passed itself is replaced in the list by the one that was");
+  assert(!old.kids[0].kids.includes(nb) && ob);
+}
+
+// One timeout for all the blinks: the next edge, set again when one comes or goes (not a poll).
+{
+  let pending = 0;
+  const set = global.setTimeout, clear = global.clearTimeout;
+  const live = new Set();
+  global.setTimeout = (fn, ms) => { const h = set(fn, ms); live.add(h); return h; };
+  global.clearTimeout = (h) => { live.delete(h); clear(h); };
+  const part = () => ({ innerHTML: "", style: {}, animate: () => ({ play() {}, pause() {}, cancel() {} }) });
+  const fake = () => { const m = { ".c-facein": part(), ".c-head": part(), ".c-all": part(), ".c-leaf": null }; return { querySelector: (q) => m[q], style: {}, closest: () => null, isConnected: true }; };
+  const runs = [];
+  for (let i = 0; i < 50; i++) runs.push(C.charStart(fake(), `idle-${i}`, "idle", {}));
+  assert.strictEqual(C.charBlinkers.size, 50, "every idle one waits to blink");
+  assert.strictEqual(live.size, 1, `${live.size} timeouts pending for 50 blinking characters`);
+  assert(C.charBlinkTimer, "no timer is set");
+  assert.strictEqual(C.charStart(fake(), "mini", "idle", { blink: false }), null, "a mini does not blink");
+  for (const r of runs) r.stop();
+  assert.strictEqual(C.charBlinkers.size, 0);
+  assert.strictEqual(live.size, 0, "a timer is left with nothing to blink");
+  assert.strictEqual(C.charBlinkTimer, 0);
+  global.setTimeout = set;
+  global.clearTimeout = clear;
+}
+
 console.log(`ok ${vectors.length} vectors, ${rules} rules about the parts`);

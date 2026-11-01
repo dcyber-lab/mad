@@ -58,7 +58,7 @@ function groupChar(members, small) {
   const mem = [...members].sort((a, b) => ({ running: 0 }[shownStatus(a)] ?? 1) - ({ running: 0 }[shownStatus(b)] ?? 1)).slice(0, 3);
   const working = members.some((a) => shownStatus(a) === "running");
   const v = el("span", `avatar chara group${small ? " small" : ""}${working ? " s-running" : ""}`);
-  v.dataset.ck = `g:${mem.map((a) => `${a.id}:${shownStatus(a)}`).join(",")}|${small ? 1 : 0}`;
+  v.dataset.ck = charTileKey(members.map((a) => ({ id: a.id, shown: shownStatus(a) })), small); // all its members, as its label says what all of them do
   const minis = mem.map((a, i) => `<g class="c-mini">${charSVG(a.id, positions[i], charExpr(charState(shownStatus(a)), a.id), charState(shownStatus(a)) === "stop")}</g>`).join("");
   v.setAttribute("role", "img");
   v.setAttribute("aria-label", working ? "working" : members.some((a) => shownStatus(a) === "waiting") ? "needs you"

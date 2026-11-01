@@ -216,9 +216,9 @@ function avatar(a, small) {
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
   const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : "");
-  v.dataset.ck = `${key}|${state}|${stateWord(live ? shownStatus(live) : "")}|${small ? 1 : 0}`; // what the list keeps when it is drawn again (charAdopt)
+  v.dataset.ck = charAvatarKey(key, state, live ? shownStatus(live) : "", small); // what a place drawn again keeps (charAdopt)
   v.innerHTML = charSVG(key, null, charExpr(state, key), state === "stop"); // our own constants and a hash: nothing of the page's data
-  charWake(v, () => charStart(v, key, state, { blink: !small }));
+  charWake(v, () => charStart(v, key, state)); // idle ones blink too, small or not: the blinks share one timer, and only what is on the screen blinks
   v.setAttribute("role", "img");
   v.setAttribute("aria-label", stateWord(live ? shownStatus(live) : ""));
   return v;
@@ -512,6 +512,15 @@ function drawWait(o, a) {
 // you (cards, to act on in place), what works and what finished. With no
 // agents at all it is the hero.
 function drawHome() {
+  charHolding(true);
+  try {
+    drawHomeNow();
+  } finally {
+    charHolding(false);
+  }
+}
+
+function drawHomeNow() {
   const root = $("#empty");
   if (root.style.display === "none") return $("#home").replaceChildren(); // hidden: no box of its own to take the focus
   const none = !agents.size;
@@ -563,7 +572,9 @@ function drawHome() {
   const k = (ks, t) => { const s = el("span", ""); s.append(...ks.map((x) => el("kbd", "", x)), ` ${t}`); return s; };
   keys.append(k(["⌥", "N"], "next"), k(["⌘", "N"], "new chat"), k(["⌘", "K"], "search"), k(["⌥", "B"], "board"));
   h.append(keys);
+  charAdopt(box, [h]); // what moves keeps moving
   box.replaceChildren(h);
+  charArm(box);
 }
 
 // workCard is a working agent: its line, and its todo list's progress.
@@ -756,7 +767,7 @@ function drawWho(a) {
   const o = opened.get(a.id);
   if (windowed(a) && o && o.hs) {
     // Run here: its model to pick, and what its host says it does.
-    const parts = [avatar(a, true), what];
+    const parts = [what];
     const name = modelName(o.hs);
     keepModels(a.kind, o.hs.models);
     if (o.hs.models && o.hs.models.length) {
@@ -777,11 +788,11 @@ function drawWho(a) {
       parts.push(b);
     }
     parts.push(statusPill(a));
-    who.replaceChildren(...parts);
+    charPut(who, () => [avatar(a, true), ...parts]);
     who.className = `s-${shownStatus(a)}`;
     return;
   }
-  who.replaceChildren(avatar(a, true), what, statusPill(a));
+  charPut(who, () => [avatar(a, true), what, statusPill(a)]);
   who.className = `s-${shownStatus(a)}`;
 }
 
@@ -1410,7 +1421,7 @@ function drawTitle() {
   }
   sub.title = `${a.kind} · ${a.project.name}`;
   what.append(el("span", "pt", label(a)), sub);
-  t.replaceChildren(avatar(a, true), what);
+  charPut(t, () => [avatar(a, true), what]);
   t.className = `s-${shownStatus(a)}`;
   t.dataset.agent = "1";
 }
