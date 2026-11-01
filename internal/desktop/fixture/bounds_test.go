@@ -692,14 +692,24 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				  drawMessage(m(103, 9, "text", "builder", "b"));
 				  drawMessage(m(104, 40, "handoff", "architect", "h"));
 				  drawMessage(m(105, 12, "text", "builder", "c"));
-				  return { times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
+				  drawMessage({ seq: 106, at: new Date(base + 13 * 60e3).toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text: "Older messages were dropped; the last 500 are kept.", event: "trimmed" });
+				  return { notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
 				})()`)
 				if err != nil {
 					t.Fatal(err)
 				}
-				var synth struct{ Times, Groups, Msgs int }
+				var synth struct {
+					Times, Groups, Msgs int
+					Notes               []string
+				}
 				if err := json.Unmarshal(v, &synth); err != nil {
 					t.Fatal(err)
+				}
+				if theme == "light" && w == 390 {
+					shot("trim-note-390-light")
+				}
+				if len(synth.Notes) != 1 || synth.Notes[0] != "更早的消息已清理" {
+					t.Errorf("the trim note reads %v, want 更早的消息已清理", synth.Notes)
 				}
 				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 3 {
 					t.Errorf("a hidden message came between builder's: %+v, want one time line, one run, three bubbles", synth)

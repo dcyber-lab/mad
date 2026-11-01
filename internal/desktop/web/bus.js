@@ -792,8 +792,8 @@ function drawMessage(m) {
   }
   log.querySelector(".note")?.remove();
   if (m.kind === "system") {
-    // mad's pause and resume notes are drawn in Chinese by what they mean; an older note has no event
-    const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复" }[m.event] || m.text);
+    // mad's pause, resume and trim notes are drawn in Chinese by what they mean; an older note has no event
+    const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复", trimmed: "更早的消息已清理" }[m.event] || m.text);
     s.dataset.seq = m.seq;
     log.append(s);
     cv.run = null;
