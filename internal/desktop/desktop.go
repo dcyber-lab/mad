@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"html"
 	"io/fs"
 	"net"
 	"net/http"
@@ -34,6 +35,9 @@ var webFS embed.FS
 // Server is the desktop window's backend.
 type Server struct {
 	Token string
+	// Build names the build serving (the release version): in the page as a meta tag and on /api/deck
+	// as X-Mad-Build, so a page left open over a deploy sees that it is old (web/stale.js).
+	Build string
 	// Origins are host:port the page is opened from besides its own, its
 	// websockets taken from too: the phone's, through tailscale serve.
 	Origins []string
@@ -81,6 +85,32 @@ func WebFS() fs.FS {
 	return web
 }
 
+// BuildHeader carries the build on /api/deck.
+const BuildHeader = "X-Mad-Build"
+
+// PageHandler serves the page and its assets from web; the page's index names build in its mad-build
+// meta tag (left empty when build is).
+func PageHandler(web fs.FS, build string) http.Handler {
+	files := http.FileServerFS(web)
+	if build == "" {
+		return files
+	}
+	meta := `<meta name="mad-build" content="` + html.EscapeString(build) + `">`
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
+			files.ServeHTTP(w, r)
+			return
+		}
+		raw, err := fs.ReadFile(web, "index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(strings.Replace(string(raw), `<meta name="mad-build" content="">`, meta, 1)))
+	})
+}
+
 // WithHeaders holds a handler to what the real one is held to: nothing
 // cached, and the page under its content security policy.
 func WithHeaders(h http.Handler) http.Handler { return headers(h) }
@@ -91,7 +121,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// The page and its assets carry nothing secret; the token arrives in
 	// the URL's fragment, which the browser never sends.
-	mux.Handle("GET /", http.FileServerFS(web))
+	mux.Handle("GET /", PageHandler(web, s.Build))
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
 	mux.Handle("GET /api/window", s.auth(http.HandlerFunc(s.window)))
 	mux.Handle("GET /api/window/state", s.auth(http.HandlerFunc(s.windowState)))
@@ -270,6 +300,9 @@ func headers(h http.Handler) http.Handler {
 
 func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if s.Build != "" {
+		w.Header().Set(BuildHeader, s.Build)
+	}
 	_ = json.NewEncoder(w).Encode(s.poll.Snapshot())
 }
 
