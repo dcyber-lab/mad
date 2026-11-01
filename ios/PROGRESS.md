@@ -35,11 +35,14 @@ A free Apple ID's iPhone build stops opening after 7 days; run `make ios-device`
 - **Members:** 小组 is the team's roles (lead first; a role with no agent or a gone agent stays as a faded
   row, 未启动 or 已离开); 帮手 is the rest (busy first, gone ones left out). Counts of members are the team's;
   counts of activity (在工作, 在等你, the red dot) cover everyone, so a waiting helper is always seen.
-- **Mac layout:** no title bar; the name floats as a pill with a fade under it; one centred column (bubbles
-  at most 58%); 15pt messages with loose line spacing; our own sidebar, 260–420pt, 320 at first, hidden and
-  shown with ⌘\ (animated unless Reduce Motion); the usage line at its foot; @ offers a channel's members.
-- **Language:** the UI is Chinese; tool names (Read, Bash), claude and codex, slash commands and agent text
-  stay as they are. The server's labels stay English (the TUI draws them); the clients translate by verb.
+- **Mac layout:** no title bar; the name floats as a pill with a fade under it; one centred column; bubbles,
+  folded lines, tool lines and the ask card as wide as their content, at most 58% of it; 15pt messages at a
+  line pitch of about 23pt; our own sidebar, 260–420pt, 320 at first, hidden and shown with ⌘\ (animated
+  unless Reduce Motion); the usage line at its foot; @ offers a channel's members in a list that floats over
+  the messages.
+- **Language:** every word mad itself shows is Chinese; tool names (Read, Bash), claude and codex,
+  accessibility labels, slash commands and agent text stay as they are. The server's labels stay English (the
+  TUI draws them); the clients translate by an act's verb, kind and target, never by its English text.
 
 ## How the team works
 
