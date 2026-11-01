@@ -80,7 +80,7 @@ struct ChannelBubbleView: View {
         VStack(alignment: .leading, spacing: 6) {
             // as wide as its text (the chevron 10pt after it), as a bubble is, and no wider than a bubble may be
             HStack(spacing: 10) {
-                (Text(fold.head).fontWeight(.semibold).foregroundColor(.primary) + Text(fold.head.isEmpty ? fold.summary : "  " + fold.summary))
+                Text(fold.summary)
                     .font(MadType.pill)
                     .lineLimit(expanded ? 3 : 1)
                     .truncationMode(.tail)
@@ -105,7 +105,7 @@ struct ChannelBubbleView: View {
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { toggle() } }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(fold.head + " " + fold.summary)
+        .accessibilityLabel(fold.summary)
         .accessibilityHint(expanded ? "收起" : "展开")
         .accessibilityAddTraits(.isButton)
     }

@@ -50,6 +50,7 @@ struct ReceiptLine: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(receipt?.spoken ?? "")
             .accessibilityAddTraits(receipt == nil ? [] : .isButton)
+            .accessibilityAction { if receipt != nil { card = true } } // the default action: double-tap
             .accessibilityAction(named: "谁看了") { if receipt != nil { card = true } }
             .accessibilityHidden(receipt == nil)
     }

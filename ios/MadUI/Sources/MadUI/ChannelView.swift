@@ -182,6 +182,13 @@ public struct ChannelView: View {
                 #endif
                 .padding(.bottom, 10)
             }
+            .overlay(alignment: .top) {
+                // an empty channel: one quiet line, a third of the way down the list area (the list itself is bottom-anchored)
+                if let line = emptyLine {
+                    Text(line).font(MadType.small).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .padding(.horizontal, 24).padding(.top, max(0, viewport.height / 3)).allowsHitTesting(false)
+                }
+            }
             .coordinateSpace(name: Self.space)
             .overlay(alignment: .bottom) {
                 if !nearBottom {
@@ -241,6 +248,17 @@ public struct ChannelView: View {
         }
     }
 
+    /// The channel has nothing but notes, one of them an empty-state note (the note of older messages dropped may be
+    /// first): its text.
+    private var emptyLine: String? {
+        var line: String?
+        for item in screen.items {
+            guard case .note(let id, let text) = item else { return nil }
+            if id == "quiet" || id == "empty" { line = text }
+        }
+        return line
+    }
+
     /// Once the layout has had time to settle after a resize (the keyboard comes in several steps, a third-party one
     /// with its own height, and the composer grows with it): a list that was at the bottom is at the bottom again,
     /// and a list that shows no row at all (an offset left past the content) is put right whatever it was doing.
@@ -270,6 +288,8 @@ public struct ChannelView: View {
         switch item {
         case .time(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+        case .note(let id, _) where id == "quiet" || id == "empty":
+            Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):

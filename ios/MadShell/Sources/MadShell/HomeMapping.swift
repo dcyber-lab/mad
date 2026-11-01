@@ -45,6 +45,17 @@ public enum HomeMapping {
         return ids.contains { needs.contains($0) }
     }
 
+    /// What a channel row says when there is no message to show (the server leaves the agents' bookkeeping out of the
+    /// last line, so a channel that has only that has none): how many wait and work, or that it is quiet.
+    static func activityLine(_ members: [HomeMember], dm: Bool, paused: Bool) -> String {
+        if paused { return "已暂停" }
+        let waiting = members.filter { $0.state == .needsYou }.count
+        let working = members.filter { $0.state == .working }.count
+        if dm { return waiting > 0 ? "在等你" : working > 0 ? "在工作" : "空闲" }
+        let parts = [waiting > 0 ? "\(waiting) 个在等你" : "", working > 0 ? "\(working) 个在工作" : ""].filter { !$0.isEmpty }
+        return parts.isEmpty ? "空闲" : parts.joined(separator: " · ")
+    }
+
     static func chatRow(_ c: Channel, dot: Bool, deck: Deck) -> HomeRow {
         let ids = c.team != nil ? (c.team?.roles ?? []).compactMap(\.agent) : c.members.map(\.id)
         let labels = Dictionary(c.members.map { ($0.id, $0.label) }, uniquingKeysWith: { a, _ in a })
@@ -57,7 +68,8 @@ public enum HomeMapping {
         let members = ids.map(member)
         // a team channel's other members whose agent exists: out of the tile, in the state
         let helpers = c.team == nil ? [] : c.members.map(\.id).filter { id in !ids.contains(id) && deck.agent(id: id) != nil }.map(member)
-        return HomeRow(id: c.id, kind: c.dm ? .dm : .channel, name: c.dm ? c.title : c.id, preview: c.lastText,
+        return HomeRow(id: c.id, kind: c.dm ? .dm : .channel, name: c.dm ? c.title : c.id,
+                       preview: c.lastText.isEmpty ? activityLine(members + helpers, dm: c.dm, paused: c.paused) : c.lastText,
                        needsYou: dot, members: members, helpers: helpers)
     }
 

@@ -551,3 +551,258 @@ func TestReceiptLineAndCard(t *testing.T) {
 		}
 	}
 }
+
+// What agents settle between themselves is not in the channel: in channel-fold the handoff, the done report,
+// the nudge, the check-in and the lapsed notice draw nothing; an @you result is an ordinary bubble; mad's
+// resume note stays; a run of one sender is not split by a hidden message, and a hidden message adds no time
+// line; a reply that quotes a hidden message shows its snippet. A channel with only such messages says that
+// agents are collaborating in the background. At a phone's width and a wide window's, in both themes
+// (MAD_BOUNDS_SHOTS=<dir> keeps a screenshot of each). Where there is no Chrome, it is skipped.
+func TestQuietKindsAreNotDrawn(t *testing.T) {
+	bin := chrome()
+	if bin == "" {
+		t.Skip("no Chrome: the channel is not checked (MAD_CHROME names one)")
+	}
+	fold, err := newHandler("channel-fold", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quietH, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foldSrv, quietSrv := httptest.NewServer(fold), httptest.NewServer(quietH)
+	defer foldSrv.Close()
+	defer quietSrv.Close()
+	c := startChrome(t, bin)
+	if _, err := c.call("Page.enable", nil); err != nil {
+		t.Fatal(err)
+	}
+	open := func(t *testing.T, base string, w int, theme string) {
+		t.Helper()
+		if _, err := c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": w, "height": 900, "deviceScaleFactor": 1, "mobile": false}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Page.navigate", map[string]any{"url": "about:blank"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Page.navigate", map[string]any{"url": base + "/?channel=fold#token=" + strings.Repeat("0", 32)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shot := func(name string) {
+		if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
+			// the end of the channel, once what rises has risen
+			for i := 0; i < 3; i++ {
+				_, _ = c.eval(`(() => { for (const e of [document.querySelector("#chanscroll"), document.querySelector("#chanlog"), document.scrollingElement]) e.scrollTop = 1e9; })()`)
+				time.Sleep(400 * time.Millisecond)
+			}
+			if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+				var s struct{ Data []byte }
+				if json.Unmarshal(res, &s) == nil {
+					_ = os.WriteFile(filepath.Join(dir, name+".png"), s.Data, 0o644)
+				}
+			}
+		}
+	}
+	for _, theme := range []string{"light", "dark"} {
+		for _, w := range []int{390, 1600} {
+			t.Run(fmt.Sprintf("%s/%d", theme, w), func(t *testing.T) {
+				open(t, foldSrv.URL, w, theme)
+				if !waitFor(20*time.Second, func() bool {
+					v, err := c.eval(`document.querySelector('#chanlog [data-seq="21"]') ? 1 : 0`)
+					return err == nil && string(v) == "1"
+				}) {
+					t.Fatal("the channel did not draw")
+				}
+				var rep struct {
+					Seqs       []string
+					Sys        []string
+					Times      int
+					Lines      int
+					RunNames   int
+					Quote      string
+					Text       string
+					Bounds     struct{ Bad, Sideways []string }
+					AtYouWhole bool
+				}
+				v, err := c.eval(`(() => {
+				  const log = document.querySelector("#chanlog");
+				  const bounds = (` + boundsJS + `);
+				  const r15 = log.querySelector('[data-seq="15"]'), r17 = log.querySelector('[data-seq="17"]');
+				  return { seqs: [...log.querySelectorAll(".cmsg")].map((e) => e.dataset.seq), sys: [...log.querySelectorAll(".csys")].map((e) => e.textContent),
+				    times: log.querySelectorAll(".ctime").length, lines: log.querySelectorAll(".cline").length,
+				    runNames: r15 && r17 && r15.parentElement === r17.parentElement ? r15.parentElement.querySelectorAll(".cname").length : -1,
+				    quote: r15 ? (r15.querySelector(".cquote") || {}).textContent || "" : "", text: log.textContent,
+				    bounds: { bad: bounds.bad, sideways: bounds.sideways },
+				    atYouWhole: !!log.querySelector('[data-seq="21"] .cbub') && !log.querySelector('[data-seq="21"].fold') };
+				})()`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(v, &rep); err != nil {
+					t.Fatal(err)
+				}
+				wantSeqs := "1,4,5,6,7,8,9,10,11,12,13,14,15,17,21"
+				if got := strings.Join(rep.Seqs, ","); got != wantSeqs {
+					t.Errorf("messages drawn: %s, want %s", got, wantSeqs)
+				}
+				for _, gone := range []string{"Do it on a branch", "Done: PR", "h-fx01", "每小时检查", "整理发布说明"} {
+					if strings.Contains(rep.Text, gone) {
+						t.Errorf("%q is drawn", gone)
+					}
+				}
+				if !rep.AtYouWhole || !strings.Contains(rep.Text, "评审通过了，等你合并") {
+					t.Errorf("an @you result is not an ordinary bubble: %+v", rep.AtYouWhole)
+				}
+				if len(rep.Sys) != 2 || rep.Sys[0] != "群已暂停" || rep.Sys[1] != "群已恢复" {
+					t.Errorf("mad's lines: %v, want 群已暂停 and 群已恢复", rep.Sys)
+				}
+				if rep.Times != 2 {
+					t.Errorf("%d time lines: the first message's, and one before the message 15 minutes on (the hidden ones in between add none)", rep.Times)
+				}
+				if rep.RunNames != 1 {
+					t.Errorf("builder's messages 15 and 17, a nudge between them, are in %d runs (names), want one", rep.RunNames)
+				}
+				if !strings.Contains(rep.Quote, "architect") || !strings.Contains(rep.Quote, "Images in bus channels") {
+					t.Errorf("the reply to the hidden handoff quotes %q", rep.Quote)
+				}
+				if rep.Lines != 2 {
+					t.Errorf("%d folded lines, want the two long messages", rep.Lines)
+				}
+				for _, b := range rep.Bounds.Bad {
+					t.Errorf("reaches past its column: %s", b)
+				}
+				for _, s := range rep.Bounds.Sideways {
+					t.Errorf("scrolls sideways: %s", s)
+				}
+				shot(fmt.Sprintf("quiet-%d-%s", w, theme))
+
+				// runs and time lines ignore a hidden message that comes between: out of the page's own drawing
+				v, err = c.eval(`(() => {
+				  const log = document.querySelector("#chanlog");
+				  log.replaceChildren(); cv.run = null; cv.lastAt = 0;
+				  const base = Date.now() - 3600e3;
+				  const m = (seq, min, kind, from, text) => ({ seq, at: new Date(base + min * 60e3).toISOString(), from: { id: from, label: from }, kind, text });
+				  drawMessage(m(101, 0, "text", "builder", "a"));
+				  drawMessage(m(102, 11, "nudge", "mad", "n"));
+				  drawMessage(m(103, 9, "text", "builder", "b"));
+				  drawMessage(m(104, 40, "handoff", "architect", "h"));
+				  drawMessage(m(105, 12, "text", "builder", "c"));
+				  const trim = (seq, text) => drawMessage({ seq, at: new Date(base + 13 * 60e3).toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, event: "trimmed" });
+				  trim(106, "Older messages were dropped; the last 500 are kept.");
+				  trim(107, "Older messages were dropped; the last 400 are kept.");
+				  drawMessage(m(108, 14, "text", "builder", "d"));
+				  return { first: log.firstElementChild.className + ":" + log.firstElementChild.dataset.seq, notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
+				})()`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var synth struct {
+					Times, Groups, Msgs int
+					Notes               []string
+					First               string
+				}
+				if err := json.Unmarshal(v, &synth); err != nil {
+					t.Fatal(err)
+				}
+				// notes written before the event field existed are told by their text, and a trim note is first
+				var old struct {
+					Notes []string
+					First string
+				}
+				v, err = c.eval(`(() => {
+				  const log = document.querySelector("#chanlog");
+				  log.replaceChildren(); cv.run = null; cv.lastAt = 0;
+				  const sys = (seq, text, extra) => drawMessage({ seq, at: new Date().toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, ...extra });
+				  drawMessage({ seq: 200, at: new Date().toISOString(), from: { id: "you", label: "you" }, kind: "text", text: "hi" });
+				  sys(201, "Paused: 30 posts by agents with no word from a person. It waits for a person.");
+				  sys(202, "Resumed by a person.");
+				  sys(203, "Older messages were dropped; the last 500 are kept.");
+				  sys(204, "Something else mad said");
+				  sys(205, "Paused: h-1 lapsed", { handoff: { id: "h-1", to: "x", status: "lapsed" } });
+				  return { notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), first: log.firstElementChild.className };
+				})()`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(v, &old); err != nil {
+					t.Fatal(err)
+				}
+				if got := strings.Join(old.Notes, "|"); got != "更早的消息已清理|群已暂停|群已恢复|Something else mad said" || old.First != "csys trimmed" {
+					t.Errorf("old notes read %q (first item %q), want 更早的消息已清理 first, then 群已暂停|群已恢复|Something else mad said", got, old.First)
+				}
+				if theme == "light" && w == 390 {
+					shot("trim-note-390-light")
+				}
+				if synth.First != "csys trimmed:107" {
+					t.Errorf("the first item is %q: the latest trim note must be the list's first item, above the oldest message and its time line", synth.First)
+				}
+				if len(synth.Notes) != 1 || synth.Notes[0] != "更早的消息已清理" {
+					t.Errorf("the trim note reads %v, want 更早的消息已清理", synth.Notes)
+				}
+				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 4 {
+					t.Errorf("a hidden message came between builder's: %+v, want one time line, one run, three bubbles", synth)
+				}
+			})
+		}
+	}
+	silentH, err := newHandler("silent", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	silentSrv := httptest.NewServer(silentH)
+	defer silentSrv.Close()
+	// both empty states are one quiet line: secondary colour, 14px, centred, about a third of the way down
+	for _, c2 := range []struct{ name, base, want, shot string }{
+		{"only hidden messages", quietSrv.URL, "agent 们在后台协作，有事会在这里 @ 你。", "quiet-empty-390-light"},
+		{"nothing said yet", silentSrv.URL, "还没人说话。@ 一个 agent 可以叫醒它。", "silent-empty-390-light"},
+	} {
+		t.Run(c2.name, func(t *testing.T) {
+			open(t, c2.base, 390, "light")
+			var note struct {
+				Text, Color      string
+				Size, DX, Top, H float64
+				Others           int
+			}
+			if !waitFor(20*time.Second, func() bool {
+				v, err := c.eval(`document.querySelector("#chanlog .note") ? 1 : 0`)
+				return err == nil && string(v) == "1"
+			}) {
+				t.Fatal("the empty channel says nothing")
+			}
+			time.Sleep(300 * time.Millisecond)
+			v, err := c.eval(`(() => {
+			  const n = document.querySelector("#chanlog .note"), s = document.querySelector("#chanscroll");
+			  const nr = n.getBoundingClientRect(), sr = s.getBoundingClientRect(), cs = getComputedStyle(n);
+			  return { text: n.textContent, color: cs.color, size: parseFloat(cs.fontSize), dx: (nr.left + nr.right) / 2 - (sr.left + sr.right) / 2,
+			    top: nr.top - sr.top, h: sr.height, others: document.querySelectorAll("#chanlog > :not(.note)").length };
+			})()`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(v, &note); err != nil {
+				t.Fatal(err)
+			}
+			if note.Text != c2.want {
+				t.Errorf("the empty note is %q, want %q", note.Text, c2.want)
+			}
+			if note.Others != 0 {
+				t.Errorf("something is drawn beside the note")
+			}
+			if note.Size != 14 || note.Color != "rgb(85, 85, 95)" {
+				t.Errorf("the note is %vpx in %s, want 14px in the secondary colour (rgb(85, 85, 95))", note.Size, note.Color)
+			}
+			if note.DX < -3 || note.DX > 3 {
+				t.Errorf("the note is %vpx off the centre", note.DX)
+			}
+			if frac := note.Top / note.H; frac < 0.2 || frac > 0.45 {
+				t.Errorf("the note is %.0f%% of the way down the list area, want about a third", frac*100)
+			}
+			shot(c2.shot)
+		})
+	}
+}
