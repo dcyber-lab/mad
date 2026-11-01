@@ -40,12 +40,30 @@ public struct NativeRoot: View {
     }
 
     private var actions: HomeActions {
+        Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb)
+    }
+
+    /// What the home's controls do: a row opens, the title's ▾ and ⋯'s 切换 Mac switch Mac, and everything that is not
+    /// native yet (the ⋯ items, the + items) opens the page on its view. The search needs nothing of the app: the
+    /// list filters itself.
+    static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
+                            openWeb: ((WebTarget) -> Void)?) -> HomeActions {
         HomeActions(
-            open: { selection = $0 },
-            switchMac: { onSwitchMac?() },
+            open: open,
+            switchMac: { switchMac?() },
+            create: { item in openWeb?(.view(Self.webView(forNew: item))) },
             menu: { item in
-                if item == .switchMac { onSwitchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
+                if item == .switchMac { switchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
             })
+    }
+
+    /// The page's dialog for a + item.
+    static func webView(forNew item: HomeNewItem) -> WebTarget.View {
+        switch item {
+        case .chat: .newchat
+        case .channel: .newchannel
+        case .team: .newteam
+        }
     }
 
     /// The page's view for a ⋯ menu item that is not native yet.
