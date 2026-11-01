@@ -5,13 +5,17 @@ import SwiftUI
 /// changes, and the word crossfades. A tap opens a small card of who and how far each got.
 struct ReceiptLine: View {
     let receipt: ChannelReceipt?
-    @State private var card = {
-        #if DEBUG
-        UserDefaults.standard.bool(forKey: "receiptCard") // `-receiptCard YES`: to look at the card
+    @State private var card = false
+
+    /// The Mac's card hangs under the line. On the phone the line is near the foot of the screen, and a card under it would
+    /// have the composer's strip to fit in: it stands above the line.
+    private static var arrowEdge: Edge {
+        #if os(macOS)
+        .top
         #else
-        false
+        .bottom
         #endif
-    }()
+    }
 
     var body: some View {
         let word = receipt?.word ?? ""
@@ -26,9 +30,16 @@ struct ReceiptLine: View {
             .frame(height: 20)
             .contentShape(Rectangle())
             .onTapGesture { if receipt != nil { card = true } }
-            .popover(isPresented: $card, arrowEdge: .top) {
+            .popover(isPresented: $card, arrowEdge: Self.arrowEdge) {
                 if let receipt { ReceiptCard(receipt: receipt).presentationCompactAdaptation(.popover) }
             }
+            #if DEBUG
+            .task { // `-receiptCard YES`: opens the card a moment after the line shows, to look at it
+                guard UserDefaults.standard.bool(forKey: "receiptCard"), receipt != nil else { return }
+                try? await Task.sleep(for: .seconds(2))
+                card = true
+            }
+            #endif
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(receipt?.spoken ?? "")
             .accessibilityAddTraits(receipt == nil ? [] : .isButton)
@@ -56,5 +67,6 @@ struct ReceiptCard: View {
         }
         .padding(14)
         .frame(minWidth: 240, maxWidth: 340, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
