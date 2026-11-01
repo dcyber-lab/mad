@@ -142,4 +142,10 @@ struct BottomWatch {
 
     /// At a recheck: the marker is still out.
     var stillLeft: Bool { !shown }
+
+    /// The list's last row is on screen but well above the viewport's foot: the offset was left past the end of the
+    /// content (the viewport grew), and an empty band shows under the last message.
+    static func pastEnd(markerShown: Bool, markerFoot: CGFloat, viewportHeight: CGFloat) -> Bool {
+        markerShown && viewportHeight > 0 && markerFoot < viewportHeight - 40
+    }
 }

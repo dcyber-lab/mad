@@ -16,6 +16,8 @@ public struct ChannelView: View {
     @State private var keeper = BottomKeeper()
     /// The marker's whereabouts and when the list last followed a message (see `BottomWatch`).
     @State private var watch = BottomWatch()
+    /// How many rows the lazy list has made now (not state: counting must not draw the view again).
+    @State private var realized = RealizedRows()
     @State private var expanded: Set<Int> = []
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
@@ -33,6 +35,7 @@ public struct ChannelView: View {
     }
 
     private static let bottom = "bottom"
+    private static let space = "channelList"
 
     public var body: some View {
         #if os(macOS)
@@ -140,10 +143,19 @@ public struct ChannelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(screen.items) { item in row(item).id(item.id) }
+                    ForEach(screen.items) { item in
+                        row(item).id(item.id)
+                            .onAppear { realized.count += 1 }
+                            .onDisappear { realized.count -= 1 }
+                    }
                     // The last row of the lazy stack: it appears and disappears as the scroll brings it
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
+                        .background(GeometryReader { g in
+                            // where the marker's foot is in the scroll view, kept without drawing the view again
+                            Color.clear.onAppear { realized.markerFoot = g.frame(in: .named(Self.space)).maxY }
+                                .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in realized.markerFoot = y }
+                        })
                         .onAppear { watch.appeared(); nearBottom = true }
                         .onDisappear {
                             // a message that arrives pushes the marker out for a moment and the list follows it: that
@@ -168,6 +180,7 @@ public struct ChannelView: View {
                 #endif
                 .padding(.bottom, 10)
             }
+            .coordinateSpace(name: Self.space)
             .overlay(alignment: .bottom) {
                 if !nearBottom {
                     Button { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } } label: {
@@ -185,6 +198,7 @@ public struct ChannelView: View {
                 Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
                     viewport = size
                     if keeper.resized() { stick(proxy) }
+                    settle(proxy, following: nearBottom || watch.shown)
                 }
             })
             #if os(macOS)
@@ -210,6 +224,19 @@ public struct ChannelView: View {
                 // gaps, and the new message pushing the marker out would flash the way-down button.
                 if nearBottom || mine { watch.followed(); stick(proxy) }
             }
+        }
+    }
+
+    /// Once the layout has had time to settle after a resize (the keyboard comes in several steps, a third-party one
+    /// with its own height, and the composer grows with it): a list that was at the bottom is at the bottom again,
+    /// and a list that shows no row at all (an offset left past the content) is put right whatever it was doing.
+    private func settle(_ proxy: ScrollViewProxy, following: Bool) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            let blank = realized.count <= 0 && !screen.items.isEmpty
+            // the marker's foot well above the viewport's: an offset left past the end of the content (the viewport grew
+            // as the keyboard went away), an empty band under the last message
+            let pastEnd = BottomWatch.pastEnd(markerShown: watch.shown, markerFoot: realized.markerFoot, viewportHeight: viewport.height)
+            if blank || pastEnd || (following && !watch.shown) { stick(proxy) }
         }
     }
 
@@ -387,3 +414,6 @@ public struct ChannelView: View {
     }
     #endif
 }
+
+/// A count the view keeps without being drawn again for it.
+private final class RealizedRows { var count = 0; var markerFoot: CGFloat = .infinity }
