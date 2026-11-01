@@ -141,4 +141,23 @@ final class WebMenuTests: XCTestCase {
         XCTAssertEqual(NativeRoot.webView(for: .notifications), .notify)
         XCTAssertEqual(NativeRoot.webView(for: .addProject), .addproject)
     }
+
+    /// The + items and the ⋯ items are carried out through `openWeb`: none of the home's controls is a silent no-op.
+    func testEveryPlusItemAndEveryMenuItemCallsOpenWeb() {
+        var asked: [WebTarget] = []
+        var switched = 0
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: { switched += 1 }, openWeb: { asked.append($0) })
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(asked, [.view(.newchat), .view(.newchannel), .view(.newteam)])
+        asked = []
+        for item in HomeMenuItem.allCases where item != .switchMac { actions.menu(item) }
+        XCTAssertEqual(asked.count, HomeMenuItem.allCases.count - 1)
+        actions.menu(.switchMac)
+        actions.switchMac()
+        XCTAssertEqual(switched, 2)
+    }
+
+    func testThePlusMenuHasNewChatChannelAndTeam() {
+        XCTAssertEqual(HomeNewItem.allCases.map(\.title), ["新对话", "新群聊", "新团队"])
+    }
 }

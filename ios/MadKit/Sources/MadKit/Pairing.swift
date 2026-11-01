@@ -129,7 +129,7 @@ public enum Pairing {
 /// native screen yet (the agent's terminal and changes, usage, the board, skills ...).
 public enum WebTarget: Hashable, Codable, Sendable, Identifiable {
     public enum View: String, Codable, Sendable, CaseIterable {
-        case usage, board, skills, phone, notify, addproject, theme
+        case usage, board, skills, phone, notify, addproject, theme, newchat, newchannel, newteam
     }
     case view(View)
     case agent(String)

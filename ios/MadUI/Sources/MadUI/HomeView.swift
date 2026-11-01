@@ -52,8 +52,7 @@ public struct HomeView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { searching = true } label: { Image(systemName: "magnifyingglass") }
                         .accessibilityLabel("搜索")
-                    Button(action: actions.newChat) { Image(systemName: "plus") }
-                        .accessibilityLabel("新建")
+                    HomeNewMenu(action: actions.create)
                     HomeMenu(groups: menu, action: actions.menu)
                 }
             }
@@ -61,6 +60,22 @@ public struct HomeView: View {
     }
 }
 #endif
+
+/// The + menu: what the page's + starts. Each item is the app's to carry out (the page's dialog, for now).
+struct HomeNewMenu: View {
+    let action: (HomeNewItem) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(HomeNewItem.allCases, id: \.self) { item in
+                Button { action(item) } label: { Label(item.title, systemImage: item.symbol) }
+            }
+        } label: {
+            Image(systemName: "plus")
+        }
+        .accessibilityLabel("新建")
+    }
+}
 
 /// The ⋯ menu: the items in groups, a divider between groups.
 struct HomeMenu: View {

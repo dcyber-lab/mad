@@ -1390,6 +1390,9 @@ function openWanted() {
       notify: () => notifyDialog(),
       addproject: () => $("#addproject").click(),
       theme: () => $("#theme").click(),
+      newchat: () => openNew(),
+      newchannel: () => createChannel(),
+      newteam: () => newTeam(),
     };
     // an own key only: #open=__proto__ or valueOf must not reach Object's members
     const open = Object.hasOwn(views, appAsks.view) ? views[appAsks.view] : null;
