@@ -32,7 +32,7 @@ func TestPageOpensTheViewsTheAppsAskFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, view := range []string{"usage", "board", "skills", "phone", "notify", "addproject", "theme"} {
+	for _, view := range []string{"usage", "board", "skills", "phone", "notify", "addproject", "theme", "newchat", "newchannel", "newteam"} {
 		if !regexp.MustCompile(`\b` + view + `: \(\) =>`).Match(b) {
 			t.Errorf("app.js does not open #open=%s", view)
 		}

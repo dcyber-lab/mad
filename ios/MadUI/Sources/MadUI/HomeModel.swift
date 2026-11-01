@@ -118,21 +118,43 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     var tile: [GroupTile.Member] { members.map { (id: $0.id, kind: $0.kind, state: $0.state) } }
 }
 
+/// What the + offers to start, as the page's + does.
+public enum HomeNewItem: String, CaseIterable, Sendable {
+    case chat, channel, team
+
+    public var title: String {
+        switch self {
+        case .chat: "新对话"
+        case .channel: "新群聊"
+        case .team: "新团队"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .chat: "square.and.pencil"
+        case .channel: "bubble.left.and.bubble.right"
+        case .team: "person.3"
+        }
+    }
+}
+
 /// What the app is asked to do. Every closure has a do-nothing default.
 public struct HomeActions {
     public var open: (HomeRow.ID) -> Void
     public var switchMac: () -> Void
-    public var newChat: () -> Void
+    /// The + menu's item was chosen.
+    public var create: (HomeNewItem) -> Void
     /// The search text changed (the list filters itself; this is for an app that also searches elsewhere).
     public var search: (String) -> Void
     public var menu: (HomeMenuItem) -> Void
 
     public init(open: @escaping (HomeRow.ID) -> Void = { _ in }, switchMac: @escaping () -> Void = {},
-                newChat: @escaping () -> Void = {}, search: @escaping (String) -> Void = { _ in },
+                create: @escaping (HomeNewItem) -> Void = { _ in }, search: @escaping (String) -> Void = { _ in },
                 menu: @escaping (HomeMenuItem) -> Void = { _ in }) {
         self.open = open
         self.switchMac = switchMac
-        self.newChat = newChat
+        self.create = create
         self.search = search
         self.menu = menu
     }

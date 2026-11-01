@@ -9,7 +9,7 @@ struct MadApp: App {
     var body: some Scene {
         WindowGroup {
             if let mac = MadApp.nativeRootMac {
-                NativeRoot(api: MadClient(mac: mac), title: mac.name)
+                NativeRoot(api: MadClient(mac: mac, cache: SnapshotCache.standard(for: mac)), title: mac.name)
             } else {
                 MacsView(opening: MadApp.fixtureMac ?? store.lastMac).environmentObject(store)
             }

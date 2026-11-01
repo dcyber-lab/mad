@@ -51,6 +51,20 @@ final class NativeDefaultTests: MadUITestCase {
         XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 10), "closing the sheet did not show the home")
     }
 
+    func testThePlusMenuOffersNewChatChannelAndTeamAndAnItemOpensThePageOnItsDialog() {
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
+        tap("新建")
+        XCTAssertTrue(app.buttons["新对话"].firstMatch.waitForExistence(timeout: 5), "the + menu has no 新对话")
+        XCTAssertTrue(app.buttons["新团队"].firstMatch.exists, "the + menu has no 新团队")
+        shot("the + menu")
+        app.buttons["新群聊"].firstMatch.tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 15), "新群聊 did not open the page")
+        XCTAssertTrue(element("完成").firstMatch.exists, "the sheet has no way to close")
+        shot("新群聊 in a sheet")
+        tap("完成")
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 10), "closing the sheet did not show the home")
+    }
+
     func testSwitchMacIsReachableAndLongPressChoosesTheWebVersion() {
         XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40))
         XCTAssertGreaterThanOrEqual(elements(containing: "switch Mac").count, 1, "no way to switch Mac on the home")

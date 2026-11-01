@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import MadKit
 import MadUI
 import SwiftUI
 
@@ -11,6 +12,10 @@ struct MacShell<Detail: View>: View {
     let model: HomeModel
     @Binding var selection: HomeRow.ID?
     let actions: HomeActions
+    /// How the Mac answers: when it does not, a capsule says so over the detail pane.
+    let link: LinkState
+    /// A channel or an agent is open (its name floats at the top, and the note goes under it).
+    let rowOpen: Bool
     @ViewBuilder var detail: Detail
 
     @AppStorage("mad.sidebarWidth") private var storedWidth = 320.0
@@ -22,10 +27,13 @@ struct MacShell<Detail: View>: View {
     @State private var open = true
     @State private var dragFrom: Double?
 
-    init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions, @ViewBuilder detail: () -> Detail) {
+    init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions, link: LinkState = .ok, rowOpen: Bool = false,
+         @ViewBuilder detail: () -> Detail) {
         self.model = model
         _selection = selection
         self.actions = actions
+        self.link = link
+        self.rowOpen = rowOpen
         self.detail = detail()
         #if DEBUG
         // `-sidebarHidden YES` starts with the sidebar hidden (and `-mad.sidebarWidth 420` sets its width), to look at them
@@ -43,6 +51,17 @@ struct MacShell<Detail: View>: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.chatBackdrop)
+                // With no row open: a capsule over the pane only, never the sidebar or the traffic lights' line, 12pt from
+                // the top, and it takes no room (nothing moves when it comes or goes). With a row open the name pill's
+                // second line says it instead, so there is one floating thing.
+                .overlay(alignment: .top) {
+                    if !rowOpen {
+                        LinkNote(link: link)
+                            .padding(.horizontal, 32)
+                            .padding(.top, 12)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
         .overlay(alignment: .topLeading) {
             if !open {

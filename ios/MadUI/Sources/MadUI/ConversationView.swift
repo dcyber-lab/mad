@@ -293,10 +293,7 @@ struct ConversationIdentity: View {
                 Text(model.title)
                     .font(MadType.title)
                     .lineLimit(1)
-                Text(model.stateLine)
-                    .font(MadType.label)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                PillSubline(text: model.stateLine)
             }
             if expands { Spacer(minLength: 0) }
         }

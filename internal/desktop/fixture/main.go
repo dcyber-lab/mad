@@ -71,6 +71,9 @@ type scenario struct {
 	Deck     map[string]any               `json:"deck"`
 	Chat     map[string]json.RawMessage   `json:"chat"`
 	Messages map[string][]json.RawMessage `json:"messages"`
+	// Receipts is a channel's receipts under the person's messages, Paused whether it is paused (/api/bus/messages).
+	Receipts map[string]json.RawMessage `json:"receipts"`
+	Paused   map[string]bool            `json:"paused"`
 }
 
 func main() {
@@ -334,7 +337,13 @@ func (f *fixture) messages(w http.ResponseWriter, r *http.Request) {
 		relative(m, now)
 		out = append(out, m)
 	}
-	reply(w, map[string]any{"channel": ch, "messages": out, "last": last, "paused": false, "receipts": receipts})
+	// the scenario's receipts, then those of what was posted through /api/bus/post
+	list := []any{}
+	if raw, ok := f.scn.Receipts[ch]; ok {
+		_ = json.Unmarshal(raw, &list)
+	}
+	list = append(list, receipts...)
+	reply(w, map[string]any{"channel": ch, "messages": out, "last": last, "paused": f.scn.Paused[ch], "receipts": list})
 }
 
 // receiptAt is how a posted message stands `age` after it came: two agents get it, builder a step every two seconds

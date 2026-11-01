@@ -192,10 +192,10 @@ async function api(method, path, params = {}, body) {
 function ago(when) {
   const s = (Date.now() - new Date(when)) / 1000;
   if (!when || isNaN(s)) return "";
-  if (s < 90) return "just now";
-  if (s < 5400) return `${Math.round(s / 60)} min ago`;
-  if (s < 129600) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86400)} d ago`;
+  if (s < 90) return "刚刚";
+  if (s < 5400) return `${Math.round(s / 60)} 分钟前`;
+  if (s < 129600) return `${Math.round(s / 3600)} 小时前`;
+  return `${Math.round(s / 86400)} 天前`;
 }
 
 function projectOf(path) {
@@ -250,16 +250,16 @@ function closeNew() {
 // conversations to go on with.
 function drawNew() {
   const p = projectOf(nc.project);
-  $("#newtitle").textContent = p ? "What should we work on?" : "Add a project to start";
-  $("#newsub").textContent = p ? `in ${p.name}${p.branch ? " · " + p.branch : ""}` : "A project is a directory the agents work in.";
+  $("#newtitle").textContent = p ? "要做点什么？" : "先添加一个项目";
+  $("#newsub").textContent = p ? `在 ${p.name}${p.branch ? " · " + p.branch : ""} 里` : "项目就是 agent 工作所在的目录。";
   const past = $("#past");
   if (!p) {
-    past.replaceChildren(button("Add a project", "primary", () => addProject()));
+    past.replaceChildren(button("添加项目", "primary", () => addProject()));
     return;
   }
   if (past.dataset.project !== p.path) {
     past.dataset.project = p.path;
-    past.replaceChildren(el("div", "muted pastnote", "Looking for past conversations…"));
+    past.replaceChildren(el("div", "muted pastnote", "正在找以前的对话…"));
     loadPast(p.path);
   }
   drawNewSkills();
@@ -286,12 +286,12 @@ async function loadPast(path) {
     return;
   }
   const head = el("div", "pasthead");
-  head.append(icon("history"), el("span", "", "Continue a past conversation"));
+  head.append(icon("history"), el("span", "", "接着以前的对话"));
   const rows = list.slice(0, 12).map((s) => {
     const r = el("button", "pastrow");
     r.type = "button";
     r.append(avatar({ kind: s.kind, icon: kindIcon(s.kind), color: kindColor(s.kind) }, true),
-      el("span", "t", s.title || "untitled"), el("span", "w muted", ago(s.updated)));
+      el("span", "t", s.title || "无标题"), el("span", "w muted", ago(s.updated)));
     r.title = `${s.kind} · ${s.id}`;
     r.onclick = () => continuePast(path, s);
     return r;
@@ -328,7 +328,7 @@ function drawNewWho() {
   const p = projectOf(nc.project);
   const proj = el("button", "chip");
   proj.type = "button";
-  proj.append(icon("folder"), el("span", "", p ? p.name : "No project"), icon("down"));
+  proj.append(icon("folder"), el("span", "", p ? p.name : "没有项目"), icon("down"));
   proj.onmousedown = (e) => { e.preventDefault(); projectPicker(proj); };
   const kinds = el("span", "seg");
   for (const [k, name] of KINDS) {
@@ -351,10 +351,10 @@ function drawNewWho() {
     const m = models.find((x) => x.value === nc.model);
     const b = el("button", "chip");
     b.type = "button";
-    b.append(el("span", "", m ? m.name || m.value : "Default model"), icon("down"));
+    b.append(el("span", "", m ? m.name || m.value : "默认模型"), icon("down"));
     b.onmousedown = (e) => {
       e.preventDefault();
-      popup(b, [{ label: "Default model", desc: "as its own settings say", checked: !nc.model, onclick: () => { nc.model = ""; drawQueue(); } },
+      popup(b, [{ label: "默认模型", desc: "按它自己的设置", checked: !nc.model, onclick: () => { nc.model = ""; drawQueue(); } },
         ...models.map((x) => ({ label: x.name || x.value, desc: x.description, checked: x.value === nc.model,
           onclick: () => { nc.model = x.value; drawQueue(); } }))], { above: true });
     };
@@ -369,7 +369,7 @@ function projectPicker(anchor) {
     ...deck.projects.map((p) => ({ label: p.name, desc: p.branch ? `${p.branch} · ${p.path}` : p.path, icon: "folder",
       checked: p.path === nc.project, onclick: () => { nc.project = p.path; drawNew(); drawQueue(); } })),
     "-",
-    { label: "Add a project…", icon: "folderplus", onclick: () => addProject() },
+    { label: "添加项目…", icon: "folderplus", onclick: () => addProject() },
   ], { above: true });
 }
 
@@ -446,7 +446,7 @@ async function sendTo(id, text, imgs) {
 // addProject asks for a directory, offering the ones agents ran in.
 async function addProject() {
   const input = el("input", "say wide");
-  input.placeholder = "A directory: type a path, or pick one below";
+  input.placeholder = "一个目录：输入路径，或从下面选一个";
   input.spellcheck = false;
   const list = el("div", "suggest");
   const body = el("div", "");
@@ -464,7 +464,7 @@ async function addProject() {
       const r = el("button", `srow${i === 0 ? " on" : ""}`);
       r.type = "button";
       r.append(icon("folder"), el("span", "t", it.name), el("span", "p muted", it.short || it.path));
-      if (it.added) r.append(el("span", "pill quiet", "added"));
+      if (it.added) r.append(el("span", "pill quiet", "已添加"));
       r.dataset.path = it.path;
       r.onclick = () => {
         picked = it.path;
@@ -478,8 +478,8 @@ async function addProject() {
   };
   input.oninput = () => fill();
   const v = await dialog({
-    title: "Add a project", body,
-    actions: [{ label: "Cancel", value: null }, { label: "Add", value: "add", cls: "primary" }],
+    title: "添加项目", body,
+    actions: [{ label: "取消", value: null }, { label: "添加", value: "add", cls: "primary" }],
     ready: (done) => {
       input.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) done("add"); };
       fill();
@@ -491,7 +491,7 @@ async function addProject() {
   if (!path) return;
   try {
     const r = await api("POST", "/api/projects", {}, { path });
-    toast(r.added ? `Added ${r.name}` : `${r.name} was there already`);
+    toast(r.added ? `已添加 ${r.name}` : `${r.name} 早就在了`);
     await refresh();
     openNew(r.path);
   } catch (e) {
@@ -502,13 +502,13 @@ async function addProject() {
 // projectMenu is what can be done with project p.
 function projectMenu(p, anchor) {
   popup(anchor, [
-    { label: "New chat", icon: "compose", onclick: () => openNew(p.path) },
-    { label: "New terminal", desc: "a shell, in your terminal app", icon: "terminal", onclick: () => newShell(p) },
-    { label: "New team…", desc: "agents in roles start together in a channel", icon: "agent", onclick: () => newTeam(p.path) },
-    { label: "Past conversations", icon: "history", onclick: () => openNew(p.path) },
+    { label: "新对话", icon: "compose", onclick: () => openNew(p.path) },
+    { label: "新终端", desc: "在你的终端 app 里开一个 shell", icon: "terminal", onclick: () => newShell(p) },
+    { label: "新小组…", desc: "按角色分工的 agent 一起在一个群里启动", icon: "agent", onclick: () => newTeam(p.path) },
+    { label: "以前的对话", icon: "history", onclick: () => openNew(p.path) },
     "-",
-    { label: "Remove project", icon: "trash", danger: true, disabled: p.agents.length > 0,
-      desc: p.agents.length ? "delete its agents first" : "from mad; nothing on disk", onclick: () => removeProject(p) },
+    { label: "移除项目", icon: "trash", danger: true, disabled: p.agents.length > 0,
+      desc: p.agents.length ? "先删掉它的 agent" : "只从 mad 里移除，磁盘上的东西不动", onclick: () => removeProject(p) },
   ], anchor.getBoundingClientRect ? { right: true } : {});
 }
 
@@ -516,7 +516,7 @@ async function newShell(p) {
   try {
     const r = await api("POST", "/api/agents", {}, { project: p.path, kind: "shell" });
     await api("POST", "/api/terminal", { id: r.id });
-    toast("Opened in your terminal app");
+    toast("已在你的终端 app 里打开");
     refresh();
   } catch (e) {
     toast(e.message, "err");
@@ -541,26 +541,26 @@ function agentMenu(a, anchor, opts) {
   const off = a.status === "stopped" || a.status === "asleep" || a.status === "exited";
   const waits = a.status === "waiting";
   popup(anchor, [
-    { label: "Rename", icon: "edit", onclick: () => renameAgent(a) },
-    { label: "Open in terminal", desc: "the terminal deck, in your terminal app", icon: "external", onclick: () => openTerminal(a) },
-    { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
-    { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
-    { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
+    { label: "改名", icon: "edit", onclick: () => renameAgent(a) },
+    { label: "在终端里打开", desc: "在你的终端 app 里打开 deck", icon: "external", onclick: () => openTerminal(a) },
+    { label: "改动", desc: "它在自己目录里改了什么", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
+    { label: "在消息总线上发消息", desc: "一条私信，它忙完这一轮后会读到", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
+    { label: "存为技能", desc: "请它把行之有效的做法写下来，由你批准", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
     { label: "打断", desc: interruptWhy(a), icon: "stop", disabled: a.status !== "running" || !a.chat || interruptSent(a), onclick: () => interruptAgent(a) },
-    { label: "Put to sleep", icon: "sleep", disabled: off, onclick: () => sleepAgent(a),
-      desc: off ? "it is not running" : waits ? "ends its process to free memory: what it asks you now is lost; a message wakes it" : "ends its process to free memory; a message wakes it where it left off" },
+    { label: "让它休眠", icon: "sleep", disabled: off, onclick: () => sleepAgent(a),
+      desc: off ? "它没有在运行" : waits ? "结束它的进程来释放内存：它现在问你的会丢掉；来一条消息会叫醒它" : "结束它的进程来释放内存；来一条消息会让它接着刚才的地方继续" },
     "-",
-    { label: "Delete", desc: "out of mad; its conversation stays on disk", icon: "trash", danger: true, onclick: () => deleteAgent(a) },
+    { label: "删除", desc: "从 mad 里移除；它的对话仍留在磁盘上", icon: "trash", danger: true, onclick: () => deleteAgent(a) },
   ], opts || {});
 }
 
 async function renameAgent(a) {
   const input = el("input", "say wide");
   input.value = a.name || label(a);
-  input.placeholder = "A name, or nothing for its conversation's title";
+  input.placeholder = "填个名字，留空则用对话的标题";
   const v = await dialog({
-    title: "Rename", body: input,
-    actions: [{ label: "Cancel", value: null }, { label: "Rename", value: "ok", cls: "primary" }],
+    title: "改名", body: input,
+    actions: [{ label: "取消", value: null }, { label: "改名", value: "ok", cls: "primary" }],
     ready: (done) => {
       input.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) done("ok"); };
       setTimeout(() => input.select(), 0);
@@ -580,7 +580,7 @@ async function renameAgent(a) {
 async function sleepAgent(a) {
   try {
     await api("POST", "/api/agents/stop", { id: a.id });
-    toast(`${label(a)} is asleep: a message wakes it`);
+    toast(`${label(a)} 已休眠：来一条消息会叫醒它`);
     refresh();
   } catch (e) {
     toast(e.message, "err");
@@ -640,10 +640,10 @@ async function interruptAgent(a) {
 }
 
 async function deleteAgent(a) {
-  const body = el("p", "muted dtext", `${label(a)} stops and leaves mad. Its conversation stays on disk: you can go on with it from Past conversations.`);
+  const body = el("p", "muted dtext", `${label(a)} 会停下并离开 mad。它的对话仍留在磁盘上，可以从“以前的对话”接着聊。`);
   const v = await dialog({
-    title: "Delete this agent?", body,
-    actions: [{ label: "Cancel", value: null }, { label: "Delete", value: "del", cls: "danger" }],
+    title: "删除这个 agent？", body,
+    actions: [{ label: "取消", value: null }, { label: "删除", value: "del", cls: "danger" }],
   });
   if (v !== "del") return;
   try {
@@ -659,7 +659,7 @@ async function deleteAgent(a) {
 async function openTerminal(a) {
   try {
     await api("POST", "/api/terminal", { id: a.id });
-    toast("Opened in your terminal app");
+    toast("已在你的终端 app 里打开");
   } catch (e) {
     toast(e.message, "err");
   }
@@ -674,7 +674,7 @@ function drawActs() {
   $("#acts").hidden = !a && !ch;
   const more = $("#more");
   more.setAttribute("aria-label", ch ? "群信息" : "更多");
-  more.title = ch ? "群信息" : "more";
+  more.title = ch ? "群信息" : "更多";
   if (more.dataset.icon !== (ch ? "info" : "more")) {
     more.dataset.icon = ch ? "info" : "more";
     more.replaceChildren(icon(ch ? "info" : "more"));
@@ -717,7 +717,7 @@ async function openChanges(id) {
   const box = $("#side");
   box.hidden = false;
   drawActs();
-  box.replaceChildren(sideHead(null), el("div", "muted sidenote", "Reading its changes…"));
+  box.replaceChildren(sideHead(null), el("div", "muted sidenote", "正在读取它的改动…"));
   let d;
   try {
     d = await api("GET", "/api/diff", { id });
@@ -738,7 +738,7 @@ function closeChanges() {
 function sideHead(d) {
   const head = el("div", "sidehead");
   const what = el("div", "what");
-  what.append(el("b", "", "Changes"));
+  what.append(el("b", "", "改动"));
   if (d && d.branch) {
     const b = el("span", "branch muted");
     b.append(icon("branch"), d.branch);
@@ -747,16 +747,16 @@ function sideHead(d) {
   const files = d && d.files ? d.files : [];
   if (d && !d.error) {
     const add = files.reduce((s, f) => s + (f.added || 0), 0), del = files.reduce((s, f) => s + (f.deleted || 0), 0);
-    what.append(el("span", "muted", `${files.length} file${files.length === 1 ? "" : "s"}`), el("span", "plus", `+${add}`), el("span", "minus", `−${del}`));
+    what.append(el("span", "muted", `${files.length} 个文件`), el("span", "plus", `+${add}`), el("span", "minus", `−${del}`));
   }
   const refreshB = el("button", "icon-btn");
   refreshB.type = "button";
-  refreshB.title = "read again";
+  refreshB.title = "重新读取";
   refreshB.append(icon("refresh"));
   refreshB.onclick = () => side.id && openChanges(side.id);
   const shut = el("button", "icon-btn");
   shut.type = "button";
-  shut.title = "close";
+  shut.title = "关闭";
   shut.append(icon("panelclose"));
   shut.onclick = () => closeChanges();
   head.append(what, el("span", "grow"), refreshB, shut);
@@ -770,7 +770,7 @@ function drawChanges(d) {
   if (d.error) {
     parts.push(el("div", "muted sidenote", d.error));
   } else if (!d.files || !d.files.length) {
-    parts.push(el("div", "muted sidenote", "Nothing changed since its last commit."));
+    parts.push(el("div", "muted sidenote", "自上次提交以来没有改动。"));
   } else {
     const body = el("div", "sidebody");
     const chunks = splitPatch(d.patch || "");
@@ -779,7 +779,7 @@ function drawChanges(d) {
       const sec = el("details", "dfile");
       sec.open = true;
       const sum = el("summary");
-      const st = { "??": "new", A: "new", D: "gone", M: "", R: "moved" }[(f.status || "").trim()[0] === "?" ? "??" : (f.status || "").trim()[0]] || "";
+      const st = { "??": "新增", A: "新增", D: "已删", M: "", R: "已移动" }[(f.status || "").trim()[0] === "?" ? "??" : (f.status || "").trim()[0]] || "";
       sum.append(icon("right", "chev"), el("span", "p", f.path));
       if (st) sum.append(el("span", "pill quiet", st));
       sum.append(el("span", "plus", f.added ? `+${f.added}` : ""), el("span", "minus", f.deleted ? `−${f.deleted}` : ""));
@@ -796,7 +796,7 @@ function drawChanges(d) {
       }
       body.append(sec);
     }
-    if (d.cut) body.append(el("div", "muted sidenote", "The rest is too long to show here."));
+    if (d.cut) body.append(el("div", "muted sidenote", "后面的太长，这里不显示。"));
     parts.push(body);
   }
   box.replaceChildren(...parts);
@@ -851,11 +851,11 @@ function addImages(files) {
   for (const f of files) {
     if (!f.type.startsWith("image/")) continue;
     if (!IMAGE_TYPES.includes(f.type)) {
-      bad.push(f.name || "An image");
+      bad.push(f.name || "一张图片");
       continue;
     }
     if (f.size > MAX_IMAGE_BYTES) {
-      toast(`${f.name || "An image"} is over ${MAX_IMAGE_BYTES >> 20} MB`, "err");
+      toast(`${f.name || "一张图片"} 超过了 ${MAX_IMAGE_BYTES >> 20} MB`, "err");
       continue;
     }
     if (pendingImgs.length + pendingReads >= MAX_IMAGES) {
@@ -872,13 +872,13 @@ function addImages(files) {
     };
     reader.onerror = () => {
       pendingReads--;
-      toast(`${f.name || "An image"} could not be read`, "err");
+      toast(`${f.name || "一张图片"} 读不了`, "err");
       drawImages();
     };
     reader.readAsDataURL(f);
   }
-  if (bad.length) toast(`${bad.join(", ")}: send a png, jpeg, gif or webp (a HEIC photo as a JPEG)`, "err");
-  if (left) toast(`${MAX_IMAGES} images at most: ${left} left out`, "err");
+  if (bad.length) toast(`${bad.join("、")}：请发 png、jpeg、gif 或 webp（HEIC 照片请转成 JPEG）`, "err");
+  if (left) toast(`最多 ${MAX_IMAGES} 张图片：有 ${left} 张没加进来`, "err");
 }
 
 function drawImages() {
@@ -890,7 +890,7 @@ function drawImages() {
     img.alt = "";
     const x = el("button", "x");
     x.type = "button";
-    x.title = "remove it";
+    x.title = "移除";
     x.append(icon("x"));
     x.onclick = () => {
       pendingImgs.splice(i, 1);
@@ -980,14 +980,14 @@ async function phoneDialog() {
   }
   const body = el("div", "phonebox");
   const cf = s.via === "cloudflare";
-  let actions = [{ label: "OK", cls: "primary", value: null }];
+  let actions = [{ label: "好", cls: "primary", value: null }];
   if (s.problem) {
     body.append(el("p", "dtext", s.problem));
   } else if (!s.on) {
     body.append(el("p", "dtext", cf
-      ? "Serve this window to your phone through a Cloudflare Tunnel, from anywhere (chosen with mad phone on --cloudflare): anyone with the address can reach it, and they need the code it shows to get in."
-      : `Serve this window to your phone over Tailscale, at ${s.host}: only your own devices reach it, and they need the code it shows to get in.`));
-    actions = [{ label: "Cancel", value: null }, { label: "Turn on", cls: "primary", value: "on" }];
+      ? "通过 Cloudflare Tunnel 把这个窗口送到你的手机上，在哪里都能用（用 mad phone on --cloudflare 选的）：知道地址的人都能连上，但进去要输入它显示的验证码。"
+      : `通过 Tailscale 把这个窗口送到你的手机上${s.host ? `，地址是 ${s.host}` : ""}：只有你自己的设备连得上，进去要输入它显示的验证码。`));
+    actions = [{ label: "取消", value: null }, { label: "打开", cls: "primary", value: "on" }];
   } else {
     const img = el("img", "qr");
     img.alt = "QR code";
@@ -995,7 +995,7 @@ async function phoneDialog() {
     const url = el("div", "purl");
     const copy = el("button", "icon-btn");
     copy.type = "button";
-    copy.title = "copy";
+    copy.title = "复制";
     copy.append(icon("copy"));
     copy.onclick = async () => {
       try {
@@ -1010,8 +1010,8 @@ async function phoneDialog() {
         const row = el("div", "pdev");
         const rm = el("button", "icon-btn");
         rm.type = "button";
-        rm.title = "Remove";
-        rm.textContent = "Remove";
+        rm.title = "移除";
+        rm.textContent = "移除";
         rm.onclick = async () => {
           try {
             await api("DELETE", "/api/phone/devices", { id: d.id });
@@ -1020,14 +1020,14 @@ async function phoneDialog() {
             toast(e.message, "err");
           }
         };
-        row.append(el("span", "", `${d.name} · seen ${ago(d.last_seen)}`), rm);
+        row.append(el("span", "", `${d.name} · ${ago(d.last_seen)}在线`), rm);
         devs.append(row);
       }
     } catch (_) { /* the list is a courtesy */ }
-    body.append(img, el("p", "dtext muted", `Served ${cf ? "through a Cloudflare Tunnel" : "over Tailscale"}. Scan it with the phone's camera${cf ? "" : ", the phone on your tailnet"}: the code in it works once, for 10 minutes, and the phone gets a key of its own. There, Add to Home Screen keeps it at hand.`), url, el("p", "dtext muted", "Paired phones"), devs);
-    actions = [{ label: "Turn off", value: "off" }, { label: "Done", cls: "primary", value: null }];
+    body.append(img, el("p", "dtext muted", `已通过 ${cf ? "Cloudflare Tunnel" : "Tailscale"} 提供。用手机相机扫它${cf ? "" : "（手机要在你的 tailnet 里）"}：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。`), url, el("p", "dtext muted", "已配对的手机"), devs);
+    actions = [{ label: "关闭", value: "off" }, { label: "完成", cls: "primary", value: null }];
   }
-  const v = await dialog({ title: "On your phone", body, actions });
+  const v = await dialog({ title: "在你的手机上", body, actions });
   try {
     if (v === "on") {
       const r = await api("POST", "/api/phone");
@@ -1035,7 +1035,7 @@ async function phoneDialog() {
       else phoneDialog();
     } else if (v === "off") {
       await api("DELETE", "/api/phone");
-      toast("The phone's way in is closed");
+      toast("手机的入口已关闭");
     }
   } catch (e) {
     toast(e.message, "err");
@@ -1063,23 +1063,23 @@ async function notifyDialog() {
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
   if (!can) {
     body.append(el("p", "dtext", ios && !navigator.standalone
-      ? "On an iPhone, notifications come to mad on the Home Screen: Share → Add to Home Screen, open mad from there, and turn them on here."
-      : "This browser can't be sent notifications here. Open mad on your phone (the phone button), and turn them on there."));
+      ? "iPhone 上的通知要通过主屏幕上的 mad 来收：点分享 → 添加到主屏幕，从那里打开 mad，再在这里打开通知。"
+      : "这个浏览器收不到通知。请在手机上打开 mad（点手机按钮），在那里打开通知。"));
   } else if (Notification.permission === "denied") {
-    body.append(el("p", "dtext", "Notifications are blocked for mad in this browser's settings: allow them there first."));
+    body.append(el("p", "dtext", "这个浏览器的设置里屏蔽了 mad 的通知：请先在那里允许。"));
   } else if (sub && st.on) {
-    body.append(el("p", "dtext", "This device is told when an agent needs you or is done, mad open or not."));
-    actions = [{ label: "Turn off", value: "off" }, { label: "Send a test", value: "test" }, { label: "Done", cls: "primary", value: null }];
+    body.append(el("p", "dtext", "agent 在等你或做完时，这台设备会收到通知，不管 mad 开没开着。"));
+    actions = [{ label: "关闭", value: "off" }, { label: "发一条测试", value: "test" }, { label: "完成", cls: "primary", value: null }];
   } else {
-    body.append(el("p", "dtext", "Be told on this device when an agent needs you or is done, mad open or not."));
-    actions = [{ label: "Cancel", value: null },
-      { label: "Turn on", cls: "primary", value: "on", now: () => { asked = Notification.requestPermission(); } }];
+    body.append(el("p", "dtext", "agent 在等你或做完时，在这台设备上收到通知，不管 mad 开没开着。"));
+    actions = [{ label: "取消", value: null },
+      { label: "打开", cls: "primary", value: "on", now: () => { asked = Notification.requestPermission(); } }];
   }
-  const v = await dialog({ title: "Notifications", body, actions });
+  const v = await dialog({ title: "通知", body, actions });
   try {
     if (v === "on") {
       if ((await asked) !== "granted") {
-        toast("Notifications were not allowed", "err");
+        toast("没有允许通知", "err");
         return;
       }
       const key = Uint8Array.from(atob(st.key.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
@@ -1088,14 +1088,14 @@ async function notifyDialog() {
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       await api("POST", "/api/push", {}, sub.toJSON());
       await api("POST", "/api/push/test", { endpoint: sub.endpoint });
-      toast("Notifications on: a test is on its way");
+      toast("通知已打开：测试通知马上到");
     } else if (v === "off") {
       await api("DELETE", "/api/push", { endpoint: sub.endpoint });
       await sub.unsubscribe();
-      toast("Notifications off on this device");
+      toast("这台设备的通知已关闭");
     } else if (v === "test") {
       await api("POST", "/api/push/test", { endpoint: sub.endpoint });
-      toast("Sent");
+      toast("已发送");
     }
   } catch (e) {
     toast(e.message, "err");
@@ -1120,7 +1120,7 @@ $("#embed-menu").onclick = () => {
     ...(embed ? [{ label: "切换 Mac", onclick: () => switchMac() }] : [{ label: "通知", onclick: () => $("#bell").click() }]),
     "-",
     { label: "添加项目", onclick: () => $("#addproject").click() },
-    { label: `主题：${theme}`, onclick: () => $("#theme").click() },
+    { label: `主题：${themeWord[theme]}`, onclick: () => $("#theme").click() },
     // #embed=app from a link in a browser: the app's own page is not there to leave it
     ...(embed && !window.webkit?.messageHandlers?.mad ? [{ label: "显示完整页面", onclick: () => leaveEmbed() }] : []),
   ], { right: true });

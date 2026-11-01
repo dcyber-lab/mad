@@ -45,4 +45,20 @@ final class BottomWatchTests: XCTestCase {
         XCTAssertFalse(BottomWatch.pastEnd(markerShown: false, markerFoot: 440, viewportHeight: 640), "a marker out of sight is the person reading above")
         XCTAssertFalse(BottomWatch.pastEnd(markerShown: true, markerFoot: 440, viewportHeight: 0), "not measured yet")
     }
+
+    func testAMarkerThatLeftWithAResizeIsPutBackAndOneThatLeftAloneIsNot() {
+        var w = BottomWatch()
+        w.resized(at: t0)
+        _ = w.disappeared(at: t0.addingTimeInterval(0.2))
+        XCTAssertTrue(w.leftWithResize, "it left a moment after the viewport changed")
+        var v = BottomWatch()
+        v.resized(at: t0)
+        _ = v.disappeared(at: t0.addingTimeInterval(3))
+        XCTAssertFalse(v.leftWithResize, "the person scrolled long after the resize")
+        var back = BottomWatch()
+        back.resized(at: t0)
+        _ = back.disappeared(at: t0.addingTimeInterval(0.1))
+        back.appeared()
+        XCTAssertFalse(back.leftWithResize, "it came back")
+    }
 }

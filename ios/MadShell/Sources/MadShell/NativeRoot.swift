@@ -40,12 +40,30 @@ public struct NativeRoot: View {
     }
 
     private var actions: HomeActions {
+        Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb)
+    }
+
+    /// What the home's controls do: a row opens, the title's ▾ and ⋯'s 切换 Mac switch Mac, and everything that is not
+    /// native yet (the ⋯ items, the + items) opens the page on its view. The search needs nothing of the app: the
+    /// list filters itself.
+    static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
+                            openWeb: ((WebTarget) -> Void)?) -> HomeActions {
         HomeActions(
-            open: { selection = $0 },
-            switchMac: { onSwitchMac?() },
+            open: open,
+            switchMac: { switchMac?() },
+            create: { item in openWeb?(.view(Self.webView(forNew: item))) },
             menu: { item in
-                if item == .switchMac { onSwitchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
+                if item == .switchMac { switchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
             })
+    }
+
+    /// The page's dialog for a + item.
+    static func webView(forNew item: HomeNewItem) -> WebTarget.View {
+        switch item {
+        case .chat: .newchat
+        case .channel: .newchannel
+        case .team: .newteam
+        }
     }
 
     /// The page's view for a ⋯ menu item that is not native yet.
@@ -67,10 +85,15 @@ public struct NativeRoot: View {
             .environment(store)
             // Polls while the app is active; the task restarts when it comes back, so it looks at once.
             .task(id: scenePhase) {
+                // leaving the foreground: what the device keeps of the Mac is written now, not after its pause
+                if scenePhase != .active { SnapshotCache.flushAll() }
                 guard scenePhase == .active else { return }
                 await store.run()
             }
+            #if os(iOS)
+            // a thin bar across the top; the Mac's is a capsule in the detail pane (MacShell)
             .overlay(alignment: .top) { LinkNote(link: store.link) }
+            #endif
             #if DEBUG && os(macOS)
             .task { await DebugWindow.runIfAsked() }
             #endif
@@ -81,9 +104,12 @@ public struct NativeRoot: View {
 
     @ViewBuilder private var content: some View {
         #if os(macOS)
-        MacShell(model: model, selection: $selection, actions: actions) {
+        MacShell(model: model, selection: $selection, actions: actions, link: store.link,
+                 rowOpen: selection.map { drawsOwnHead($0) } ?? false) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb)
         }
+        // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
+        .environment(\.madLinkNote, LinkNote.message(for: store.link))
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
@@ -140,22 +166,42 @@ public struct LinkNote: View {
     let link: LinkState
     public init(link: LinkState) { self.link = link }
 
-    public var body: some View {
+    /// What the link says when it is not good, and its symbol; nil when all is well.
+    public static func message(for link: LinkState) -> MadLinkNote? {
         switch link {
-        case .refused: note("Token refused: pair this Mac again.", "key.slash")
-        case .offline: note("The Mac cannot be reached.", "wifi.slash")
-        case .failed(let why): note(why, "exclamationmark.triangle")
-        case .connecting, .ok: EmptyView()
+        case .refused: MadLinkNote(text: "这台 Mac 不认这个令牌了：请重新配对。", symbol: "key.slash")
+        case .offline: MadLinkNote(text: "连不上这台 Mac。", symbol: "wifi.slash")
+        case .failed(let why): MadLinkNote(text: why, symbol: "exclamationmark.triangle")
+        case .connecting, .ok: nil
         }
     }
 
+    public var body: some View {
+        if let m = Self.message(for: link) { note(m.text, m.symbol) }
+    }
+
     private func note(_ text: String, _ icon: String) -> some View {
+        #if os(macOS)
+        // a small floating capsule, like the name pill: it covers no more than itself, and a long text is cut at the end
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+            Text(text).lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: 13)) // MadType.label
+        .foregroundStyle(.orange)
+        .padding(.horizontal, 14).padding(.vertical, 7)
+        // opaque, so it reads the same over anything
+        .background(Color.chatComposer, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        #else
         Label(text, systemImage: icon)
             .font(.subheadline)
             .foregroundStyle(.orange)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.regularMaterial)
+        #endif
     }
 }
 

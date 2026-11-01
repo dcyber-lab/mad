@@ -89,8 +89,12 @@ public struct HomeSidebar: View {
                 if searching { searchFocused = true } else { query = "" }
             } label: { Image(systemName: "magnifyingglass") }
                 .accessibilityLabel("搜索")
-            Button(action: actions.newChat) { Image(systemName: "plus") }
-                .accessibilityLabel("新建")
+            HomeNewMenu(action: actions.create)
+                #if os(macOS)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                #endif
             HomeMenu(groups: menu, action: actions.menu)
                 #if os(macOS)
                 .menuStyle(.borderlessButton)

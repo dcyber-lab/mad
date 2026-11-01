@@ -7,13 +7,13 @@
 const bd = { open: false, key: "", channel: "" };
 
 const boardColumns = [
-  ["waiting-you", "Waiting for you"], ["doing", "Doing"], ["blocked", "Blocked"],
-  ["review", "Review"], ["todo", "To do"], ["done", "Done today"],
+  ["waiting-you", "在等你"], ["doing", "在做"], ["blocked", "卡住了"],
+  ["review", "待检查"], ["todo", "待办"], ["done", "今天做完的"],
 ];
 
 // Why a card is blocked; what waits on you is the inbox's (inbox.js).
 const boardWhy = {
-  waits: "waits on another task", lapsed: "handoff lapsed", stalled: "stalled", permission: "waits on a permission",
+  waits: "在等另一个任务", lapsed: "交接过期了", stalled: "停住了", permission: "在等许可",
 };
 
 function openBoard(channel) {
@@ -72,7 +72,7 @@ function drawBoardNow() {
   const head = el("div", "bhead");
   const inColumn = (col) => col === "waiting-you" ? waiting.length : cards.filter((c) => c.column === col).length;
   const counts = boardColumns.map(([col, name]) => [name, inColumn(col)]).filter(([, n]) => n);
-  head.append(el("h1", "", bd.channel ? `Board · #${bd.channel}` : "Board"), el("p", "muted", counts.length ? counts.map(([n, k]) => `${k} ${n.toLowerCase()}`).join(" · ") : "Nothing on the board: handoffs and the agents' task_set put tasks here."));
+  head.append(el("h1", "", bd.channel ? `看板 · #${bd.channel}` : "看板"), el("p", "muted", counts.length ? counts.map(([n, k]) => `${k} 个${n}`).join(" · ") : "看板上还没有任务：交接和 agent 的 task_set 会把任务放到这里。"));
   const spend = spendLine(deck.spend);
   const cols = el("div", "bcols");
   for (const [col, name] of boardColumns) {
@@ -81,7 +81,7 @@ function drawBoardNow() {
     const h = el("h2", "");
     h.append(name, el("span", "muted", list.length ? ` ${list.length}` : ""));
     box.append(h);
-    if (!list.length) box.append(el("p", "muted bnone", col === "waiting-you" ? "Nothing waits for you." : "Nothing here."));
+    if (!list.length) box.append(el("p", "muted bnone", col === "waiting-you" ? "没有在等你的" : "这里没有"));
     for (const c of list) box.append(col === "waiting-you" ? itemCard(c, true) : boardCard(c));
     cols.append(box);
   }
@@ -92,16 +92,16 @@ function drawBoardNow() {
 // thin bar; amber from 80% of it, red once it is spent and agents wait.
 function spendLine(s) {
   if (!s || !s.day || (!s.usd && !s.turns)) return null;
-  const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? ` of $${+s.budget_usd.toFixed(2)}` : "");
-  const turns = `${s.turns}` + (s.budget_turns ? ` of ${s.budget_turns}` : "") + (s.turns === 1 ? " turn" : " turns");
+  const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? ` / $${+s.budget_usd.toFixed(2)}` : "");
+  const turns = `${s.turns}` + (s.budget_turns ? ` / ${s.budget_turns}` : "") + " 轮";
   const part = s.part || 0;
   const box = el("div", `bspend${s.closed ? " closed" : part >= 0.8 ? " hot" : ""}`);
   const bar = el("div", "bbar");
   const fill = el("div", "bfill");
   fill.style.width = `${Math.min(100, Math.round(part * 100))}%`;
   bar.append(fill);
-  const note = s.closed ? " · agents wait" : s.open_today ? " · lifted for today" : "";
-  box.append(el("span", "muted", `mad's own work today: ${usd} · ${turns}${note}`), bar);
+  const note = s.closed ? " · agent 在等" : s.open_today ? " · 今天不限" : "";
+  box.append(el("span", "muted", `mad 自己今天的花费：${usd} · ${turns}${note}`), bar);
   return box;
 }
 
@@ -116,20 +116,20 @@ function boardCard(c) {
   if (a) {
     meta.append(avatar(a, true), el("span", "", label(a)), statusPill(a));
   } else if (c.owner === "you") {
-    meta.append(el("span", "pill quiet", "you"));
+    meta.append(el("span", "pill quiet", "你"));
   } else if (c.owner_label) {
     meta.append(el("span", "", c.owner_label));
   }
   if (c.channel) meta.append(el("span", "muted", c.channel.startsWith("dm.") ? "DM" : "#" + c.channel));
   meta.append(el("span", "muted", ageText(c.age)));
   card.append(meta);
-  if (c.why) card.append(el("div", "bwhy", c.why === "waits" && c.waits && c.waits.length ? `waits on ${c.waits.join(", ")}` : boardWhy[c.why] || c.why));
+  if (c.why) card.append(el("div", "bwhy", c.why === "waits" && c.waits && c.waits.length ? `在等 ${c.waits.join("、")}` : boardWhy[c.why] || c.why));
   // An ask's message is what its title does not already say (bus.Card).
   const text = (c.message && c.message.text) || c.note;
   if (text && text.trim() !== card.querySelector(".btitle").textContent.trim()) card.append(el("div", "bnote", text.length > 220 ? text.slice(0, 219) + "…" : text));
   if (c.task && c.task.nudges && c.task.nudges.length) {
     const n = c.task.nudges[c.task.nudges.length - 1];
-    card.append(el("div", "muted bnudged", `nudged ${clock(n.at)}`));
+    card.append(el("div", "muted bnudged", `${clock(n.at)} 催过`));
   }
   card.onclick = () => cardMenu(c, card);
   return card;
@@ -137,10 +137,10 @@ function boardCard(c) {
 
 function ageText(ns) {
   const m = Math.floor((ns || 0) / 6e10);
-  if (m < 1) return "now";
-  if (m < 60) return `${m} min`;
-  if (m < 48 * 60) return `${Math.floor(m / 60)} h`;
-  return `${Math.floor(m / 1440)} d`;
+  if (m < 1) return "刚刚";
+  if (m < 60) return `${m} 分钟`;
+  if (m < 48 * 60) return `${Math.floor(m / 60)} 小时`;
+  return `${Math.floor(m / 1440)} 天`;
 }
 
 // cardMenu offers what can be done about card c.
@@ -148,15 +148,15 @@ function cardMenu(c, anchor) {
   const a = c.owner && agents.get(c.owner);
   const items = [];
   const t = c.task;
-  if (a) items.push({ label: `Open ${label(a)}`, desc: "its conversation", icon: "chat", onclick: () => show(a.id) });
-  if (c.channel) items.push({ label: c.channel.startsWith("dm.") ? "Open the DM" : `Open #${c.channel}`, icon: "chat", onclick: () => openChannel(c.channel) });
+  if (a) items.push({ label: `打开 ${label(a)}`, desc: "它的对话", icon: "chat", onclick: () => show(a.id) });
+  if (c.channel) items.push({ label: c.channel.startsWith("dm.") ? "打开私信" : `打开 #${c.channel}`, icon: "chat", onclick: () => openChannel(c.channel) });
   if (t && t.status !== "done") {
     items.push("-");
-    if (a) items.push({ label: "Ask how it stands", desc: "a word to its owner, which wakes it", icon: "question", onclick: () => boardCall("/api/board/nudge", { id: t.id }) });
-    items.push({ label: "Give it to…", desc: "another agent, told and woken", icon: "agent", onclick: () => reassign(t, anchor) });
-    if (t.status !== "review") items.push({ label: "Mark in review", icon: "eye", onclick: () => boardCall("/api/board/task", { id: t.id, status: "review" }) });
-    items.push({ label: "Mark done", icon: "check", onclick: () => boardCall("/api/board/task", { id: t.id, status: "done" }) });
-    items.push({ label: "Drop it", icon: "trash", danger: true, onclick: () => boardCall("/api/board/task", { id: t.id, status: "dropped" }) });
+    if (a) items.push({ label: "问问进度", desc: "给负责人说一声，会叫醒它", icon: "question", onclick: () => boardCall("/api/board/nudge", { id: t.id }) });
+    items.push({ label: "交给别人…", desc: "另一个 agent，会通知并叫醒它", icon: "agent", onclick: () => reassign(t, anchor) });
+    if (t.status !== "review") items.push({ label: "标为待检查", icon: "eye", onclick: () => boardCall("/api/board/task", { id: t.id, status: "review" }) });
+    items.push({ label: "标为做完", icon: "check", onclick: () => boardCall("/api/board/task", { id: t.id, status: "done" }) });
+    items.push({ label: "放弃它", icon: "trash", danger: true, onclick: () => boardCall("/api/board/task", { id: t.id, status: "dropped" }) });
   }
   if (!items.length) return;
   popup(anchor, items, {});

@@ -11,6 +11,11 @@ public struct Mac: Hashable, Codable, Identifiable, Sendable {
     /// The person gave it this name, so the Mac's own name no longer replaces it.
     public var renamed: Bool
 
+    /// The Mac the app runs on, reached through its own server (its address and token change on every start).
+    public static let localID = UUID(uuidString: "00000000-0000-4000-8000-00000000110C")!
+    /// The fixture server's: nothing of it is kept.
+    public static let fixtureID = UUID(uuidString: "00000000-0000-4000-8000-0000000F1700")!
+
     public init(id: UUID = UUID(), name: String, baseURL: URL, token: String, deviceID: String? = nil,
                 renamed: Bool = false) {
         self.renamed = renamed
@@ -54,13 +59,13 @@ public enum PairingError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .empty: return "Nothing to pair with: the code is empty."
-        case .notURL: return "This is not a link."
-        case .notHTTPS: return "The link must start with https://."
-        case .noHost: return "The link has no host name."
-        case .noToken: return "The link has no #pair=… or #token=… part. Show the code again with mad phone."
-        case .badToken: return "The token must be 32 hex characters."
-        case .badCode: return "The pairing code must be 32 hex characters."
+        case .empty: return "没有可配对的内容：请扫描二维码，或粘贴 mad phone 显示的链接。"
+        case .notURL: return "这不是一个链接：请粘贴 mad phone 显示的链接。"
+        case .notHTTPS: return "链接必须以 https:// 开头：请粘贴 mad phone 显示的链接。"
+        case .noHost: return "链接里没有主机名：请粘贴 mad phone 显示的完整链接。"
+        case .noToken: return "链接里没有 #pair=… 或 #token=… 部分：请在 Mac 上再运行一次 mad phone 获取。"
+        case .badToken: return "令牌必须是 32 位十六进制字符：请粘贴 mad phone 显示的完整链接。"
+        case .badCode: return "配对码必须是 32 位十六进制字符：请粘贴 mad phone 显示的完整链接。"
         }
     }
 }
@@ -129,7 +134,7 @@ public enum Pairing {
 /// native screen yet (the agent's terminal and changes, usage, the board, skills ...).
 public enum WebTarget: Hashable, Codable, Sendable, Identifiable {
     public enum View: String, Codable, Sendable, CaseIterable {
-        case usage, board, skills, phone, notify, addproject, theme
+        case usage, board, skills, phone, notify, addproject, theme, newchat, newchannel, newteam
     }
     case view(View)
     case agent(String)
