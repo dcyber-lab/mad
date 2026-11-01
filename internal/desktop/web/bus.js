@@ -8,7 +8,7 @@
 // lastAt is when the last message drawn was said; run is the sender of the
 // messages drawn in a row (they share one name and one character); pics are
 // the pictures drawn, for the channel's panel.
-const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null, jump: 0, lastAt: 0, run: null, pics: [] };
+const cv = { open: null, last: 0, seq: 0, timer: null, paused: false, reply: null, jump: 0, lastAt: 0, run: null, pics: [], quiet: new Map() };
 
 function busChannel(id) {
   return (deck.bus || []).find((c) => c.id === id);
@@ -102,16 +102,13 @@ function chanMatch(c, q) {
 // red dot when it @you or a member waits on you.
 function teamRow(c, found) {
   const mem = chanAgents(c);
-  const live = chanLive(c);
-  const n = (s) => live.filter((a) => shownStatus(a) === s).length;
-  const parts = [n("waiting") ? `${n("waiting")} 个在等你` : "", n("running") ? `${n("running")} 个在工作` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
   const lead = chanDot(c) ? withDot(face) : face;
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
-      : String(c.last_text || "").replace(/\s+/g, " ").trim() || parts.join(" · ") || c.topic || "idle",
+      : String(c.last_text || "").replace(/\s+/g, " ").trim() || chanSub(c),
     onclick: () => openChannel(c.id), title: c.topic || c.title,
   });
 }
@@ -145,6 +142,7 @@ function openChannel(id, seq) {
     cv.lastAt = 0;
     cv.run = null;
     cv.pics = [];
+    cv.quiet = new Map();
     replyTo(null);
     closeChanPanel(true);
     $("#chanlog").replaceChildren();
@@ -636,8 +634,13 @@ async function loadChannel(first) {
     drawMessage(m);
     cv.last = m.seq;
   }
-  if (!cv.last && !$("#chanlog").children.length) {
-    $("#chanlog").append(el("div", "note", id.startsWith("dm.") ? "说点什么：它忙完之后会看到。" : "还没人说话。@ 一个 agent 可以叫醒它。"));
+  // Nothing shown: said nothing yet, or only what agents settle between themselves (never drawn).
+  const log = $("#chanlog");
+  if (!log.querySelector(":scope > :not(.note)")) {
+    let note = log.querySelector(".note");
+    if (!note) log.append((note = el("div", "note")));
+    note.textContent = cv.quiet.size ? "agent 们在后台协作，有事会在这里 @ 你。"
+      : id.startsWith("dm.") ? "说点什么：它忙完之后会看到。" : "还没人说话。@ 一个 agent 可以叫醒它。";
   }
   if (cv.paused !== r.paused) {
     cv.paused = r.paused;
@@ -762,6 +765,18 @@ function timeLine(at) {
   return t;
 }
 
+// QUIET_KINDS are the kinds of message that are agents' bookkeeping, which the channel does not show: a
+// handoff, its result (done, declined), a check-in (timer), a nudge. The server's list is bus.HiddenKinds
+// (a test keeps the two the same). So is a lapsed notice (a system line about a handoff). Whatever @mentions
+// the person stays, of any kind, and so do mad's pause and resume notes.
+const QUIET_KINDS = ["handoff", "done", "declined", "timer", "nudge"];
+const YOU_MENTION = /(^|[\s(（])@you(?![\w-])/i;
+function quiet(m) {
+  if (YOU_MENTION.test(m.text || "")) return false;
+  if (m.kind === "system") return !!m.handoff;
+  return QUIET_KINDS.includes(m.kind);
+}
+
 // drawMessage draws message m at the end of the log: the person's on the
 // right, the bus's own lines in the middle, an agent's in a run with its
 // other messages in a row, which share the name and the character (beside
@@ -769,6 +784,12 @@ function timeLine(at) {
 // have passed.
 function drawMessage(m) {
   const log = $("#chanlog");
+  // What agents settle between themselves is not drawn: no bubble, no time line, no break in a run. A reply
+  // may quote it, so what it said is kept.
+  if (quiet(m)) {
+    cv.quiet.set(m.seq, { who: m.from.label, text: m.text || "" });
+    return;
+  }
   log.querySelector(".note")?.remove();
   if (m.kind === "system") {
     const s = el("div", "csys", m.text);
@@ -809,7 +830,7 @@ function drawMessage(m) {
   cv.run.stack.append(row);
 }
 
-// messageNode is one message: a bubble; or, for what an agent did or reports,
+// messageNode is one message: a bubble; or, for what an agent says at length,
 // one thin line, opened in place by a tap; its pictures; the message it answers,
 // quoted. Reply is on hover, and in a menu on a long press.
 function messageNode(m) {
@@ -835,8 +856,6 @@ function messageNode(m) {
     line.type = "button";
     line.setAttribute("aria-expanded", "false");
     const sum = el("span", "csum");
-    const head = foldHead(m);
-    if (head) sum.append(el("b", "", head), "：");
     sum.append(folded);
     const chev = el("span", "chev", "›");
     chev.setAttribute("aria-hidden", "true");
@@ -846,8 +865,6 @@ function messageNode(m) {
     if (quote) full.append(quote);
     if (m.text) full.append(text);
     if (imgs) full.append(imgs);
-    const h = m.handoff;
-    if (h) full.append(el("div", "cnote", `${h.id} · ${h.status || ""}`));
     row.append(line, full);
   } else {
     if (quote || m.text) {
@@ -906,18 +923,8 @@ async function copyText(text) {
   }
 }
 
-// foldHead is the bold start of a folded line: whom a handoff is to, or that
-// a result is done (or refused); none for other long messages.
-function foldHead(m) {
-  const h = m.handoff;
-  if (m.kind === "handoff") return `→ ${agentLabel(h && h.to)}`;
-  if (m.kind === "done") return h && h.status === "declined" ? "已拒绝" : "完成";
-  return "";
-}
-
 // foldSummary is the line a message folds to in a channel, "" when it is
-// shown whole: an agent's handoff, its result, and what runs past three
-// lines. The person's own, mad's, a message that @mentions the person, and
+// shown whole: what an agent says that runs past three lines. The person's own, mad's, a message that @mentions the person, and
 // whatever an agent says in its DM with the person (all of it addressed to
 // them) stay whole.
 function foldSummary(m) {
@@ -927,9 +934,7 @@ function foldSummary(m) {
   const text = (m.text || "").trim();
   if (/(^|[\s(（])@you(?![\w-])/i.test(text)) return "";
   const lines = text.split("\n").filter((l) => l.trim());
-  const card = m.kind === "handoff" || m.kind === "done";
-  if (!card && lines.length <= 3 && text.length <= 280) return "";
-  // The line's bold start says whom a handoff is to, or how it ended (foldHead).
+  if (lines.length <= 3 && text.length <= 280) return "";
   return firstSentence(lines[0] || "");
 }
 
@@ -976,8 +981,14 @@ function quoteOf(seq) {
   const q = el("button", "cquote");
   q.type = "button";
   const parent = $(`#chanlog [data-seq="${seq}"]`);
+  const hidden = cv.quiet.get(seq);
   if (parent) {
     q.append(el("b", "", parent.dataset.who || ""), " ", snippet(parent.querySelector(".ctext")?.textContent || parent.textContent));
+  } else if (hidden) {
+    q.append(el("b", "", hidden.who), " ", snippet(hidden.text));
+    q.title = "";
+    q.tabIndex = -1; // nothing on the page to show: it is not drawn
+    return q;
   } else {
     q.append("↩ 更早的消息");
   }

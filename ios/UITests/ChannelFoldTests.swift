@@ -1,17 +1,13 @@
 import XCTest
 
-/// A long channel (`channel-fold` scenario): folded handoffs and reports as thin lines,
-/// whole @you and own messages, pictures with a lightbox, a long URL, a long quote,
+/// A long channel (`channel-fold` scenario): long messages as thin lines, no handoffs, results,
+/// nudges or check-ins at all, whole @you and own messages, pictures with a lightbox, a long URL, a long quote,
 /// the 群信息 panel, and the long-press menu.
 final class ChannelFoldTests: MadUITestCase {
-    /// The folded lines: buttons named by their text ("→ builder：…", "完成：…"). Four of the
-    /// scenario's messages fold: the handoff, the done report, and two long ones.
+    /// The folded lines: buttons named by their text. Two of the scenario's messages fold, the long ones.
     private var lines: XCUIElementQuery {
-        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@",
-                                         "→ builder", "完成", "修改在这里", "命令"))
+        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "修改在这里", "命令"))
     }
-    private var handoff: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "→ builder")).firstMatch }
-    private var done: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "完成")).firstMatch }
 
     /// ⓘ, which opens 群信息 (the dialog it opens has the same label). It and the head's button
     /// say aria-haspopup, so WebKit makes them pop-up buttons, not buttons: any element will do.
@@ -35,24 +31,21 @@ final class ChannelFoldTests: MadUITestCase {
 
     // MARK: Folded lines
 
-    func testHandoffAndDoneAreThinLinesThatOpenInPlaceAndFoldAgain() {
-        // At least the handoff and the done report are one line each (the fixture has two long messages more).
-        XCTAssertGreaterThanOrEqual(lines.count, 2, "the handoff and the done report should each be one line: \(lines.count)")
-        XCTAssertTrue(handoff.label.contains("Images in bus channels and DMs"), "the handoff line says: “\(handoff.label)”")
-        XCTAssertTrue(done.label.contains("Done: PR #88 adds pictures to channels"), "the done line says: “\(done.label)”")
-        XCTAssertFalse(done.label.contains("PR PR"), "the done line repeats PR: “\(done.label)”")
-        shot("folded")
-        // The rest of the report is not on the page until the line is opened, there, and folds again.
-        let rest = elements(containing: "One thing to know")
-        XCTAssertEqual(rest.count, 0, "the done report's text is shown while it is folded")
-        done.tap()
-        XCTAssertTrue(rest.firstMatch.waitForExistence(timeout: 5), "tapping the done line did not open its text")
-        XCTAssertEqual(elements(containing: "Do it on a branch").count, 0, "opening one line opened the handoff too")
-        shot("the done report open")
-        done.tap()
-        waitUntilGone(rest.firstMatch, "tapping the done line again did not fold it")
-        handoff.tap()
-        XCTAssertTrue(elements(containing: "Do it on a branch").firstMatch.waitForExistence(timeout: 5), "tapping the handoff did not open it")
+    func testBookkeepingBetweenAgentsIsNotInTheChannel() {
+        // The scenario has a handoff, a done report, a nudge, a check-in and a lapsed notice: none is drawn,
+        // and no line is a pill ("→ builder", "完成").
+        for gone in ["Do it on a branch", "Done: PR", "还没有 bus_done", "每小时检查", "已过期", "整理发布说明"] {
+            XCTAssertEqual(elements(containing: gone).count, 0, "“\(gone)” is on the page")
+        }
+        XCTAssertEqual(web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "→ builder", "完成")).count, 0,
+                       "a handoff or result is still a line")
+        // A result that @mentions the person is an ordinary bubble, whole, whatever its kind.
+        XCTAssertTrue(elements(containing: "评审通过了，等你合并").firstMatch.exists, "the @you result is not shown")
+        // mad's resume note stays.
+        XCTAssertTrue(elements(containing: "Resumed by a person.").firstMatch.exists, "the resume note is gone")
+        shot("no bookkeeping")
+        // The long messages are still lines.
+        XCTAssertTrue(lines.firstMatch.exists, "no folded long message")
     }
 
     func testNoShowMoreAndNoMemberStripAnywhere() {

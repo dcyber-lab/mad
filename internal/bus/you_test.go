@@ -2,6 +2,9 @@ package bus
 
 import (
 	"image/color"
+	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -120,5 +123,100 @@ func TestYourChannelsLastLine(t *testing.T) {
 	// LastAt is the time of the message the line is of.
 	if y, _ := YourChannels(); !y["ops"].LastAt.Equal(now()) {
 		t.Errorf("last at %v, want %v", y["ops"].LastAt, now())
+	}
+}
+
+// put writes m straight into a channel's file, as the bus's own code does for each kind.
+func put(t *testing.T, ch string, m Message) {
+	t.Helper()
+	err := locked(func() error {
+		msgs, err := readMsgs(ch)
+		if err != nil {
+			return err
+		}
+		_, err = addMsg(ch, &msgs, m)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// What the bus keeps between agents is not the person's: no last line, no unread, no red dot for each of the
+// hidden kinds; a lapsed notice (a system line about a handoff) is the same; an @you of any kind counts and
+// is a last line; mad's own pause and resume notes are passed over as before.
+func TestHiddenKindsAreNotTheirs(t *testing.T) {
+	setup(t)
+	if _, err := Create("ops", "", []string{idArch}, me); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Post("ops", arch, "the deploy is green", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkRead(You, "ops", 1); err != nil {
+		t.Fatal(err)
+	}
+	from := From{ID: idArch, Label: "architect", Kind: "claude"}
+	mad := From{ID: system, Label: system, Kind: "system"}
+	ref := &HandoffRef{ID: "h-1", To: idBuild, Status: "open"}
+	for _, kind := range HiddenKinds {
+		put(t, "ops", Message{From: from, Kind: kind, Text: "Re-review the handoff, it lapsed", Handoff: ref})
+	}
+	put(t, "ops", Message{From: mad, Kind: "system", Text: "h-1 lapsed", Handoff: ref, Mentions: []string{idArch}})
+	put(t, "ops", Message{From: mad, Kind: "system", Text: "Resumed by a person."})
+	y, err := YourChannels()
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := y["ops"]
+	if o.Unread != 0 || o.Mention || o.Listed {
+		t.Errorf("bookkeeping counted for the person: %+v", o)
+	}
+	if o.LastLine != "architect: the deploy is green" {
+		t.Errorf("the last line is %q, want the last visible message", o.LastLine)
+	}
+	if o.Last != 8 {
+		t.Errorf("last = %d: it is still the number of the last message, hidden or not", o.Last)
+	}
+	// an @you keeps its kind's weight: it is a message like any other, whatever its kind
+	for _, kind := range append([]string{"text"}, HiddenKinds...) {
+		put(t, "ops", Message{From: from, Kind: kind, Text: "@you your review is needed on " + kind})
+		y, _ = YourChannels()
+		o = y["ops"]
+		if o.Unread == 0 || !o.Mention || o.LastLine != "architect: @you your review is needed on "+kind {
+			t.Errorf("an @you of kind %s: %+v", kind, o)
+		}
+		if err := MarkRead(You, "ops", o.Last); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// a channel with nothing visible has no last line at all
+	if _, err := Create("quiet", "", []string{idArch}, me); err != nil {
+		t.Fatal(err)
+	}
+	put(t, "quiet", Message{From: from, Kind: "handoff", Text: "do it", Handoff: ref})
+	put(t, "quiet", Message{From: from, Kind: "done", Text: "done", Handoff: ref})
+	y, _ = YourChannels()
+	if q := y["quiet"]; q.LastLine != "" || !q.LastAt.IsZero() || q.Unread != 0 || q.Last != 2 {
+		t.Errorf("a channel of only bookkeeping: %+v", q)
+	}
+}
+
+// The page's list of hidden kinds is the server's.
+func TestPageHidesTheSameKinds(t *testing.T) {
+	b, err := os.ReadFile("../desktop/web/bus.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`const QUIET_KINDS = \[([^\]]*)\]`).FindSubmatch(b)
+	if m == nil {
+		t.Fatal("bus.js has no QUIET_KINDS")
+	}
+	var page []string
+	for _, k := range strings.Split(string(m[1]), ",") {
+		page = append(page, strings.Trim(strings.TrimSpace(k), `"`))
+	}
+	if !slices.Equal(page, HiddenKinds) {
+		t.Errorf("the page hides %v, the server %v", page, HiddenKinds)
 	}
 }

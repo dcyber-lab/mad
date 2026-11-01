@@ -131,7 +131,7 @@
             "kind": "codex"
           }
         ],
-        "last": 8,
+        "last": 22,
         "last_text": "architect: 长的交接和汇报都折叠",
         "last_at": "-1m",
         "listed": true,
@@ -392,6 +392,113 @@
         "kind": "text",
         "reply_to": 13,
         "text": "跑过了：`go test -race ./internal/desktop/... -run TestSomethingWithAVeryLongNameThatNeverEndsAndKeepsGoingForever -count=1 -v` 通过。长词 Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious 也在这条里。"
+      },
+      {
+        "seq": 15,
+        "at": "-1m",
+        "from": {
+          "id": "fold0002-aaaa",
+          "label": "builder",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "收到，我来补上。",
+        "reply_to": 2
+      },
+      {
+        "seq": 16,
+        "at": "-1m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "nudge",
+        "text": "@builder h-fx01 还没有 bus_done",
+        "mentions": [
+          "fold0002-aaaa"
+        ]
+      },
+      {
+        "seq": 17,
+        "at": "-1m",
+        "from": {
+          "id": "fold0002-aaaa",
+          "label": "builder",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "CI 已经绿了。"
+      },
+      {
+        "seq": 18,
+        "at": "-1m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "handoff",
+        "text": "整理发布说明。\n1. 列出这一周合并的 PR\n2. 标出需要迁移的地方",
+        "handoff": {
+          "id": "h-fx01",
+          "to": "fold0002-aaaa",
+          "status": "open"
+        }
+      },
+      {
+        "seq": 19,
+        "at": "-1m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "timer",
+        "text": "每小时检查：CI 和待合并的 PR"
+      },
+      {
+        "seq": 20,
+        "at": "-1m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "text": "h-fx01 已过期：builder 没有 bus_done",
+        "handoff": {
+          "id": "h-fx01",
+          "to": "fold0002-aaaa",
+          "status": "open"
+        }
+      },
+      {
+        "seq": 21,
+        "at": "-1m",
+        "from": {
+          "id": "fold0003-aaaa",
+          "label": "reviewer",
+          "kind": "claude"
+        },
+        "kind": "done",
+        "text": "@you 评审通过了，等你合并。",
+        "handoff": {
+          "id": "h-fx02",
+          "to": "fold0001-aaaa",
+          "status": "done"
+        }
+      },
+      {
+        "seq": 22,
+        "at": "-1m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "text": "Resumed by a person."
       }
     ]
   }

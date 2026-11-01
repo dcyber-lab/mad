@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -21,11 +22,30 @@ type Yours struct {
 	Listed bool `json:"listed,omitempty"`
 	// LastLine is the last message as one line of a list: "who: its first
 	// line", at most lastRunes long, "who: [图片]" for pictures alone; mad's
-	// own system lines are passed over. Empty for a channel with nothing
-	// said.
+	// own system lines and the hidden kinds are passed over. Empty for a
+	// channel with nothing visible said.
 	LastLine string `json:"last_line,omitempty"`
 	// LastAt is when that message was said.
 	LastAt time.Time `json:"last_at,omitzero"`
+}
+
+// HiddenKinds are the kinds of message that are agents' bookkeeping among themselves: a handoff, its result
+// (done, declined), a check-in (timer), a nudge. No view of a channel shows them and the person's counts
+// (last line, unread, the red dot) skip them; the board and each agent's own conversation still have them.
+// The page's QUIET_KINDS (web/bus.js) is the same list, and native views take this one.
+var HiddenKinds = []string{"handoff", "done", "declined", "timer", "nudge"}
+
+// Quiet says whether m is bookkeeping the person is not shown: one of HiddenKinds, or a lapsed notice (a
+// system line about a handoff). Whatever @mentions the person is never quiet, of any kind, and mad's own
+// pause and resume notes are not a handoff's, so they are not either.
+func Quiet(m Message) bool {
+	if youRe.MatchString(m.Text) {
+		return false
+	}
+	if m.Kind == "system" {
+		return m.Handoff != nil
+	}
+	return slices.Contains(HiddenKinds, m.Kind)
 }
 
 // lastRunes is how much of a message's first line the list keeps.
@@ -67,10 +87,12 @@ func YourChannels() (map[string]Yours, error) {
 			var y Yours
 			for _, m := range msgs {
 				y.Last = max(y.Last, m.Seq)
-				if m.Kind != "system" && (strings.TrimSpace(m.Text) != "" || len(m.Images) > 0) {
+				// the hidden kinds count for nothing here: a channel whose last messages are all bookkeeping keeps
+				// its last visible line (LastLine stays empty if it has none)
+				if m.Kind != "system" && !Quiet(m) && (strings.TrimSpace(m.Text) != "" || len(m.Images) > 0) {
 					y.LastLine, y.LastAt = lastLine(m), m.At
 				}
-				if m.Seq > cs[c.ID].Read && m.Kind != "system" && m.From.ID != You {
+				if m.Seq > cs[c.ID].Read && m.Kind != "system" && !Quiet(m) && m.From.ID != You {
 					y.Unread++
 					y.Mention = y.Mention || isYourDM(c.ID) || youRe.MatchString(m.Text)
 				}

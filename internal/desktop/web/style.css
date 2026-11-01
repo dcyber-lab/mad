@@ -1723,12 +1723,10 @@ html.ptype .cbub { font-size: 16.5px; }
 html.ptype .cline { font-size: 15px; }
 .cline:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .csum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.csum b { color: var(--text); font-weight: 600; }
 .cline .chev { flex: none; color: var(--text-3); transition: transform 0.15s; }
 .cmsg.open .cline .chev { transform: rotate(90deg); }
 .cfull { display: none; min-width: 0; max-width: 100%; margin-left: 6px; padding: 2px 0 2px 10px; border-left: 2px solid var(--border-2); font-size: 14.5px; }
 .cmsg.open .cfull { display: block; }
-.cnote { margin-top: 4px; font-size: 12px; color: var(--text-3); }
 /* what it answers: one line, quoted */
 .cquote {
   display: block; width: 100%; max-width: 100%; margin: 0 0 4px; padding: 0 0 0 8px; border: 0; border-left: 2px solid var(--border-2);
