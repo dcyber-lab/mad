@@ -77,8 +77,8 @@ final class ChatDecodingTests: XCTestCase {
         XCTAssertEqual(a.map(\.label), ["ios", "fix tests", "pi a3", "a4"], "name, else title, else kind and the id's first 8, else the id")
         XCTAssertTrue(a[0].inWindowMode)
         XCTAssertTrue(a[0].headless)
-        XCTAssertEqual(s.word(for: "running"), "Working")
-        XCTAssertEqual(s.word(for: "waiting"), "Needs you")
+        XCTAssertEqual(s.word(for: "running"), "在工作")
+        XCTAssertEqual(s.word(for: "waiting"), "在等你")
         XCTAssertEqual(s.word(for: "mystery"), "Mystery", "an unknown state is shown as it is")
         XCTAssertEqual(s.tone(for: "running"), "working")
         XCTAssertEqual(s.tone(for: "asleep"), "quiet")
@@ -260,5 +260,28 @@ final class ChatClientTests: XCTestCase {
         do { _ = try await c.chat(agent: "a"); XCTFail() } catch { XCTAssertEqual(error as? ConnectionError, .offline) }
         do { _ = try await c.live(agent: "a", since: 0); XCTFail() } catch { XCTAssertEqual(error as? ConnectionError, .offline) }
         do { try await c.send(agent: "a", text: "x"); XCTFail() } catch { XCTAssertEqual(error as? ConnectionError, .offline) }
+    }
+}
+
+final class InboxActLabelTests: XCTestCase {
+    private func shown(_ verb: String, _ label: String, option: String? = nil, input: Bool = false, row: Bool = false) -> String {
+        InboxAct(verb: verb, label: label, option: option, input: input, row: row).shownLabel
+    }
+
+    func testActsAreShownInChineseByVerbNotByLabel() {
+        XCTAssertEqual(shown("allow", "Allow", row: true), "允许")
+        XCTAssertEqual(shown("allow", "whatever the server says", row: true), "允许")
+        XCTAssertEqual(shown("always", "Always allow"), "总是允许")
+        XCTAssertEqual(shown("deny", "Deny", row: true), "拒绝")
+        XCTAssertEqual(shown("deny", "Tell it instead…", input: true), "改为告诉它…")
+        XCTAssertEqual(shown("deny", "Keep planning", input: true, row: true), "继续规划")
+        XCTAssertEqual(shown("answer", "Reply", input: true, row: true), "回复")
+        XCTAssertEqual(shown("reply", "Reply", input: true, row: true), "回复")
+    }
+
+    func testAnOptionKeepsItsOwnWords() {
+        XCTAssertEqual(shown("answer", "Blue", option: "Blue"), "Blue")
+        XCTAssertEqual(shown("allow", "Yes, and don't ask again", option: "2"), "Yes, and don't ask again")
+        XCTAssertEqual(shown("open", "Open #ios"), "Open #ios")
     }
 }

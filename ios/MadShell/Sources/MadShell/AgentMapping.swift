@@ -86,7 +86,7 @@ public enum AgentMapping {
     static func ask(for id: String, deck: Deck) -> AskCard? {
         guard let item = item(for: id, deck: deck) else { return nil }
         let acts = item.acts.filter { !$0.isOpen }.map {
-            AskAct(id: $0.id, label: $0.label, primary: $0.primary, input: $0.input)
+            AskAct(id: $0.id, label: $0.shownLabel, primary: $0.primary, input: $0.input)
         }
         guard !acts.isEmpty else { return nil }
         let title = item.context.flatMap { $0.isEmpty ? nil : $0 } ?? item.title

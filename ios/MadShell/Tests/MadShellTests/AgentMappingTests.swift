@@ -97,7 +97,7 @@ final class AgentMappingTests: XCTestCase {
         XCTAssertEqual(ask.title, "想用 Bash")
         XCTAssertEqual(ask.detail, "python3 make_table.py --out report.xlsx")
         XCTAssertTrue(ask.mono)
-        XCTAssertEqual(ask.acts.map(\.label), ["Allow", "Deny"])
+        XCTAssertEqual(ask.acts.map(\.label), ["允许", "拒绝"])
         XCTAssertEqual(ask.acts.map(\.primary), [true, false])
         XCTAssertEqual(ask.acts.map(\.input), [false, false])
     }
@@ -127,7 +127,7 @@ final class AgentMappingTests: XCTestCase {
     func testOpenActsAreNotButtons() throws {
         var deck = try fixture("deck-edge-home", as: Deck.self)
         deck.inbox.items[0].acts.append(InboxAct(verb: "open", label: "Open"))
-        XCTAssertEqual(try XCTUnwrap(AgentMapping.ask(for: needs, deck: deck)).acts.map(\.label), ["Allow", "Deny"])
+        XCTAssertEqual(try XCTUnwrap(AgentMapping.ask(for: needs, deck: deck)).acts.map(\.label), ["允许", "拒绝"])
     }
 
     func testTheBlockingItemWinsOverAnEarlierOne() throws {

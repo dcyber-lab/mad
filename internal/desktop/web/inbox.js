@@ -250,11 +250,11 @@ function fitRows(root) {
 // opens the reply box, open goes to the item, the rest are sent.
 function actButton(it, a, where) {
   const cls = a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
-  const b = rowButton(a.label, cls, () => {
+  const b = rowButton(actLabel(a), cls, () => {
     if (a.verb === "open") openItem(it);
     else if (a.input) openReply(it, a, where);
     else act(it, a);
-  }, a.option && a.option !== a.label ? `${a.label}: ${a.option}` : "", `${it.key}\n${a.verb}\n${a.label}\n${where}`);
+  }, a.option && a.option !== a.label ? `${actLabel(a)}: ${a.option}` : "", `${it.key}\n${a.verb}\n${a.label}\n${where}`);
   const p = ib.pending.get(it.key);
   if (p && a.verb !== "open") {
     // sent: it stays here, saying so, until the snapshot settles it
@@ -264,11 +264,34 @@ function actButton(it, a, where) {
   return b;
 }
 
+// actLabel is what act a's button says. The server's labels stay English (the
+// TUI draws them); this maps by the act's verb and flags, never by its text.
+// An act with no word here, such as an option's own label or "Open #chan",
+// keeps the server's.
+function actLabel(a) {
+  switch (a.verb) {
+    case "allow": return a.option ? a.label : "允许";
+    case "always": return "总是允许";
+    case "deny": return a.input ? (a.row ? "继续规划" : "改为告诉它…") : a.row ? "拒绝" : "取消 (Esc)";
+    case "answer": return a.input ? "回复" : a.label;
+    case "reply": return "回复";
+    case "approve": return "批准";
+    case "discard": return "丢弃";
+    case "seen": return "标为已读";
+    case "send": return "立即发送";
+    case "drop": return "放弃";
+    case "resume": return "继续";
+    case "raise": return a.option ? `加 $${a.option}` : a.label;
+    case "lift": return "今天不限";
+  }
+  return a.label;
+}
+
 // pendingWord is what the button of an act in flight says.
 function pendingWord(a) {
-  const w = { allow: "Allowing", always: "Allowing", deny: "Denying", answer: "Answering", reply: "Sending", approve: "Approving",
-    discard: "Discarding", seen: "Marking", send: "Sending", drop: "Dropping", resume: "Resuming", raise: "Raising", lift: "Lifting" }[a.verb];
-  return `${w || a.label.replace(/…$/, "")}…`;
+  const w = { allow: "允许中", always: "允许中", deny: "拒绝中", answer: "回答中", reply: "发送中", approve: "批准中",
+    discard: "丢弃中", seen: "标记中", send: "发送中", drop: "放弃中", resume: "继续中", raise: "提高中", lift: "取消中" }[a.verb];
+  return `${w || actLabel(a).replace(/…$/, "")}…`;
 }
 
 function openReply(it, a, where) {
@@ -311,7 +334,7 @@ function replyBox(it, r) {
   if (opts.length) box.append(el("div", "opts", ""));
   for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "Send this answer", `${it.key}\nopt\n${o.option}`));
   const ta = el("textarea");
-  ta.placeholder = `${a.label.replace(/…$/, "")}…`;
+  ta.placeholder = `${actLabel(a).replace(/…$/, "")}…`;
   ta.rows = 2;
   ta.value = ib.drafts.get(it.key) || "";
   ta.oninput = () => ib.drafts.set(it.key, ta.value);
@@ -343,7 +366,8 @@ async function act(it, a, text) {
   ib.pending.set(it.key, { verb: a.verb, label: a.label, option: a.option || "", at: Date.now(), done: 0 });
   if (ib.reply?.key === it.key) ib.reply = null;
   redraw();
-  const what = text ? `${a.label}: “${text.length > 40 ? text.slice(0, 39) + "…" : text}”` : a.option && a.option !== a.label ? `${a.label}: ${a.option}` : a.label;
+  const al = actLabel(a);
+  const what = text ? `${al}: “${text.length > 40 ? text.slice(0, 39) + "…" : text}”` : a.option && a.option !== a.label ? `${al}: ${a.option}` : al;
   try {
     const r = await authFetch("/api/inbox", {
       method: "POST", headers: { "Content-Type": "application/json" },
