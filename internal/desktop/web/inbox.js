@@ -196,7 +196,7 @@ const letsThrough = new Set(["allow", "always", "approve"]);
 function itemRow(it) {
   const acts = [];
   const p = ib.pending.get(it.key);
-  const review = () => rowButton("Review", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "Read all of it before allowing", `${it.key}\nreview`);
+  const review = () => rowButton("查看", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "允许之前先看完全部内容", `${it.key}\nreview`);
   // A full item's body is part of what it allows (a TUI's prompt): what
   // lets it through is on its card alone, never on a row, which offers
   // Review. Sent from the card, the row says so.
@@ -332,7 +332,7 @@ function replyBox(it, r) {
   box.append(q);
   const opts = it.acts.filter((x) => x.option && !x.input && x.verb === a.verb);
   if (opts.length) box.append(el("div", "opts", ""));
-  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "Send this answer", `${it.key}\nopt\n${o.option}`));
+  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "发送这个回答", `${it.key}\nopt\n${o.option}`));
   const ta = el("textarea");
   ta.placeholder = `${actLabel(a).replace(/…$/, "")}…`;
   ta.rows = 2;
@@ -353,7 +353,7 @@ function replyBox(it, r) {
     if (ta.value.trim()) act(it, a, ta.value.trim());
   };
   const ra = el("div", "ra");
-  ra.append(el("span", "muted", "↵ send · Esc"), rowButton("Cancel", "ghost", closeReply), rowButton("Send", "primary", send, "", `${it.key}\nsend`));
+  ra.append(el("span", "muted", "↵ 发送 · Esc"), rowButton("取消", "ghost", closeReply), rowButton("发送", "primary", send, "", `${it.key}\nsend`));
   box.append(ta, ra);
   return box;
 }
@@ -374,7 +374,7 @@ async function act(it, a, text) {
       body: JSON.stringify({ key: it.key, verb: a.verb, option: a.option || "", text: text || "" }),
     });
     if (r.status === 409) {
-      toast((await r.text()).trim() || "Already handled: it is not waiting on you any more");
+      toast((await r.text()).trim() || "已经处理过了：它不再等你");
     } else if (!r.ok) {
       ib.pending.delete(it.key);
       toast((await r.text()).trim() || r.statusText, "err");
@@ -415,7 +415,7 @@ function openItem(it) {
 // what finished): the deck's d walks the same list.
 function nextItem() {
   const list = [...needsYou(), ...finishedItems()];
-  if (!list.length) return toast("Nothing needs you");
+  if (!list.length) return toast("没有在等你的");
   const i = list.findIndex((x) => x.key === ib.nextKey);
   const it = list[(i + 1) % list.length];
   ib.nextKey = it.key;
@@ -471,7 +471,7 @@ function itemCard(it, compact, where = "main") {
     // an answer's options are one tap each; "Reply" and the like follow
     const acts = el("div", "acts");
     for (const x of it.acts) acts.append(actButton(it, x, where));
-    if (where === "side") acts.append(rowButton("Less", "ghost", () => { ib.expanded.delete(it.key); redraw(); }, "Back to the row"));
+    if (where === "side") acts.append(rowButton("收起", "ghost", () => { ib.expanded.delete(it.key); redraw(); }, "回到那一行"));
     c.append(acts);
     if (ib.reply?.key === it.key && ib.reply.where === where) c.append(replyBox(it, ib.reply) || "");
   }

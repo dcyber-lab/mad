@@ -177,7 +177,7 @@ final class ChannelFoldTests: MadUITestCase {
         // The menu's 回复 is the last of those named so: the menu is the page's last element.
         let replies = element("回复")
         replies.element(boundBy: replies.count - 1).tap()
-        XCTAssertTrue(elements(containing: "Replying to reviewer").firstMatch.waitForExistence(timeout: 5), "回复 did not start a reply to reviewer")
+        XCTAssertTrue(elements(containing: "回复 reviewer").firstMatch.waitForExistence(timeout: 5), "回复 did not start a reply to reviewer")
         shot("replying")
     }
 

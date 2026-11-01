@@ -146,8 +146,8 @@ public struct LinkNote: View {
 
     public var body: some View {
         switch link {
-        case .refused: note("Token refused: pair this Mac again.", "key.slash")
-        case .offline: note("The Mac cannot be reached.", "wifi.slash")
+        case .refused: note("这台 Mac 不认这个令牌了：请重新配对。", "key.slash")
+        case .offline: note("连不上这台 Mac。", "wifi.slash")
         case .failed(let why): note(why, "exclamationmark.triangle")
         case .connecting, .ok: EmptyView()
         }

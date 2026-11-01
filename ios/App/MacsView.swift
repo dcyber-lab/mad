@@ -176,7 +176,7 @@ struct MacsView: View {
     /// pairing is kept and can be retried.
     private func report(_ error: Error) {
         if let e = error as? ConnectionError, e == .offline {
-            problem = "The Mac could not be reached. The pairing is kept: tap Retry when it is back."
+            problem = "连不上这台 Mac。配对已保留：等它在线后点“重试”。"
         } else {
             problem = error.localizedDescription
         }

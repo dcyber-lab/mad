@@ -14,8 +14,8 @@ final class PairingTests: MadUITestCase {
     func testARefusedCodeAsksForANewQR() {
         launch(link: "\(fixtureURL)/#pair=\(Self.badCode)", open: false)
         let alert = app.alerts["配对失败"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 20), "no “Cannot pair” alert")
-        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "scan a new QR")).firstMatch.exists,
+        XCTAssertTrue(alert.waitForExistence(timeout: 20), "no “配对失败” alert")
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "重新扫描一个新的二维码")).firstMatch.exists,
                       "the alert does not say to scan a new QR code")
         shot("refused: scan a new QR")
         alert.buttons["好"].tap()
@@ -54,7 +54,7 @@ final class PairingOfflineTests: MadUITestCase {
         launch(link: "\(fixtureURL)/#pair=\(Self.goodCode)", open: false)
         let alert = app.alerts["配对失败"]
         XCTAssertTrue(alert.waitForExistence(timeout: 30), "no alert for an unreachable Mac")
-        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "pairing is kept")).firstMatch.exists)
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "配对已保留")).firstMatch.exists)
         shot("server down: the pairing is kept")
         alert.buttons["好"].tap()
         XCTAssertTrue(app.staticTexts["还没配对完"].waitForExistence(timeout: 5), "no “还没配对完” row")

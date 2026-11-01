@@ -174,7 +174,7 @@ public final class ChannelStore {
 
 public enum ChannelStoreError: Error, Equatable, LocalizedError {
     case busy
-    public var errorDescription: String? { "A message is already on its way." }
+    public var errorDescription: String? { "上一条消息还在发送：请稍等一下再发。" }
 }
 
 /// One agent's conversation: its transcript (/api/chat, read by file and offset), the message being

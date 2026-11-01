@@ -80,9 +80,9 @@ public enum LocalServer {
 
         public var errorDescription: String? {
             switch self {
-            case .madNotFound: return "mad was not found. Install it, or set its path in Settings."
-            case .failed(let why): return "mad could not start: \(why)"
-            case .timeout: return "mad did not say where it listens."
+            case .madNotFound: return "没有找到 mad：请先安装它，或在设置里指定它的路径。"
+            case .failed(let why): return "mad 启动失败：\(why)"
+            case .timeout: return "mad 没有报告它监听的地址：请重启这个应用再试。"
             }
         }
     }

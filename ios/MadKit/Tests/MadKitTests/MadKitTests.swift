@@ -70,10 +70,10 @@ final class ClientTests: XCTestCase {
 
     func testOtherStatusAndGarbage() {
         XCTAssertThrowsError(try MadClient.decode(Data(), response(500))) {
-            XCTAssertEqual($0 as? ConnectionError, .unexpected("The Mac answered HTTP 500."))
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("这台 Mac 返回了 HTTP 500：稍后再试，或在 Mac 上重启 mad。"))
         }
         XCTAssertThrowsError(try MadClient.decode(Data("<html>".utf8), response(200))) {
-            XCTAssertEqual($0 as? ConnectionError, .unexpected("This does not look like mad's answer."))
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("这不像是 mad 的回应：请检查链接是不是 mad 的。"))
         }
     }
 
@@ -197,10 +197,10 @@ final class PairExchangeTests: XCTestCase {
             }
         }
         XCTAssertThrowsError(try PendingPairing.check(Data(), response(500))) {
-            XCTAssertEqual($0 as? ConnectionError, .unexpected("The Mac answered HTTP 500."))
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("这台 Mac 返回了 HTTP 500：稍后再试，或在 Mac 上重启 mad。"))
         }
         XCTAssertThrowsError(try PendingPairing.check(Data("{}".utf8), response(200))) {
-            XCTAssertEqual($0 as? ConnectionError, .unexpected("This does not look like mad's answer."))
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("这不像是 mad 的回应：请检查链接是不是 mad 的。"))
         }
     }
 
