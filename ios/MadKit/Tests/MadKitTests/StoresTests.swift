@@ -90,6 +90,24 @@ final class DeckStoreTests: XCTestCase {
 
 @MainActor
 final class ChannelStoreTests: XCTestCase {
+    /// A look that brings the same receipts and the same pause tells nobody: a view that reads them is not drawn again.
+    func testALookThatChangesNothingDoesNotTellTheView() async {
+        let mac = FakeMac()
+        let r = BusReceipt(seq: 1, targets: [.init(id: "a", label: "a", state: "read")])
+        mac.pages = [.success(MessagesPage(channel: "c", messages: [msg(1)], last: 1, receipts: [r])),
+                     .success(MessagesPage(channel: "c", messages: [], last: 1, receipts: [r])),
+                     .success(MessagesPage(channel: "c", messages: [], last: 1, paused: true, receipts: [r]))]
+        let s = ChannelStore(id: "c", api: mac)
+        await s.refresh()
+        var heard = 0
+        func watch() { withObservationTracking { _ = s.receipts; _ = s.paused } onChange: { heard += 1 } }
+        watch()
+        await s.refresh()
+        XCTAssertEqual(heard, 0, "the same receipts and pause were told again")
+        await s.refresh()
+        XCTAssertEqual(heard, 1, "a pause is news")
+    }
+
     func testEachLookAsksForWhatCameAfterTheLastOne() async {
         let mac = FakeMac()
         mac.pages = [.success(MessagesPage(channel: "c", messages: [msg(1), msg(2)], last: 2)),

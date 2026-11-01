@@ -301,9 +301,16 @@ func TestPostBecomesTheNextMessage(t *testing.T) {
 			Text string
 			From struct{ ID string }
 		}
-		Last int
+		Last     int
+		Receipts []struct {
+			Seq     int
+			Targets []struct{ Label, State string }
+		}
 	}
 	_ = json.NewDecoder(r.Body).Decode(&m)
+	if len(m.Receipts) != 1 || m.Receipts[0].Seq != 15 || len(m.Receipts[0].Targets) != 2 || m.Receipts[0].Targets[0].State != "waiting" {
+		t.Errorf("the receipt of the post: %+v", m.Receipts)
+	}
 	if len(m.Messages) != 1 || m.Messages[0].Seq != 15 || m.Messages[0].Text != "hello there" || m.Messages[0].From.ID != "you" || m.Last != 15 {
 		t.Errorf("after the post: %+v", m)
 	}

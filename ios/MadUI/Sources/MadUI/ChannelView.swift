@@ -140,7 +140,11 @@ public struct ChannelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(screen.items) { item in row(item).id(item.id) }
+                    // Each row is drawn again only when what it shows changed: a look that brought nothing new (or one
+                    // new message) leaves the other rows alone.
+                    ForEach(screen.items) { item in
+                        DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
+                    }
                     // The last row of the lazy stack: it appears and disappears as the scroll brings it
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
@@ -210,6 +214,15 @@ public struct ChannelView: View {
         }
     }
 
+    /// The ids of the bubbles of `item` that are open: part of what its row shows.
+    private func expandedBubbles(of item: ChannelItem) -> [Int] {
+        switch item {
+        case .mine(let b): expanded.contains(b.id) ? [b.id] : []
+        case .run(let r): r.bubbles.map(\.id).filter { expanded.contains($0) }
+        default: []
+        }
+    }
+
     /// Back to the bottom once the layout has settled (after a resize that moved it).
     private func stick(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.async { proxy.scrollTo(Self.bottom, anchor: .bottom) }
@@ -222,10 +235,19 @@ public struct ChannelView: View {
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):
-            // against the column's right edge, as wide as its text
-            HStack(spacing: 0) {
-                Spacer(minLength: MadColumn.gutter)
-                bubble(b, mine: true, who: "自己")
+            // against the column's right edge, as wide as its text; under it, how far it got with the agents
+            VStack(alignment: .trailing, spacing: 3) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: MadColumn.gutter)
+                    bubble(b, mine: true, who: "自己")
+                }
+                if let receipt = b.receipt {
+                    Text(receipt.line)
+                        .font(MadType.small).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 2)
+                }
             }
             .padding(.top, 6)
         case .run(let run):
@@ -376,4 +398,18 @@ public struct ChannelView: View {
         return Double(min(1, -drag / width))
     }
     #endif
+}
+
+
+/// A row that is drawn again only when `item`, its open bubbles or the column's width changed (`.equatable()`):
+/// SwiftUI does not run `content` for a row that compares equal.
+private struct DrawnOnChange<Content: View>: View, Equatable {
+    let item: ChannelItem
+    let expanded: [Int]
+    let width: CGFloat
+    let content: () -> Content
+
+    static func == (a: Self, b: Self) -> Bool { a.item == b.item && a.expanded == b.expanded && a.width == b.width }
+
+    var body: some View { content() }
 }

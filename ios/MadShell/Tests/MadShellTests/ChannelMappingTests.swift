@@ -37,6 +37,67 @@ private func bubbles(_ s: ChannelScreen) -> [ChannelBubble] {
 }
 
 final class ChannelMappingTests: XCTestCase {
+    // MARK: receipts
+
+    private func target(_ label: String, _ state: String) -> BusReceipt.Target { .init(id: "id-\(label)", label: label, state: state) }
+
+    func testReceiptSaysEachStepWithItsNamesFurthestFirst() {
+        let r = BusReceipt(seq: 1, targets: [target("builder", "read"), target("architect", "replied"), target("tester", "read"), target("ops", "waiting"), target("qa", "delivered")])
+        let receipt = ChannelMapping.receipt(r, paused: false)
+        XCTAssertEqual(receipt.parts.map(\.step), [.replied, .read, .delivered, .waiting])
+        XCTAssertEqual(receipt.parts.map(\.names), [["architect"], ["builder", "tester"], ["qa"], ["ops"]])
+        XCTAssertEqual(receipt.line, "↩ 已回复 architect · ✓✓ 已读 builder、tester · ✓ 已送达 qa · ◷ 待送达 ops")
+        XCTAssertFalse(receipt.held)
+    }
+
+    func testReceiptWithNoTargetsSaysNobodyWasWoken() {
+        let receipt = ChannelMapping.receipt(BusReceipt(seq: 1), paused: false)
+        XCTAssertTrue(receipt.wokeNobody)
+        XCTAssertEqual(receipt.line, "没有叫醒谁，@ 一个 agent 才会叫醒它")
+        XCTAssertFalse(ChannelMapping.receipt(BusReceipt(seq: 1), paused: true).held, "nobody waits: nothing is held")
+    }
+
+    func testPausedChannelHoldsOnlyWhatStillWaits() {
+        let waiting = ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("builder", "read"), target("ops", "waiting")]), paused: true)
+        XCTAssertTrue(waiting.held)
+        XCTAssertEqual(waiting.line, "✓✓ 已读 builder · ◷ 待送达 ops · 群已暂停，消息先存着")
+        let none = ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("builder", "read")]), paused: true)
+        XCTAssertFalse(none.held)
+        XCTAssertEqual(none.line, "✓✓ 已读 builder")
+        XCTAssertFalse(ChannelMapping.receipt(BusReceipt(seq: 1, targets: [target("ops", "waiting")]), paused: false).held)
+    }
+
+    func testReceiptsSitUnderTheirOwnMessagesOnly() {
+        let all = [msg(1, "architect"), msg(2, "you"), msg(3, "builder"), msg(4, "you")]
+        let receipts = [BusReceipt(seq: 2, targets: [target("builder", "read")]), BusReceipt(seq: 3, targets: [target("x", "read")]), BusReceipt(seq: 9)]
+        let s = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: receipts, calendar: cal, now: now)
+        let byID = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0.receipt) })
+        XCTAssertEqual(byID[2]??.line, "✓✓ 已读 builder")
+        XCTAssertNil(byID[1] ?? nil, "an agent's message has no receipt")
+        XCTAssertNil(byID[3] ?? nil, "a receipt for a message that is not the person's is not drawn")
+        XCTAssertNil(byID[4] ?? nil, "a message with no receipt has no line")
+    }
+
+    /// A look that moves a receipt on changes that one row and no other: the ids stay, only the bubble's receipt differs.
+    func testAReceiptMovingOnChangesOnlyItsOwnRow() {
+        let all = [msg(1, "architect"), msg(2, "you"), msg(3, "builder")]
+        func items(_ state: String) -> [ChannelItem] {
+            ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", state)])],
+                                  calendar: cal, now: now).items
+        }
+        let a = items("delivered"), b = items("read")
+        XCTAssertEqual(a.map(\.id), b.map(\.id))
+        XCTAssertEqual(zip(a, b).filter { $0 != $1 }.count, 1)
+    }
+
+    func testTheTailMovesWhenTheLastOwnMessageGetsItsReceipt() {
+        let all = [msg(1, "architect"), msg(2, "you")]
+        let bare = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, calendar: cal, now: now)
+        let withLine = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", "waiting")])],
+                                            calendar: cal, now: now)
+        XCTAssertNotEqual(bare.tail, withLine.tail, "the view follows a row that grew at the bottom")
+    }
+
     /// A message that arrives leaves every row it did not touch with the id it had: the list keeps those rows
     /// (a changed id would build them again), whether the message joins a run, starts one, is the person's, or comes after a quiet while.
     func testRowIdsStayTheSameWhenAMessageArrives() {

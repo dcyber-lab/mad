@@ -47,6 +47,9 @@ extension NSColor {
 }
 #endif
 
+/// Compiled once: a bubble is drawn many times.
+private let mentionPattern = try! NSRegularExpression(pattern: "@[\\p{L}\\p{N}_-]+")
+
 /// A text with its @mentions in bold (and blue in an agent's bubble), its inline markdown (bold, code,
 /// links) read: what a bubble shows.
 func chatText(_ text: String, mine: Bool) -> AttributedString {
@@ -59,8 +62,7 @@ func chatText(_ text: String, mine: Bool) -> AttributedString {
         if mine { a[run.range].foregroundColor = .white }
     }
     let plain = String(a.characters)
-    guard let re = try? NSRegularExpression(pattern: "@[\\p{L}\\p{N}_-]+") else { return a }
-    for m in re.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
+    for m in mentionPattern.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
         guard let r = Range(m.range, in: plain) else { continue }
         let from = a.characters.index(a.characters.startIndex, offsetBy: plain.distance(from: plain.startIndex, to: r.lowerBound))
         let to = a.characters.index(a.characters.startIndex, offsetBy: plain.distance(from: plain.startIndex, to: r.upperBound))

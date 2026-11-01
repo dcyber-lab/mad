@@ -187,6 +187,8 @@ type fixture struct {
 	pairTried map[string]bool
 	// posted: what the person said through /api/bus/post, by channel; they follow the scenario's messages.
 	posted map[string][]json.RawMessage
+	// postedAt: when each posted message came, by channel and number: its receipt moves on as time passes.
+	postedAt map[string]map[int]time.Time
 }
 
 func reply(w http.ResponseWriter, v any) {
@@ -312,6 +314,10 @@ func (f *fixture) messages(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	f.mu.Lock()
 	all := append(append([]json.RawMessage{}, f.scn.Messages[ch]...), f.posted[ch]...)
+	receipts := []any{}
+	for seq, at := range f.postedAt[ch] {
+		receipts = append(receipts, receiptAt(seq, time.Since(at)))
+	}
 	f.mu.Unlock()
 	for _, raw := range all {
 		var m map[string]any
@@ -328,7 +334,27 @@ func (f *fixture) messages(w http.ResponseWriter, r *http.Request) {
 		relative(m, now)
 		out = append(out, m)
 	}
-	reply(w, map[string]any{"channel": ch, "messages": out, "last": last, "paused": false, "receipts": []any{}})
+	reply(w, map[string]any{"channel": ch, "messages": out, "last": last, "paused": false, "receipts": receipts})
+}
+
+// receiptAt is how a posted message stands `age` after it came: two agents get it, builder a step every two seconds
+// and architect a step every four (waiting, delivered, read, replied).
+func receiptAt(seq int, age time.Duration) map[string]any {
+	state := func(step time.Duration) string {
+		switch n := int(age / step); {
+		case n >= 3:
+			return "replied"
+		case n == 2:
+			return "read"
+		case n == 1:
+			return "delivered"
+		}
+		return "waiting"
+	}
+	return map[string]any{"seq": seq, "paused": false, "targets": []any{
+		map[string]any{"id": "fold0002-aaaa", "label": "builder", "state": state(2 * time.Second)},
+		map[string]any{"id": "fold0001-aaaa", "label": "architect", "state": state(4 * time.Second)},
+	}}
 }
 
 // post takes the person's message into the channel, as the next one, so a native client can be seen sending.
@@ -358,6 +384,13 @@ func (f *fixture) post(w http.ResponseWriter, r *http.Request) {
 		f.posted = map[string][]json.RawMessage{}
 	}
 	f.posted[in.Channel] = append(f.posted[in.Channel], raw)
+	if f.postedAt == nil {
+		f.postedAt = map[string]map[int]time.Time{}
+	}
+	if f.postedAt[in.Channel] == nil {
+		f.postedAt[in.Channel] = map[int]time.Time{}
+	}
+	f.postedAt[in.Channel][seq] = time.Now()
 	reply(w, map[string]any{"seq": seq, "woke": []string{}})
 }
 

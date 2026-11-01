@@ -131,8 +131,9 @@ public final class ChannelStore {
             messages.append(m)
             last = m.seq
         }
-        paused = page.paused
-        receipts = page.receipts
+        // an @Observable tells its readers on every write, equal or not: the view hears of what changed only
+        if paused != page.paused { paused = page.paused }
+        if receipts != page.receipts { receipts = page.receipts }
     }
 
     public func run() async {
