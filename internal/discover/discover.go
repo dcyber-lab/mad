@@ -236,10 +236,17 @@ func isTerminal(tty string) bool {
 }
 
 // externalCache: a pid's cwd and session don't change while it lives.
+// cwdMissed keeps when a pid's cwd could not be read (a process not ours,
+// one going away), asked again only after cwdRetry; scanNow is replaceable
+// in tests.
 var (
 	externalMu    sync.Mutex
 	externalCache = map[int]External{}
+	cwdMissed     = map[int]time.Time{}
+	scanNow       = time.Now
 )
+
+const cwdRetry = time.Minute
 
 // ScanExternal finds the sessions of every provider running outside the
 // deck, whose own terminals are deckTTYs (e.g. /dev/ttys004). taken are the
@@ -263,10 +270,15 @@ func ScanExternal(deckTTYs, taken map[string]bool) []External {
 		alive[p.pid] = true
 		e, ok := externalCache[p.pid]
 		if !ok {
-			e = External{PID: p.pid, TTY: p.tty, Desktop: p.desktop, Kind: p.kind, Cwd: processCwd(p.pid)}
-			if e.Cwd == "" {
+			if at, missed := cwdMissed[p.pid]; missed && scanNow().Sub(at) < cwdRetry {
 				continue
 			}
+			e = External{PID: p.pid, TTY: p.tty, Desktop: p.desktop, Kind: p.kind, Cwd: processCwd(p.pid)}
+			if e.Cwd == "" {
+				cwdMissed[p.pid] = scanNow()
+				continue
+			}
+			delete(cwdMissed, p.pid)
 			e.Root = ResolveRoot(e.Cwd)
 			e.SessionID = want[p.kind].ProcessSession(p.pid, p.args)
 			externalCache[p.pid] = e
@@ -279,6 +291,11 @@ func ScanExternal(deckTTYs, taken map[string]bool) []External {
 	for pid := range externalCache {
 		if !alive[pid] {
 			delete(externalCache, pid)
+		}
+	}
+	for pid := range cwdMissed {
+		if !alive[pid] {
+			delete(cwdMissed, pid)
 		}
 	}
 

@@ -400,8 +400,16 @@ func RunsHost(pane tmux.Pane, id string) bool {
 		return false
 	}
 	cmd, err := tmux.Out("display-message", "-p", "-t", pane.ID, "#{pane_start_command}")
-	return err == nil && strings.Contains(cmd, "host "+id)
+	return err == nil && hostCommand(cmd, id)
 }
+
+// RunsHostIn is RunsHost with every pane's start command at hand
+// (tmux.StartCommands), for a poller asking about many panes at once.
+func RunsHostIn(cmds map[string]string, pane tmux.Pane, id string) bool {
+	return !pane.Dead && hostCommand(cmds[pane.ID], id)
+}
+
+func hostCommand(cmd, id string) bool { return strings.Contains(cmd, "host "+id) }
 
 // command is what runs in a's pane: `mad host` in window mode, else its
 // TUI (TUICommand).

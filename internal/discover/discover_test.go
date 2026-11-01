@@ -503,6 +503,11 @@ func TestTranscripts(t *testing.T) {
 	rollout := filepath.Join(codexSessionsDir(), "2026", "05", "17", "rollout-2026-05-17T22-33-30-019e-abc.jsonl")
 	f.write(rollout, []any{map[string]any{"type": "session_meta"}}, time.Now())
 	f.write(strings.Replace(rollout, "019e-abc", "019e-abcd", 1), []any{map[string]any{"type": "session_meta"}}, time.Now())
+	// After a miss, days other than today and yesterday are looked through
+	// again only every codexMissEvery.
+	oldNow := codexNow
+	t.Cleanup(func() { codexNow = oldNow })
+	codexNow = func() time.Time { return time.Now().Add(codexMissEvery) }
 	if got := (codex{}).Transcripts("", "019e-abc"); len(got) != 1 || got[0] != rollout {
 		t.Errorf("got %q want %q", got, rollout)
 	}

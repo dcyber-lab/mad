@@ -247,6 +247,17 @@ func (p *poller) Poll(now time.Time) {
 		p.gits = git.StatusAll(dirs, git.Status)
 	}
 
+	// The panes' start commands, asked once for every agent in window mode
+	// and only when there is one.
+	var cmds map[string]string
+	startCommands := func() map[string]string {
+		if cmds == nil {
+			if cmds, _ = tmux.StartCommands(); cmds == nil {
+				cmds = map[string]string{}
+			}
+		}
+		return cmds
+	}
 	queues, _ := queue.All()
 	snap := Snapshot{Projects: []Project{}, At: now, Quota: map[string]any{}, States: status.Looks, Machine: machine()}
 	seen := map[string]bool{}
@@ -282,7 +293,7 @@ func (p *poller) Poll(now time.Time) {
 			_, ag.Chat = discover.Conversation(a.Kind)
 			ag.Headless = deck.Headless[a.Kind]
 			// In window mode once its TUI, if it runs, gave way.
-			if deck.Windowed(a) && (!ok || pn.Dead || deck.RunsHost(pn, a.ID)) {
+			if deck.Windowed(a) && (!ok || pn.Dead || deck.RunsHostIn(startCommands(), pn, a.ID)) {
 				ag.Mode = state.ModeWindow
 			}
 			out.Agents = append(out.Agents, ag)
