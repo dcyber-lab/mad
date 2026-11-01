@@ -149,7 +149,9 @@ final class ChannelMappingTests: XCTestCase {
     func testAChannelOfOnlyHiddenMessagesSaysTheAgentsWorkInTheBackground() {
         let s = screen([handoffMessage(1), msg(2, "builder", "ok", kind: "done")])
         XCTAssertEqual(s.items, [.note(id: "quiet", text: "agent 们在后台协作，有事会在这里 @ 你。")])
-        XCTAssertEqual(screen([]).items, [], "a channel with nothing in it says nothing")
+        XCTAssertEqual(screen([]).items, [.note(id: "empty", text: "还没人说话…")], "a channel nobody has spoken in")
+        XCTAssertEqual(ChannelMapping.screen(channel: "fold", messages: [], deck: nil, loaded: false, calendar: cal, now: now).items, [],
+                       "before the first look it is not known to be empty")
         // and a hidden message that arrives later changes nothing on screen
         let one = screen([msg(1, "builder", "hi")])
         let two = screen([msg(1, "builder", "hi"), handoffMessage(2), msg(3, "architect", "x", kind: "nudge")])

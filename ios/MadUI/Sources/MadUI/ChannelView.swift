@@ -213,6 +213,10 @@ public struct ChannelView: View {
         switch item {
         case .time(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+        case .note(let id, let text) where id == "quiet" || id == "empty":
+            // an empty channel: one quiet line, about a third of the way down the list area
+            Text(text).font(MadType.small).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity).padding(.top, max(0, viewport.height / 3))
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):

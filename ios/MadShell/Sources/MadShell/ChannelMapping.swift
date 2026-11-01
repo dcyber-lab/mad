@@ -13,7 +13,8 @@ public enum ChannelMapping {
     public static let foldLines = 3
     public static let foldChars = 280
 
-    public static func screen(channel id: String, messages: [BusMessage], deck: Deck?, paused: Bool = false,
+    /// `loaded`: the first look at the channel has come (or it is kept from last time): only then can it be said to be empty.
+    public static func screen(channel id: String, messages: [BusMessage], deck: Deck?, paused: Bool = false, loaded: Bool = true,
                               calendar: Calendar = .current, now: Date = Date()) -> ChannelScreen {
         let channel = deck?.channel(id: id)
         let title = Self.title(id: id, channel: channel)
@@ -24,8 +25,8 @@ public enum ChannelMapping {
         // are built from what is, and a reply keeps its quote of a message that is not (it looks in `sorted`).
         let visible = sorted.filter { !isHidden($0) }
         var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
-        // only the agents' own work so far: say so, once, rather than showing an empty channel
-        if items.isEmpty, !sorted.isEmpty { items = [.note(id: "quiet", text: quietNote)] }
+        // nothing yet, or only the agents' own work so far: say so, quietly, rather than showing a blank
+        if items.isEmpty { if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] } else if loaded { items = [.note(id: emptyID.none, text: noneNote)] } }
         let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
         let everyone = members + split.helpers
@@ -48,8 +49,11 @@ public enum ChannelMapping {
             placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
     }
 
-    /// What an empty-looking channel says when everything in it is hidden.
+    /// What an empty-looking channel says when everything in it is hidden, and when nobody has said anything.
     public static let quietNote = "agent 们在后台协作，有事会在这里 @ 你。"
+    public static let noneNote = "还没人说话…"
+    /// The ids of those two lines (`ChannelItem.note`): the view draws them as one quiet line a third of the way down.
+    public static let emptyID = (quiet: "quiet", none: "empty")
 
     /// The kinds of message that are the agents' bookkeeping and are not drawn: a handoff, what answers it, a
     /// check-in, a nudge (the lapsed notice of a handoff is a system message that carries the handoff).

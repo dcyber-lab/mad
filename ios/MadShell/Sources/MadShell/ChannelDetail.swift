@@ -25,7 +25,7 @@ struct ChannelDetail: View {
     }
 
     var body: some View {
-        ChannelView(screen: ChannelMapping.screen(channel: id, messages: store.messages, deck: deck.deck, paused: store.paused),
+        ChannelView(screen: ChannelMapping.screen(channel: id, messages: store.messages, deck: deck.deck, paused: store.paused, loaded: store.loaded || store.fromCache),
                     actions: actions, panelOpen: debugPanel)
             // Polls while the app is active; the task restarts when it comes back, so it looks at once.
             .task(id: scenePhase) {
