@@ -24,7 +24,7 @@ extension Color {
     /// The thin line of a folded message, and between rows.
     public static var chatLine: Color { dynamic(light: 0xdcdce2, dark: 0x2a2a2e) }
     /// The Mac's composer bar and menus: a surface over the window.
-    static var chatComposer: Color { dynamic(light: 0xffffff, dark: 0x1c1c1f) }
+    public static var chatComposer: Color { dynamic(light: 0xffffff, dark: 0x1c1c1f) }
     /// The Mac's detail pane behind the messages.
     public static var chatBackdrop: Color { dynamic(light: 0xffffff, dark: 0x121214) }
     /// The Mac's sidebar.

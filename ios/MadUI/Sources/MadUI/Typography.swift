@@ -111,3 +111,40 @@ struct BottomKeeper {
 
     private var close: Bool { abs(resizedAt.timeIntervalSince(leftAt)) < 0.4 }
 }
+
+/// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
+/// its state line: one place the person already looks, and no second floating thing.
+public struct MadLinkNote: Equatable, Sendable {
+    public var text: String
+    public var symbol: String
+    public init(text: String, symbol: String) { self.text = text; self.symbol = symbol }
+}
+
+private struct LinkNoteKey: EnvironmentKey { static let defaultValue: MadLinkNote? = nil }
+
+extension EnvironmentValues {
+    /// Set by the window when the Mac cannot be reached, refuses the token or fails; nil when all is well.
+    public var madLinkNote: MadLinkNote? {
+        get { self[LinkNoteKey.self] }
+        set { self[LinkNoteKey.self] = newValue }
+    }
+}
+
+/// The second line of a name pill: how the channel or agent stands, or, when the link is bad, that.
+struct PillSubline: View {
+    let text: String
+    @Environment(\.madLinkNote) private var note
+
+    var body: some View {
+        if let note {
+            HStack(spacing: 4) {
+                Image(systemName: note.symbol).font(.system(size: 11))
+                Text(note.text).lineLimit(1).truncationMode(.tail)
+            }
+            .font(MadType.label)
+            .foregroundStyle(.orange)
+        } else if !text.isEmpty {
+            Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+}

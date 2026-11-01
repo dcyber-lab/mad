@@ -98,7 +98,7 @@ public struct ChannelView: View {
                           dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
                 VStack(alignment: .leading, spacing: 0) {
                     Text(screen.title).font(MadType.title).lineLimit(1)
-                    if !screen.stateLine.isEmpty { Text(screen.stateLine).font(MadType.label).foregroundStyle(.secondary).lineLimit(1) }
+                    PillSubline(text: screen.stateLine)
                 }
                 #if os(iOS)
                 Spacer(minLength: 0)
