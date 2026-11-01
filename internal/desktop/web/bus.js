@@ -796,6 +796,14 @@ function drawMessage(m) {
     // mad's pause, resume and trim notes are drawn in Chinese by what they mean; an older note has no event
     const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复", trimmed: "更早的消息已清理" }[m.event] || m.text);
     s.dataset.seq = m.seq;
+    if (m.event === "trimmed") {
+      // It is about the start of the channel, not the moment it was written: the first item, above the oldest
+      // message kept and its time line, whatever its seq. Only the latest counts. It breaks no run.
+      for (const old of log.querySelectorAll(".csys.trimmed")) old.remove();
+      s.classList.add("trimmed");
+      log.prepend(s);
+      return;
+    }
     log.append(s);
     cv.run = null;
     return;

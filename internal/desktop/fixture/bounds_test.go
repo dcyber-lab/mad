@@ -692,8 +692,11 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				  drawMessage(m(103, 9, "text", "builder", "b"));
 				  drawMessage(m(104, 40, "handoff", "architect", "h"));
 				  drawMessage(m(105, 12, "text", "builder", "c"));
-				  drawMessage({ seq: 106, at: new Date(base + 13 * 60e3).toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text: "Older messages were dropped; the last 500 are kept.", event: "trimmed" });
-				  return { notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
+				  const trim = (seq, text) => drawMessage({ seq, at: new Date(base + 13 * 60e3).toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, event: "trimmed" });
+				  trim(106, "Older messages were dropped; the last 500 are kept.");
+				  trim(107, "Older messages were dropped; the last 400 are kept.");
+				  drawMessage(m(108, 14, "text", "builder", "d"));
+				  return { first: log.firstElementChild.className + ":" + log.firstElementChild.dataset.seq, notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), times: log.querySelectorAll(".ctime").length, groups: log.querySelectorAll(".cgrp").length, msgs: log.querySelectorAll(".cmsg").length };
 				})()`)
 				if err != nil {
 					t.Fatal(err)
@@ -701,6 +704,7 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				var synth struct {
 					Times, Groups, Msgs int
 					Notes               []string
+					First               string
 				}
 				if err := json.Unmarshal(v, &synth); err != nil {
 					t.Fatal(err)
@@ -708,10 +712,13 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				if theme == "light" && w == 390 {
 					shot("trim-note-390-light")
 				}
+				if synth.First != "csys trimmed:107" {
+					t.Errorf("the first item is %q: the latest trim note must be the list's first item, above the oldest message and its time line", synth.First)
+				}
 				if len(synth.Notes) != 1 || synth.Notes[0] != "更早的消息已清理" {
 					t.Errorf("the trim note reads %v, want 更早的消息已清理", synth.Notes)
 				}
-				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 3 {
+				if synth.Times != 1 || synth.Groups != 1 || synth.Msgs != 4 {
 					t.Errorf("a hidden message came between builder's: %+v, want one time line, one run, three bubbles", synth)
 				}
 			})
