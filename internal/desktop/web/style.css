@@ -745,6 +745,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   transition: opacity 0.4s, transform 0.4s;
 }
 .toast .i { width: 15px; height: 15px; }
+.toast.update { border: 0; font: inherit; font-size: 13px; cursor: pointer; }
 .toast.err { background: var(--stopped); color: #fff; }
 .toast.out { opacity: 0; transform: translateY(6px); }
 
@@ -1798,3 +1799,7 @@ html.ptype #queue.inchan { padding-inline: 12px; }
 .cpgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .cpgrid .cimgbtn { width: 100%; aspect-ratio: 1; }
 .cpgrid .cimg { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: 8px; }
+
+/* The menu's rule is a line on every screen: the sheet's and the phone type's padding for touch targets
+   (.popup li, html.ptype .popup li) must not make a button of it. */
+.popup li.rule, html.ptype .popup li.rule { min-height: 0; height: 1px; padding: 0; margin: 5px 6px; }

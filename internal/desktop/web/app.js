@@ -1120,6 +1120,32 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
+// The build this page was served by, and whether the server has moved on to another (stale.js).
+const pageBuild = document.querySelector('meta[name="mad-build"]')?.content || "";
+let updateNote = null;
+// pageBusy: something is being written or answered, which a reload would lose.
+function pageBusy() {
+  if (!$("#dialog").hidden || !$("#popup").hidden || pendingReads > 0) return true;
+  const a = document.activeElement;
+  if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && !["checkbox", "radio", "button"].includes(a.type)))) return true;
+  return [...document.querySelectorAll("textarea")].some((t) => t.value.trim());
+}
+// checkBuild reloads for a newer page (the token, the embed and the window's id are kept: storage and
+// the fragment survive a reload). Busy, it says so with a toast to tap; the reload comes when the person
+// taps it, or when the composer is empty and let go of.
+function checkBuild(seen) {
+  const act = staleAction({ mine: pageBuild, seen, busy: pageBusy() });
+  if (act === "reload") { location.reload(); return; }
+  if (act === "none") { updateNote?.remove(); updateNote = null; return; }
+  if (updateNote?.isConnected) return;
+  updateNote = el("button", "toast update");
+  updateNote.type = "button";
+  updateNote.style.pointerEvents = "auto";
+  updateNote.append(icon("check"), el("span", "", "mad 已更新 · 刷新"));
+  updateNote.onclick = () => location.reload();
+  $("#toasts").append(updateNote);
+}
+
 // setOffline says, over the whole page, that what it draws is old: a
 // failed look leaves the last one on screen, and an agent that looks
 // working may not be. The banner names when it was last true.
@@ -1145,6 +1171,7 @@ async function refresh() {
   try {
     const r = await authFetch("/api/deck");
     if (!r.ok) throw new Error(r.status);
+    checkBuild(r.headers.get("X-Mad-Build") || "");
     deck = await r.json();
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");

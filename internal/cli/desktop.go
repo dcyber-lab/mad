@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"slices"
 	"syscall"
 	"time"
@@ -69,6 +70,7 @@ func desktopCmd(args []string, stdio IO) error {
 		}
 	}
 	srv := desktop.New(kinds())
+	srv.Build = buildID()
 	if *origin != "" {
 		srv.Origins = []string{*origin}
 	}
@@ -143,4 +145,21 @@ func openWindow(ctx context.Context, stdio IO, url string, open func() bool, sto
 			fmt.Fprintln(stdio.Err, "mad: serving until Ctrl-C")
 		}
 	}()
+}
+
+// buildID names this build for the page: the version, and for a build from a checkout (version "devel")
+// the commit too, so a rebuilt server is told from the one before it.
+func buildID() string {
+	v := version()
+	if v != "devel" {
+		return v
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 8 {
+				return v + "-" + s.Value[:8]
+			}
+		}
+	}
+	return v
 }
