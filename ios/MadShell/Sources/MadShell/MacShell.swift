@@ -51,13 +51,16 @@ struct MacShell<Detail: View>: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.chatBackdrop)
-                // Over the pane only, never the sidebar or the traffic lights' line, and it takes no room: nothing moves
-                // when it comes or goes. With a row open it is 8pt under the name pill (44pt high, 12pt from the top).
+                // With no row open: a capsule over the pane only, never the sidebar or the traffic lights' line, 12pt from
+                // the top, and it takes no room (nothing moves when it comes or goes). With a row open the name pill's
+                // second line says it instead, so there is one floating thing.
                 .overlay(alignment: .top) {
-                    LinkNote(link: link)
-                        .padding(.horizontal, 32)
-                        .padding(.top, rowOpen ? 64 : 12)
-                        .allowsHitTesting(false)
+                    if !rowOpen {
+                        LinkNote(link: link)
+                            .padding(.horizontal, 32)
+                            .padding(.top, 12)
+                            .allowsHitTesting(false)
+                    }
                 }
         }
         .overlay(alignment: .topLeading) {
