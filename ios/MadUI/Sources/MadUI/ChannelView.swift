@@ -33,12 +33,7 @@ public struct ChannelView: View {
     public var body: some View {
         #if os(macOS)
         chat
-            // the head is the window's toolbar: the one bar above the channel, with no title of its own
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .navigation) { nameButton }
-                ToolbarItem(placement: .primaryAction) { infoButton }
-            }
+            .ignoresSafeArea(.container, edges: .top) // the name floats at the very top, as in the conversation
             .inspector(isPresented: $panelOpen) { panelView.inspectorColumnWidth(min: 260, ideal: 300, max: 380) }
             .sheet(isPresented: $gallery) { galleryView }
             .sheet(item: Binding(get: { viewing.map(Picked.init) }, set: { viewing = $0?.id })) { p in
@@ -67,7 +62,8 @@ public struct ChannelView: View {
             #endif
             messages
             // the composer has the message column's edges, exactly
-            ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, replying: $replying, send: actions.send)
+            ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
+                            replying: $replying, send: actions.send)
                 .frame(maxWidth: MadColumn.maxWidth)
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
@@ -113,6 +109,20 @@ public struct ChannelView: View {
         .accessibilityHint("群信息")
     }
 
+    #if os(macOS)
+    /// The channel's name, floating at the top of the window as a small pill: its tile, name and how it stands.
+    /// It opens 群信息.
+    private var namePill: some View {
+        nameButton
+            .fixedSize()
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+            .padding(.top, 12)
+    }
+    #endif
+
     private var infoButton: some View {
         Button { panelOpen.toggle() } label: {
             Image(systemName: "info").font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
@@ -138,9 +148,29 @@ public struct ChannelView: View {
                 })
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
+                #if os(macOS)
+                .padding(.top, 76) // under the floating name
+                #else
                 .padding(.top, 6)
+                #endif
                 .padding(.bottom, 10)
             }
+            .overlay(alignment: .bottom) {
+                if !nearBottom {
+                    Button { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } } label: {
+                        Image(systemName: "arrow.down").font(.system(size: 14, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().strokeBorder(Color.chatLine))
+                            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain).padding(.bottom, 10).accessibilityLabel("到最新")
+                    .transition(.opacity)
+                }
+            }
+            #if os(macOS)
+            .overlay(alignment: .top) { namePill }
+            #endif
             #if os(iOS)
             .background(GeometryReader { g in
                 Color.clear.onAppear { chatWidth = g.size.width }.onChange(of: g.size.width) { _, w in chatWidth = w }
@@ -171,6 +201,20 @@ public struct ChannelView: View {
             }
             .padding(.top, 6)
         case .run(let run):
+            #if os(macOS)
+            // As in a chat with one bot: no gutter; the sender's small character stands by its name above the bubbles
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: 20)
+                        .onTapGesture { actions.openAgent(run.sender.id) }
+                    Text(run.sender.name).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .padding(.leading, 2)
+                ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 12)
+            #else
             HStack(alignment: .bottom, spacing: 8) {
                 CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: 26)
                     .onTapGesture { actions.openAgent(run.sender.id) }
@@ -183,6 +227,7 @@ public struct ChannelView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.top, 10)
+            #endif
         }
     }
 

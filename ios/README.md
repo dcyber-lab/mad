@@ -238,3 +238,15 @@ and pills 14, labels 13), on the iPhone they are the text styles. `MadColumn` is
 or a conversation: at most 820pt on the Mac (720 on the phone), centred, with 32pt (14) at the sides; the avatar
 is in a 34pt gutter, others' bubbles start after it, mine end at the right edge, a bubble is as wide as its text
 up to 75% of the column, and the lines (handoffs, tools) and the composer have the column's two edges.
+
+### The Mac window
+
+The Mac window is laid out as a chat app is, not as a NavigationSplitView (`MacShell`, MadShell): the content goes
+under the traffic lights (no title bar), a sidebar of ours (`MacSidebar`: round search and new buttons, the
+machine's tile and name, the list with a soft grey row for the open one, the usage and ⋯ at the bottom) is held
+between 240 and 420pt, dragged by its edge, and hidden and shown with ⌘\ or its button, animated. In a channel or
+a conversation there is no bar: the name floats at the top as a pill, the messages are one column (bubbles at most
+58% of it, no avatars beside them, the sender's small character by its name), and the composer is a rounded bar
+with the column's edges. Typing @ in a channel offers its members (↑ ↓ and ⏎ or Tab, or a click).
+
+Debug launch arguments: `-sidebarHidden YES`, `-mad.sidebarWidth 420`, `-composerText "@r"`.

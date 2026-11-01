@@ -37,9 +37,16 @@ public struct ConversationView: View {
         .background(.background)
         .environment(\.convImageLoader, actions.loadImage)
         #if os(macOS)
-        // the only bar above the conversation is the window's toolbar, with no title of its own
-        .navigationTitle("")
-        .toolbar { ToolbarItem(placement: .navigation) { ConversationIdentity(model: model) } }
+        // no bar: the agent's name floats at the top as a small pill
+        .overlay(alignment: .top) {
+            ConversationIdentity(model: model)
+                .fixedSize()
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                .padding(.top, 12)
+        }
         #endif
     }
 
@@ -66,7 +73,11 @@ public struct ConversationView: View {
                 .environment(\.madColumnWidth, columnWidth)
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
+                #if os(macOS)
+                .padding(.top, 76).padding(.bottom, 8) // under the floating name
+                #else
                 .padding(.vertical, 8)
+                #endif
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboardIfAvailable()
@@ -80,32 +91,17 @@ public struct ConversationView: View {
 
     @ViewBuilder private var composer: some View {
         if model.canSend {
-            HStack(alignment: .bottom, spacing: 8) {
-                Button(action: actions.attach) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.primary.opacity(0.08)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Attach")
-                TextField(model.composerPrompt, text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .textFieldStyle(.plain)
-                    .font(MadType.message)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Color.primary.opacity(0.08)))
-                    .onSubmit(submit)
-                trailing
-            }
+            conversationField
             // the message column's edges, exactly
             .frame(maxWidth: MadColumn.maxWidth)
             .padding(.horizontal, MadColumn.side)
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
+            #if os(macOS)
+            .padding(.bottom, 16)
+            #else
             .padding(.bottom, 8)
+            #endif
         } else {
             Text(model.sendHint)
                 .font(MadType.rowLine)
@@ -115,6 +111,52 @@ public struct ConversationView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
         }
+    }
+
+    /// ＋, the field and send: on the Mac one rounded bar with a hairline and a soft shadow, on the phone three pieces.
+    @ViewBuilder private var conversationField: some View {
+        #if os(macOS)
+        HStack(alignment: .bottom, spacing: 8) {
+            attachButton
+            composerField.padding(.vertical, 7)
+            trailing
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.chatComposer))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.chatLine))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        #else
+        HStack(alignment: .bottom, spacing: 8) {
+            attachButton
+            composerField
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Color.primary.opacity(0.08)))
+            trailing
+        }
+        #endif
+    }
+
+    private var attachButton: some View {
+        Button(action: actions.attach) {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 36, height: 36)
+                #if os(iOS)
+                .background(Circle().fill(Color.primary.opacity(0.08)))
+                #endif
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Attach")
+    }
+
+    private var composerField: some View {
+        TextField(model.composerPrompt, text: $draft, axis: .vertical)
+            .lineLimit(1...5)
+            .textFieldStyle(.plain)
+            .font(MadType.message)
+            .onSubmit(submit)
     }
 
     @ViewBuilder private var trailing: some View {
@@ -229,9 +271,11 @@ struct AgentRow<Content: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            #if os(iOS)
             CharacterView(id: model.agentID, kind: model.kind, state: .idle, size: avatar)
                 .frame(width: avatar, height: avatar)
                 .accessibilityHidden(true)
+            #endif
             Group {
                 if hugs && columnWidth > 0 { content.hugging(maxWidth: MadColumn.bubble(in: columnWidth)) } else { content }
             }

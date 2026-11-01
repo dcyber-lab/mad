@@ -61,9 +61,7 @@ public struct NativeRoot: View {
 
     @ViewBuilder private var content: some View {
         #if os(macOS)
-        NavigationSplitView {
-            HomeSidebar(model: model, selection: $selection, actions: actions)
-        } detail: {
+        MacShell(model: model, selection: $selection, actions: actions) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 })
         }
         #else

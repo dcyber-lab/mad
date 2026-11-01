@@ -416,3 +416,30 @@ final class ColumnTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(MadColumn.bubble(in: 0), 120, "an unmeasured column still leaves room for text")
     }
 }
+
+final class MentionTests: XCTestCase {
+    private func member(_ name: String, dim: Bool = false) -> ChannelMember {
+        ChannelMember(id: name, kind: "claude", state: .idle, name: name, dim: dim)
+    }
+
+    func testTheWordAfterAnAtThatStartsAWord() {
+        XCTAssertEqual(ChannelMention.query(in: "@"), "")
+        XCTAssertEqual(ChannelMention.query(in: "hi @ar"), "ar")
+        XCTAssertEqual(ChannelMention.query(in: "@a @bu"), "bu")
+        XCTAssertNil(ChannelMention.query(in: "mail me at a@b"), "an @ inside a word is not a mention")
+        XCTAssertNil(ChannelMention.query(in: "@architect please"), "the word is over")
+        XCTAssertNil(ChannelMention.query(in: "no mention"))
+    }
+
+    func testPrefixMatchesComeBeforeContainingOnesAndFadedRolesAreLeftOut() {
+        let all = [member("builder"), member("architect"), member("reviewer"), member("ghost", dim: true), member("tester")]
+        XCTAssertEqual(ChannelMention.matches(for: "", in: all).map(\.name), ["builder", "architect", "reviewer", "tester"])
+        XCTAssertEqual(ChannelMention.matches(for: "r", in: all).map(\.name), ["reviewer", "builder", "architect", "tester"])
+        XCTAssertEqual(ChannelMention.matches(for: "gh", in: all).map(\.name), [], "a faded role has nobody to wake")
+    }
+
+    func testCompletingReplacesTheWordAndAddsASpace() {
+        XCTAssertEqual(ChannelMention.completing("look @ar", with: "architect"), "look @architect ")
+        XCTAssertEqual(ChannelMention.completing("plain", with: "architect"), "plain")
+    }
+}
