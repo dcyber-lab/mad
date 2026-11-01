@@ -8,6 +8,8 @@ public struct GroupTile: View {
     let members: [Member]
     let size: CGFloat
     let dot: Bool?
+    /// Its members' looks, built once: each is a hash, a random sequence and a shuffle.
+    private let minis: [(look: CharacterLook, state: CharacterState)]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var since = Date()
     @State private var onScreen = false
@@ -16,6 +18,7 @@ public struct GroupTile: View {
     public init(members: [Member], size: CGFloat, dot: Bool? = nil) {
         self.dot = dot
         self.members = members
+        minis = Self.shown(of: members).map { (look: CharacterLook(id: $0.id, kind: $0.kind), state: $0.state) }
         self.size = size
     }
 
@@ -29,7 +32,9 @@ public struct GroupTile: View {
     var word: String { CharacterState.group(members.map(\.state)).word }
 
     /// Working members first, then the rest in order; three at most.
-    var shown: [Member] {
+    var shown: [Member] { Self.shown(of: members) }
+
+    private static func shown(of members: [Member]) -> [Member] {
         let ranked = members.enumerated().sorted { a, b in
             let ra = a.element.state == .working ? 0 : 1, rb = b.element.state == .working ? 0 : 1
             return ra != rb ? ra < rb : a.offset < b.offset
@@ -42,7 +47,8 @@ public struct GroupTile: View {
             if reduceMotion || !animated {
                 canvas(at: nil)
             } else {
-                TimelineView(.animation(paused: !onScreen)) { canvas(at: $0.date) }
+                // the cycles are seconds long: 30 frames a second is plenty
+                TimelineView(.animation(minimumInterval: 1 / 30, paused: !onScreen)) { canvas(at: $0.date) }
             }
         }
         .frame(width: size * (1 + 2 * CharacterView.margin), height: size * (1 + 2 * CharacterView.margin))
@@ -60,7 +66,6 @@ public struct GroupTile: View {
 
     /// The tile at `date`; nil is at rest. Each member is as a character of its own state is.
     private func canvas(at date: Date?) -> some View {
-        let minis = shown.map { (look: CharacterLook(id: $0.id, kind: $0.kind), state: $0.state) }
         let ms = date.map { $0.timeIntervalSince(since) * 1000 } ?? 0
         return Canvas { ctx, _ in
             var c = ctx
@@ -74,9 +79,9 @@ public struct GroupTile: View {
             for (i, mini) in minis.enumerated() {
                 var m = c
                 if mini.state == .stopped { m.opacity = 0.5 }
-                let state = date == nil ? CharacterView.resting(mini.state) : mini.state
-                var pose = mini.look.plan.pose(state, ms: ms)
-                if date == nil { pose.tilt = 0 }
+                // a mini that is neither working nor asking does not blink (nor does the page's)
+                let moves = date != nil && (mini.state == .working || mini.state == .needsYou)
+                let pose = moves ? mini.look.plan.pose(mini.state, ms: ms) : CharacterPlan.resting(mini.state)
                 CharacterArt.draw(&m, look: mini.look, in: Self.positions[i], pose: pose)
             }
         }
