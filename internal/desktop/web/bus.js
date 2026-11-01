@@ -643,6 +643,8 @@ async function loadChannel(first) {
     cv.paused = r.paused;
     drawChanHead();
   }
+  cv.receipts = r.receipts || [];
+  drawReceipts(cv.receipts, r.paused);
   if (cv.jump) {
     const s = cv.jump;
     cv.jump = 0;
@@ -652,6 +654,100 @@ async function loadChannel(first) {
 }
 
 // ---- the messages ----
+
+// drawReceipts keeps the receipt line under the person's latest own message, and only that one (receipts.js
+// has the words). When a newer message of theirs is drawn, the old line goes and the new bubble gets its
+// line, empty and already 20px tall, in this one pass; the line's word is patched in place when the receipt
+// arrives or changes, never the bubble.
+function drawReceipts(list, paused) {
+  const log = $("#chanlog");
+  const mine = log.querySelectorAll(".cmsg.mine");
+  const row = mine[mine.length - 1];
+  for (const l of log.querySelectorAll(".crcpt")) if (!row || l.parentElement !== row) closeReceiptCard(l.parentElement), l.remove();
+  if (!row) return;
+  let line = row.querySelector(".crcpt");
+  if (!line) {
+    line = el("button", "crcpt");
+    line.type = "button";
+    line.append(el("span", "crw"));
+    line.onclick = (e) => {
+      e.stopPropagation();
+      toggleReceiptCard(row);
+    };
+    row.append(line);
+  }
+  const rc = list.find((r) => r.seq === Number(row.dataset.seq));
+  if (!rc) return;
+  const sum = receiptSummary(rc.targets, paused);
+  fillReceipt(line, sum);
+  if (row.querySelector(".rcard")) drawReceiptCard(row, sum);
+}
+
+// fillReceipt writes the summary into the line: its word (a change fades in over 150ms), its colour, its
+// title and its label for a screen reader. The one place the line's look is made.
+function fillReceipt(line, sum) {
+  const w = line.firstChild;
+  if (w.textContent !== sum.word) {
+    const fresh = !!w.textContent;
+    w.textContent = sum.word;
+    if (fresh && w.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) w.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease-in-out" });
+  }
+  line.classList.toggle("blue", sum.tone === "blue");
+  line.classList.add("has");
+  if (line.title !== sum.title) line.title = sum.title;
+  line.setAttribute("aria-label", sum.label);
+  line.setAttribute("aria-haspopup", "true");
+}
+
+// toggleReceiptCard opens the card of who under the line, or closes it.
+function toggleReceiptCard(row) {
+  if (row.querySelector(".rcard")) return closeReceiptCard(row);
+  const line = row.querySelector(".crcpt");
+  if (!line || !line.classList.contains("has")) return;
+  const rc = (cv.receipts || []).find((r) => r.seq === Number(row.dataset.seq));
+  drawReceiptCard(row, receiptSummary(rc && rc.targets, cv.paused));
+  const card = row.querySelector(".rcard");
+  line.setAttribute("aria-expanded", "true");
+  card.scrollIntoView({ block: "nearest" });
+}
+
+// drawReceiptCard (re)draws the card's rows: the character, the name and how far it got.
+function drawReceiptCard(row, sum) {
+  let card = row.querySelector(".rcard");
+  if (!card) {
+    card = el("div", "rcard");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", "谁收到了");
+    row.append(card);
+  }
+  const kids = sum.rows.map((r) => {
+    const item = el("div", "rrow");
+    const a = agents.get(r.id) || { id: r.id, kind: "?" };
+    item.append(avatar(a, true), el("span", "rname", r.label), el("span", "rstate", r.text));
+    return item;
+  });
+  kids.push(el("div", "rfoot", sum.footer));
+  if (sum.held && !sum.none) kids.push(el("div", "rfoot", RECEIPT_WORDS.held));
+  card.replaceChildren(...kids);
+  if (sum.none) card.classList.add("plain");
+  else card.classList.remove("plain");
+}
+
+function closeReceiptCard(row) {
+  if (!row) return;
+  const card = row.querySelector(".rcard");
+  if (card) card.remove();
+  const line = row.querySelector(".crcpt");
+  if (line) line.removeAttribute("aria-expanded");
+}
+document.addEventListener("click", (e) => {
+  for (const card of document.querySelectorAll("#chanlog .rcard")) if (!card.contains(e.target)) closeReceiptCard(card.parentElement);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const card of document.querySelectorAll("#chanlog .rcard")) closeReceiptCard(card.parentElement);
+});
+
 
 // timeLine is the centred time between messages that are far apart: today's
 // as "今天 21:05", yesterday's, or the date.

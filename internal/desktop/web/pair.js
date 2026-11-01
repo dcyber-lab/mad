@@ -41,7 +41,7 @@ let made = ""; // see ownToken
       await retry(r.error);
     }
   }
-  for (const src of ["stale.js", "blobs.js", "characters.js", "app.js", "actions.js", "bus.js", "team.js", "skills.js", "board.js", "usage.js", "timers.js"]) {
+  for (const src of ["stale.js", "blobs.js", "receipts.js", "characters.js", "app.js", "actions.js", "bus.js", "team.js", "skills.js", "board.js", "usage.js", "timers.js"]) {
     const s = document.createElement("script");
     s.src = src;
     s.async = false; // in this order

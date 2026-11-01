@@ -340,3 +340,214 @@ func TestChannelBubblesStayInTheColumn(t *testing.T) {
 		}
 	}
 }
+
+// What the page shows of the receipt line under the person's messages: how many lines there are and under
+// which message, and the latest one's word, colour, size, height, place against its bubble, title and label.
+const receiptLineJS = `(() => {
+  const lines = [...document.querySelectorAll("#chanlog .crcpt")];
+  const l = lines[0];
+  if (!l) return { count: 0 };
+  const row = l.parentElement, b = row.querySelector(".cbub");
+  const lr = l.getBoundingClientRect(), br = b.getBoundingClientRect();
+  const cs = getComputedStyle(l);
+  return { count: lines.length, seq: row.dataset.seq, word: l.textContent, blue: l.classList.contains("blue"), has: l.classList.contains("has"),
+    color: cs.color, size: parseFloat(cs.fontSize), weight: cs.fontWeight, height: lr.height, dx: br.right - lr.right, dy: lr.top - br.bottom,
+    title: l.title, label: l.getAttribute("aria-label") || "", mine: document.querySelectorAll("#chanlog .cmsg.mine").length };
+})()`
+
+// The receipts scenario has the person's messages, the latest with two agents who have it but have not read
+// it, in a paused channel. Only that message shows the line, "2 个未读" in blue; clicking it opens the card of
+// who, which Esc or a click outside closes. The line is patched in place (its word changes, the bubble stays),
+// and a newer message of the person's takes the line, empty and 20px tall, in one pass. Every width and
+// theme: the line and the card stay inside the column. MAD_BOUNDS_SHOTS=<dir> keeps a screenshot of each,
+// with the card shut and open. Where there is no Chrome, it is skipped.
+func TestReceiptLineAndCard(t *testing.T) {
+	bin := chrome()
+	if bin == "" {
+		t.Skip("no Chrome: the receipts are not checked (MAD_CHROME names one)")
+	}
+	h, err := newHandler("receipts", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := startChrome(t, bin)
+	if _, err := c.call("Page.enable", nil); err != nil {
+		t.Fatal(err)
+	}
+	evalJSON := func(t *testing.T, expr string, into any) {
+		t.Helper()
+		v, err := c.eval(expr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(v, into); err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
+	}
+	shot := func(name string) {
+		if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
+			if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+				var s struct{ Data []byte }
+				if json.Unmarshal(res, &s) == nil {
+					_ = os.WriteFile(filepath.Join(dir, name+".png"), s.Data, 0o644)
+				}
+			}
+		}
+	}
+	inColumn := func(t *testing.T) {
+		t.Helper()
+		var rep struct{ Bad, Sideways []string }
+		evalJSON(t, boundsJS, &rep)
+		for _, b := range rep.Bad {
+			t.Errorf("reaches past its column: %s", b)
+		}
+		for _, s := range rep.Sideways {
+			t.Errorf("scrolls sideways: %s", s)
+		}
+	}
+	for _, theme := range []string{"light", "dark"} {
+		for _, w := range []int{390, 1600} {
+			t.Run(fmt.Sprintf("%s/%d", theme, w), func(t *testing.T) {
+				if _, err := c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": w, "height": 900, "deviceScaleFactor": 1, "mobile": false}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := c.call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := c.call("Page.navigate", map[string]any{"url": "about:blank"}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := c.call("Page.navigate", map[string]any{"url": srv.URL + "/?channel=fold#token=" + strings.Repeat("0", 32)}); err != nil {
+					t.Fatal(err)
+				}
+				if !waitFor(20*time.Second, func() bool {
+					v, err := c.eval(`document.querySelectorAll("#chanlog .crcpt.has").length`)
+					return err == nil && string(v) == "1"
+				}) {
+					t.Fatal("the page did not draw the receipt line")
+				}
+				time.Sleep(1500 * time.Millisecond) // the fade-in, and a look or two at the channel
+				var l struct {
+					Count          int
+					Seq, Word      string
+					Blue, Has      bool
+					Color          string
+					Size           float64
+					Weight         string
+					Height, Dx, Dy float64
+					Title, Label   string
+					Mine           int
+				}
+				evalJSON(t, receiptLineJS, &l)
+				blue := map[string]string{"light": "rgb(31, 107, 255)", "dark": "rgb(47, 123, 255)"}[theme]
+				if l.Count != 1 || l.Seq != "9" || l.Mine < 4 {
+					t.Errorf("want one line, under the latest of the person's messages (seq 9): %+v", l)
+				}
+				if l.Word != "2 个未读" || !l.Blue || l.Color != blue {
+					t.Errorf("the line reads %q (blue=%v, colour %s), want 2 个未读 in %s", l.Word, l.Blue, l.Color, blue)
+				}
+				if l.Size != 12.5 || l.Weight != "400" || l.Height != 20 {
+					t.Errorf("the line is %vpx, weight %s, %vpx tall; want 12.5, 400, 20", l.Size, l.Weight, l.Height)
+				}
+				if l.Dx < 3.5 || l.Dx > 4.5 || l.Dy < 3.5 || l.Dy > 4.5 {
+					t.Errorf("the line is %vpx in from the bubble's right edge and %vpx below it; want 4 and 4", l.Dx, l.Dy)
+				}
+				if l.Title != "reviewer 已送达 · builder 已送达" && l.Title != "builder 已送达 · reviewer 已送达" {
+					t.Errorf("title %q is not the breakdown", l.Title)
+				}
+				if !strings.Contains(l.Label, "builder 未读") || !strings.Contains(l.Label, "reviewer 未读") {
+					t.Errorf("label %q is not the breakdown in words", l.Label)
+				}
+				inColumn(t)
+				shot(fmt.Sprintf("receipts-%d-%s", w, theme))
+
+				// the card
+				if _, err := c.eval(`document.querySelector("#chanlog .crcpt").click()`); err != nil {
+					t.Fatal(err)
+				}
+				var card struct {
+					Rows           []string
+					Foot           []string
+					Dx             float64
+					Left, Width    float64
+					Expanded, Pops bool
+				}
+				evalJSON(t, `(() => {
+				  const c = document.querySelector("#chanlog .rcard"), l = document.querySelector("#chanlog .crcpt");
+				  if (!c) return { rows: [], foot: [] };
+				  const cr = c.getBoundingClientRect(), lr = l.getBoundingClientRect();
+				  return { rows: [...c.querySelectorAll(".rrow")].map((r) => r.querySelector(".rname").textContent + "|" + r.querySelector(".rstate").textContent + "|" + (r.querySelector(".avatar") ? "av" : "")),
+				    foot: [...c.querySelectorAll(".rfoot")].map((x) => x.textContent), dx: lr.right - cr.right, left: cr.left, width: cr.width,
+				    expanded: l.getAttribute("aria-expanded") === "true", pops: !!c.closest(".cmsg.mine") };
+				})()`, &card)
+				if len(card.Rows) != 2 || !strings.HasSuffix(card.Rows[0], "|已送达，还没看|av") || len(card.Foot) < 1 || card.Foot[0] != "只显示被 @ 到的 agent" {
+					t.Errorf("the card is %+v", card)
+				}
+				if card.Dx < -1 || card.Dx > 1 || !card.Expanded || !card.Pops {
+					t.Errorf("the card is not right-aligned under the line or the line does not say it is open: %+v", card)
+				}
+				if card.Left < 0 {
+					t.Errorf("the card starts at %v, off the screen", card.Left)
+				}
+				inColumn(t)
+				shot(fmt.Sprintf("receipts-%d-%s-card", w, theme))
+				// Esc shuts it; so does a click outside
+				for _, how := range []string{
+					`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`,
+					`document.querySelector("#chanlog .cgrp").click()`,
+				} {
+					if _, err := c.eval(how); err != nil {
+						t.Fatal(err)
+					}
+					v, _ := c.eval(`document.querySelectorAll("#chanlog .rcard").length`)
+					if string(v) != "0" {
+						t.Errorf("the card stayed after %s", how)
+					}
+					if _, err := c.eval(`document.querySelector("#chanlog .crcpt").click()`); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := c.eval(`document.querySelector("#chanlog .crcpt").click()`); err != nil { // shut it again
+					t.Fatal(err)
+				}
+
+				// patched in place: the word changes, the bubble and the line stay the same nodes
+				var patch struct {
+					SameBubble, SameLine bool
+					Word                 string
+					Blue                 bool
+				}
+				evalJSON(t, `(() => {
+				  const row = document.querySelector("#chanlog .cmsg.mine .crcpt").parentElement, bub = row.querySelector(".cbub"), line = row.querySelector(".crcpt");
+				  drawReceipts([{ seq: 9, targets: [{ id: "x", label: "builder", state: "replied" }, { id: "y", label: "reviewer", state: "read" }] }], false);
+				  return { sameBubble: bub === row.querySelector(".cbub") && bub.isConnected, sameLine: line === row.querySelector(".crcpt"), word: line.textContent, blue: line.classList.contains("blue") };
+				})()`, &patch)
+				if !patch.SameBubble || !patch.SameLine || patch.Word != "已回复" || patch.Blue {
+					t.Errorf("the line was not patched in place to 已回复 in grey: %+v", patch)
+				}
+				// a newer message of the person's takes the line, empty and 20px tall, in the same pass
+				var next struct {
+					Lines      int
+					Under      string
+					Has        bool
+					Height     float64
+					OldHasNone bool
+					Word       string
+				}
+				evalJSON(t, `(() => {
+				  drawMessage({ seq: 10, at: Date.now(), from: { id: "you", label: "you" }, kind: "text", text: "再说一句" });
+				  drawReceipts(cv.receipts, cv.paused);
+				  const lines = [...document.querySelectorAll("#chanlog .crcpt")];
+				  const l = lines[0];
+				  return { lines: lines.length, under: l.parentElement.dataset.seq, has: l.classList.contains("has"), height: l.getBoundingClientRect().height,
+				    oldHasNone: !document.querySelector('#chanlog .cmsg[data-seq="9"] .crcpt'), word: l.textContent };
+				})()`, &next)
+				if next.Lines != 1 || next.Under != "10" || next.Has || next.Height != 20 || !next.OldHasNone || next.Word != "" {
+					t.Errorf("the new message did not take the line, reserved and empty: %+v", next)
+				}
+			})
+		}
+	}
+}
