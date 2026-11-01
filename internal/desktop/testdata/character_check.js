@@ -94,6 +94,24 @@ for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
   assert(!old.kids[0].kids.includes(nb) && ob);
 }
 
+// Under Reduce Motion a character that has not started yet (off the screen, waiting to wake) when it comes on
+// shows the face of its state, not the one it was drawn with: a working one shows focus.
+{
+  const part = () => ({ innerHTML: "", style: {}, animate: () => assert.fail("a still character was animated") });
+  const root = (face) => { const m = { ".c-facein": part(), ".c-head": part(), ".c-all": part(), ".c-leaf": null }; m[".c-facein"].innerHTML = face; return { m, querySelector: (q) => m[q] }; };
+  C.charReduced.matches = true;
+  try {
+    for (const [state, face] of [["work", "focus"], ["need", "ask"], ["idle", "calm"], ["stop", "sleep"]]) {
+      const r = root(EXPR.wink); // drawn with another face (a working one starts with the first of its own order)
+      assert.strictEqual(C.charStart(r, "some-id", state, {}), null, `${state}: nothing is started`);
+      assert.strictEqual(r.m[".c-facein"].innerHTML, EXPR[face], `${state}: a still one shows ${face}`);
+    }
+    assert.strictEqual(C.charBlinkers.size, 0);
+  } finally {
+    C.charReduced.matches = false;
+  }
+}
+
 // One timeout for all the blinks: the next edge, set again when one comes or goes (not a poll).
 {
   let pending = 0;

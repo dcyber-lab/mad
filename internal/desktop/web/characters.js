@@ -267,8 +267,12 @@ function charBlinkTick() {
 // 2.5 to 5.5 seconds unless opts.blink is false), "stop" (asleep, at half opacity). Reduced motion: still,
 // with the state's expression. watch is the element whose being on the screen it follows (default root).
 function charStart(root, key, state, opts = {}) {
-  if (charReduced.matches || state === "stop" || (state === "idle" && opts.blink === false)) return null; // nothing to move
   const facein = root.querySelector(".c-facein"), head = root.querySelector(".c-head"), all = root.querySelector(".c-all"), leaf = root.querySelector(".c-leaf");
+  if (charReduced.matches) { // still: with the face of its state, whatever face it was drawn with (it may have been drawn before Reduce Motion was on)
+    if (facein) facein.innerHTML = EXPR[charExpr(state, key)];
+    return null;
+  }
+  if (state === "stop" || (state === "idle" && opts.blink === false)) return null; // nothing to move
   if (!facein || !head) return null;
   const set = (k) => { facein.innerHTML = EXPR[k]; };
   const run = { root, anims: [], ticks: [], handles: [], on: false, reset: () => set(charExpr(state, key)) };
@@ -369,4 +373,4 @@ if (charReduced.addEventListener) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG, charExpr, charAvatarKey, charTileKey, charAdopt, charStart, charBlinkers, get charBlinkTimer() { return charBlinkTimer; } };
+if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG, charExpr, charAvatarKey, charTileKey, charAdopt, charStart, charReduced, charBlinkers, get charBlinkTimer() { return charBlinkTimer; } };
