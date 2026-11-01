@@ -235,3 +235,30 @@ Debug builds only (none of this is compiled into Release):
 Never point a test at the real deck's server and tap an act: allow, deny and
 reply answer real agents. Use an isolated server (a temporary
 `XDG_STATE_HOME`, its own port).
+
+### The Mac window, for screenshots
+
+Debug builds of the Mac app take `-windowSize 1200x800` (leaves full screen and sizes the window), `-windowAppearance
+light|dark`, `-mad.sidebarWidth 300` (the sidebar's stored width) and `-windowInfo <path>`, which writes the window's number there once it is
+drawn: `screencapture -x -o -l $(cat <path>) shot.png` then takes it (the shell has the permission the app lacks).
+With `-fixtureURL <url> -nativeOpen <row id>` it opens a channel or an agent at once.
+
+### Type and the message column
+
+`MadType` (MadUI) is the one type scale: on the Mac the sizes are chosen (row names 16, messages 15, last lines
+and pills 14, labels 13), on the iPhone they are the text styles. `MadColumn` is the message column of a channel
+or a conversation: at most 820pt on the Mac (720 on the phone), centred, with 32pt (14) at the sides; the avatar
+is in a 34pt gutter, others' bubbles start after it, mine end at the right edge, a bubble is as wide as its text
+up to 75% of the column, and the lines (handoffs, tools) and the composer have the column's two edges.
+
+### The Mac window
+
+The Mac window is laid out as a chat app is, not as a NavigationSplitView (`MacShell`, MadShell): the content goes
+under the traffic lights (no title bar), a sidebar of ours (`MacSidebar`: round search and new buttons, the
+machine's tile and name, the list with a soft grey row for the open one, the usage and ⋯ at the bottom) is held
+between 260 and 420pt (320 at first), dragged by its edge, and hidden and shown with ⌘\ or its button, animated. In a channel or
+a conversation there is no bar: the name floats at the top as a pill, the messages are one column (bubbles at most
+58% of it, no avatars beside them, the sender's small character by its name), and the composer is a rounded bar
+with the column's edges. Typing @ in a channel offers its members (↑ ↓ and ⏎ or Tab, or a click).
+
+Debug launch arguments: `-sidebarHidden YES`, `-mad.sidebarWidth 420`, `-composerText "@r"`.

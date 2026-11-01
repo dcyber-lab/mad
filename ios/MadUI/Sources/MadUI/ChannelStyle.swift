@@ -22,7 +22,13 @@ extension Color {
     /// The composer's field, the round buttons, the panel's lists.
     static var chatCard: Color { dynamic(light: 0xf4f4f6, dark: 0x151517) }
     /// The thin line of a folded message, and between rows.
-    static var chatLine: Color { dynamic(light: 0xdcdce2, dark: 0x2a2a2e) }
+    public static var chatLine: Color { dynamic(light: 0xdcdce2, dark: 0x2a2a2e) }
+    /// The Mac's composer bar and menus: a surface over the window.
+    static var chatComposer: Color { dynamic(light: 0xffffff, dark: 0x1c1c1f) }
+    /// The Mac's detail pane behind the messages.
+    public static var chatBackdrop: Color { dynamic(light: 0xffffff, dark: 0x121214) }
+    /// The Mac's sidebar.
+    static var chatSidebar: Color { dynamic(light: 0xf6f6f8, dark: 0x1a1a1d) }
     /// The 群信息 panel.
     static var chatPanel: Color { dynamic(light: 0xf7f7f9, dark: 0x0e0e10) }
 }

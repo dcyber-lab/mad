@@ -71,6 +71,9 @@ public struct NativeRoot: View {
                 await store.run()
             }
             .overlay(alignment: .top) { LinkNote(link: store.link) }
+            #if DEBUG && os(macOS)
+            .task { await DebugWindow.runIfAsked() }
+            #endif
     }
 
     /// Whether the row's own view draws its head and way back (a channel, an agent): the iPhone's bar stays out of it.
@@ -78,11 +81,7 @@ public struct NativeRoot: View {
 
     @ViewBuilder private var content: some View {
         #if os(macOS)
-        NavigationSplitView {
-            HomeSidebar(model: model, selection: $selection, actions: actions)
-                // wide enough for the rows to read as they do on the phone, not "clau…"
-                .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
-        } detail: {
+        MacShell(model: model, selection: $selection, actions: actions) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb)
         }
         #else

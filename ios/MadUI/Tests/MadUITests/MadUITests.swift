@@ -333,6 +333,9 @@ final class ConversationTests: XCTestCase {
     func testComposerRules() {
         var c = AgentConversation(title: "ios", agentID: "a", state: .working)
         XCTAssertEqual(c.composerPrompt, "发消息给 ios")
+        var long = c
+        long.title = String(repeating: "很长的标题", count: 20)
+        XCTAssertEqual(long.composerPrompt, "发消息给 " + String(repeating: "很长的标题", count: 20).prefix(28) + "…", "the hint stays one line")
         XCTAssertTrue(c.showsInterrupt(draft: ""))
         XCTAssertTrue(c.showsInterrupt(draft: "  \n"))
         XCTAssertFalse(c.showsInterrupt(draft: "wait"), "typing turns interrupt into send")
@@ -407,5 +410,39 @@ final class ChannelTailTests: XCTestCase {
     func testTailIsSteadyWhenNothingIsAdded() {
         XCTAssertEqual(screen([run([1, 2])]).tail, screen([run([1, 2])]).tail)
         XCTAssertEqual(screen([]).tail, "")
+    }
+}
+
+final class ColumnTests: XCTestCase {
+    func testABubbleTakesAShareOfTheColumnAfterTheGutter() {
+        XCTAssertEqual(MadColumn.bubble(in: 834), (834 - MadColumn.gutter) * MadColumn.bubbleShare, accuracy: 0.01)
+        XCTAssertGreaterThanOrEqual(MadColumn.bubble(in: 0), 120, "an unmeasured column still leaves room for text")
+    }
+}
+
+final class MentionTests: XCTestCase {
+    private func member(_ name: String, dim: Bool = false) -> ChannelMember {
+        ChannelMember(id: name, kind: "claude", state: .idle, name: name, dim: dim)
+    }
+
+    func testTheWordAfterAnAtThatStartsAWord() {
+        XCTAssertEqual(ChannelMention.query(in: "@"), "")
+        XCTAssertEqual(ChannelMention.query(in: "hi @ar"), "ar")
+        XCTAssertEqual(ChannelMention.query(in: "@a @bu"), "bu")
+        XCTAssertNil(ChannelMention.query(in: "mail me at a@b"), "an @ inside a word is not a mention")
+        XCTAssertNil(ChannelMention.query(in: "@architect please"), "the word is over")
+        XCTAssertNil(ChannelMention.query(in: "no mention"))
+    }
+
+    func testPrefixMatchesComeBeforeContainingOnesAndFadedRolesAreLeftOut() {
+        let all = [member("builder"), member("architect"), member("reviewer"), member("ghost", dim: true), member("tester")]
+        XCTAssertEqual(ChannelMention.matches(for: "", in: all).map(\.name), ["builder", "architect", "reviewer", "tester"])
+        XCTAssertEqual(ChannelMention.matches(for: "r", in: all).map(\.name), ["reviewer", "builder", "architect", "tester"])
+        XCTAssertEqual(ChannelMention.matches(for: "gh", in: all).map(\.name), [], "a faded role has nobody to wake")
+    }
+
+    func testCompletingReplacesTheWordAndAddsASpace() {
+        XCTAssertEqual(ChannelMention.completing("look @ar", with: "architect"), "look @architect ")
+        XCTAssertEqual(ChannelMention.completing("plain", with: "architect"), "plain")
     }
 }

@@ -42,7 +42,7 @@ public struct HomeSidebar: View {
                                 .listRowSeparator(.hidden)
                         }
                     } header: {
-                        Text(section.title).font(.footnote).foregroundStyle(.secondary)
+                        Text(section.title).font(MadType.label).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -50,7 +50,7 @@ public struct HomeSidebar: View {
             .onChange(of: selection) { _, id in if let id { actions.open(id) } }
             if let usage = model.usage {
                 Text(usage)
-                    .font(.caption)
+                    .font(MadType.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,11 +58,32 @@ public struct HomeSidebar: View {
                     .padding(.vertical, 8)
             }
         }
+        #if os(macOS)
+        .ignoresSafeArea(.container, edges: .top) // the header takes the title bar's band
+        #endif
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(model.machine).font(.headline).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            Text(model.machine).font(MadType.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            headerButtons
+        }
+        .buttonStyle(.borderless)
+        #if os(macOS)
+        // The name and the buttons sit in the title bar's own band, beside the traffic lights and the
+        // sidebar toggle, so there is one row there and not two.
+        .padding(.leading, 84)
+        .padding(.trailing, 44)
+        .padding(.top, 8)
+        .frame(height: 48)
+        #else
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        #endif
+    }
+
+    @ViewBuilder private var headerButtons: some View {
+        Group {
             Button {
                 searching.toggle()
                 if searching { searchFocused = true } else { query = "" }
@@ -77,8 +98,5 @@ public struct HomeSidebar: View {
                 .fixedSize()
                 #endif
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 }
