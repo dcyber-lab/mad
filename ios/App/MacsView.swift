@@ -72,7 +72,7 @@ struct MacsView: View {
             .overlay {
                 if store.macs.isEmpty && store.pending.isEmpty {
                     ContentUnavailableView("还没有 Mac", systemImage: "qrcode.viewfinder",
-                        description: Text("在 Mac 上运行 mad phone，然后扫描它的二维码。"))
+                        description: Text("在 Mac 上运行 mad phone，\n然后扫描它的二维码。"))
                 }
             }
             .navigationTitle("mad")
