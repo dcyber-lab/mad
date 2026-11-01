@@ -471,7 +471,9 @@ func post(sp postSpec) (PostResult, error) {
 			c.Paused = true
 			paused = true
 			res.Warning = pause
-			if _, err := addMsg(c.ID, &msgs, systemMsg(pause)); err != nil {
+			note := systemMsg(pause)
+			note.Event = EventPaused
+			if _, err := addMsg(c.ID, &msgs, note); err != nil {
 				return err
 			}
 		}
@@ -510,8 +512,10 @@ func post(sp postSpec) (PostResult, error) {
 	return res, nil
 }
 
-// youRe finds @you in a message.
-var youRe = regexp.MustCompile(`(?i)(^|[\s(])@you\b`)
+// youRe finds @you in a message: after the start, a space or a (half or full width) parenthesis, and not
+// followed by a letter, digit, _ or -, so "（@you" counts and "@you-x" does not. The page's rule is the same
+// (bus.js YOU_MENTION), as native's is.
+var youRe = regexp.MustCompile(`(?i)(^|[\s(（])@you($|[^\w-])`)
 
 // tell lets the person know about a message for them, as the deck's
 // notifications do (on their phone too); replaced in tests.

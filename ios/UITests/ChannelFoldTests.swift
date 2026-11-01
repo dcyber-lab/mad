@@ -41,8 +41,10 @@ final class ChannelFoldTests: MadUITestCase {
                        "a handoff or result is still a line")
         // A result that @mentions the person is an ordinary bubble, whole, whatever its kind.
         XCTAssertTrue(elements(containing: "评审通过了，等你合并").firstMatch.exists, "the @you result is not shown")
-        // mad's resume note stays.
-        XCTAssertTrue(elements(containing: "Resumed by a person.").firstMatch.exists, "the resume note is gone")
+        // mad's pause and resume notes stay, in Chinese.
+        XCTAssertTrue(elements(containing: "群已暂停").firstMatch.exists, "the pause note is gone")
+        XCTAssertTrue(elements(containing: "群已恢复").firstMatch.exists, "the resume note is gone")
+        XCTAssertEqual(elements(containing: "Resumed by a person").count, 0, "the resume note is in English")
         shot("no bookkeeping")
         // The long messages are still lines.
         XCTAssertTrue(lines.firstMatch.exists, "no folded long message")

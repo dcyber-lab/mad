@@ -596,8 +596,10 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 	shot := func(name string) {
 		if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
 			// the end of the channel, once what rises has risen
-			_, _ = c.eval(`(() => { for (const e of [document.querySelector("#chanscroll"), document.querySelector("#chanlog"), document.scrollingElement]) e.scrollTop = 1e9; })()`)
-			time.Sleep(600 * time.Millisecond)
+			for i := 0; i < 3; i++ {
+				_, _ = c.eval(`(() => { for (const e of [document.querySelector("#chanscroll"), document.querySelector("#chanlog"), document.scrollingElement]) e.scrollTop = 1e9; })()`)
+				time.Sleep(400 * time.Millisecond)
+			}
 			if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
 				var s struct{ Data []byte }
 				if json.Unmarshal(res, &s) == nil {
@@ -656,8 +658,8 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				if !rep.AtYouWhole || !strings.Contains(rep.Text, "评审通过了，等你合并") {
 					t.Errorf("an @you result is not an ordinary bubble: %+v", rep.AtYouWhole)
 				}
-				if len(rep.Sys) != 1 || rep.Sys[0] != "Resumed by a person." {
-					t.Errorf("mad's lines: %v, want the resume note only", rep.Sys)
+				if len(rep.Sys) != 2 || rep.Sys[0] != "群已暂停" || rep.Sys[1] != "群已恢复" {
+					t.Errorf("mad's lines: %v, want 群已暂停 and 群已恢复", rep.Sys)
 				}
 				if rep.Times != 2 {
 					t.Errorf("%d time lines: the first message's, and one before the message 15 minutes on (the hidden ones in between add none)", rep.Times)
@@ -705,26 +707,59 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 			})
 		}
 	}
-	t.Run("only hidden messages", func(t *testing.T) {
-		open(t, quietSrv.URL, 390, "light")
-		var note string
-		if !waitFor(20*time.Second, func() bool {
-			v, err := c.eval(`(document.querySelector("#chanlog .note") || {}).textContent || ""`)
-			if err != nil {
-				return false
+	silentH, err := newHandler("silent", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	silentSrv := httptest.NewServer(silentH)
+	defer silentSrv.Close()
+	// both empty states are one quiet line: secondary colour, 14px, centred, about a third of the way down
+	for _, c2 := range []struct{ name, base, want, shot string }{
+		{"only hidden messages", quietSrv.URL, "agent 们在后台协作，有事会在这里 @ 你。", "quiet-empty-390-light"},
+		{"nothing said yet", silentSrv.URL, "还没人说话。@ 一个 agent 可以叫醒它。", "silent-empty-390-light"},
+	} {
+		t.Run(c2.name, func(t *testing.T) {
+			open(t, c2.base, 390, "light")
+			var note struct {
+				Text, Color      string
+				Size, DX, Top, H float64
+				Others           int
 			}
-			_ = json.Unmarshal(v, &note)
-			return note != ""
-		}) {
-			t.Fatal("the empty channel says nothing")
-		}
-		if note != "agent 们在后台协作，有事会在这里 @ 你。" {
-			t.Errorf("the empty note is %q", note)
-		}
-		v, _ := c.eval(`document.querySelectorAll("#chanlog > :not(.note)").length`)
-		if string(v) != "0" {
-			t.Errorf("something is drawn beside the note: %s", v)
-		}
-		shot("quiet-empty-390-light")
-	})
+			if !waitFor(20*time.Second, func() bool {
+				v, err := c.eval(`document.querySelector("#chanlog .note") ? 1 : 0`)
+				return err == nil && string(v) == "1"
+			}) {
+				t.Fatal("the empty channel says nothing")
+			}
+			time.Sleep(300 * time.Millisecond)
+			v, err := c.eval(`(() => {
+			  const n = document.querySelector("#chanlog .note"), s = document.querySelector("#chanscroll");
+			  const nr = n.getBoundingClientRect(), sr = s.getBoundingClientRect(), cs = getComputedStyle(n);
+			  return { text: n.textContent, color: cs.color, size: parseFloat(cs.fontSize), dx: (nr.left + nr.right) / 2 - (sr.left + sr.right) / 2,
+			    top: nr.top - sr.top, h: sr.height, others: document.querySelectorAll("#chanlog > :not(.note)").length };
+			})()`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(v, &note); err != nil {
+				t.Fatal(err)
+			}
+			if note.Text != c2.want {
+				t.Errorf("the empty note is %q, want %q", note.Text, c2.want)
+			}
+			if note.Others != 0 {
+				t.Errorf("something is drawn beside the note")
+			}
+			if note.Size != 14 || note.Color != "rgb(85, 85, 95)" {
+				t.Errorf("the note is %vpx in %s, want 14px in the secondary colour (rgb(85, 85, 95))", note.Size, note.Color)
+			}
+			if note.DX < -3 || note.DX > 3 {
+				t.Errorf("the note is %vpx off the centre", note.DX)
+			}
+			if frac := note.Top / note.H; frac < 0.2 || frac > 0.45 {
+				t.Errorf("the note is %.0f%% of the way down the list area, want about a third", frac*100)
+			}
+			shot(c2.shot)
+		})
+	}
 }

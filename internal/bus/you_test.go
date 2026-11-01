@@ -220,3 +220,30 @@ func TestPageHidesTheSameKinds(t *testing.T) {
 		t.Errorf("the page hides %v, the server %v", page, HiddenKinds)
 	}
 }
+
+// The server finds @you as the page and native do: after the start, a space or a (half or full width)
+// parenthesis; not before anything else, and not followed by a letter, digit, _ or -.
+func TestAtYouRule(t *testing.T) {
+	for text, want := range map[string]bool{
+		"@you":           true,
+		"@you 请看一下":      true,
+		"请看 @you，谢谢":     true,
+		"(@you)":         true,
+		"（@you）看一下":      true,
+		"@YOU":           true,
+		"@you.":          true,
+		"@you-x":         false,
+		"@you_x":         false,
+		"@youth":         false,
+		"@you2":          false,
+		"mail@you.com":   false,
+		"a@you":          false,
+		"请@you":          false,
+		"@your reviewer": false,
+		"@you\n下一行":      true,
+	} {
+		if got := youRe.MatchString(text); got != want {
+			t.Errorf("%q: found=%v, want %v", text, got, want)
+		}
+	}
+}

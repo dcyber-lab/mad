@@ -255,6 +255,8 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; background:
 .chat.on { display: block; }
 .chat .log { max-width: var(--column); min-width: 0; margin: 0 auto; padding: 36px 28px 48px; display: flex; flex-direction: column; gap: 2px; }
 .chat .note { color: var(--text-3); text-align: center; font-size: 12.5px; padding: 10px; }
+/* the channel's empty states ("还没人说话…", "agent 们在后台协作…"): one quiet line, not a message */
+#chanlog > .note { align-self: center; max-width: 80%; margin-top: 28vh; padding: 0; color: var(--text-2); font-size: 14px; line-height: 1.5; text-align: center; }
 .log > .msg, .log > .call, .log > .cmd { animation: rise 0.18s ease-out; }
 .msg { font-size: 15px; line-height: 1.72; overflow-wrap: anywhere; }
 .msg.from-user {

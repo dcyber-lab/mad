@@ -131,7 +131,7 @@
             "kind": "codex"
           }
         ],
-        "last": 22,
+        "last": 23,
         "last_text": "architect: 长的交接和汇报都折叠",
         "last_at": "-1m",
         "listed": true,
@@ -498,7 +498,20 @@
           "kind": "system"
         },
         "kind": "system",
-        "text": "Resumed by a person."
+        "text": "Paused: 30 posts by agents with no word from a person. It waits for a person: post here, or mad bus resume fold.",
+        "event": "paused"
+      },
+      {
+        "seq": 23,
+        "at": "-1m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "text": "Resumed by a person.",
+        "event": "resumed"
       }
     ]
   }
