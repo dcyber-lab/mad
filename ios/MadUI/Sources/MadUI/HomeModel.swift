@@ -75,9 +75,11 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public var dimmed: Bool
     /// A channel's members, for its tile; a team's also feed search.
     public var members: [HomeMember]
+    /// A team channel's other live members: they are not in its tile, but what they do counts (its state and dot).
+    public var helpers: [HomeMember]
 
     public init(id: String, kind: Kind = .agent, agentKind: String = "", name: String, preview: String = "",
-                state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = []) {
+                state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = [], helpers: [HomeMember] = []) {
         self.id = id
         self.kind = kind
         self.agentKind = agentKind
@@ -87,6 +89,7 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
         self.needsYou = needsYou
         self.dimmed = dimmed
         self.members = members
+        self.helpers = helpers
     }
 
     /// What the row is called: its name, else "codex 32d23a28" for an untitled agent.
@@ -97,9 +100,9 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     }
 
     /// The state the row shows and says: an agent's own; a channel's from its members (working, else
-    /// needs you, else starting, else idle), as its tile draws it.
+    /// needs you, else starting, else idle), helpers included; its tile draws the team's.
     public var displayState: CharacterState {
-        kind == .agent ? state : CharacterState.group(members.map(\.state))
+        kind == .agent ? state : CharacterState.group((members + helpers).map(\.state))
     }
 
     /// What VoiceOver reads for the row, as one label: the name, the preview, the state word once (not

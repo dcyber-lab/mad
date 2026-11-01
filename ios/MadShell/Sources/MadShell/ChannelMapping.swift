@@ -17,17 +17,29 @@ public enum ChannelMapping {
                               calendar: Calendar = .current, now: Date = Date()) -> ChannelScreen {
         let channel = deck?.channel(id: id)
         let title = Self.title(id: id, channel: channel)
-        let members = Self.members(channel: channel, deck: deck)
+        let split = Self.split(channel: channel, deck: deck)
+        let members = split.team
         let sorted = messages.sorted { $0.seq < $1.seq }
         let items = Self.items(sorted, channel: channel, deck: deck, calendar: calendar, now: now)
         let pictures = sorted.reduce(0) { $0 + $1.images.count }
-        let working = members.filter { $0.state == .working }.count
-        let needing = members.filter { $0.state == .needsYou }.count
-        let line = members.isEmpty ? "" : working > 0 ? "\(working) 个在工作" : needing > 0 ? "\(needing) 个在等你" : "\(members.count) 位成员"
+        // what is going on counts everyone; how many there are counts the team only
+        let everyone = members + split.helpers
+        let working = everyone.filter { $0.state == .working }.count
+        let needing = everyone.filter { $0.state == .needsYou }.count
         let isPaused = paused || (channel?.paused ?? false)
+        // as the page's head says it: paused, else who waits and who works, else quiet
+        let line: String
+        if channel == nil { line = "" }
+        else if isPaused { line = "已暂停" }
+        else if channel?.dm == true { line = needing > 0 ? "在等你" : working > 0 ? "在工作" : "空闲" }
+        else {
+            let parts = [needing > 0 ? "\(needing) 个在等你" : "", working > 0 ? "\(working) 个在工作" : ""].filter { !$0.isEmpty }
+            line = parts.isEmpty ? "空闲" : parts.joined(separator: " · ")
+        }
         return ChannelScreen(
-            title: title, members: members, stateLine: line, items: items,
-            panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, pictureCount: pictures, paused: isPaused),
+            title: title, members: members, helpers: split.helpers, stateLine: line, items: items,
+            panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
+                                pictureCount: pictures, paused: isPaused),
             placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
     }
 
@@ -37,6 +49,50 @@ public enum ChannelMapping {
     }
 
     // MARK: members
+
+    /// A channel's members in the two groups the panel shows: the team's roles (lead first, in their
+    /// order) and the helpers (members the team does not name, whose agent still exists; working or
+    /// waiting ones first). A channel without a team is one list.
+    public struct MemberSplit: Equatable {
+        public var team: [ChannelMember]
+        public var helpers: [ChannelMember]
+        /// The channel has a team, so the lists have headings.
+        public var sectioned: Bool
+    }
+
+    public static func split(channel: Channel?, deck: Deck?) -> MemberSplit {
+        let all = members(channel: channel, deck: deck)
+        guard let roles = channel?.team?.roles, !roles.isEmpty else {
+            return MemberSplit(team: all, helpers: [], sectioned: false)
+        }
+        // the lead first, the rest in the team's order
+        let ordered = roles.filter(\.lead) + roles.filter { !$0.lead }
+        var team: [ChannelMember] = []
+        for r in ordered {
+            // a role with no agent yet, or whose agent is gone from the deck, stays as a faded row
+            func dim(_ id: String, _ status: String) -> ChannelMember {
+                ChannelMember(id: id, kind: "", state: .stopped, name: r.role, status: status, isLead: r.lead, role: r.role, dim: true)
+            }
+            guard let id = r.agent, !id.isEmpty else { team.append(dim("role:\(r.role)", "未启动")); continue }
+            if deck != nil, deck?.agent(id: id) == nil { team.append(dim(id, "已离开")); continue }
+            var m: ChannelMember
+            if let member = all.first(where: { $0.id == id }) {
+                m = member
+            } else if let agent = deck?.agent(id: id) {
+                let state = CharacterState(status: agent.state)
+                m = ChannelMember(id: id, kind: agent.kind, state: state, name: agent.label, status: statusText(agent, state), isLead: r.lead)
+            } else {
+                team.append(dim(id, "已离开")); continue
+            }
+            m.role = r.role
+            team.append(m)
+        }
+        let named = Set(team.map(\.id))
+        // without a deck nothing says an agent is gone
+        let helpers = all.filter { !named.contains($0.id) && (deck == nil || deck?.agent(id: $0.id) != nil) }
+        let active = helpers.filter { $0.state == .working || $0.state == .needsYou }
+        return MemberSplit(team: team, helpers: active + helpers.filter { !($0.state == .working || $0.state == .needsYou) }, sectioned: true)
+    }
 
     static func members(channel: Channel?, deck: Deck?) -> [ChannelMember] {
         guard let c = channel else { return [] }

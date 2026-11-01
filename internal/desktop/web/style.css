@@ -1757,6 +1757,8 @@ html.ptype #queue.inchan { padding-inline: 12px; }
   transform: translateX(100%); transition: transform 0.28s ease;
 }
 #chpanel.open .chside { transform: none; }
+/* The panel is one column that scrolls as a whole: a card never shrinks to fit (its rounded clip would cut its last rows). */
+.chside > * { flex: none; }
 @media (prefers-reduced-motion: reduce) { .chside, .chscrim { transition: none; } }
 .cpclose { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: 8px; }
 .cptop { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 12px; text-align: center; }
@@ -1773,7 +1775,9 @@ html.ptype #queue.inchan { padding-inline: 12px; }
 .cprow:focus-visible, .cpact:focus-visible, .cpback:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cprow:disabled { opacity: 0.5; cursor: default; }
 .cprow .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cprow .n { font-size: 15.5px; font-weight: 600; }
+.cprow .n { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 15.5px; font-weight: 600; }
+.cprow .nm { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cprow .k { margin-left: auto; flex: none; font-size: 12px; font-weight: 400; color: var(--text-3); }
 .cprow .s { font-size: 13px; color: var(--text-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cprow .tag { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 999px; background: var(--raise-2); color: var(--text-2); }
 .cpact { font-size: 15.5px; }

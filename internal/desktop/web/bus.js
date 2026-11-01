@@ -71,8 +71,16 @@ function groupChar(members, small) {
 // chanDot: 1 when something in channel c waits on the person (an @you, an
 // unread DM, a member with an item in the inbox), else 0.
 function chanDot(c) {
-  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
-  return c.mention || (c.dm && c.unread) || ids.some((id) => id && needAgents.has(id)) ? 1 : 0;
+  const ids = chanLive(c).map((a) => a.id);
+  return c.mention || (c.dm && c.unread) || ids.some((id) => needAgents.has(id)) ? 1 : 0;
+}
+
+// chanLive are all the agents in channel c that are in the deck, the team's and its helpers: what is
+// done in a channel and what waits on the person counts everyone, while membership (the 小组 count, the
+// tile's faces) is the team's alone (chanAgents).
+function chanLive(c) {
+  const ids = new Set([...(c.members || []).map((m) => m.id), ...((c.team && c.team.roles) || []).map((r) => r.agent)]);
+  return [...ids].map((id) => id && agents.get(id)).filter(Boolean);
 }
 
 // chanAgents are the agents in channel c, as the page knows them.
@@ -94,7 +102,8 @@ function chanMatch(c, q) {
 // red dot when it @you or a member waits on you.
 function teamRow(c, found) {
   const mem = chanAgents(c);
-  const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
+  const live = chanLive(c);
+  const n = (s) => live.filter((a) => shownStatus(a) === s).length;
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
@@ -221,12 +230,15 @@ function chanName(id) {
   return chanTitle(id).replace(/^[#@]/, "");
 }
 
-// chanSub is the head's one small line: how many work, or that it is quiet.
+// chanSub is the head's one small line: how many wait on the person and how many work (every agent in
+// the channel, helpers too), or that it is quiet.
 function chanSub(c) {
   if (c && c.paused) return "已暂停";
-  const n = c ? chanAgents(c).filter((a) => shownStatus(a) === "running").length : 0;
-  if (c && c.dm) return n ? "在工作" : "空闲";
-  return n ? `${n} 个在工作` : "空闲";
+  const live = c ? chanLive(c) : [];
+  const n = live.filter((a) => shownStatus(a) === "running").length;
+  const w = live.filter((a) => shownStatus(a) === "waiting").length;
+  if (c && c.dm) return w ? "在等你" : n ? "在工作" : "空闲";
+  return [w ? `${w} 个在等你` : "", n ? `${n} 个在工作` : ""].filter(Boolean).join(" · ") || "空闲";
 }
 
 // tileSig says how the channel's tile stands (its members' states), so a tile is
@@ -337,7 +349,8 @@ function panelRow(key, label, small, onclick) {
 // so what has the focus keeps it and nothing is fetched again.
 function panelSig(c) {
   if (cp.page === "pics") return JSON.stringify(["pics", cv.pics.map((p) => p.url)]);
-  return JSON.stringify([c.id, c.topic || "", !!c.paused, !!c.dm, c.lead || "", (c.members || []).map((m) => [m.id, m.label])]);
+  const g = chanGroups(c);
+  return JSON.stringify([c.id, c.topic || "", !!c.paused, !!c.dm, c.lead || "", g.split, g.rows.map((r) => [r.m.id, r.m.label, r.role || ""])]);
 }
 
 function bigTile(id) {
@@ -345,6 +358,48 @@ function bigTile(id) {
   t.classList.remove("small");
   t.classList.add("big");
   return t;
+}
+
+// chanGroups: how the panel lists a channel's members. A team's channel has two groups: 小组, the team's
+// roles in their order, the lead first, and 帮手, the other members, the busy ones first, those whose
+// agent is no longer in the deck left out. Any other channel is one list. rows is them all, in the
+// order they are drawn.
+function chanGroups(c) {
+  const members = c.members || [];
+  const roles = (c.team && c.team.roles) || [];
+  if (!roles.length) return { split: false, team: [], helpers: [], rows: members.map((m) => ({ m })) };
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const team = [...roles].sort((a, b) => !!b.lead - !!a.lead).map((r) => ({
+    m: byId.get(r.agent) || { id: r.agent || "", label: r.role, kind: "" }, role: r.role, lead: !!r.lead || r.agent === c.lead, team: true,
+  }));
+  const inTeam = new Set(roles.map((r) => r.agent).filter(Boolean));
+  const busy = (m) => ["running", "waiting"].includes(shownStatus(agents.get(m.id))) ? 0 : 1;
+  const helpers = members.filter((m) => !inTeam.has(m.id) && agents.has(m.id)).sort((a, b) => busy(a) - busy(b)).map((m) => ({ m }));
+  return { split: true, team, helpers, rows: [...team, ...helpers] };
+}
+
+// panelMember is one member's row of the panel; a team member's has its role's name and its kind.
+function panelMember(row, c) {
+  const { m } = row;
+  const a = agents.get(m.id);
+  const r = el("button", "cprow");
+  r.type = "button";
+  r.dataset.key = `m:${m.id}`;
+  r.disabled = !a;
+  r.dataset.st = a ? shownStatus(a) : "";
+  const t = el("span", "t");
+  const n = el("span", "n");
+  if (!a && row.team) r.dataset.gone = m.id ? "已离开" : "未启动";
+  n.append(el("span", "nm", row.team ? row.role : m.label));
+  if (row.team ? row.lead : m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
+  if (row.team && (a?.kind || m.kind)) n.append(el("span", "k", a?.kind || m.kind));
+  // A team's role with no agent yet is "未启动", one whose agent is gone from the deck "已离开"; either is a
+  // still, faded character.
+  const gone = row.team ? (m.id ? "已离开" : "未启动") : "不在列表里";
+  t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : gone));
+  r.append(avatar(a || { kind: m.kind, id: m.id }, false, !a), t);
+  r.onclick = () => { closeChanPanel(true); show(m.id); };
+  return r;
 }
 
 // drawChanPanel draws what the panel says of the channel: its tile, name
@@ -392,26 +447,20 @@ function drawPanelMain(side, c) {
   top.append(bigTile(id), el("b", "", chanName(id)));
   if (c.topic) top.append(el("p", "cptopic", c.topic));
   const parts = [panelClose(), top];
-  // the members
-  const mem = c.members || [];
-  parts.push(el("h3", "cpsec", `成员 · ${mem.length}`));
-  const list = el("div", "cplist");
-  for (const m of mem) {
-    const a = agents.get(m.id);
-    const r = el("button", "cprow");
-    r.type = "button";
-    r.dataset.key = `m:${m.id}`;
-    r.disabled = !a;
-    r.dataset.st = a ? shownStatus(a) : "";
-    const t = el("span", "t");
-    const n = el("span", "n", m.label);
-    if (m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
-    t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : "不在列表里"));
-    r.append(avatar(a || { kind: m.kind, id: m.id }, false), t);
-    r.onclick = () => { closeChanPanel(true); show(m.id); };
-    list.append(r);
+  // the members: a team's channel in two groups, any other in one list
+  const g = chanGroups(c);
+  const section = (title, rows) => {
+    parts.push(el("h3", "cpsec", title));
+    const list = el("div", "cplist");
+    list.append(...rows.map((r) => panelMember(r, c)));
+    parts.push(list);
+  };
+  if (g.split) {
+    section(`小组 ${g.team.length}`, g.team);
+    if (g.helpers.length) section(`帮手 ${g.helpers.length}`, g.helpers);
+  } else {
+    section(`成员 · ${g.rows.length}`, g.rows);
   }
-  parts.push(list);
   // the group
   parts.push(el("h3", "cpsec", "这个群"));
   const acts = el("div", "cplist");
@@ -441,17 +490,17 @@ function patchChanPanel(side, c) {
     top.dataset.sig = tileSig(c.id);
   }
   const rows = [...side.querySelectorAll(".cprow")];
-  (c.members || []).forEach((m, i) => {
+  chanGroups(c).rows.forEach(({ m }, i) => {
     const r = rows[i];
     if (!r) return;
     const a = agents.get(m.id);
     const st = a ? shownStatus(a) : "";
     r.disabled = !a;
     if (r.dataset.st !== st) {
-      r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false));
+      r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false, !a));
       r.dataset.st = st;
     }
-    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : "不在列表里";
+    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : r.dataset.gone || "不在列表里";
     if (line.textContent !== text) line.textContent = text;
   });
   const set = (key, text) => {
@@ -890,8 +939,11 @@ function drawChanWho() {
   const c = busChannel(cv.open);
   const who = $("#who");
   const what = el("span", "what");
-  const n = c ? c.members.length : 0;
-  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"} · @ to wake one` : " · reaches it when its turn is over");
+  const g = c ? chanGroups(c) : null;
+  // how many can be @-woken: the agents that are there (a role not started, or gone, is not)
+  const n = g ? g.rows.filter((r) => agents.has(r.m.id) && (!g.split || r.team)).length : 0;
+  const helpers = g && g.helpers.length ? ` · ${g.helpers.length} 帮手` : "";
+  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"}${helpers} · @ to wake one` : " · reaches it when its turn is over");
   who.replaceChildren(what);
   who.className = "";
   drawNoWake();
