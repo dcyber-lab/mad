@@ -120,6 +120,26 @@ final class HomeMappingTests: XCTestCase {
         XCTAssertTrue(rows[0].needsYou)
     }
 
+    func testAChannelWithNoLastMessageSaysWhatItsAgentsDo() {
+        let agents = [Agent(id: "a1", name: "one"), Agent(id: "a2", name: "two"), Agent(id: "a3", name: "three")]
+        var deck = Deck(projects: [Project(name: "p", agents: agents)])
+        deck.projects[0].agents[0].shown = "running"
+        deck.projects[0].agents[1].shown = "running"
+        let members: [Channel.Member] = agents.map { .init(id: $0.id, label: $0.name ?? $0.id) }
+        // the server leaves the agents' bookkeeping out of the last line: a channel with only that has none
+        deck.channels = [Channel(id: "work", members: members, lastText: "")]
+        XCTAssertEqual(HomeMapping.model(from: deck).sections[0].rows[0].preview, "2 个在工作")
+        deck.projects[0].agents[2].shown = "waiting"
+        XCTAssertEqual(HomeMapping.model(from: deck).sections[0].rows[0].preview, "1 个在等你 · 2 个在工作")
+        deck.projects[0].agents[0].shown = "idle"
+        deck.projects[0].agents[1].shown = "idle"
+        deck.projects[0].agents[2].shown = "idle"
+        XCTAssertEqual(HomeMapping.model(from: deck).sections[0].rows[0].preview, "空闲")
+        // with a last message it is that
+        deck.channels[0].lastText = "one: hi"
+        XCTAssertEqual(HomeMapping.model(from: deck).sections[0].rows[0].preview, "one: hi")
+    }
+
     func testTiesKeepTheServersOrder() {
         let t = Date()
         let a = Channel(id: "a", lastAt: t), b = Channel(id: "b", lastAt: t), c = Channel(id: "c", lastAt: t)

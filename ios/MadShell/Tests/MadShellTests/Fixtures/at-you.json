@@ -1,0 +1,110 @@
+{
+ "about": "One rule for @you, as the server (bus.youRe, post.go), the page (YOU_MENTION, web/bus.js) and native read it: at the start, or after a space (any Unicode space) or a ( or （; not followed by an ASCII letter, digit, _ or -. Each case is {text, want, note}. Copy this table into a native test.",
+ "cases": [
+  {
+   "text": "@you",
+   "want": true,
+   "note": "alone"
+  },
+  {
+   "text": "@you请看一下",
+   "want": true,
+   "note": "CJK right after @you is still a mention"
+  },
+  {
+   "text": "@you 请看一下",
+   "want": true,
+   "note": ""
+  },
+  {
+   "text": "　@you 看",
+   "want": true,
+   "note": "a full-width space before"
+  },
+  {
+   "text": "请看 @you，谢谢",
+   "want": true,
+   "note": ""
+  },
+  {
+   "text": "（@you",
+   "want": true,
+   "note": "a full-width parenthesis before"
+  },
+  {
+   "text": "（@you）看一下",
+   "want": true,
+   "note": ""
+  },
+  {
+   "text": "(@you)",
+   "want": true,
+   "note": ""
+  },
+  {
+   "text": "@you.",
+   "want": true,
+   "note": ""
+  },
+  {
+   "text": "@YOU",
+   "want": true,
+   "note": "any case"
+  },
+  {
+   "text": "@you\n下一行",
+   "want": true,
+   "note": "a newline after"
+  },
+  {
+   "text": "a line\n@you here",
+   "want": true,
+   "note": "a newline before"
+  },
+  {
+   "text": "@you-x",
+   "want": false,
+   "note": "a hyphen after"
+  },
+  {
+   "text": "@you_x",
+   "want": false,
+   "note": "an underscore after"
+  },
+  {
+   "text": "@young",
+   "want": false,
+   "note": "a letter after"
+  },
+  {
+   "text": "@youth",
+   "want": false,
+   "note": ""
+  },
+  {
+   "text": "@your reviewer",
+   "want": false,
+   "note": ""
+  },
+  {
+   "text": "@you2",
+   "want": false,
+   "note": "a digit after"
+  },
+  {
+   "text": "x@you",
+   "want": false,
+   "note": "a letter before"
+  },
+  {
+   "text": "mail@you.com",
+   "want": false,
+   "note": ""
+  },
+  {
+   "text": "请@you",
+   "want": false,
+   "note": "CJK before"
+  }
+ ]
+}

@@ -48,14 +48,13 @@ public struct ChannelBubble: Identifiable, Equatable, Sendable {
     /// Ids of its pictures (`loadPicture` fetches the bytes).
     public var images: [String]
     public var quote: ChannelQuote?
-    /// Set when the message is folded into one bordered line: the bold start of it ("→ builder", "完成")
-    /// and the first sentence. Tapping opens `text` in place.
+    /// Set when a long message of an agent is folded into one bordered line: its first sentence. Tapping opens
+    /// `text` in place.
     public var fold: Fold?
 
     public struct Fold: Equatable, Sendable {
-        public var head: String
         public var summary: String
-        public init(head: String, summary: String) { self.head = head; self.summary = summary }
+        public init(summary: String) { self.summary = summary }
     }
 
     public init(id: Int, text: String, images: [String] = [], quote: ChannelQuote? = nil, fold: Fold? = nil) {

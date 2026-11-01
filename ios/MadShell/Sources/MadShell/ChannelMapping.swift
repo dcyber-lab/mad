@@ -13,15 +13,28 @@ public enum ChannelMapping {
     public static let foldLines = 3
     public static let foldChars = 280
 
-    public static func screen(channel id: String, messages: [BusMessage], deck: Deck?, paused: Bool = false,
+    /// `loaded`: the first look at the channel has come (or it is kept from last time): only then can it be said to be empty.
+    public static func screen(channel id: String, messages: [BusMessage], deck: Deck?, paused: Bool = false, loaded: Bool = true,
                               calendar: Calendar = .current, now: Date = Date()) -> ChannelScreen {
         let channel = deck?.channel(id: id)
         let title = Self.title(id: id, channel: channel)
         let split = Self.split(channel: channel, deck: deck)
         let members = split.team
         let sorted = messages.sorted { $0.seq < $1.seq }
-        let items = Self.items(sorted, channel: channel, deck: deck, calendar: calendar, now: now)
-        let pictures = sorted.reduce(0) { $0 + $1.images.count }
+        // The agents' bookkeeping (handoffs, reports, check-ins, nudges, lapsed notices) is not drawn: runs and time lines
+        // are built from what is, and a reply keeps its quote of a message that is not (it looks in `sorted`).
+        // The note that older messages were dropped is not at its place: the latest of them is the first item, above the
+        // oldest message held.
+        let trimmed = sorted.last { effectiveEvent($0) == "trimmed" }
+        let visible = sorted.filter { !isHidden($0) && effectiveEvent($0) != "trimmed" }
+        var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
+        // nothing yet, or only the agents' own work so far: say so, quietly, rather than showing a blank
+        if items.isEmpty {
+            if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] }
+            else if loaded { items = [.note(id: emptyID.none, text: channel?.dm == true ? noneNoteDM : noneNote)] }
+        }
+        if let trimmed { items.insert(.note(id: "trimmed", text: noteText(trimmed)), at: 0) }
+        let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
         let everyone = members + split.helpers
         let working = everyone.filter { $0.state == .working }.count
@@ -41,6 +54,27 @@ public enum ChannelMapping {
             panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
                                 pictureCount: pictures, paused: isPaused),
             placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
+    }
+
+    /// What an empty-looking channel says when everything in it is hidden, and when nobody has said anything.
+    public static let quietNote = "agent 们在后台协作，有事会在这里 @ 你。"
+    /// As the page says them: a channel nobody has spoken in, and a DM.
+    public static let noneNote = "还没人说话。@ 一个 agent 可以叫醒它。"
+    public static let noneNoteDM = "说点什么：它忙完之后会看到。"
+    /// The ids of those two lines (`ChannelItem.note`): the view draws them as one quiet line a third of the way down.
+    public static let emptyID = (quiet: "quiet", none: "empty")
+
+    /// The kinds of message that are the agents' bookkeeping and are not drawn: a handoff, what answers it, a
+    /// check-in, a nudge (the lapsed notice of a handoff is a system message that carries the handoff).
+    public static let hiddenKinds: Set<String> = ["handoff", "done", "declined", "timer", "nudge"]
+
+    /// Whether a message is left out of the channel: the bookkeeping kinds and the lapsed notices, unless the message
+    /// @mentions the person (it is then an ordinary message, whatever its kind). The bus's own pause and resume
+    /// notes stay.
+    public static func isHidden(_ m: BusMessage) -> Bool {
+        if asksYou(m) { return false }
+        if hiddenKinds.contains(m.kind) { return true }
+        return m.kind == "system" && m.handoff != nil
     }
 
     static func title(id: String, channel: Channel?) -> String {
@@ -120,13 +154,14 @@ public enum ChannelMapping {
 
     // MARK: items
 
-    static func items(_ messages: [BusMessage], channel: Channel?, deck: Deck?, calendar: Calendar, now: Date) -> [ChannelItem] {
+    /// `messages` are the ones that are drawn, `all` every one (for what a reply quotes).
+    static func items(_ messages: [BusMessage], all: [BusMessage], channel: Channel?, deck: Deck?, calendar: Calendar, now: Date) -> [ChannelItem] {
         var out: [ChannelItem] = []
         var previous: BusMessage?
         var openRun = false // the last item is a run a message may join
         for m in messages {
             if m.kind == "system" {
-                out.append(.note(id: String(m.seq), text: m.text))
+                out.append(.note(id: String(m.seq), text: noteText(m)))
                 openRun = false
                 previous = m
                 continue
@@ -135,7 +170,7 @@ public enum ChannelMapping {
                 out.append(.time(id: String(m.seq), text: label))
                 openRun = false
             }
-            let bubble = Self.bubble(m, messages: messages, channel: channel, deck: deck)
+            let bubble = Self.bubble(m, messages: all, channel: channel, deck: deck)
             if m.from.isYou {
                 out.append(.mine(bubble))
                 openRun = false
@@ -149,6 +184,27 @@ public enum ChannelMapping {
             previous = m
         }
         return out
+    }
+
+    /// What happened, for a note of mad's own: its `event`, and for the notes written before there was one (history) the
+    /// start of their text, as the page tells them. Empty for every other message, and for any other system line.
+    static func effectiveEvent(_ m: BusMessage) -> String {
+        guard m.kind == "system", m.handoff == nil else { return "" }
+        if !m.event.isEmpty { return m.event }
+        if m.text.hasPrefix("Paused") { return "paused" }
+        if m.text.hasPrefix("Resumed") { return "resumed" }
+        if m.text.hasPrefix("Older messages were dropped") { return "trimmed" }
+        return ""
+    }
+
+    /// What mad's own note says, in Chinese where it is known what happened (the server's English otherwise).
+    static func noteText(_ m: BusMessage) -> String {
+        switch effectiveEvent(m) {
+        case "paused": "群已暂停"
+        case "resumed": "群已恢复"
+        case "trimmed": "更早的消息已清理"
+        default: m.text
+        }
     }
 
     static func sender(_ m: BusMessage, deck: Deck?) -> ChannelMember {
@@ -190,34 +246,20 @@ public enum ChannelMapping {
     /// The person is asked: `@you` in the text (the bus does not list the person among the mentions).
     static func asksYou(_ m: BusMessage) -> Bool {
         if m.mentions.contains("you") { return true }
-        return m.text.range(of: "(^|[\\s(（])@you(?![\\p{L}\\p{N}_-])", options: [.regularExpression, .caseInsensitive]) != nil
+        // one rule with the server and the page (internal/bus/testdata/at-you.json): at the start, or after a space of any
+        // kind or a ( or （, and not followed by an ASCII letter, digit, _ or - (a CJK character right after still counts)
+        return m.text.range(of: "(^|[\\s\\p{Zs}(（])@you(?![A-Za-z0-9_-])", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    static func isReport(_ m: BusMessage) -> Bool {
-        ["handoff", "done", "declined"].contains(m.kind)
-    }
-
-    /// The fold of an agent's message, nil when it is shown whole: the person's, mad's own, any that asks
+    /// The fold of a long message of an agent, nil when it is shown whole: the person's, mad's own, any that asks
     /// the person, and whatever an agent says in a DM with the person (all of it is addressed to them).
     static func fold(_ m: BusMessage, channel: Channel?, deck: Deck?) -> ChannelBubble.Fold? {
         if m.from.isYou || m.from.id == "mad" || m.kind == "system" { return nil }
         if let c = channel, c.dm, c.yours { return nil }
         if asksYou(m) { return nil }
         let lines = m.text.split(separator: "\n", omittingEmptySubsequences: true).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard isReport(m) || lines.count > foldLines || m.text.count > foldChars else { return nil }
-        let declined = m.kind == "declined" || m.handoff?.status == "declined"
-        var first = firstSentence(String(lines.first ?? ""))
-        let head: String
-        switch m.kind {
-        case "handoff":
-            let to = m.handoff?.to ?? ""
-            head = "→ " + (deck?.agent(id: to)?.label ?? to)
-        case "done", "declined":
-            head = declined ? "拒绝" : "完成"
-            first = first.replacingOccurrences(of: "^(done|declined|完成|拒绝)[:：]\\s*", with: "", options: [.regularExpression, .caseInsensitive])
-        default: head = ""
-        }
-        return ChannelBubble.Fold(head: head, summary: first)
+        guard lines.count > foldLines || m.text.count > foldChars else { return nil }
+        return ChannelBubble.Fold(summary: firstSentence(String(lines.first ?? "")))
     }
 
     // MARK: text

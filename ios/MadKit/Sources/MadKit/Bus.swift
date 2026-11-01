@@ -41,6 +41,9 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
     public var replyTo: Int
     public var handoff: Handoff?
     public var images: [BusImage]
+    /// What a system note of mad's own says happened, for the apps to word: "paused" or "resumed"; empty on older
+    /// notes and on every other message.
+    public var event: String
     public var id: Int { seq }
 
     public struct Sender: Equatable, Decodable, Sendable {
@@ -78,7 +81,7 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
         }
     }
 
-    enum CodingKeys: String, CodingKey { case seq, at, from, kind, text, mentions, replyTo = "reply_to", handoff, images }
+    enum CodingKeys: String, CodingKey { case seq, at, from, kind, text, mentions, replyTo = "reply_to", handoff, images, event }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -91,12 +94,13 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
         replyTo = try c.decodeIfPresent(Int.self, forKey: .replyTo) ?? 0
         handoff = try c.decodeIfPresent(Handoff.self, forKey: .handoff)
         images = try c.decodeIfPresent([BusImage].self, forKey: .images) ?? []
+        event = try c.decodeIfPresent(String.self, forKey: .event) ?? ""
     }
 
     public init(seq: Int, at: Date? = nil, from: Sender, kind: String = "text", text: String = "", mentions: [String] = [],
-                replyTo: Int = 0, handoff: Handoff? = nil, images: [BusImage] = []) {
+                replyTo: Int = 0, handoff: Handoff? = nil, images: [BusImage] = [], event: String = "") {
         self.seq = seq; self.at = at; self.from = from; self.kind = kind; self.text = text; self.mentions = mentions
-        self.replyTo = replyTo; self.handoff = handoff; self.images = images
+        self.replyTo = replyTo; self.handoff = handoff; self.images = images; self.event = event
     }
 
     /// It asks the person.
