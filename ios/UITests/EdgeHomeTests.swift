@@ -81,6 +81,11 @@ final class EdgeHomeTests: MadUITestCase {
 
     func testSearchFindsTheTeamRow() {
         tap("搜索")
+        // The page focuses the field itself, but a tap that comes as the keyboard rises can lose that:
+        // the field is tapped too, so it has the keyboard before the typing.
+        let field = web.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "the search field did not open")
+        field.tap()
         app.typeText("builder")
         waitUntilGone(element("solo").firstMatch, "searching “builder” still lists the solo chat")
         XCTAssertTrue(element("ios").firstMatch.exists, "searching “builder” did not find the ios team row")
