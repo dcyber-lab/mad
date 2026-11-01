@@ -53,6 +53,8 @@ public final class DeckStore {
             let d = try await api.deck()
             deck = d
             link = .ok
+            // once per launch, after the first good look: what the device kept of channels and agents that are gone goes
+            api.cache?.pruneOnce(channels: Set(d.channels.map(\.id)), agents: Set(d.projects.flatMap { $0.agents.map(\.id) }))
         } catch {
             if Task.isCancelled { return }
             link = LinkState(error)

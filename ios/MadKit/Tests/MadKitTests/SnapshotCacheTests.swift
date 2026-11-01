@@ -24,7 +24,7 @@ private func chatPage(file: String = "f1", offset: Int64, n: Int, reset: Bool = 
 }
 
 final class SnapshotCacheTests: XCTestCase {
-    private var root = tempRoot()
+    fileprivate var root = tempRoot()
 
     override func setUp() { root = tempRoot() }
     override func tearDown() { try? FileManager.default.removeItem(at: root) }
@@ -131,9 +131,10 @@ final class SnapshotCacheTests: XCTestCase {
         c.clear()
         XCTAssertFalse(FileManager.default.fileExists(atPath: c.directory.path))
         XCTAssertNil(c.loadChannel("fold"))
-        c.mergeChannel("fold", page: page(5, 6)) // after clearing: ignored
-        c.flush()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: c.directory.path))
+        let waits = expectation(description: "past the write delay")
+        DispatchQueue.global().asyncAfter(deadline: .now() + SnapshotCache.writeDelay + 0.4) { waits.fulfill() }
+        wait(for: [waits], timeout: 5)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: c.directory.path), "what waited was not written after the clear")
         XCTAssertNotNil(other.loadChannel("fold"), "another Mac's cache is not touched")
     }
 
@@ -170,6 +171,158 @@ final class SnapshotCacheTests: XCTestCase {
             let text = String(decoding: try Data(contentsOf: c.directory.appendingPathComponent(name)), as: UTF8.self)
             XCTAssertFalse(text.contains(secret), "\(name) holds the token")
         }
+    }
+}
+
+extension SnapshotCacheTests {
+    /// The modification dates of the files in a Mac's folder.
+    fileprivate func stamps(_ c: SnapshotCache) -> [String: Date] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: c.directory.path)) ?? []
+        return Dictionary(uniqueKeysWithValues: names.compactMap { n in
+            (try? FileManager.default.attributesOfItem(atPath: c.directory.appendingPathComponent(n).path)[.modificationDate] as? Date).map { (n, $0) }
+        })
+    }
+
+    func testAnAnswerThatAddsNothingWritesNothing() throws {
+        let c = SnapshotCache(root: root, mac: "m")
+        c.mergeChannel("fold", page: page(1, 3))
+        c.mergeChat("a1", page: chatPage(offset: 10, n: 2, reset: true))
+        c.flush()
+        let before = stamps(c)
+        XCTAssertEqual(before.count, 2)
+        Thread.sleep(forTimeInterval: 1.1) // so a rewrite would show in the modification time
+        c.mergeChannel("fold", page: page(4, 3, last: 3)) // the same last, no news
+        c.mergeChannel("fold", page: page(1, 3)) // all of it held already
+        c.mergeChat("a1", page: chatPage(offset: 10, n: 0)) // no entries, the same offset
+        let waits = expectation(description: "past the write delay")
+        DispatchQueue.global().asyncAfter(deadline: .now() + SnapshotCache.writeDelay + 0.4) { waits.fulfill() }
+        wait(for: [waits], timeout: 5)
+        c.flush()
+        XCTAssertEqual(stamps(c), before, "nothing was written")
+        // and a change is written: the channel is paused now
+        c.mergeChannel("fold", page: page(4, 3, last: 3, paused: true))
+        c.flush()
+        XCTAssertNotEqual(stamps(c)[SnapshotCache.channelFile("fold")], before[SnapshotCache.channelFile("fold")])
+        XCTAssertTrue(try decoded(c.loadChannel("fold")).paused)
+    }
+
+    func testTheSameBytesAreNotWrittenAgain() throws {
+        let c = SnapshotCache(root: root, mac: "m", deckInterval: 0)
+        c.saveDeck(Data(#"{"machine":"m"}"#.utf8))
+        c.flush()
+        let file = c.directory.appendingPathComponent("deck.json")
+        let first = try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date
+        Thread.sleep(forTimeInterval: 1.1)
+        c.saveDeck(Data(#"{"machine":"m"}"#.utf8))
+        c.flush()
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date, first)
+    }
+
+    func testTheDeckIsWrittenOnceInAWhileNotOnEveryPoll() throws {
+        let c = SnapshotCache(root: root, mac: "m", deckInterval: 60)
+        let file = c.directory.appendingPathComponent("deck.json")
+        c.saveDeck(Data(#"{"machine":"one"}"#.utf8)) // the first look goes through
+        let waits = expectation(description: "written")
+        DispatchQueue.global().asyncAfter(deadline: .now() + SnapshotCache.writeDelay + 0.4) { waits.fulfill() }
+        wait(for: [waits], timeout: 5)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        for i in 2...6 { c.saveDeck(Data(#"{"machine":"m\#(i)"}"#.utf8)) } // five polls within the interval
+        let more = expectation(description: "past the delay again")
+        DispatchQueue.global().asyncAfter(deadline: .now() + SnapshotCache.writeDelay + 0.4) { more.fulfill() }
+        wait(for: [more], timeout: 5)
+        XCTAssertTrue(String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("one"), "not written within the interval")
+        XCTAssertTrue(String(decoding: c.loadDeck() ?? Data(), as: UTF8.self).contains("m6"), "but read back as the latest")
+        c.flush() // the app goes to the background
+        XCTAssertTrue(String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("m6"))
+    }
+
+    func testFilesOfChannelsAndAgentsThatAreGoneArePrunedOncePerLaunch() throws {
+        let c = SnapshotCache(root: root, mac: "m")
+        c.saveDeck(Data(#"{"machine":"m"}"#.utf8))
+        for id in ["keep", "gone"] { c.mergeChannel(id, page: page(1, 1)) }
+        for id in ["a-keep", "a-gone"] { c.mergeChat(id, page: chatPage(offset: 1, n: 1, reset: true)) }
+        c.flush()
+        c.pruneOnce(channels: ["keep"], agents: ["a-keep"])
+        let settled = expectation(description: "pruned")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: c.directory.path)) ?? [])
+        XCTAssertEqual(names, ["deck.json", SnapshotCache.channelFile("keep"), SnapshotCache.chatFile("a-keep")])
+        // a second call in the same launch does nothing, even for a file that is not in the lists
+        c.mergeChannel("later", page: page(1, 1))
+        c.flush()
+        c.pruneOnce(channels: [], agents: [])
+        let again = expectation(description: "again")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) { again.fulfill() }
+        wait(for: [again], timeout: 5)
+        XCTAssertNotNil(c.loadChannel("later"))
+    }
+
+    func testTheFolderIsHeldToItsFileCapAndTheLeastRecentlyUsedGoFirst() throws {
+        let c = SnapshotCache(root: root, mac: "m", maxFiles: 3)
+        for (i, id) in ["a", "b", "c"].enumerated() {
+            c.mergeChannel(id, page: page(1, 1))
+            c.flush()
+            // the files' ages: a oldest, then b, then c
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: Double(i - 10))],
+                                                  ofItemAtPath: c.directory.appendingPathComponent(SnapshotCache.channelFile(id)).path)
+        }
+        XCTAssertNotNil(c.loadChannel("a")) // a is used now: b is the oldest
+        c.mergeChannel("d", page: page(1, 1))
+        c.flush()
+        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: c.directory.path)) ?? [])
+        XCTAssertEqual(names, [SnapshotCache.channelFile("a"), SnapshotCache.channelFile("c"), SnapshotCache.channelFile("d")])
+    }
+
+    func testTheFolderIsHeldToItsByteCap() throws {
+        let c = SnapshotCache(root: root, mac: "m", maxBytes: 1500)
+        for (i, id) in ["a", "b", "c", "d"].enumerated() {
+            c.mergeChannel(id, page: page(1, 6))
+            c.flush()
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: Double(i - 10))],
+                                                  ofItemAtPath: c.directory.appendingPathComponent(SnapshotCache.channelFile(id)).path)
+        }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: c.directory.path)) ?? []
+        let total = names.reduce(0) { $0 + ((try? FileManager.default.attributesOfItem(atPath: c.directory.appendingPathComponent($1).path)[.size] as? Int) ?? 0) }
+        XCTAssertLessThanOrEqual(total, 1500)
+        XCTAssertFalse(names.contains(SnapshotCache.channelFile("a")), "the oldest went first")
+    }
+
+    func testAClearedCacheWorksAgain() throws {
+        let c = SnapshotCache(root: root, mac: "m")
+        c.mergeChannel("fold", page: page(1, 2))
+        c.flush()
+        c.clear() // a refused token
+        XCTAssertNil(c.loadChannel("fold"))
+        c.mergeChannel("fold", page: page(1, 3)) // paired again, the same object is still in use
+        c.flush()
+        XCTAssertEqual(try decoded(c.loadChannel("fold")).messages.map(\.seq), [1, 2, 3])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: c.directory.path))
+    }
+
+    func testAMergeBeganBeforeAClearIsNotWrittenAfterIt() throws {
+        let c = SnapshotCache(root: root, mac: "m")
+        c.mergeChannel("fold", page: page(1, 2)) // waits to be written
+        c.clear()
+        let waits = expectation(description: "past the write delay")
+        DispatchQueue.global().asyncAfter(deadline: .now() + SnapshotCache.writeDelay + 0.4) { waits.fulfill() }
+        wait(for: [waits], timeout: 5)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: c.directory.path), "the old write was dropped")
+    }
+
+    func testAnUnpairedMacKeepsNothingAndTheSameIdGetsAFreshCache() throws {
+        let mac = Mac(name: "a", baseURL: URL(string: "https://a")!, token: "ta")
+        let before = try XCTUnwrap(SnapshotCache.standard(for: mac))
+        SnapshotCache.clear(mac: mac) // unpaired
+        before.mergeChannel("fold", page: page(1, 2)) // a request that was still on its way
+        before.flush()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: before.directory.path), "nothing is kept for an unpaired Mac")
+        let again = try XCTUnwrap(SnapshotCache.standard(for: mac)) // paired again, the same id
+        XCTAssertFalse(again === before)
+        again.mergeChannel("fold", page: page(1, 2))
+        again.flush()
+        XCTAssertNotNil(again.loadChannel("fold"))
+        SnapshotCache.clear(mac: mac)
     }
 }
 
