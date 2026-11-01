@@ -102,14 +102,20 @@ for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
   C.charReduced.matches = true;
   try {
     for (const [state, face] of [["work", "focus"], ["need", "ask"], ["idle", "calm"], ["stop", "sleep"]]) {
-      const r = root(EXPR.wink); // drawn with another face (a working one starts with the first of its own order)
-      assert.strictEqual(C.charStart(r, "some-id", state, {}), null, `${state}: nothing is started`);
+      // drawn with another face: a working one starts with the first of its own order, and "architect"'s is wow, not focus
+      assert.notStrictEqual(plan("architect").order[0], "focus", "the id must not begin with the still face, or the check shows nothing");
+      const r = root(EXPR[plan("architect").order[0]]);
+      assert.strictEqual(C.charStart(r, "architect", state, {}), null, `${state}: nothing is started`);
       assert.strictEqual(r.m[".c-facein"].innerHTML, EXPR[face], `${state}: a still one shows ${face}`);
     }
     assert.strictEqual(C.charBlinkers.size, 0);
+    // the one source: what the page draws a working character with (charExpr) follows it too
+    assert.strictEqual(C.charExpr("work", "architect"), "focus", "charExpr does not read charReduced");
+    assert(charSVG("architect", null, C.charExpr("work", "architect")).includes(EXPR.focus));
   } finally {
     C.charReduced.matches = false;
   }
+  assert.strictEqual(C.charExpr("work", "architect"), plan("architect").order[0], "not reduced: the first of its own order");
 }
 
 // One timeout for all the blinks: the next edge, set again when one comes or goes (not a poll).
