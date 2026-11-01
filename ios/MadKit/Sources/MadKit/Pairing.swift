@@ -11,6 +11,11 @@ public struct Mac: Hashable, Codable, Identifiable, Sendable {
     /// The person gave it this name, so the Mac's own name no longer replaces it.
     public var renamed: Bool
 
+    /// The Mac the app runs on, reached through its own server (its address and token change on every start).
+    public static let localID = UUID(uuidString: "00000000-0000-4000-8000-00000000110C")!
+    /// The fixture server's: nothing of it is kept.
+    public static let fixtureID = UUID(uuidString: "00000000-0000-4000-8000-0000000F1700")!
+
     public init(id: UUID = UUID(), name: String, baseURL: URL, token: String, deviceID: String? = nil,
                 renamed: Bool = false) {
         self.renamed = renamed

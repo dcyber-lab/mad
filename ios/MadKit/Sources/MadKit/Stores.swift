@@ -43,6 +43,8 @@ public final class DeckStore {
     public init(api: MadAPI, interval: Duration = .seconds(1)) {
         self.api = api
         self.interval = interval
+        // What the Mac last said, from the device: the home draws at once, and the first look replaces it.
+        deck = MadClient.cachedDeck(api.cache)
     }
 
     /// One look at /api/deck.
@@ -90,6 +92,8 @@ public final class ChannelStore {
     public private(set) var link: LinkState = .connecting
     /// The first look has come.
     public private(set) var loaded = false
+    /// What is held came from the device's cache, and no look has replaced it yet.
+    public private(set) var fromCache = false
     /// A post is on its way; one at a time.
     public private(set) var sending = false
 
@@ -102,6 +106,12 @@ public final class ChannelStore {
         self.id = id
         self.api = api
         self.interval = interval
+        // The last messages of the channel as the device kept them: the channel draws at once, and the looks ask
+        // only for what came after `last`.
+        if let raw = api.cache?.loadChannel(id), let page = try? JSONDecoder().decode(MessagesPage.self, from: raw) {
+            apply(page)
+            fromCache = !messages.isEmpty
+        }
     }
 
     /// One look: asks for what came after `last`, and goes on asking while the pages are full.
@@ -115,7 +125,15 @@ public final class ChannelStore {
             rounds += 1
             do {
                 let page = try await api.messages(channel: id, since: last)
+                // The Mac's last number is below what is held: the channel began again. Start over from the first.
+                if page.last < last {
+                    messages = []
+                    last = 0
+                    api.cache?.forgetChannel(id)
+                    continue
+                }
                 apply(page)
+                fromCache = false
                 link = .ok
                 loaded = true
                 if page.messages.count < Self.pageLimit { return }

@@ -4,12 +4,17 @@ import Foundation
 public struct Endpoint: Equatable, Sendable {
     public var base: URL
     public var token: String
-    public init(base: URL, token: String) { self.base = base; self.token = token }
+    /// The id its Mac gets (and what is kept of it on the device is kept under): the same on every start.
+    public var macID: UUID
+    public init(base: URL, token: String, macID: UUID = Mac.localID) { self.base = base; self.token = token; self.macID = macID }
 
     /// This server as a Mac the client can talk to.
-    public func mac(named name: String = "This Mac") -> Mac { Mac(name: name, baseURL: base, token: token) }
-    /// A client for it.
-    public func client(session: URLSession = .shared) -> MadClient { MadClient(mac: mac(), session: session) }
+    public func mac(named name: String = "This Mac") -> Mac { Mac(id: macID, name: name, baseURL: base, token: token) }
+    /// A client for it, keeping what it sees on the device (see `SnapshotCache`).
+    public func client(session: URLSession = .shared) -> MadClient {
+        let m = mac()
+        return MadClient(mac: m, session: session, cache: SnapshotCache.standard(for: m))
+    }
 }
 
 /// Finding the server of the Mac the app runs on: the phone server if it is up, else one of its own.
@@ -240,6 +245,6 @@ public enum FixtureHook {
         guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
         while s.hasSuffix("/") { s.removeLast() }
         guard let url = URL(string: s), url.scheme == "http" || url.scheme == "https", url.host != nil else { return nil }
-        return Endpoint(base: url, token: token)
+        return Endpoint(base: url, token: token, macID: Mac.fixtureID)
     }
 }

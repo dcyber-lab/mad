@@ -195,8 +195,10 @@ extension MadClient {
 
     public func messages(channel: String, since: Int = 0) async throws -> MessagesPage {
         let (data, response) = try await runRequest(messagesRequest(channel: channel, since: since))
-        try Self.checkBus(data, response, [200])
-        return try Self.decodeJSON(MessagesPage.self, data)
+        try checked { try Self.checkBus(data, response, [200]) }
+        let page = try Self.decodeJSON(MessagesPage.self, data)
+        cache?.mergeChannel(channel, page: data)
+        return page
     }
 
     /// POST /api/bus/post {channel, text, reply_to, images}: the person says something in a channel

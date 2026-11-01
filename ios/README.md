@@ -264,3 +264,13 @@ a conversation there is no bar: the name floats at the top as a pill, the messag
 with the column's edges. Typing @ in a channel offers its members (↑ ↓ and ⏎ or Tab, or a click).
 
 Debug launch arguments: `-sidebarHidden YES`, `-mad.sidebarWidth 420`, `-composerText "@r"`.
+
+### What the device keeps of a Mac
+
+`SnapshotCache` (MadKit) keeps the Mac's own answers on the device, in `Application Support/mad/cache/<Mac id>/`:
+the deck's last look (`deck.json`), each channel's last 200 messages (`ch.<id>.json`, a `/api/bus/messages` answer) and
+each agent's last 200 transcript entries (`chat.<id>.json`, a `/api/chat` answer that starts over). `DeckStore`,
+`ChannelStore` and `ChatSession` read them when they are made, so a screen draws at once, and then ask only for what
+came after (`since`, or the file and offset); `MadClient` merges each answer in, and writes are put off 0.5s and merged
+(`flushAll()` when the app leaves the foreground). A Mac's folder goes when it is unpaired (`PairingBook.remove`) and
+when its token is refused. No token is kept, and the fixture server is never cached (`Mac.fixtureID`).
