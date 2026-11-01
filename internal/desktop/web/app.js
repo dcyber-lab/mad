@@ -337,7 +337,7 @@ function drawListNow() {
   const nodes = [];
   if (!deck.projects.length) {
     const p = el("div", "none");
-    p.innerHTML = "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.";
+    p.innerHTML = "还没有项目。在 git 仓库里运行 <code>mad</code>，或者 <code>mad spawn</code>。";
     nodes.push(p);
   }
   nodes.push(channelsGroup(q));
@@ -380,7 +380,7 @@ function drawListNow() {
     if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"] .rowhit`)?.focus({ preventScroll: true });
     else if (hi >= 0) nav.querySelectorAll(".project > .head")[hi]?.focus({ preventScroll: true });
   }
-  $("#summary").textContent = `${count} agent${count === 1 ? "" : "s"}`;
+  $("#summary").textContent = `${count} 个 agent`;
 }
 
 // needAgents: the agents with an item in the inbox, as of the last drawList.
@@ -399,7 +399,7 @@ function agentRow(a, key) {
   const qu = a.queue;
   if (qu && qu.items && qu.items.length) {
     const n = el("span", `qn${qu.paused ? " paused" : ""}`, String(qu.items.length));
-    n.title = qu.paused ? "queued messages, paused" : "queued messages";
+    n.title = qu.paused ? "排队的消息，已暂停" : "排队的消息";
     name.append(n);
   }
   const right = [];
@@ -417,7 +417,7 @@ function agentRow(a, key) {
   r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
   const more = el("button", "icon-btn more");
   more.type = "button";
-  more.title = "more";
+  more.title = "更多";
   more.append(icon("more"));
   more.onclick = (e) => { e.stopPropagation(); agentMenu(a, more, { right: true }); };
   r.append(more);
@@ -449,12 +449,12 @@ function projectHead(p, quiet) {
   const hacts = el("span", "hacts");
   const plus = el("button", "icon-btn");
   plus.type = "button";
-  plus.title = `a new chat in ${p.name}`;
+  plus.title = `在 ${p.name} 里开新对话`;
   plus.append(icon("plus"));
   plus.onclick = (e) => { e.stopPropagation(); openNew(p.path); };
   const pmore = el("button", "icon-btn");
   pmore.type = "button";
-  pmore.title = "more";
+  pmore.title = "更多";
   pmore.append(icon("more"));
   pmore.onclick = (e) => { e.stopPropagation(); projectMenu(p, pmore); };
   hacts.append(plus, pmore);
@@ -505,9 +505,9 @@ function drawWait(o, a) {
   const acting = !!it && it.acts.some((x) => x.verb !== "open");
   // waiting with no item: its prompt is off its screen for a moment,
   // answered or not drawn yet (status.Tracker.Clearing)
-  const text = !asks || !it ? "Running in the terminal deck: watch it here; it comes here once done."
-    : acting ? "Waiting on you in the terminal deck: answer it here or there; it comes here once done."
-      : "Waiting on you in the terminal deck: answer it there; it comes here once done.";
+  const text = !asks || !it ? "在终端里的 Deck 运行：可以在这里看着，完成后会回到这里。"
+    : acting ? "在终端里的 Deck 等你：在这里或那边回答都行，完成后会回到这里。"
+      : "在终端里的 Deck 等你：请到那边回答，完成后会回到这里。";
   const p = it && ib.pending.get(it.key);
   const sig = JSON.stringify([text, it, p && [p.verb, p.label, p.option], it && ib.reply?.key === it.key ? ib.reply.where : ""]);
   if (o.wait.dataset.text === sig) return;
@@ -519,7 +519,7 @@ function drawWait(o, a) {
   if (!it) return;
   if (acting) o.wait.append(itemCard(it, false, "wait"));
   const row = el("div", "wacts");
-  row.append(rowButton("Open in terminal", "ghost", () => openTerminal(a), "the terminal deck, in your terminal app"));
+  row.append(rowButton("在终端里打开", "ghost", () => openTerminal(a), "终端里的 Deck，在你的终端应用里"));
   o.wait.append(row);
 }
 
@@ -622,9 +622,9 @@ function spendMeter(s) {
   if (!s || !s.day || (!s.usd && !s.turns)) return null;
   const part = s.part || 0;
   const box = el("span", `spend${s.closed ? " closed" : part >= 0.8 ? " hot" : ""}`);
-  box.title = "what mad's own work cost today, against its budget";
-  const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? ` of $${+s.budget_usd.toFixed(2)}` : "");
-  box.append("mad today ", el("b", "", usd), meter(part), el("b", "pc", `${Math.round(part * 100)}%`));
+  box.title = "mad 自己的工作今天花了多少，和预算比";
+  const usd = `$${s.usd.toFixed(2)}` + (s.budget_usd ? `，预算 $${+s.budget_usd.toFixed(2)}` : "");
+  box.append("mad 今天 ", el("b", "", usd), meter(part), el("b", "pc", `${Math.round(part * 100)}%`));
   return box;
 }
 
@@ -653,13 +653,14 @@ window.addEventListener("keydown", (e) => {
 if (!/Mac/.test(navigator.platform)) $("#filterKey").hidden = true;
 
 const themes = ["auto", "light", "dark"];
+const themeWord = { auto: "跟随系统", light: "浅色", dark: "深色" };
 let theme = themes.includes(localStorageGet("mad.theme")) ? localStorageGet("mad.theme") : "auto";
 function applyTheme() {
   if (theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
   const b = $("#theme");
   b.replaceChildren(icon({ auto: "auto", light: "sun", dark: "moon" }[theme]));
-  b.title = `Theme: ${theme === "auto" ? "as the system's" : theme} (click to change)`;
+  b.title = `主题：${themeWord[theme]}（点一下切换）`;
 }
 $("#theme").onclick = () => {
   theme = themes[(themes.indexOf(theme) + 1) % themes.length];
@@ -697,7 +698,7 @@ function drawQueue(fresh) {
     return;
   }
   if (nc.open) {
-    $("#qinput").placeholder = "Ask anything, or / for commands";
+    $("#qinput").placeholder = "问点什么，输入 / 用命令";
     $("#qitems").replaceChildren();
     $("#qitems").dataset.key = "";
     $("#qpause").hidden = true;
@@ -722,7 +723,7 @@ function drawQueue(fresh) {
       li.title = it.text;
       const x = el("button", "x icon-btn");
       x.type = "button";
-      x.title = "drop it";
+      x.title = "放弃这条";
       x.append(icon("x"));
       x.onclick = () => queueCall("DELETE", { item: it.id });
       li.append(el("span", "n", String(i + 1)), el("span", "t", it.text.split("\n")[0]), x);
@@ -731,11 +732,11 @@ function drawQueue(fresh) {
   }
   const o = opened.get(current);
   $("#qerr").textContent = windowed(a) ? (o && (o.err || o.hs && o.hs.error)) || ""
-    : q.error && items.length ? `Not sent yet: ${q.error}` : "";
+    : q.error && items.length ? `还没发出去：${q.error}` : "";
   const pause = $("#qpause");
   pause.hidden = !items.length && !q.paused;
   pause.replaceChildren(icon(q.paused ? "play" : "pause"));
-  pause.title = q.paused ? "the queue is held: let it go" : "hold the queued messages";
+  pause.title = q.paused ? "队列已暂停：点一下放行" : "暂停排队的消息";
   pause.classList.toggle("on", !!q.paused);
   drawWho(a);
   drawTodo();
@@ -761,7 +762,7 @@ function drawTodo() {
   const now = items.find((t) => t.status === "in_progress") || left[0];
   const head = el("button", "thead");
   head.type = "button";
-  head.title = o.todoOpen ? "fold the list" : "the whole list";
+  head.title = o.todoOpen ? "收起清单" : "看完整清单";
   head.append(icon("circledot"), el("span", "now", now.text || ""),
     el("span", "count", `${items.length - left.length}/${items.length}`), icon(o.todoOpen ? "down" : "right", "chev"));
   head.onclick = () => {
@@ -789,8 +790,8 @@ function drawWho(a) {
     if (o.hs.models && o.hs.models.length) {
       const b = el("button", "chip model");
       b.type = "button";
-      b.title = "its model";
-      b.append(el("span", "", name || "Model"), icon("down"));
+      b.title = "它用的模型";
+      b.append(el("span", "", name || "模型"), icon("down"));
       b.onmousedown = (e) => { e.preventDefault(); modelMenu(b, o); };
       parts.push(b);
     }
@@ -798,7 +799,7 @@ function drawWho(a) {
     if (perm) {
       const b = el("button", `chip perm p-${o.hs.permission}`);
       b.type = "button";
-      b.title = "what it may do without asking";
+      b.title = "它不用问就能做的事";
       b.append(icon("shield"), el("span", "", perm), icon("down"));
       b.onmousedown = (e) => { e.preventDefault(); permissionMenu(b, o); };
       parts.push(b);
@@ -827,7 +828,7 @@ async function submit() {
   // Pictures still being read are not in the draft yet: sending now would
   // send the message without them, and they would go with the next one.
   if (pendingReads > 0) {
-    toast("The pictures are still loading: send again in a moment");
+    toast("图片还在加载：稍等一下再发");
     return;
   }
   const t = $("#qinput");
@@ -1176,8 +1177,8 @@ function setOffline(off) {
   bar.hidden = !off;
   document.body.classList.toggle("stale", off);
   if (off) {
-    const at = new Date(lastGood).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    bar.textContent = lastGood ? `Offline · as of ${at} · reconnecting` : "Offline · reconnecting";
+    const at = new Date(lastGood).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    bar.textContent = lastGood ? `离线 · 数据截至 ${at} · 正在重连` : "离线 · 正在重连";
   }
 }
 
@@ -1195,7 +1196,7 @@ async function refresh() {
     deck = await r.json();
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");
-    $("#conn").title = "connected";
+    $("#conn").title = "已连接";
     setOffline(false);
     drawUsage();
     drawMachine();
@@ -1216,7 +1217,7 @@ async function refresh() {
     }
   } catch (e) {
     $("#conn").classList.remove("ok");
-    $("#conn").title = `no connection to mad (${e.message || e})`;
+    $("#conn").title = `连不上 mad（${e.message || e}）`;
     setOffline(true);
   }
 }
@@ -1228,7 +1229,7 @@ function open(id) {
   tab.append(el("span", "dot"), el("span", "t", label(agents.get(id) || { id, kind: "" })));
   const x = el("span", "x");
   x.append(icon("x"));
-  x.title = "close (the agent keeps running)";
+  x.title = "关闭（agent 继续运行）";
   x.onclick = (e) => { e.stopPropagation(); close(id); };
   tab.append(x);
   tab.onclick = () => show(id);
@@ -1247,7 +1248,7 @@ function open(id) {
   // Scrolled up: a way back to what is being written.
   const down = el("button", "tobottom");
   down.type = "button";
-  down.title = "to the latest";
+  down.title = "回到最新";
   down.append(icon("down"));
   down.onclick = () => chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
   chat.append(log, wait, down);
@@ -1317,8 +1318,8 @@ function present(id, o) {
     if (!o.log.querySelector(".tui-only")) {
       const n = el("div", "tui-only");
       const t = el("div", "");
-      t.append(el("b", "", `A ${a.kind} is a terminal`), el("span", "muted", "It runs in the terminal deck: open it in your terminal app."));
-      n.append(icon("terminal"), t, button("Open in terminal", "primary", () => openTerminal(agents.get(id) || a)));
+      t.append(el("b", "", `${a.kind} 只在终端里运行`), el("span", "muted", "它在终端里的 Deck 运行：请在终端应用里打开。"));
+      n.append(icon("terminal"), t, button("在终端里打开", "primary", () => openTerminal(agents.get(id) || a)));
       o.log.insertBefore(n, o.live);
     }
     return;
@@ -1434,7 +1435,7 @@ function drawTitle() {
       t.dataset.agent = "";
       return;
     }
-    t.replaceChildren(el("span", "pt", bd.open ? (bd.channel ? `Board · #${bd.channel}` : "Board") : us.open ? "Usage" : sk.open ? "Skills" : nc.open ? "New chat" : ""));
+    t.replaceChildren(el("span", "pt", bd.open ? (bd.channel ? `看板 · #${bd.channel}` : "看板") : us.open ? "用量" : sk.open ? "技能" : nc.open ? "新对话" : ""));
     t.className = "";
     t.dataset.agent = "";
     return;
@@ -1527,7 +1528,7 @@ async function loadChat(id, o) {
       o.parts.clear();
       o.partIDs.clear();
       o.entries = 0;
-      if (c.earlier) put(o, el("div", "note", "Earlier messages are in the transcript, not shown here."));
+      if (c.earlier) put(o, el("div", "note", "更早的消息在记录里，这里不显示。"));
     }
     const atEnd = nearEnd(o);
     for (const e of c.entries) {
@@ -1536,7 +1537,7 @@ async function loadChat(id, o) {
     o.file = c.file;
     o.offset = c.offset;
     if (!o.loaded && !o.entries) {
-      o.none = el("div", "note", "Nothing in its transcript yet.");
+      o.none = el("div", "note", "还没有对话内容");
       put(o, o.none);
     }
     if (c.entries.length) drawLive(o);
@@ -1705,7 +1706,7 @@ function openLightbox(src) {
 function copyButton(text) {
   const b = el("button", "mcopy");
   b.type = "button";
-  b.title = "copy";
+  b.title = "复制";
   b.append(icon("copy"));
   b.onclick = async () => {
     try {
@@ -1792,7 +1793,7 @@ function drawLive(o) {
         shown = true;
       } else if (b.kind === "thinking" && !b.done) {
         const n = el("div", "thinking");
-        n.append(el("span", "what shimmer", "Thinking"));
+        n.append(el("span", "what shimmer", "思考中"));
         if (b.text) n.append(el("div", "gist", b.text.slice(-300)));
         parts.push(n);
         shown = true;
@@ -2008,7 +2009,7 @@ async function hostSubmit(id, text) {
   try {
     await sendTo(id, text, imgs);
   } catch (e) {
-    err = e.message || "no connection to mad";
+    err = e.message || "连不上 mad";
     restoreImages(imgs);
   }
   if (o) {
@@ -2120,7 +2121,7 @@ function askCard(o, r) {
     return say;
   };
   if (r.kind === "question") {
-    head.append(icon("chat", "ai"), el("span", "t", "It asks you"));
+    head.append(icon("chat", "ai"), el("span", "t", "它在问你"));
     const qs = (r.questions || []).map((q) => questionBlock(q, body));
     const answers = () => {
       const out = {};
@@ -2175,7 +2176,7 @@ function questionBlock(q, box) {
   let picked = false;
   const list = el("div", "opts");
   const other = el("input", "say");
-  other.placeholder = "Something else…";
+  other.placeholder = "别的…";
   const changed = () => box.dispatchEvent(new Event("change"));
   for (const opt of q.options || []) {
     const b = el("button", "opt");

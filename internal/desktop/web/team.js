@@ -10,11 +10,11 @@ function teamItems(c) {
   return [
     "-",
     {
-      label: "Sleep team", desc: "every agent of it stops; a message wakes one", icon: "sleep",
+      label: "让小组休眠", desc: "它的所有 agent 都停下；来一条消息会叫醒其中一个", icon: "sleep",
       onclick: async () => {
         try {
           const r = await api("POST", "/api/team", {}, { op: "sleep", team: t.name });
-          toast(`${r.slept} asleep`);
+          toast(`${r.slept} 个已休眠`);
           refresh();
         } catch (e) {
           toast(e.message, "err");
@@ -23,12 +23,12 @@ function teamItems(c) {
       },
     },
     {
-      label: "Remove team", desc: "removes its agents (their conversations stay on disk) and archives the channel", icon: "trash", danger: true,
+      label: "移除小组", desc: "移除它的 agent（对话仍留在磁盘上），并归档这个群", icon: "trash", danger: true,
       onclick: async () => {
         const v = await dialog({
-          title: `Remove team ${t.name}?`,
-          body: el("p", "dtext", `Its ${t.roles.length} agents are stopped and removed from mad, and #${c.id} is archived.`),
-          actions: [{ label: "Cancel", value: null }, { label: "Remove", cls: "danger", value: "ok" }],
+          title: `移除小组 ${t.name}？`,
+          body: el("p", "dtext", `它的 ${t.roles.length} 个 agent 会被停止并从 mad 移除，#${c.id} 会被归档。`),
+          actions: [{ label: "取消", value: null }, { label: "移除", cls: "danger", value: "ok" }],
         });
         if (v !== "ok") return;
         try {
@@ -68,7 +68,7 @@ function agentParts(s) {
 // permission and, if wanted, one worktree for all.
 async function newTeam(project) {
   if (!deck.projects.length) {
-    toast("Add a project first", "err");
+    toast("请先添加一个项目", "err");
     return;
   }
   let info;
@@ -92,12 +92,12 @@ async function newTeam(project) {
     for (const r of t.roles) {
       const [agent0, effort0] = agentParts(r.agent);
       picked[r.name] = { agent: agent0, effort: effort0 };
-      const opts = info.choices.map((c) => [c.agent, c.agent === "codex" ? "codex (its own model)" : c.agent]);
+      const opts = info.choices.map((c) => [c.agent, c.agent === "codex" ? "codex（用它自己的模型）" : c.agent]);
       if (!choice(agent0)) opts.unshift([agent0, agent0]);
       const eff = el("span", "");
       const drawEffort = () => {
         const levels = (choice(picked[r.name].agent) || { efforts: [] }).efforts;
-        const e = select([["", "default effort"], ...levels.map((l) => [l, l])], levels.includes(picked[r.name].effort) ? picked[r.name].effort : "", (v) => (picked[r.name].effort = v));
+        const e = select([["", "默认强度"], ...levels.map((l) => [l, l])], levels.includes(picked[r.name].effort) ? picked[r.name].effort : "", (v) => (picked[r.name].effort = v));
         picked[r.name].effort = e.value;
         eff.replaceChildren(e);
       };
@@ -107,7 +107,7 @@ async function newTeam(project) {
       });
       drawEffort();
       const name = el("div", "tname");
-      name.append(el("b", "", r.name), r.lead ? el("span", "pill working", "lead") : "", r.read_only ? el("span", "pill quiet", "read only") : "");
+      name.append(el("b", "", r.name), r.lead ? el("span", "pill working", "组长") : "", r.read_only ? el("span", "pill quiet", "只读") : "");
       const row = el("div", "trole-row");
       row.title = r.brief || "";
       row.append(name, ag, eff);
@@ -117,39 +117,39 @@ async function newTeam(project) {
   };
   drawRoles();
   const name = el("input", "say wide");
-  name.placeholder = "name: letters, digits, dashes, any language (from the goal when empty)";
+  name.placeholder = "名字：字母、数字、短横线或任何语言的文字（留空则取自目标）";
   name.autocapitalize = "none";
   name.autocomplete = "off";
   name.spellcheck = false;
   const goal = el("textarea", "say wide tgoal");
-  goal.placeholder = "the goal: what the team is to get done";
+  goal.placeholder = "目标：这个小组要完成什么";
   goal.rows = 3;
-  const perm = select(info.permissions.map((p) => [p, p === "auto" ? "auto: claude judges each action (recommended)" : p === "allowlist" ? "allowlist: edits, tests, builds, commits" : "bypass: asks nothing (risky)"]), info.permissions[0]);
+  const perm = select(info.permissions.map((p) => [p, p === "auto" ? "auto：由 claude 判断每个操作（推荐）" : p === "allowlist" ? "allowlist：改文件、跑测试、构建、提交" : "bypass：什么都不问（有风险）"]), info.permissions[0]);
   const shared = el("input");
   shared.type = "checkbox";
   const branch = el("input", "say wide");
-  branch.placeholder = "branch, e.g. team/api";
+  branch.placeholder = "分支，例如 team/api";
   branch.hidden = true;
   shared.onchange = () => {
     branch.hidden = !shared.checked;
     if (shared.checked && !branch.value) branch.focus();
   };
   const wt = el("label", "tcheck");
-  wt.append(shared, el("span", "", "One shared worktree for all (otherwise they work in the project's directory)"));
+  wt.append(shared, el("span", "", "所有人共用一个 worktree（否则各自在项目目录里工作）"));
   const field = (text, node) => {
     const f = el("label", "tfield");
     f.append(el("span", "muted", text), node);
     return f;
   };
-  body.append(field("Project", proj), field("Template", tpl), roles, field("Name", name), field("Goal", goal), field("Permission", perm), wt, branch,
-    el("p", "dtext muted", `Lead and teammates start together in a new channel; the lead gets the goal. At most ${info.max_teams} teams run at once.`));
+  body.append(field("项目", proj), field("模板", tpl), roles, field("名字", name), field("目标", goal), field("权限", perm), wt, branch,
+    el("p", "dtext muted", `组长和组员会一起在一个新群里启动，目标交给组长。同时最多运行 ${info.max_teams} 个小组。`));
   // The start runs with the form open: a refusal is shown in it, and what
   // was typed stays to be fixed.
   let started = null;
   const start = async () => {
     if (!goal.value.trim()) {
       goal.focus();
-      return "The team needs a goal.";
+      return "小组需要一个目标。";
     }
     const agentsChosen = {};
     for (const [r, p] of Object.entries(picked)) agentsChosen[r] = p.agent + (p.effort ? "@" + p.effort : "");
@@ -160,8 +160,8 @@ async function newTeam(project) {
     return null;
   };
   const v = await dialog({
-    title: "A new team", body,
-    actions: [{ label: "Cancel", value: null }, { label: "Start", cls: "primary", value: "ok", submit: start, busy: "Starting: agents come up one by one…" }],
+    title: "新建小组", body,
+    actions: [{ label: "取消", value: null }, { label: "启动", cls: "primary", value: "ok", submit: start, busy: "启动中：agent 一个接一个起来…" }],
     ready: () => goal.focus(),
   });
   if (v !== "ok" || !started) return;

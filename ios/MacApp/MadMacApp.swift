@@ -24,7 +24,7 @@ struct MadMacApp: App {
                 WebPage(url: endpoint.mac().webURL(target, embedded: false))
                     .frame(minWidth: 720, minHeight: 480)
             } else {
-                Text("mad is not running").padding(32)
+                Text("mad 没有在运行").padding(32)
             }
         }
         Settings { SettingsView() }
@@ -132,14 +132,14 @@ struct RootView: View {
         Group {
             switch server.state {
             case .locating:
-                ProgressView("Looking for mad…")
+                ProgressView("正在找 mad…")
             case .failed(let why):
                 VStack(spacing: 12) {
-                    Text("mad is not running").font(.title2.weight(.semibold))
+                    Text("mad 没有在运行").font(.title2.weight(.semibold))
                     Text(why).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     HStack {
-                        Button("Try again") { Task { await server.start() } }
-                        SettingsLink { Text("Settings…") }
+                        Button("再试一次") { Task { await server.start() } }
+                        SettingsLink { Text("设置…") }
                     }
                 }
                 .padding(32)
@@ -185,10 +185,10 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Toggle("使用网页版", isOn: $webDeck)
-            Text("Show the whole web page in the window instead of the native screens, if something is wrong with them.")
+            Text("窗口里显示完整的网页，不用原生界面；原生界面有问题时可以用。")
                 .font(.footnote).foregroundStyle(.secondary)
-            TextField("Path to mad", text: $madPath, prompt: Text("the first mad on your PATH"))
-            Text("The app uses the phone server when it is on, and starts mad itself when it is not.")
+            TextField("mad 的路径", text: $madPath, prompt: Text("PATH 里的第一个 mad"))
+            Text("手机服务开着时，应用用它；没开时，应用自己启动 mad。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .padding(20)
