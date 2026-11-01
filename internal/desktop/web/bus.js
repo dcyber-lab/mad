@@ -643,6 +643,7 @@ async function loadChannel(first) {
     cv.paused = r.paused;
     drawChanHead();
   }
+  drawReceipts(r.receipts || [], r.paused);
   if (cv.jump) {
     const s = cv.jump;
     cv.jump = 0;
@@ -652,6 +653,24 @@ async function loadChannel(first) {
 }
 
 // ---- the messages ----
+
+// drawReceipts puts under each of the person's messages who it woke and how far it got (receipts.js has
+// the words). The line is patched in place on every look: its text changes only when it is different.
+function drawReceipts(list, paused) {
+  for (const rc of list) {
+    const row = $(`#chanlog .cmsg.mine[data-seq="${rc.seq}"]`);
+    if (!row) continue;
+    const { text, title, none } = receiptLine(rc.targets, paused);
+    let line = row.querySelector(".crcpt");
+    if (!line) {
+      line = el("div", "crcpt");
+      row.append(line);
+    }
+    line.classList.toggle("nowake", none);
+    if (line.textContent !== text) line.textContent = text;
+    if (line.title !== title) line.title = title;
+  }
+}
 
 // timeLine is the centred time between messages that are far apart: today's
 // as "今天 21:05", yesterday's, or the date.

@@ -340,3 +340,127 @@ func TestChannelBubblesStayInTheColumn(t *testing.T) {
 		}
 	}
 }
+
+// What the person's receipt lines say and where they sit: their texts in order, and how far each one's text ends
+// from its bubble's right edge.
+const receiptsJS = `(() => {
+  const out = [];
+  for (const l of document.querySelectorAll("#chanlog .cmsg.mine .crcpt")) {
+    const b = l.parentElement.querySelector(".cbub");
+    const rg = document.createRange();
+    rg.selectNodeContents(l);
+    const rs = [...rg.getClientRects()];
+    const textRight = Math.max(...rs.map((r) => r.right));
+    out.push({ text: l.textContent, none: l.classList.contains("nowake"), title: l.title, size: parseFloat(getComputedStyle(l).fontSize), dx: b ? Math.abs(b.getBoundingClientRect().right - textRight) : -1 });
+  }
+  return out;
+})()`
+
+// The receipts scenario has the person's messages with every state, one that woke no one, and a paused
+// channel: each line reads as it should, sits right-aligned under its bubble, and stays inside the column at
+// a phone's width and a wide window's. MAD_BOUNDS_SHOTS=<dir> keeps a screenshot of each. Where there is no
+// Chrome, it is skipped.
+func TestReceiptLinesReadAndStayInTheColumn(t *testing.T) {
+	bin := chrome()
+	if bin == "" {
+		t.Skip("no Chrome: the receipts are not checked (MAD_CHROME names one)")
+	}
+	h, err := newHandler("receipts", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := startChrome(t, bin)
+	if _, err := c.call("Page.enable", nil); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"↩ 已回复 architect · ✓✓ 已读 builder · ✓ 已送达 reviewer · ◷ 待送达 kim · 群已暂停，消息先存着",
+		"✓✓ 已读 builder",
+		"没有叫醒谁，@ 一个 agent 才会叫醒它",
+		"◷ 待送达 reviewer · 群已暂停，消息先存着",
+		"✓ 已送达 builder、reviewer",
+	}
+	for _, w := range []int{390, 1600} {
+		t.Run(strconv.Itoa(w), func(t *testing.T) {
+			if _, err := c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": w, "height": 900, "deviceScaleFactor": 1, "mobile": false}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.call("Page.navigate", map[string]any{"url": "about:blank"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.call("Page.navigate", map[string]any{"url": srv.URL + "/?channel=fold#token=" + strings.Repeat("0", 32)}); err != nil {
+				t.Fatal(err)
+			}
+			if !waitFor(20*time.Second, func() bool {
+				v, err := c.eval(`document.querySelectorAll("#chanlog .crcpt").length`)
+				return err == nil && string(v) == strconv.Itoa(len(want))
+			}) {
+				t.Fatalf("the page did not draw %d receipt lines", len(want))
+			}
+			// the lines are patched in place: the node stays the same one across looks
+			v, err := c.eval(`(() => { const l = document.querySelector("#chanlog .crcpt"); window.__first = l; return true; })()`)
+			if err != nil || string(v) != "true" {
+				t.Fatal(err)
+			}
+			time.Sleep(4 * time.Second) // at least one more look at the channel
+			if v, err := c.eval(`window.__first === document.querySelector("#chanlog .crcpt") && window.__first.isConnected`); err != nil || string(v) != "true" {
+				t.Errorf("a receipt line was drawn again on a look (%s, %v)", v, err)
+			}
+			var got []struct {
+				Text  string
+				None  bool
+				Title string
+				Size  float64
+				Dx    float64
+			}
+			v, err = c.eval(receiptsJS)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(v, &got); err != nil {
+				t.Fatal(err)
+			}
+			for i, g := range got {
+				if g.Text != want[i] {
+					t.Errorf("line %d reads %q, want %q", i, g.Text, want[i])
+				}
+				if g.None != (i == 2) {
+					t.Errorf("line %d none=%v", i, g.None)
+				}
+				if g.Title == "" {
+					t.Errorf("line %d has no tooltip", i)
+				}
+				if g.Size < 12 || g.Size > 13 {
+					t.Errorf("line %d is %vpx, want 12-13", i, g.Size)
+				}
+				if g.Dx > 3 {
+					t.Errorf("line %d's right edge is %vpx from its bubble's", i, g.Dx)
+				}
+			}
+			var rep struct{ Bad, Sideways []string }
+			v, err = c.eval(boundsJS)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(v, &rep); err != nil {
+				t.Fatal(err)
+			}
+			for _, b := range rep.Bad {
+				t.Errorf("reaches past its column: %s", b)
+			}
+			for _, s := range rep.Sideways {
+				t.Errorf("scrolls sideways: %s", s)
+			}
+			if shot := os.Getenv("MAD_BOUNDS_SHOTS"); shot != "" {
+				if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+					var s struct{ Data []byte }
+					if json.Unmarshal(res, &s) == nil {
+						_ = os.WriteFile(filepath.Join(shot, fmt.Sprintf("receipts-%d.png", w)), s.Data, 0o644)
+					}
+				}
+			}
+		})
+	}
+}
