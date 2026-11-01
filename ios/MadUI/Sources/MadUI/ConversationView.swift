@@ -51,9 +51,9 @@ public struct ConversationView: View {
         // it with a material behind them, so what scrolls under them is blurred, never cut.
         messages
             .safeAreaInset(edge: .top, spacing: 0) {
-                ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb).background(.bar)
+                ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb).background(.ultraThinMaterial)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar.background(.bar) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar.background(.ultraThinMaterial) }
             .background(.background)
             .environment(\.convImageLoader, actions.loadImage)
         #else

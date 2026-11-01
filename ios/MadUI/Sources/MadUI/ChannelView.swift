@@ -79,8 +79,8 @@ public struct ChannelView: View {
         // changes the list's inset (the list stays where it is under it), a composer that grows goes up over the list, and
         // what scrolls under the head is blurred by its material, not cut.
         messages
-            .safeAreaInset(edge: .top, spacing: 0) { head.background(.bar) }
-            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.bar) }
+            .safeAreaInset(edge: .top, spacing: 0) { head.background(.ultraThinMaterial) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.ultraThinMaterial) }
             .background(Color.clear)
         #else
         VStack(spacing: 0) {
