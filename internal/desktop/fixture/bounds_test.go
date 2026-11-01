@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -94,46 +95,129 @@ func (c *cdp) eval(expr string) (json.RawMessage, error) {
 	return r.Result.Value, nil
 }
 
+// skipOrFail is for what stops the check from running although Chrome is there: it skips on a machine
+// of someone's, and fails where CI is set, so a green CI is never green for nothing.
+func skipOrFail(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf(format, args...)
+	}
+	t.Skipf(format, args...)
+}
+
+// waitFor polls cond until it holds, up to timeout.
+func waitFor(timeout time.Duration, cond func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if cond() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// removeProfile removes Chrome's profile directory, as well as it can: its helper processes may still be
+// writing to it for a moment after the browser has gone, so it tries again; it never fails the test (a
+// leftover temp directory is not what is being checked).
+func removeProfile(dir string) {
+	for i := 0; i < 25; i++ {
+		if os.RemoveAll(dir) == nil {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// getJSON reads the JSON of a GET at url into v.
+func getJSON(url string, v any) error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	res, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	return json.NewDecoder(res.Body).Decode(v)
+}
+
+// shutdown closes Chrome as it closes itself, over the DevTools protocol on the browser's own socket
+// (Browser.close: its helper processes go with it), and waits for it to be gone; one that does not go
+// within ten seconds is killed.
+func shutdown(cmd *exec.Cmd, port string) {
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	if port != "" {
+		var v struct {
+			WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+		}
+		if getJSON("http://127.0.0.1:"+port+"/json/version", &v) == nil && v.WebSocketDebuggerURL != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if conn, _, err := websocket.Dial(ctx, v.WebSocketDebuggerURL, nil); err == nil {
+				_ = conn.Write(ctx, websocket.MessageText, []byte(`{"id":1,"method":"Browser.close"}`))
+				_ = conn.CloseNow()
+			}
+			cancel()
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		_ = cmd.Process.Kill()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
 // startChrome runs a headless Chrome and returns a session on its first page.
 func startChrome(t *testing.T, bin string) *cdp {
 	t.Helper()
-	dir := t.TempDir()
+	// Not t.TempDir: its removal fails the test when Chrome's helpers are still writing. This runs last.
+	dir, err := os.MkdirTemp("", "mad-chrome-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { removeProfile(dir) })
 	cmd := exec.Command(bin, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
 		"--user-data-dir="+dir, "--remote-debugging-port=0", "--remote-allow-origins=*", "about:blank")
 	if err := cmd.Start(); err != nil {
-		t.Skipf("chrome did not start: %v", err)
+		skipOrFail(t, "chrome did not start: %v", err)
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	var port string
-	for i := 0; i < 100 && port == ""; i++ {
-		if b, err := os.ReadFile(filepath.Join(dir, "DevToolsActivePort")); err == nil {
-			port = strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
-			break
+	t.Cleanup(func() { shutdown(cmd, port) })
+	waitFor(10*time.Second, func() bool {
+		b, err := os.ReadFile(filepath.Join(dir, "DevToolsActivePort"))
+		if err != nil {
+			return false
 		}
-		time.Sleep(100 * time.Millisecond)
-	}
+		port = strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
+		return port != ""
+	})
 	if port == "" {
-		t.Skip("chrome did not say where it listens")
+		skipOrFail(t, "chrome did not say where it listens")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
 	var ws string
-	for i := 0; i < 50 && ws == ""; i++ {
-		out, err := exec.Command("curl", "-s", "http://127.0.0.1:"+port+"/json/list").Output()
+	waitFor(10*time.Second, func() bool {
 		var list []struct{ Type, WebSocketDebuggerURL string }
-		if err == nil && json.Unmarshal(out, &list) == nil {
+		if getJSON("http://127.0.0.1:"+port+"/json/list", &list) == nil {
 			for _, p := range list {
 				if p.Type == "page" {
 					ws = p.WebSocketDebuggerURL
 				}
 			}
 		}
-		if ws == "" {
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+		return ws != ""
+	})
 	if ws == "" {
-		t.Skip("chrome has no page")
+		skipOrFail(t, "chrome has no page")
 	}
 	conn, _, err := websocket.Dial(ctx, ws, nil)
 	if err != nil {
@@ -205,22 +289,29 @@ func TestChannelBubblesStayInTheColumn(t *testing.T) {
 					Messages, Quotes, Code, Pre int
 					Panel                       bool
 				}
-				for i := 0; i < 100; i++ {
-					time.Sleep(150 * time.Millisecond)
+				waitFor(20*time.Second, func() bool {
 					v, err := c.eval(`document.querySelectorAll("#chanlog .cmsg").length`)
-					if err == nil {
-						if n, _ := strconv.Atoi(string(v)); n >= 9 {
-							break
-						}
+					if err != nil {
+						return false
 					}
-				}
+					n, _ := strconv.Atoi(string(v))
+					return n >= 9
+				})
 				if panel {
 					if _, err := c.eval(`openChanPanel()`); err != nil {
 						t.Fatal(err)
 					}
-					time.Sleep(500 * time.Millisecond)
 				}
-				time.Sleep(300 * time.Millisecond)
+				// Settled: the panel is open (or not wanted), and nothing that ends is still running (the panel's slide, a
+				// fade). What loops (a working character) is not waited for.
+				settled := `(() => !!document.querySelector("#chpanel").classList.contains("open") === ` + strconv.FormatBool(panel) +
+					` && document.getAnimations().every((a) => a.playState !== "running" || a.effect.getComputedTiming().iterations === Infinity))()`
+				if !waitFor(10*time.Second, func() bool {
+					v, err := c.eval(settled)
+					return err == nil && string(v) == "true"
+				}) {
+					t.Fatalf("the page did not settle (panel open: %v)", panel)
+				}
 				v, err := c.eval(boundsJS)
 				if err != nil {
 					t.Fatal(err)
