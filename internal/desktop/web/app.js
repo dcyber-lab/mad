@@ -42,6 +42,14 @@ function leaveEmbed() {
 }
 document.documentElement.classList.toggle("embed", embed);
 
+// What the app asks the page to show first (#open=usage|board|skills|phone|notify|addproject|theme, or
+// #agent=<id>): the views the app has no native screen for yet. Read here, before the token's read drops
+// the fragment; shown by openWanted once the deck is in.
+const wanted = (() => {
+  const h = new URLSearchParams(location.hash.slice(1));
+  return { view: h.get("open") || "", agent: h.get("agent") || "" };
+})();
+
 // The token: the one in the URL's fragment (#token=, the local window's),
 // else the one kept (the device's own, got by pair.js; a phone's home
 // screen opens the page without it). Out of sight once read.
@@ -1327,7 +1335,7 @@ function close(id) {
 
 // The service worker shows notifications pushed here; one clicked opens
 // its agent, in this page (a message) or a new one (?agent=).
-let toOpen = new URLSearchParams(location.search).get("agent");
+let toOpen = new URLSearchParams(location.search).get("agent") || wanted.agent || null;
 let toOpenChannel = new URLSearchParams(location.search).get("channel");
 if (toOpen || toOpenChannel) history.replaceState(null, "", location.pathname);
 if (!embed && "serviceWorker" in navigator && isSecureContext) {
@@ -1350,6 +1358,20 @@ function openWanted() {
   if (toOpen && agents.has(toOpen)) {
     show(toOpen);
     toOpen = null;
+  }
+  if (wanted.view) {
+    const views = {
+      usage: () => openUsage(),
+      board: () => openBoard(),
+      skills: () => $("#skills").click(),
+      phone: () => phoneDialog(),
+      notify: () => notifyDialog(),
+      addproject: () => $("#addproject").click(),
+      theme: () => $("#theme").click(),
+    };
+    const open = views[wanted.view];
+    wanted.view = "";
+    if (open) open();
   }
 }
 

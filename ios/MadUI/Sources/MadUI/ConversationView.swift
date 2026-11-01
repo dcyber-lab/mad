@@ -18,7 +18,7 @@ public struct ConversationView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            ConversationHeader(model: model, showsBack: showsBack, back: actions.back)
+            ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb)
             messages
             if let ask = model.ask {
                 AskCardView(card: ask, act: { actions.act(ask.id, $0, $1) })
@@ -150,6 +150,7 @@ struct ConversationHeader: View {
     let model: AgentConversation
     let showsBack: Bool
     let back: () -> Void
+    var openWeb: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -181,6 +182,16 @@ struct ConversationHeader: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(model.title), \(model.stateLine)")
             .accessibilityAddTraits(.isHeader)
+            if let openWeb {
+                Button(action: openWeb) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("在网页里打开终端/改动")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

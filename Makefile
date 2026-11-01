@@ -39,6 +39,14 @@ mac:
 	xcodebuild -project ios/mad.xcodeproj -scheme madmac -destination 'platform=macOS' -derivedDataPath ios/build/mac build
 	open ios/build/mac/Build/Products/Debug/madmac.app
 
+# A Release build of the Mac app, put in /Applications (replacing the one there).
+mac-install:
+	cd ios && xcodegen generate
+	xcodebuild -project ios/mad.xcodeproj -scheme madmac -configuration Release -destination 'platform=macOS' -derivedDataPath ios/build/mac-release build
+	rm -rf /Applications/madmac.app
+	cp -R ios/build/mac-release/Build/Products/Release/madmac.app /Applications/madmac.app
+	@echo "madmac is in /Applications: open it from Spotlight or the Launchpad."
+
 # Put the app on your iPhone with a free Apple ID: builds Release for the phone,
 # installs and launches it. DEVICE=<id|name> and TEAM=<id> pick a phone or a
 # team when there are several (see ios/README.md).
@@ -51,4 +59,4 @@ ios-device:
 ios-uitest:
 	ios/scripts/uitest.sh
 
-.PHONY: build install test clean demo ios mac ios-device ios-uitest
+.PHONY: build install test clean demo ios mac mac-install ios-device ios-uitest

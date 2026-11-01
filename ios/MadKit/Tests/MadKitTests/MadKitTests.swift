@@ -230,6 +230,14 @@ final class MachineNameTests: XCTestCase {
         XCTAssertEqual(m.embeddedDeckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=app")
         XCTAssertEqual(m.deckURL.absoluteString, "https://box.ts.net:7443/#token=\(tok)")
     }
+
+    func testWebURLOpensAViewOrAnAgent() throws {
+        let m = try mac("https://box.ts.net:7443/#token=\(tok)")
+        XCTAssertEqual(m.webURL(.view(.usage)).absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=app&open=usage")
+        XCTAssertEqual(m.webURL(.agent("ab12cd34-ef56")).absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=app&agent=ab12cd34%2Def56")
+        XCTAssertEqual(m.webURL(.view(.board), embedded: false).absoluteString, "https://box.ts.net:7443/#token=\(tok)&embed=0&open=board")
+        XCTAssertEqual(m.webURL(nil), m.embeddedDeckURL)
+    }
 }
 
 final class WebBridgeTests: XCTestCase {

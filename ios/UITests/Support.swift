@@ -34,21 +34,24 @@ class MadUITestCase: XCTestCase {
 
     /// Launches the app: forgets every Mac first, pairs with the fixture server (a
     /// token link, or `link` as given), and opens the Mac.
-    func launch(link: String? = nil, open: Bool = true, reset: Bool = true, extra: [String] = []) {
+    /// The app opens a Mac on its native screens; most cases look at the web page, which is still there
+    /// as the fallback ("使用网页版"), so they ask for it (`-webDeck YES`) unless `native` is true.
+    func launch(link: String? = nil, open: Bool = true, reset: Bool = true, native: Bool = false, extra: [String] = []) {
         app = XCUIApplication()
         var args: [String] = []
         if reset { args += ["-resetStore", "YES"] }
         args += ["-pairLink", link ?? "\(fixtureURL)/#token=\(Self.token)"]
         if open { args += ["-openMac", "YES"] }
+        if !native { args += ["-webDeck", "YES"] }
         app.launchArguments = args + extra
         app.launch()
     }
 
     /// Launches again without forgetting or pairing anything (the Mac last used opens).
-    func relaunch(extra: [String] = []) {
+    func relaunch(native: Bool = false, extra: [String] = []) {
         app?.terminate()
         app = XCUIApplication()
-        app.launchArguments = extra
+        app.launchArguments = (native ? [] : ["-webDeck", "YES"]) + extra
         app.launch()
     }
 

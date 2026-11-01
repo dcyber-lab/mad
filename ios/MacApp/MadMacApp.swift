@@ -2,6 +2,7 @@ import AppKit
 import MadKit
 import MadShell
 import SwiftUI
+import WebKit
 
 /// mad for the Mac. It talks to the server of the Mac it runs on: the phone server if that is up,
 /// else a `mad desktop -no-window` of its own (see `ServerModel`).
@@ -14,7 +15,48 @@ struct MadMacApp: App {
             RootView(server: server)
                 .frame(minWidth: 720, minHeight: 480)
         }
+        // The page, in a window of its own, for what has no native screen yet (usage, the board, an
+        // agent's terminal ...). The server is the one the main window found.
+        WindowGroup("mad", for: WebTarget.self) { $target in
+            if let target, case .ready(let endpoint) = server.state {
+                WebPage(url: endpoint.mac().webURL(target, embedded: false))
+                    .frame(minWidth: 720, minHeight: 480)
+            } else {
+                Text("mad is not running").padding(32)
+            }
+        }
         Settings { SettingsView() }
+    }
+}
+
+/// The page in a WKWebView. Only the server's own origin loads in it; other links go to the browser.
+struct WebPage: NSViewRepresentable {
+    let url: URL
+
+    func makeCoordinator() -> Coordinator { Coordinator(origin: WebOrigin(url)) }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.navigationDelegate = context.coordinator
+        view.load(URLRequest(url: url))
+        return view
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let origin: WebOrigin
+        init(origin: WebOrigin) { self.origin = origin }
+
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = action.request.url else { return decisionHandler(.cancel) }
+            if WebOrigin(url) == origin { return decisionHandler(.allow) }
+            decisionHandler(.cancel)
+            if let s = url.scheme?.lowercased(), s == "https" || s == "http" { NSWorkspace.shared.open(url) }
+        }
     }
 }
 
@@ -34,6 +76,8 @@ final class ServerModel {
 
     /// Where `mad` is, if the person set it in Settings; empty means the first one on PATH.
     static let madPathKey = "madPath"
+    /// Whether the window shows the whole web page instead of the native screens.
+    static let webDeckKey = "webDeck"
 
     func start() async {
         state = .locating
@@ -63,6 +107,9 @@ final class ServerModel {
 
 struct RootView: View {
     let server: ServerModel
+    @Environment(\.openWindow) private var openWindow
+    /// "Use the web version" in Settings: the whole page in this window, as before the native screens.
+    @AppStorage(ServerModel.webDeckKey) private var webDeck = false
 
     var body: some View {
         Group {
@@ -80,7 +127,11 @@ struct RootView: View {
                 }
                 .padding(32)
             case .ready(let endpoint):
-                NativeRoot(api: endpoint.client(), title: "mad")
+                if webDeck {
+                    WebPage(url: endpoint.mac().webURL(nil, embedded: false))
+                } else {
+                    NativeRoot(api: endpoint.client(), title: "mad", openWeb: { openWindow(value: $0) })
+                }
             }
         }
         .task { await server.start() }
@@ -112,9 +163,13 @@ extension RootView {
 
 struct SettingsView: View {
     @AppStorage(ServerModel.madPathKey) private var madPath = ""
+    @AppStorage(ServerModel.webDeckKey) private var webDeck = false
 
     var body: some View {
         Form {
+            Toggle("使用网页版", isOn: $webDeck)
+            Text("Show the whole web page in the window instead of the native screens, if something is wrong with them.")
+                .font(.footnote).foregroundStyle(.secondary)
             TextField("Path to mad", text: $madPath, prompt: Text("the first mad on your PATH"))
             Text("The app uses the phone server when it is on, and starts mad itself when it is not.")
                 .font(.footnote).foregroundStyle(.secondary)
