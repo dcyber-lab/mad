@@ -17,17 +17,22 @@ public enum ChannelMapping {
                               calendar: Calendar = .current, now: Date = Date()) -> ChannelScreen {
         let channel = deck?.channel(id: id)
         let title = Self.title(id: id, channel: channel)
-        let members = Self.members(channel: channel, deck: deck)
+        let split = Self.split(channel: channel, deck: deck)
+        let members = split.team
         let sorted = messages.sorted { $0.seq < $1.seq }
         let items = Self.items(sorted, channel: channel, deck: deck, calendar: calendar, now: now)
         let pictures = sorted.reduce(0) { $0 + $1.images.count }
-        let working = members.filter { $0.state == .working }.count
-        let needing = members.filter { $0.state == .needsYou }.count
-        let line = members.isEmpty ? "" : working > 0 ? "\(working) 个在工作" : needing > 0 ? "\(needing) 个在等你" : "\(members.count) 位成员"
+        // what is going on counts everyone; how many there are counts the team only
+        let everyone = members + split.helpers
+        let working = everyone.filter { $0.state == .working }.count
+        let needing = everyone.filter { $0.state == .needsYou }.count
+        var line = members.isEmpty ? "" : working > 0 ? "\(working) 个在工作" : needing > 0 ? "\(needing) 个在等你" : "\(members.count) 位成员"
+        if !line.isEmpty, !split.helpers.isEmpty { line += " · \(split.helpers.count) 帮手" }
         let isPaused = paused || (channel?.paused ?? false)
         return ChannelScreen(
-            title: title, members: members, stateLine: line, items: items,
-            panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, pictureCount: pictures, paused: isPaused),
+            title: title, members: members, helpers: split.helpers, stateLine: line, items: items,
+            panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
+                                pictureCount: pictures, paused: isPaused),
             placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
     }
 
@@ -37,6 +42,45 @@ public enum ChannelMapping {
     }
 
     // MARK: members
+
+    /// A channel's members in the two groups the panel shows: the team's roles (lead first, in their
+    /// order) and the helpers (members the team does not name, whose agent still exists; working or
+    /// waiting ones first). A channel without a team is one list.
+    public struct MemberSplit: Equatable {
+        public var team: [ChannelMember]
+        public var helpers: [ChannelMember]
+        /// The channel has a team, so the lists have headings.
+        public var sectioned: Bool
+    }
+
+    public static func split(channel: Channel?, deck: Deck?) -> MemberSplit {
+        let all = members(channel: channel, deck: deck)
+        guard let roles = channel?.team?.roles, roles.contains(where: { !($0.agent ?? "").isEmpty }) else {
+            return MemberSplit(team: all, helpers: [], sectioned: false)
+        }
+        // the lead first, the rest in the team's order
+        let ordered = roles.filter(\.lead) + roles.filter { !$0.lead }
+        var team: [ChannelMember] = []
+        for r in ordered {
+            guard let id = r.agent, !id.isEmpty else { continue }
+            var m: ChannelMember
+            if let member = all.first(where: { $0.id == id }) {
+                m = member
+            } else if let agent = deck?.agent(id: id) {
+                let state = CharacterState(status: agent.state)
+                m = ChannelMember(id: id, kind: agent.kind, state: state, name: agent.label, status: statusText(agent, state), isLead: r.lead)
+            } else {
+                continue // the role's agent is neither in the channel nor alive
+            }
+            m.role = r.role
+            team.append(m)
+        }
+        let named = Set(team.map(\.id))
+        // without a deck nothing says an agent is gone
+        let helpers = all.filter { !named.contains($0.id) && (deck == nil || deck?.agent(id: $0.id) != nil) }
+        let active = helpers.filter { $0.state == .working || $0.state == .needsYou }
+        return MemberSplit(team: team, helpers: active + helpers.filter { !($0.state == .working || $0.state == .needsYou) }, sectioned: true)
+    }
 
     static func members(channel: Channel?, deck: Deck?) -> [ChannelMember] {
         guard let c = channel else { return [] }

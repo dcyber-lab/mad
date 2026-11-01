@@ -207,4 +207,75 @@ final class ChannelMappingTests: XCTestCase {
         XCTAssertEqual(s.stateLine, "")
         XCTAssertEqual(bubbles(s).count, 1)
     }
+
+    // MARK: the team and its helpers
+
+    /// A channel of the fixture deck's first seven agents: the 1st, 2nd and 3rd are the team's roles
+    /// (listed out of order, the lead last); the 4th is gone from the deck.
+    private func teamDeck() throws -> Deck {
+        var deck = try fixture("deck-channel-fold", Deck.self)
+        let ids = deck.projects[0].agents.map(\.id)
+        let members = ids.prefix(7).enumerated().map { Channel.Member(id: $1, label: "m\($0)", kind: "claude") }
+        deck.channels[0].members = Array(members)
+        deck.channels[0].team = Channel.ChannelTeam(name: "t", roles: [
+            .init(role: "审阅", agent: ids[1]), .init(role: "构建", agent: ids[2]), .init(role: "架构", agent: ids[0], lead: true),
+        ])
+        deck.channels[0].lead = nil
+        // the 4th member's agent no longer exists
+        deck.projects[0].agents.removeAll { $0.id == ids[3] }
+        return deck
+    }
+
+    func testTheTeamIsItsRolesLeadFirstAndTheHelpersAreTheRestWhoStillExist() throws {
+        let deck = try teamDeck()
+        let ids = ["fold0001-aaaa", "fold0002-aaaa", "fold0003-aaaa", "fold0004-aaaa", "fold0005-aaaa", "fold0006-aaaa", "fold0007-aaaa"]
+        let split = ChannelMapping.split(channel: deck.channel(id: "fold"), deck: deck)
+        XCTAssertTrue(split.sectioned)
+        XCTAssertEqual(split.team.map(\.role), ["架构", "审阅", "构建"], "the lead first, then the roles in their order")
+        XCTAssertEqual(split.team.map(\.id), [ids[0], ids[1], ids[2]])
+        XCTAssertEqual(split.team.map(\.isLead), [true, false, false])
+        XCTAssertEqual(split.helpers.count, 3, "7 members - 3 roles - 1 gone")
+        XCTAssertFalse(split.helpers.contains { $0.id == ids[3] })
+        XCTAssertTrue(split.helpers.allSatisfy { $0.role.isEmpty })
+    }
+
+    func testWorkingAndWaitingHelpersComeFirst() throws {
+        var deck = try teamDeck()
+        // helpers are the 5th, 6th and 7th agents: the 7th works, the 6th waits
+        let i = deck.projects[0].agents.firstIndex { $0.id == "fold0007-aaaa" }!
+        deck.projects[0].agents[i].shown = "running"
+        let j = deck.projects[0].agents.firstIndex { $0.id == "fold0006-aaaa" }!
+        deck.projects[0].agents[j].shown = "waiting"
+        let split = ChannelMapping.split(channel: deck.channel(id: "fold"), deck: deck)
+        XCTAssertEqual(split.helpers.map(\.id), ["fold0006-aaaa", "fold0007-aaaa", "fold0005-aaaa"], "active ones first, each group in the channel's order")
+    }
+
+    func testTheHeadAndThePanelCountTheTeamOnly() throws {
+        let deck = try teamDeck()
+        let s = screen([], deck: deck)
+        XCTAssertEqual(s.members.count, 3)
+        XCTAssertEqual(s.helpers.count, 3)
+        XCTAssertEqual(s.stateLine, "3 位成员 · 3 帮手")
+        XCTAssertEqual(s.panel.members, s.members)
+        XCTAssertEqual(s.panel.helpers, s.helpers)
+        XCTAssertTrue(s.panel.sectioned)
+    }
+
+    func testATeamWithoutHelpersHasNoHelperHeading() throws {
+        var deck = try teamDeck()
+        deck.channels[0].members = Array(deck.channels[0].members.prefix(3))
+        let s = screen([], deck: deck)
+        XCTAssertEqual(s.panel.helpers, [])
+        XCTAssertEqual(s.stateLine, "3 位成员")
+        XCTAssertTrue(s.panel.sectioned, "the team still has its heading")
+    }
+
+    func testAChannelWithoutATeamIsOneList() throws {
+        let deck = try fixture("deck-channel-fold", Deck.self)
+        let split = ChannelMapping.split(channel: deck.channel(id: "fold"), deck: deck)
+        XCTAssertFalse(split.sectioned)
+        XCTAssertEqual(split.team.count, 8)
+        XCTAssertEqual(split.helpers, [])
+        XCTAssertEqual(split.team, ChannelMapping.members(channel: deck.channel(id: "fold"), deck: deck))
+    }
 }

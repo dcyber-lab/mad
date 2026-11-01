@@ -35,12 +35,11 @@ struct ChannelPanelView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 16)
 
-                sectionTitle("成员 · \(panel.members.count)")
-                list {
-                    ForEach(Array(panel.members.enumerated()), id: \.element.id) { i, m in
-                        if i > 0 { Divider().padding(.leading, 60) }
-                        Button { close(); actions.openAgent(m.id) } label: { memberRow(m) }.buttonStyle(.plain)
-                    }
+                sectionTitle(panel.sectioned ? "小组 \(panel.members.count)" : "成员 · \(panel.members.count)")
+                memberList(panel.members)
+                if !panel.helpers.isEmpty {
+                    sectionTitle("帮手 \(panel.helpers.count)")
+                    memberList(panel.helpers)
                 }
 
                 sectionTitle("这个群")
@@ -74,12 +73,21 @@ struct ChannelPanelView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
+    private func memberList(_ rows: [ChannelMember]) -> some View {
+        list {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, m in
+                if i > 0 { Divider().padding(.leading, 60) }
+                Button { close(); actions.openAgent(m.id) } label: { memberRow(m) }.buttonStyle(.plain)
+            }
+        }
+    }
+
     private func memberRow(_ m: ChannelMember) -> some View {
         HStack(spacing: 12) {
             CharacterView(id: m.id, kind: m.kind, state: m.state, size: 36)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text(m.name).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(m.role.isEmpty ? m.name : m.role).font(.body.weight(.semibold)).lineLimit(1)
                     if m.isLead {
                         Text("负责人").font(.caption2).padding(.horizontal, 7).padding(.vertical, 1)
                             .background(Color.chatLine.opacity(0.7), in: Capsule()).foregroundStyle(.secondary)
@@ -90,11 +98,13 @@ struct ChannelPanelView: View {
                 }
             }
             Spacer(minLength: 0)
+            // its kind, if there is room: it is the kind that gives way
+            if !m.kind.isEmpty { Text(m.kind).font(.caption).foregroundStyle(.secondary).lineLimit(1).layoutPriority(-1) }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(m.name)，\(m.isLead ? "负责人，" : "")\(m.status)")
+        .accessibilityLabel("\(m.role.isEmpty ? m.name : "\(m.role)，\(m.name)")，\(m.isLead ? "负责人，" : "")\(m.status)")
         .accessibilityAddTraits(.isButton)
     }
 
