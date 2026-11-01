@@ -14,8 +14,8 @@ public struct ChannelView: View {
     @State private var nearBottom = true
     @State private var viewport = CGSize.zero
     @State private var keeper = BottomKeeper()
-    /// When the list last followed a new message to the bottom: the marker leaving then is the message pushing it, not the person scrolling.
-    @State private var followedAt = Date.distantPast
+    /// The marker's whereabouts and when the list last followed a message (see `BottomWatch`).
+    @State private var watch = BottomWatch()
     @State private var expanded: Set<Int> = []
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
@@ -144,12 +144,15 @@ public struct ChannelView: View {
                     // The last row of the lazy stack: it appears and disappears as the scroll brings it
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
-                        .onAppear { nearBottom = true }
+                        .onAppear { watch.appeared(); nearBottom = true }
                         .onDisappear {
-                            // a message that arrives pushes the marker out for a moment; the list follows at once
-                            guard Date().timeIntervalSince(followedAt) > 0.5 else { return }
-                            nearBottom = false
-                            if keeper.leftBottom() { stick(proxy) }
+                            // a message that arrives pushes the marker out for a moment and the list follows it: that
+                            // is judged when the follow is over, so a person who scrolls up in that moment is not missed
+                            switch watch.disappeared() {
+                            case .now: left(proxy)
+                            case .recheck(let after):
+                                DispatchQueue.main.asyncAfter(deadline: .now() + after + 0.02) { if watch.stillLeft { left(proxy) } }
+                            }
                         }
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
@@ -205,9 +208,16 @@ public struct ChannelView: View {
                 if case .mine? = screen.items.last { mine = true }
                 // No animation: a lazy list scrolled under an animation while its rows are measured draws
                 // gaps, and the new message pushing the marker out would flash the way-down button.
-                if nearBottom || mine { followedAt = Date(); stick(proxy) }
+                if nearBottom || mine { watch.followed(); stick(proxy) }
             }
         }
+    }
+
+    /// The person is not at the bottom: no more following, and the way-down button shows. A resize that
+    /// came with it puts the list back (`BottomKeeper`).
+    private func left(_ proxy: ScrollViewProxy) {
+        nearBottom = false
+        if keeper.leftBottom() { stick(proxy) }
     }
 
     /// Back to the bottom once the layout has settled (after a resize that moved it).

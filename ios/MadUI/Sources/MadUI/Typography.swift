@@ -111,3 +111,35 @@ struct BottomKeeper {
 
     private var close: Bool { abs(resizedAt.timeIntervalSince(leftAt)) < 0.4 }
 }
+
+/// Whether the person is at the bottom of a list that follows new messages. A message that arrives pushes the marker at
+/// the end out of view for a moment, and the list follows it: that is not the person scrolling away, so a marker that
+/// leaves within `window` of a follow is judged once the window is over (still out: they did scroll; back: they did not).
+struct BottomWatch {
+    static let window: TimeInterval = 0.5
+
+    private(set) var shown = true
+    private var followedAt = Date.distantPast
+
+    enum Left: Equatable {
+        /// The person has left the bottom.
+        case now
+        /// Look again after this many seconds: `stillLeft` then says.
+        case recheck(after: TimeInterval)
+    }
+
+    mutating func appeared() { shown = true }
+
+    /// The list followed a new message to the bottom.
+    mutating func followed(at now: Date = Date()) { followedAt = now }
+
+    /// The marker left the screen.
+    mutating func disappeared(at now: Date = Date()) -> Left {
+        shown = false
+        let wait = Self.window - now.timeIntervalSince(followedAt)
+        return wait > 0 ? .recheck(after: wait) : .now
+    }
+
+    /// At a recheck: the marker is still out.
+    var stillLeft: Bool { !shown }
+}
