@@ -14,8 +14,9 @@ struct MadMacApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(server: server)
-                .frame(minWidth: 720, minHeight: 480)
+                .frame(minWidth: 800, minHeight: 520)
         }
+        .defaultSize(width: 1200, height: 800)
         // The page, in a window of its own, for what has no native screen yet (usage, the board, an
         // agent's terminal ...). The server is the one the main window found.
         WindowGroup("mad", for: WebTarget.self) { $target in

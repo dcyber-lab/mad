@@ -80,6 +80,8 @@ public struct NativeRoot: View {
         #if os(macOS)
         NavigationSplitView {
             HomeSidebar(model: model, selection: $selection, actions: actions)
+                // wide enough for the rows to read as they do on the phone, not "clau…"
+                .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
         } detail: {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb)
         }
@@ -121,7 +123,7 @@ struct Detail: View {
                 placeholder(id, "It is gone.")
             }
         } else {
-            placeholder("mad", "Choose a chat or an agent.")
+            placeholder("mad", "选一个群聊或 agent")
         }
     }
 
