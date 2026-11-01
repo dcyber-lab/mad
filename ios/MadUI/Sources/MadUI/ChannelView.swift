@@ -113,12 +113,13 @@ public struct ChannelView: View {
     /// The channel's name, floating at the top of the window as a small pill: its tile, name and how it stands.
     /// It opens 群信息.
     private var namePill: some View {
+        // hugs its text, never passes the pane (less the side margins): a long name is cut at the end
         nameButton
-            .fixedSize()
             .padding(.horizontal, 14).padding(.vertical, 6)
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
             .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+            .padding(.horizontal, MadColumn.side)
             .padding(.top, 12)
     }
     #endif

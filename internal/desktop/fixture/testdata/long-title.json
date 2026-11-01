@@ -1,0 +1,410 @@
+{
+  "deck": {
+    "machine": "Heng Du’s MacBook Pro (the 16-inch one on the desk at home).",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "work0001-aaaa",
+            "kind": "claude",
+            "status": "running",
+            "shown": "running",
+            "chat": true,
+            "color": "#d97757",
+            "name": "Sidebar token 统计",
+            "last": "正在跑测试…",
+            "tool": "Bash",
+            "target": "go test ./..."
+          },
+          {
+            "id": "need0001-bbbb",
+            "kind": "claude",
+            "status": "waiting",
+            "shown": "waiting",
+            "chat": true,
+            "color": "#d97757",
+            "title": "给我绘制一个表格",
+            "last": "想运行一条命令，等你确认",
+            "headless": true,
+            "mode": "window"
+          },
+          {
+            "id": "stop0001-cccc",
+            "kind": "claude",
+            "status": "exited",
+            "shown": "stopped",
+            "chat": true,
+            "color": "#d97757",
+            "name": "Mad ideas",
+            "last": "已停止"
+          },
+          {
+            "id": "idle0001-dddd",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "notes"
+          },
+          {
+            "id": "unti0001-eeee",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "last": "ok"
+          },
+          {
+            "id": "cjk00001-ffff",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "长文本测试",
+            "last": "这是一段很长的中文回复，用来检查列表里的一行预览会在行尾被省略而不是把整行撑宽，也不会把名字挤出屏幕，另外还有一些标点，比如逗号、句号。"
+          },
+          {
+            "id": "emoji001-gggg",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "🚀 发布助手",
+            "last": "release v1.2 已发布 🎉"
+          },
+          {
+            "id": "team0001-arch",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "architect",
+            "team": "ios",
+            "role": "lead",
+            "last": "第 3 条也上线了，三条全部完成。"
+          },
+          {
+            "id": "team0001-bld0",
+            "kind": "claude",
+            "status": "running",
+            "shown": "running",
+            "chat": true,
+            "color": "#d97757",
+            "name": "builder",
+            "team": "ios",
+            "role": "builder",
+            "last": "在写代码"
+          },
+          {
+            "id": "team0001-rev0",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "reviewer",
+            "team": "ios",
+            "role": "reviewer",
+            "last": "评审 #88：通过"
+          },
+          {
+            "id": "long0001-hhhh",
+            "kind": "claude",
+            "status": "waiting",
+            "shown": "waiting",
+            "chat": true,
+            "color": "#d97757",
+            "title": "Refactor the whole desktop window so that its sidebar, its message column and the composer all share one set of edges and a very long session title like this one is cut at the end instead of running off the window",
+            "last": "想运行一条命令，等你确认",
+            "headless": true,
+            "mode": "window"
+          }
+        ]
+      }
+    ],
+    "teams": [
+      {
+        "name": "ios",
+        "project": "mad",
+        "members": [
+          "team0001-arch",
+          "team0001-bld0",
+          "team0001-rev0"
+        ],
+        "rollup": []
+      }
+    ],
+    "bus": [
+      {
+        "id": "ios",
+        "title": "#ios",
+        "members": [
+          {
+            "id": "team0001-arch",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "team0001-bld0",
+            "label": "builder",
+            "kind": "claude"
+          },
+          {
+            "id": "team0001-rev0",
+            "label": "reviewer",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "architect: 第 3 条也上线了，三条全部完成。",
+        "last_at": "-5m",
+        "unread": 3,
+        "mention": true,
+        "listed": true,
+        "lead": "team0001-arch",
+        "team": {
+          "name": "ios",
+          "template": "",
+          "roles": [
+            {
+              "role": "lead",
+              "agent": "team0001-arch",
+              "lead": true
+            },
+            {
+              "role": "builder",
+              "agent": "team0001-bld0"
+            },
+            {
+              "role": "reviewer",
+              "agent": "team0001-rev0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "solo",
+        "title": "#solo",
+        "members": [
+          {
+            "id": "idle0001-dddd",
+            "label": "notes",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "notes: 好的",
+        "last_at": "-2h"
+      },
+      {
+        "id": "pair",
+        "title": "#pair",
+        "members": [
+          {
+            "id": "work0001-aaaa",
+            "label": "Sidebar token 统计",
+            "kind": "claude"
+          },
+          {
+            "id": "cjk00001-ffff",
+            "label": "长文本测试",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "长文本测试: 收到",
+        "last_at": "-30m"
+      },
+      {
+        "id": "five",
+        "title": "#five",
+        "members": [
+          {
+            "id": "team0001-arch",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "team0001-bld0",
+            "label": "builder",
+            "kind": "claude"
+          },
+          {
+            "id": "team0001-rev0",
+            "label": "reviewer",
+            "kind": "claude"
+          },
+          {
+            "id": "work0001-aaaa",
+            "label": "Sidebar token 统计",
+            "kind": "claude"
+          },
+          {
+            "id": "need0001-bbbb",
+            "label": "给我绘制一个表格",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "kim: 五个成员的群",
+        "last_at": "-1h"
+      },
+      {
+        "id": "shots",
+        "title": "#shots",
+        "members": [
+          {
+            "id": "emoji001-gggg",
+            "label": "🚀 发布助手",
+            "kind": "claude"
+          }
+        ],
+        "last": 3,
+        "last_text": "🚀 发布助手: [图片]",
+        "last_at": "-10m"
+      }
+    ],
+    "inbox": {
+      "items": [
+        {
+          "key": "k-need",
+          "kind": "permission",
+          "agent": "need0001-bbbb",
+          "title": "给我绘制一个表格",
+          "context": "Bash",
+          "text": "python3 make_table.py --out report.xlsx",
+          "mono": true,
+          "since": "-1m",
+          "acts": [
+            {
+              "verb": "allow",
+              "label": "Allow",
+              "row": true,
+              "primary": true
+            },
+            {
+              "verb": "deny",
+              "label": "Deny",
+              "row": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "chat": {
+    "need0001-bbbb": {
+      "file": "fixture",
+      "offset": 4000,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "给我绘制一个表格，把本周的任务汇总一下"
+        },
+        {
+          "kind": "text",
+          "text": "好的，我先读一下任务板，再生成表格。\n\n- 读 `board.json`\n- 按负责人分组\n- 写成 **report.xlsx**"
+        },
+        {
+          "kind": "tool",
+          "tool": "Read",
+          "label": "board.json",
+          "input": "board.json",
+          "id": "t1"
+        },
+        {
+          "kind": "result",
+          "id": "t1",
+          "text": "{\n  \"tasks\": 15,\n  \"done\": 12\n}"
+        },
+        {
+          "kind": "tool",
+          "tool": "Bash",
+          "label": "go test ./internal/board/...",
+          "input": "go test ./internal/board/...",
+          "id": "t2"
+        },
+        {
+          "kind": "result",
+          "id": "t2",
+          "error": true,
+          "text": "--- FAIL: TestSummary (0.01s)\n    summary_test.go:42: want 15 tasks, got 14\nFAIL"
+        },
+        {
+          "kind": "text",
+          "text": "测试没过，少了一条任务：\n\nhttps://github.com/dcyber-lab/mad/blob/main/internal/board/summary.go#L42-L120?plain=1&token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n```go\nfor _, t := range tasks[1:] { // skips the first task\n    out[t.Owner] = append(out[t.Owner], t)\n}\n```\n\n循环从第二条开始，所以第一条任务被漏掉了。"
+        },
+        {
+          "kind": "tool",
+          "tool": "Bash",
+          "label": "python3 make_table.py --out report.xlsx",
+          "input": "python3 make_table.py --out report.xlsx",
+          "id": "t3"
+        }
+      ]
+    },
+    "long0001-hhhh": {
+      "file": "fixture",
+      "offset": 4000,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "给我绘制一个表格，把本周的任务汇总一下"
+        },
+        {
+          "kind": "text",
+          "text": "好的，我先读一下任务板，再生成表格。\n\n- 读 `board.json`\n- 按负责人分组\n- 写成 **report.xlsx**"
+        },
+        {
+          "kind": "tool",
+          "tool": "Read",
+          "label": "board.json",
+          "input": "board.json",
+          "id": "t1"
+        },
+        {
+          "kind": "result",
+          "id": "t1",
+          "text": "{\n  \"tasks\": 15,\n  \"done\": 12\n}"
+        },
+        {
+          "kind": "tool",
+          "tool": "Bash",
+          "label": "go test ./internal/board/...",
+          "input": "go test ./internal/board/...",
+          "id": "t2"
+        },
+        {
+          "kind": "result",
+          "id": "t2",
+          "error": true,
+          "text": "--- FAIL: TestSummary (0.01s)\n    summary_test.go:42: want 15 tasks, got 14\nFAIL"
+        },
+        {
+          "kind": "text",
+          "text": "测试没过，少了一条任务：\n\nhttps://github.com/dcyber-lab/mad/blob/main/internal/board/summary.go#L42-L120?plain=1&token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n```go\nfor _, t := range tasks[1:] { // skips the first task\n    out[t.Owner] = append(out[t.Owner], t)\n}\n```\n\n循环从第二条开始，所以第一条任务被漏掉了。"
+        },
+        {
+          "kind": "tool",
+          "tool": "Bash",
+          "label": "python3 make_table.py --out report.xlsx",
+          "input": "python3 make_table.py --out report.xlsx",
+          "id": "t3"
+        }
+      ]
+    }
+  }
+}

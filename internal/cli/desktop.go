@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"syscall"
@@ -31,8 +33,9 @@ func desktopCmd(args []string, stdio IO) error {
 	serve := fs.Bool("serve", false, "serve the phone (mad phone): its token, no window")
 	origin := fs.String("origin", "", "`host:port` the page is also opened from (mad phone)")
 	exitOnEOF := fs.Bool("exit-on-stdin-eof", false, "exit when standard input reaches EOF (for a parent that holds its write end: the server ends with the parent)")
+	web := fs.Bool("web", false, "open the deck's web page in a browser window even if the Mac app is installed")
 	fs.Usage = func() {
-		fmt.Fprintln(stdio.Err, "usage: mad desktop [-addr host:port] [-no-window] [-exit-on-stdin-eof]")
+		fmt.Fprintln(stdio.Err, "usage: mad desktop [-addr host:port] [-no-window] [-exit-on-stdin-eof] [-web]")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
@@ -40,6 +43,16 @@ func desktopCmd(args []string, stdio IO) error {
 	}
 	if tmux.InDeck() && !*serve {
 		return fmt.Errorf("run mad desktop outside the deck: the window is not one of its panes")
+	}
+
+	// On a Mac with the native app installed, the window is the app (it finds mad's server itself).
+	if !*serve && !*noWindow && !*web && !flagSet(fs, "addr") {
+		if app := nativeAppPath(runtime.GOOS, os.Getenv("HOME"), fileExists); app != "" {
+			if err := exec.Command("open", app).Run(); err == nil {
+				fmt.Fprintln(stdio.Err, "mad: opened", app, "(mad desktop -web opens the browser window instead)")
+				return nil
+			}
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
@@ -94,6 +107,25 @@ func desktopCmd(args []string, stdio IO) error {
 		}
 		openWindow(ctx, stdio, url+"&win="+id, func() bool { return srv.WindowOpen(id) }, stop)
 	})
+}
+
+// nativeAppPath is where the Mac app is installed ("" when it is not, or off macOS): /Applications first,
+// then the person's own Applications folder.
+func nativeAppPath(goos, home string, exists func(string) bool) string {
+	if goos != "darwin" {
+		return ""
+	}
+	for _, dir := range []string{"/Applications", home + "/Applications"} {
+		if p := dir + "/madmac.app"; exists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 // flagSet says whether flag name was given.

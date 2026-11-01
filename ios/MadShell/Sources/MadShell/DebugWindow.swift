@@ -27,10 +27,6 @@ enum DebugWindow {
                 if abs(window.frame.width - frame.width) < 1 { break }
             }
         }
-        // `-sidebarWidth 300` drags the divider there (the sidebar's own default width is another change's).
-        if let w = value("-sidebarWidth").flatMap(Double.init), let split = firstSplitView(in: window.contentView) {
-            split.setPosition(CGFloat(w), ofDividerAt: 0)
-        }
         try? await Task.sleep(for: .seconds(1))
         if let want = value("-windowSize")?.split(separator: "x").compactMap({ Double($0) }).first, window.frame.width + 1 < want {
             // still not that wide (a size that SwiftUI refuses): zoom to the screen, which it takes
@@ -42,13 +38,6 @@ enum DebugWindow {
             try? (NSStringFromRect(window.frame) + " screens " + NSScreen.screens.map { NSStringFromRect($0.frame) + NSStringFromRect($0.visibleFrame) }.joined(separator: " | ") + " style \(window.styleMask.rawValue) full \(window.styleMask.contains(.fullScreen))").write(toFile: path + ".frame", atomically: true, encoding: .utf8)
             try? String(window.windowNumber).write(toFile: path, atomically: true, encoding: .utf8)
         }
-    }
-
-    private static func firstSplitView(in view: NSView?) -> NSSplitView? {
-        guard let view else { return nil }
-        if let split = view as? NSSplitView { return split }
-        for sub in view.subviews { if let found = firstSplitView(in: sub) { return found } }
-        return nil
     }
 }
 #endif

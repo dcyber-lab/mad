@@ -24,3 +24,21 @@ func TestIndexIDsUnique(t *testing.T) {
 		t.Errorf("found only %d ids: the pattern is off", len(seen))
 	}
 }
+
+// The apps open the page on a view they have no native screen for with #open=<view> (and #agent=<id>):
+// every view the apps ask for must be one the page knows.
+func TestPageOpensTheViewsTheAppsAskFor(t *testing.T) {
+	b, err := webFS.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range []string{"usage", "board", "skills", "phone", "notify", "addproject", "theme"} {
+		if !regexp.MustCompile(`\b` + view + `: \(\) =>`).Match(b) {
+			t.Errorf("app.js does not open #open=%s", view)
+		}
+	}
+	// #open=__proto__, valueOf and hasOwnProperty are names an object has, not views
+	if !regexp.MustCompile(`Object\.hasOwn\(views, appAsks\.view\)`).Match(b) {
+		t.Error("app.js looks #open= up in views without checking it is an own key")
+	}
+}

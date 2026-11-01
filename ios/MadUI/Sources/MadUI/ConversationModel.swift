@@ -46,8 +46,11 @@ public struct AgentConversation: Equatable, Sendable {
     /// The red dot shows while something waits on the person.
     public var needsYou: Bool { ask != nil || state == .needsYou }
 
-    /// What the empty composer says.
-    public var composerPrompt: String { "发消息给 \(title)" }
+    /// What the empty composer says. A long title is cut: the hint stays one line, as the bar is.
+    public var composerPrompt: String {
+        let name = title.count > 28 ? String(title.prefix(28)) + "…" : title
+        return "发消息给 \(name)"
+    }
 
     /// The interrupt button shows while the agent works, and only when nothing is typed (typing turns it into send).
     public func showsInterrupt(draft: String) -> Bool { state == .working && Self.isBlank(draft) }
@@ -202,11 +205,16 @@ public struct ConversationActions {
     public var back: () -> Void
     /// The ＋ beside the composer (attach).
     public var attach: () -> Void
+    /// The agent's terminal and changes, which have no native view yet: a button in the header that opens them
+    /// in the web page. Nil draws no button.
+    public var openWeb: (() -> Void)?
 
     public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
-                back: @escaping () -> Void = {}, attach: @escaping () -> Void = {}) {
+                back: @escaping () -> Void = {}, attach: @escaping () -> Void = {},
+                openWeb: (() -> Void)? = nil) {
+        self.openWeb = openWeb
         self.send = send
         self.act = act
         self.interrupt = interrupt

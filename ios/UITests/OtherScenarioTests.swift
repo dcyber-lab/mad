@@ -44,7 +44,10 @@ final class UsageTests: MadUITestCase {
         launch()
         waitForHome()
         tap("更多")
-        tap("用量")
+        // the item carries a red dot when the day's budget is spent, which the label may say too
+        let item = elements(containing: "用量").firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10), "no “用量” to tap")
+        item.tap()
         XCTAssertTrue(elements(containing: "42%").firstMatch.waitForExistence(timeout: 10), "no 42%")
         for p in ["71%", "104%"] { XCTAssertTrue(elements(containing: p).firstMatch.exists, "no \(p)") }
         shot("usage")

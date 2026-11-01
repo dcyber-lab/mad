@@ -333,6 +333,9 @@ final class ConversationTests: XCTestCase {
     func testComposerRules() {
         var c = AgentConversation(title: "ios", agentID: "a", state: .working)
         XCTAssertEqual(c.composerPrompt, "发消息给 ios")
+        var long = c
+        long.title = String(repeating: "很长的标题", count: 20)
+        XCTAssertEqual(long.composerPrompt, "发消息给 " + String(repeating: "很长的标题", count: 20).prefix(28) + "…", "the hint stays one line")
         XCTAssertTrue(c.showsInterrupt(draft: ""))
         XCTAssertTrue(c.showsInterrupt(draft: "  \n"))
         XCTAssertFalse(c.showsInterrupt(draft: "wait"), "typing turns interrupt into send")

@@ -57,3 +57,31 @@ func TestDesktopKeepsServingWithoutTheFlag(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 	}
 }
+
+func TestNativeAppPath(t *testing.T) {
+	has := func(paths ...string) func(string) bool {
+		return func(p string) bool {
+			for _, x := range paths {
+				if x == p {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	for _, c := range []struct {
+		name, goos string
+		exists     func(string) bool
+		want       string
+	}{
+		{"installed", "darwin", has("/Applications/madmac.app"), "/Applications/madmac.app"},
+		{"in the home's Applications", "darwin", has("/Users/me/Applications/madmac.app"), "/Users/me/Applications/madmac.app"},
+		{"/Applications wins", "darwin", has("/Applications/madmac.app", "/Users/me/Applications/madmac.app"), "/Applications/madmac.app"},
+		{"not installed", "darwin", has(), ""},
+		{"not on macOS", "linux", has("/Applications/madmac.app"), ""},
+	} {
+		if got := nativeAppPath(c.goos, "/Users/me", c.exists); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}

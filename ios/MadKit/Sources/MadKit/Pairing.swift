@@ -28,8 +28,18 @@ public struct Mac: Hashable, Codable, Identifiable, Sendable {
 
     /// The page as the app embeds it: `embed=app` drops the page's own
     /// bottom toolbar, which the app's tab bar replaces.
-    public var embeddedDeckURL: URL {
-        URL(string: baseURL.absoluteString + "/#token=" + token + "&embed=app") ?? baseURL
+    public var embeddedDeckURL: URL { webURL(nil) }
+
+    /// The page as the app embeds it, opened on a view the app has no native screen for.
+    /// `embedded: false` is the full page, as a browser shows it (the Mac's).
+    public func webURL(_ target: WebTarget?, embedded: Bool = true) -> URL {
+        var fragment = "#token=" + token + (embedded ? "&embed=app" : "&embed=0")
+        switch target {
+        case .view(let v): fragment += "&open=" + v.rawValue
+        case .agent(let id): fragment += "&agent=" + (id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)
+        case nil: break
+        }
+        return URL(string: baseURL.absoluteString + "/" + fragment) ?? baseURL
     }
 }
 
@@ -112,5 +122,22 @@ public enum Pairing {
     private static func hex32(_ s: String) -> String? {
         let t = s.lowercased()
         return t.count == 32 && t.allSatisfy({ $0.isASCII && $0.isHexDigit }) ? t : nil
+    }
+}
+
+/// What the page is asked to show: one of its views (`#open=`), or an agent (`#agent=`), for what has no
+/// native screen yet (the agent's terminal and changes, usage, the board, skills ...).
+public enum WebTarget: Hashable, Codable, Sendable, Identifiable {
+    public enum View: String, Codable, Sendable, CaseIterable {
+        case usage, board, skills, phone, notify, addproject, theme
+    }
+    case view(View)
+    case agent(String)
+
+    public var id: String {
+        switch self {
+        case .view(let v): "view:" + v.rawValue
+        case .agent(let id): "agent:" + id
+        }
     }
 }

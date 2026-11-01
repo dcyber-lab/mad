@@ -14,6 +14,9 @@ struct MacShell<Detail: View>: View {
     @ViewBuilder var detail: Detail
 
     @AppStorage("mad.sidebarWidth") private var storedWidth = 300.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The resize cursor is pushed while the pointer is on the sidebar's edge; hiding the sidebar under it pops it.
+    @State private var onEdge = false
     @State private var open = true
     @State private var dragFrom: Double?
 
@@ -57,9 +60,13 @@ struct MacShell<Detail: View>: View {
         .background {
             // ⌘\ hides and shows the sidebar
             Button("") { toggle() }.keyboardShortcut("\\", modifiers: .command).opacity(0).frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.22), value: open)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: open)
+        .onChange(of: open) { _, isOpen in
+            if !isOpen, onEdge { NSCursor.pop(); onEdge = false }
+        }
     }
 
     /// The sidebar and its edge. Hidden it has no width (and is clipped), so that the change of width is animated.
@@ -75,7 +82,10 @@ struct MacShell<Detail: View>: View {
             if open {
                 Color.clear.frame(width: 8).contentShape(Rectangle())
                     .offset(x: 4)
-                    .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                    .onHover { inside in
+                        if inside, !onEdge { NSCursor.resizeLeftRight.push(); onEdge = true }
+                        else if !inside, onEdge { NSCursor.pop(); onEdge = false }
+                    }
                     .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                         .onChanged { v in
                             let from = dragFrom ?? Double(width)

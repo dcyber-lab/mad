@@ -21,7 +21,7 @@ public struct ConversationView: View {
     public var body: some View {
         VStack(spacing: 0) {
             #if os(iOS)
-            ConversationHeader(model: model, showsBack: showsBack, back: actions.back)
+            ConversationHeader(model: model, showsBack: showsBack, back: actions.back, openWeb: actions.openWeb)
             #endif
             messages
             if let ask = model.ask {
@@ -37,15 +37,26 @@ public struct ConversationView: View {
         .background(.background)
         .environment(\.convImageLoader, actions.loadImage)
         #if os(macOS)
-        // no bar: the agent's name floats at the top as a small pill
+        // no bar: the agent's name floats at the top as a small pill, with the way to its terminal and changes beside it.
+        // It hugs its text but never passes the pane (less the side margins): a long title is cut at the end.
         .overlay(alignment: .top) {
-            ConversationIdentity(model: model)
-                .fixedSize()
-                .padding(.horizontal, 14).padding(.vertical, 6)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
-                .padding(.top, 12)
+            HStack(spacing: 10) {
+                ConversationIdentity(model: model, expands: false)
+                if let openWeb = actions.openWeb {
+                    Button(action: openWeb) {
+                        Image(systemName: "terminal").font(.system(size: 14)).foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("在网页里打开终端/改动")
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+            .padding(.horizontal, MadColumn.side)
+            .padding(.top, 12)
         }
         #endif
     }
@@ -213,6 +224,7 @@ struct ConversationHeader: View {
     let model: AgentConversation
     let showsBack: Bool
     let back: () -> Void
+    var openWeb: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -227,6 +239,16 @@ struct ConversationHeader: View {
                 .accessibilityLabel("Back")
             }
             ConversationIdentity(model: model)
+            if let openWeb {
+                Button(action: openWeb) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("在网页里打开终端/改动")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -236,6 +258,8 @@ struct ConversationHeader: View {
 /// The character, the name and the state line, read as one. On the Mac it is the window's toolbar.
 struct ConversationIdentity: View {
     let model: AgentConversation
+    /// Fills the width it is given (a header's row); the Mac's pill hugs its text instead.
+    var expands = true
 
     var body: some View {
         HStack(spacing: 10) {
@@ -250,7 +274,7 @@ struct ConversationIdentity: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 0)
+            if expands { Spacer(minLength: 0) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(model.title), \(model.stateLine)")
