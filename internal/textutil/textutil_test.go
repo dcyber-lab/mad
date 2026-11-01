@@ -1,10 +1,12 @@
 package textutil
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestTruncate(t *testing.T) {
@@ -100,6 +102,25 @@ func TestUntil(t *testing.T) {
 	for d, want := range cases {
 		if got := Until(now.Add(d), now); got != want {
 			t.Errorf("Until(+%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+// A long string is cut as the whole of it would be: plain, wide, with
+// zero-width runes, short enough after all, and styled.
+func TestTruncateLong(t *testing.T) {
+	for _, s := range []string{
+		strings.Repeat("abcdefghij", 200),
+		strings.Repeat("宽字符", 300),
+		strings.Repeat("é", 600),
+		strings.Repeat("é", 30) + strings.Repeat("x", 10),
+		strings.Repeat("\x1b[31mred\x1b[0m ", 200),
+		"short",
+	} {
+		for _, n := range []int{1, 5, 40, 80} {
+			if got, want := Truncate(s, n), ansi.Truncate(s, n, "…"); got != want {
+				t.Errorf("Truncate(%.20q…, %d) = %q, want %q", s, n, got, want)
+			}
 		}
 	}
 }

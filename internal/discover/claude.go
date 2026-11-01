@@ -420,6 +420,15 @@ var usageKey = []byte(`"usage"`)
 // Parse reads titles, prompts, tool calls and usage. A response is logged
 // once per content block, each line repeating the usage of the whole.
 func (claude) Parse(line []byte) (Event, bool) {
+	// Most lines of a long session are tool results: no text of the
+	// user's, nothing to read but the time. They are not parsed. (A prompt
+	// typed is a string, with no tool result and no "text" key.)
+	if bytes.Contains(line, userType) && bytes.Contains(line, toolResultType) && !bytes.Contains(line, textType) &&
+		!bytes.Contains(line, inputTextType) && !bytes.Contains(line, isMeta) {
+		if at, ok := LineTime(line); ok {
+			return Event{At: at}, true
+		}
+	}
 	var ln struct {
 		Type        string    `json:"type"`
 		Timestamp   time.Time `json:"timestamp"`
@@ -551,4 +560,32 @@ func (claude) HumanSession(id string) bool {
 	}
 	claudeHumans.Store(id, true)
 	return true
+}
+
+// userType and toolResultType are types of the line's own JSON: inside a
+// string their quotes would be escaped. isMeta marks a line not shown.
+var (
+	userType       = []byte(`"type":"user"`)
+	toolResultType = []byte(`"type":"tool_result"`)
+	isMeta         = []byte(`"isMeta":true`)
+)
+
+var timestampKey = []byte(`"timestamp":"`)
+
+// LineTime is when line was logged, read off its last "timestamp" without
+// parsing the line: claude writes the line's own after its message, so a
+// timestamp inside the message comes before it. ok false when there is
+// none that parses; the line is parsed then.
+func LineTime(line []byte) (time.Time, bool) {
+	i := bytes.LastIndex(line, timestampKey)
+	if i < 0 {
+		return time.Time{}, false
+	}
+	v := line[i+len(timestampKey):]
+	end := bytes.IndexByte(v, '"')
+	if end < 0 {
+		return time.Time{}, false
+	}
+	at, err := time.Parse(time.RFC3339Nano, string(v[:end]))
+	return at, err == nil
 }

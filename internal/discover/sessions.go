@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -78,11 +79,24 @@ func cachedSession(f fileEntry, parse func(string) *Session) *Session {
 	return s
 }
 
+// textType and inputTextType are in every part of a user line with text.
+var textType, inputTextType = []byte(`"text"`), []byte(`"input_text"`)
+
 // UserText extracts what the user typed, skipping injected context
 // (system reminders, AGENTS.md, slash-command wrappers).
 func UserText(raw json.RawMessage) string {
 	var text string
-	if json.Unmarshal(raw, &text) != nil {
+	switch t := bytes.TrimLeft(raw, " \t\r\n"); {
+	case len(t) > 0 && t[0] == '"':
+		if json.Unmarshal(raw, &text) != nil {
+			return ""
+		}
+	case len(t) > 0 && t[0] == '[':
+		// Most user lines are tool results, often long, with no text of
+		// the user's: they are not parsed at all.
+		if !bytes.Contains(t, textType) && !bytes.Contains(t, inputTextType) {
+			return ""
+		}
 		var parts []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -95,6 +109,8 @@ func UserText(raw json.RawMessage) string {
 				text += p.Text + "\n"
 			}
 		}
+	default:
+		return ""
 	}
 	text = strings.TrimSpace(reminderRe.ReplaceAllString(text, ""))
 	if text == "" || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") ||
