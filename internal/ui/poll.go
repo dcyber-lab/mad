@@ -31,22 +31,26 @@ var (
 // gitCmd reads the checkout of every project and agent directory.
 func (m *model) gitCmd() tea.Cmd {
 	m.gitScanning, m.gitDue, m.lastGit = true, false, time.Now()
-	dirs := map[string]bool{}
+	seen := map[string]bool{}
+	var dirs []string
 	for _, p := range m.st.Projects {
-		dirs[p.Path] = true
-		for _, a := range p.Agents {
-			dirs[p.Dir(a)] = true
-		}
-	}
-	return func() tea.Msg {
-		out := gitMsg{}
-		for d := range dirs {
-			if info, ok := gitStatus(d); ok {
-				out[d] = info
+		for _, d := range append([]string{p.Path}, agentDirs(p)...) {
+			if !seen[d] {
+				seen[d] = true
+				dirs = append(dirs, d)
 			}
 		}
-		return out
 	}
+	status := gitStatus
+	return func() tea.Msg { return gitMsg(git.StatusAll(dirs, status)) }
+}
+
+func agentDirs(p *state.Project) []string {
+	var out []string
+	for _, a := range p.Agents {
+		out = append(out, p.Dir(a))
+	}
+	return out
 }
 
 // readCmd brings what is known of every agent's session up to date from

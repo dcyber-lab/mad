@@ -5,7 +5,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestParseStatus(t *testing.T) {
@@ -159,5 +161,34 @@ func TestStatusAndWorktrees(t *testing.T) {
 	}
 	if exec.Command("git", "-C", r, "rev-parse", "--verify", "refs/heads/feat/x").Run() != nil {
 		t.Error("branch should survive the worktree")
+	}
+}
+
+// StatusAll reads every dir, leaves out the ones outside a work tree, and
+// runs no more than statusAtOnce reads at a time.
+func TestStatusAll(t *testing.T) {
+	var mu sync.Mutex
+	running, most := 0, 0
+	status := func(d string) (Info, bool) {
+		mu.Lock()
+		running++
+		most = max(most, running)
+		mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+		mu.Lock()
+		running--
+		mu.Unlock()
+		return Info{Branch: d}, d != "none"
+	}
+	dirs := []string{"a", "b", "c", "d", "e", "f", "g", "h", "none"}
+	got := StatusAll(dirs, status)
+	if len(got) != 8 || got["e"].Branch != "e" {
+		t.Fatalf("got %v", got)
+	}
+	if _, ok := got["none"]; ok {
+		t.Fatal("a dir outside a work tree was kept")
+	}
+	if most > statusAtOnce || most < 2 {
+		t.Fatalf("%d reads at once, want 2..%d", most, statusAtOnce)
 	}
 }
