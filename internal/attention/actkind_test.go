@@ -26,4 +26,10 @@ func TestActKindAndTarget(t *testing.T) {
 	if plan[0].Kind != KindPlan || plan[1].Kind != "" {
 		t.Errorf("plan acts = %+v, want only the approve to be kind plan", plan)
 	}
+	if got := (openRoute{label: "Open board", kind: KindBoard}).acts()[0]; got.Kind != KindBoard || got.Target != "" {
+		t.Errorf("a board item's open = %+v, want kind board and no target", got)
+	}
+	if got := (openRoute{label: "Open claude-1", target: "claude-1"}).acts()[0]; got.Target != "claude-1" || got.Kind != "" {
+		t.Errorf("a TUI agent's open = %+v, want target claude-1 and no kind", got)
+	}
 }

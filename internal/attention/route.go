@@ -101,10 +101,10 @@ func (r hostRoute) do(a Answer, _ *Facts) error {
 
 // openRoute offers Open only: the waits of TUI-run agents whose screen
 // shows no prompt keys can answer, and tasks.
-type openRoute struct{ label string }
+type openRoute struct{ label, kind, target string }
 
 func (r openRoute) acts() []Act {
-	return []Act{{Verb: VerbOpen, Label: r.label, Target: r.label, Row: true, Primary: true}}
+	return []Act{{Verb: VerbOpen, Label: r.label, Kind: r.kind, Target: r.target, Row: true, Primary: true}}
 }
 func (r openRoute) do(Answer, *Facts) error { return ErrNotOffered }
 

@@ -207,7 +207,7 @@ func (b *builder) agent(a Agent) {
 		p = prompt{}
 	}
 	it := Item{Key: keyWait(a.ID, at, p.ID), Kind: KindPermission, Agent: a.ID, Title: a.Label, Where: a.Dir,
-		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: openRoute{label: "Open " + a.Label}}
+		Since: a.Since, Blocks: true, Open: Open{Agent: a.ID}, route: openRoute{label: "Open " + a.Label, target: a.Label}}
 	tool, target := splitCall(a.Info.Tool)
 	asks := tool == "AskUserQuestion" || tool == "request_user_input"
 	switch {
@@ -310,10 +310,10 @@ func (b *builder) card(c bus.Card) {
 			ctx = c.Why
 		}
 		b.add(Item{Key: keyTask(c.Task.ID), Kind: KindTask, Icon: "task", Title: c.Title, Context: ctx, Text: c.Note,
-			Tasks: tasks, Since: since, undated: undated, Open: Open{Page: PageBoard}, route: openRoute{label: "Open board"}})
+			Tasks: tasks, Since: since, undated: undated, Open: Open{Page: PageBoard}, route: openRoute{label: "Open board", kind: KindBoard}})
 	default:
 		b.add(Item{Key: keyCard(c.Kind, c.Channel, c.Title), Kind: KindTask, Icon: "task", Title: c.Title, Context: c.Why,
-			Text: c.Note, Since: since, undated: undated, Open: Open{Page: PageBoard}, route: openRoute{label: "Open board"}})
+			Text: c.Note, Since: since, undated: undated, Open: Open{Page: PageBoard}, route: openRoute{label: "Open board", kind: KindBoard}})
 	}
 }
 
