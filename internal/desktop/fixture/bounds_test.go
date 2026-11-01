@@ -709,6 +709,32 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 				if err := json.Unmarshal(v, &synth); err != nil {
 					t.Fatal(err)
 				}
+				// notes written before the event field existed are told by their text, and a trim note is first
+				var old struct {
+					Notes []string
+					First string
+				}
+				v, err = c.eval(`(() => {
+				  const log = document.querySelector("#chanlog");
+				  log.replaceChildren(); cv.run = null; cv.lastAt = 0;
+				  const sys = (seq, text, extra) => drawMessage({ seq, at: new Date().toISOString(), from: { id: "mad", label: "mad" }, kind: "system", text, ...extra });
+				  drawMessage({ seq: 200, at: new Date().toISOString(), from: { id: "you", label: "you" }, kind: "text", text: "hi" });
+				  sys(201, "Paused: 30 posts by agents with no word from a person. It waits for a person.");
+				  sys(202, "Resumed by a person.");
+				  sys(203, "Older messages were dropped; the last 500 are kept.");
+				  sys(204, "Something else mad said");
+				  sys(205, "Paused: h-1 lapsed", { handoff: { id: "h-1", to: "x", status: "lapsed" } });
+				  return { notes: [...log.querySelectorAll(".csys")].map((e) => e.textContent), first: log.firstElementChild.className };
+				})()`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(v, &old); err != nil {
+					t.Fatal(err)
+				}
+				if got := strings.Join(old.Notes, "|"); got != "更早的消息已清理|群已暂停|群已恢复|Something else mad said" || old.First != "csys trimmed" {
+					t.Errorf("old notes read %q (first item %q), want 更早的消息已清理 first, then 群已暂停|群已恢复|Something else mad said", got, old.First)
+				}
 				if theme == "light" && w == 390 {
 					shot("trim-note-390-light")
 				}
