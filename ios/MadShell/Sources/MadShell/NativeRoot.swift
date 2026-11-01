@@ -119,7 +119,7 @@ struct Detail: View {
             } else if let agent = store.agent(id: id) {
                 AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb).id(agent.id)
             } else {
-                placeholder(id, "It is gone.")
+                placeholder(id, "已经不在了")
             }
         } else {
             placeholder("mad", "选一个群聊或 agent")

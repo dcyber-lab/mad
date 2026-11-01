@@ -371,6 +371,11 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
     public var input: Bool
     public var row: Bool
     public var primary: Bool
+    /// Which act of its verb this is where the verb alone does not say ("plan": the allow that
+    /// approves a plan; "dm", "board", "read": what an open goes to), and what an open goes to
+    /// ("#ios", an agent's name). Optional: an older server sends neither and the label shows.
+    public var kind: String?
+    public var target: String?
     public var id: String { verb + "\u{1}" + (option ?? "") + "\u{1}" + label }
 
     /// "open" sends nothing: the surface goes to where the item is settled.
@@ -381,9 +386,9 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
     /// label, "Open #chan") keeps the server's.
     public var shownLabel: String {
         switch verb {
-        case "allow": return option == nil ? "允许" : label
+        case "allow": return option != nil ? label : kind == "plan" ? "批准计划" : "允许"
         case "always": return "总是允许"
-        case "deny": return input ? (row ? "继续规划" : "改为告诉它…") : row ? "拒绝" : "取消 (Esc)"
+        case "deny": return input ? (row ? "继续规划" : "改为告诉它…") : row ? "拒绝" : "取消"
         case "answer": return input ? "回复" : label
         case "reply": return "回复"
         case "approve": return "批准"
@@ -394,11 +399,18 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
         case "resume": return "继续"
         case "raise": return option.map { "加 $\($0)" } ?? label
         case "lift": return "今天不限"
+        case "open":
+            switch kind {
+            case "dm": return "打开私信"
+            case "board": return "打开看板"
+            case "read": return "去看看"
+            default: return target.map { "打开 \($0)" } ?? label
+            }
         default: return label
         }
     }
 
-    enum CodingKeys: String, CodingKey { case verb, label, option, input, row, primary }
+    enum CodingKeys: String, CodingKey { case verb, label, option, input, row, primary, kind, target }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         verb = try c.decode(String.self, forKey: .verb)
@@ -407,10 +419,12 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
         input = try c.decodeIfPresent(Bool.self, forKey: .input) ?? false
         row = try c.decodeIfPresent(Bool.self, forKey: .row) ?? false
         primary = try c.decodeIfPresent(Bool.self, forKey: .primary) ?? false
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
+        target = try c.decodeIfPresent(String.self, forKey: .target)
     }
     public init(verb: String, label: String, option: String? = nil, input: Bool = false,
-                row: Bool = false, primary: Bool = false) {
-        self.verb = verb; self.label = label; self.option = option
+                row: Bool = false, primary: Bool = false, kind: String? = nil, target: String? = nil) {
+        self.verb = verb; self.label = label; self.option = option; self.kind = kind; self.target = target
         self.input = input; self.row = row; self.primary = primary
     }
 }

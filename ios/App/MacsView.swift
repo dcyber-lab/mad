@@ -33,13 +33,13 @@ struct MacsView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(p.title).font(.body)
-                            Text("Pairing not finished").font(.subheadline).foregroundStyle(.orange)
+                            Text("还没配对完").font(.subheadline).foregroundStyle(.orange)
                         }
                         Spacer()
                         if retrying.contains(p.id) {
                             ProgressView()
                         } else {
-                            Button("Retry") { Task { await finish(p) } }.buttonStyle(.bordered)
+                            Button("重试") { Task { await finish(p) } }.buttonStyle(.bordered)
                         }
                     }
                 }
@@ -59,7 +59,7 @@ struct MacsView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("Rename") { newName = mac.name; renaming = mac }
+                        Button("改名") { newName = mac.name; renaming = mac }
                         Button((webChoice[mac.id] ?? WebDeckChoice.uses(for: mac)) ? "使用原生版" : "使用网页版") {
                             let on = !(webChoice[mac.id] ?? WebDeckChoice.uses(for: mac))
                             WebDeckChoice.set(on, for: mac)
@@ -72,7 +72,7 @@ struct MacsView: View {
             .overlay {
                 if store.macs.isEmpty && store.pending.isEmpty {
                     ContentUnavailableView("还没有 Mac", systemImage: "qrcode.viewfinder",
-                        description: Text("在 Mac 上运行 mad phone，然后扫描它的二维码。"))
+                        description: Text("在 Mac 上运行 mad phone，\n然后扫描它的二维码。"))
                 }
             }
             .navigationTitle("mad")
@@ -111,19 +111,19 @@ struct MacsView: View {
                     if let text { pair(text) }
                 }
             }
-            .alert("Paste the link", isPresented: $pasting) {
+            .alert("粘贴链接", isPresented: $pasting) {
                 TextField("https://…/#token=…", text: $pasted)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Pair") { pair(pasted) }
-                Button("Cancel", role: .cancel) {}
+                Button("配对") { pair(pasted) }
+                Button("取消", role: .cancel) {}
             }
-            .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-                TextField("Name", text: $newName)
-                Button("Save") { if let m = renaming { store.rename(m, to: newName) } }
-                Button("Cancel", role: .cancel) {}
+            .alert("改名", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("名字", text: $newName)
+                Button("保存") { if let m = renaming { store.rename(m, to: newName) } }
+                Button("取消", role: .cancel) {}
             }
-            .alert("Cannot pair", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
-                Button("OK", role: .cancel) {}
+            .alert("配对失败", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+                Button("好", role: .cancel) {}
             } message: { Text(problem ?? "") }
         }
     }

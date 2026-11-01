@@ -8,7 +8,7 @@ struct ScannerScreen: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             ScannerView(found: { done($0) }).ignoresSafeArea()
-            Button("Cancel") { done(nil) }
+            Button("取消") { done(nil) }
                 .padding().background(.thinMaterial, in: Capsule()).padding()
         }
     }

@@ -6,21 +6,21 @@ final class PairingTests: MadUITestCase {
         launch(link: "\(fixtureURL)/#pair=\(Self.goodCode)", open: false)
         let row = app.cells.firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 20), "the Mac was not added")
-        XCTAssertFalse(app.staticTexts["Pairing not finished"].exists)
+        XCTAssertFalse(app.staticTexts["还没配对完"].exists)
         XCTAssertFalse(app.alerts.firstMatch.exists, "an error came up")
         shot("paired: the Mac is on the list")
     }
 
     func testARefusedCodeAsksForANewQR() {
         launch(link: "\(fixtureURL)/#pair=\(Self.badCode)", open: false)
-        let alert = app.alerts["Cannot pair"]
+        let alert = app.alerts["配对失败"]
         XCTAssertTrue(alert.waitForExistence(timeout: 20), "no “Cannot pair” alert")
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "scan a new QR")).firstMatch.exists,
                       "the alert does not say to scan a new QR code")
         shot("refused: scan a new QR")
-        alert.buttons["OK"].tap()
+        alert.buttons["好"].tap()
         XCTAssertEqual(app.cells.count, 0, "a refused pairing left a row")
-        XCTAssertFalse(app.staticTexts["Pairing not finished"].exists, "a refused pairing stayed pending")
+        XCTAssertFalse(app.staticTexts["还没配对完"].exists, "a refused pairing stayed pending")
     }
 }
 
@@ -32,17 +32,17 @@ extension MadUITestCase {
 final class PairingRetryTests: MadUITestCase {
     func testA503KeepsThePairingAndRetryPairs() {
         launch(link: "\(fixtureURL)/#pair=\(Self.flakyCode)", open: false)
-        let alert = app.alerts["Cannot pair"]
+        let alert = app.alerts["配对失败"]
         XCTAssertTrue(alert.waitForExistence(timeout: 20), "no alert for a 503")
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "503")).firstMatch.exists, "the alert does not say 503")
         shot("503: the pairing is kept")
-        alert.buttons["OK"].tap()
-        XCTAssertTrue(app.staticTexts["Pairing not finished"].waitForExistence(timeout: 5), "no “Pairing not finished” row")
-        XCTAssertTrue(app.buttons["Retry"].exists, "no Retry button")
+        alert.buttons["好"].tap()
+        XCTAssertTrue(app.staticTexts["还没配对完"].waitForExistence(timeout: 5), "no “还没配对完” row")
+        XCTAssertTrue(app.buttons["重试"].exists, "no 重试 button")
         shot("Pairing not finished, with Retry")
-        app.buttons["Retry"].tap()
+        app.buttons["重试"].tap()
         XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 20), "Retry did not pair")
-        XCTAssertFalse(app.staticTexts["Pairing not finished"].exists, "still pending after a good Retry")
+        XCTAssertFalse(app.staticTexts["还没配对完"].exists, "still pending after a good Retry")
         shot("Retry paired")
     }
 }
@@ -52,22 +52,22 @@ final class PairingRetryTests: MadUITestCase {
 final class PairingOfflineTests: MadUITestCase {
     func testA_ServerDownKeepsThePairingWithRetry() {
         launch(link: "\(fixtureURL)/#pair=\(Self.goodCode)", open: false)
-        let alert = app.alerts["Cannot pair"]
+        let alert = app.alerts["配对失败"]
         XCTAssertTrue(alert.waitForExistence(timeout: 30), "no alert for an unreachable Mac")
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "pairing is kept")).firstMatch.exists)
         shot("server down: the pairing is kept")
-        alert.buttons["OK"].tap()
-        XCTAssertTrue(app.staticTexts["Pairing not finished"].waitForExistence(timeout: 5), "no “Pairing not finished” row")
-        XCTAssertTrue(app.buttons["Retry"].exists, "no Retry button")
+        alert.buttons["好"].tap()
+        XCTAssertTrue(app.staticTexts["还没配对完"].waitForExistence(timeout: 5), "no “还没配对完” row")
+        XCTAssertTrue(app.buttons["重试"].exists, "no 重试 button")
         shot("Pairing not finished, with Retry")
     }
 
     func testB_RetryAfterTheServerIsBackPairs() {
         relaunch()
-        XCTAssertTrue(app.staticTexts["Pairing not finished"].waitForExistence(timeout: 10), "the pending pairing did not survive a relaunch")
-        app.buttons["Retry"].tap()
+        XCTAssertTrue(app.staticTexts["还没配对完"].waitForExistence(timeout: 10), "the pending pairing did not survive a relaunch")
+        app.buttons["重试"].tap()
         XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 20), "Retry did not pair")
-        XCTAssertFalse(app.staticTexts["Pairing not finished"].exists, "still pending after a good Retry")
+        XCTAssertFalse(app.staticTexts["还没配对完"].exists, "still pending after a good Retry")
         shot("Retry paired")
     }
 }

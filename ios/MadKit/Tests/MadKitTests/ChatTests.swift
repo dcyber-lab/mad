@@ -282,6 +282,19 @@ final class InboxActLabelTests: XCTestCase {
     func testAnOptionKeepsItsOwnWords() {
         XCTAssertEqual(shown("answer", "Blue", option: "Blue"), "Blue")
         XCTAssertEqual(shown("allow", "Yes, and don't ask again", option: "2"), "Yes, and don't ask again")
-        XCTAssertEqual(shown("open", "Open #ios"), "Open #ios")
+        XCTAssertEqual(shown("open", "Open somewhere"), "Open somewhere", "an open with no kind or target keeps its label")
+    }
+
+    func testOpensAreShownByKindAndTarget() {
+        func open(kind: String? = nil, target: String? = nil) -> String {
+            InboxAct(verb: "open", label: "Open x", kind: kind, target: target).shownLabel
+        }
+        XCTAssertEqual(open(target: "#ios"), "打开 #ios")
+        XCTAssertEqual(open(kind: "dm"), "打开私信")
+        XCTAssertEqual(open(kind: "board"), "打开看板")
+        XCTAssertEqual(open(target: "claude-1"), "打开 claude-1")
+        XCTAssertEqual(open(kind: "read"), "去看看")
+        XCTAssertEqual(InboxAct(verb: "allow", label: "Approve plan", row: true, kind: "plan").shownLabel, "批准计划")
+        XCTAssertEqual(shown("deny", "Cancel (Esc)"), "取消")
     }
 }

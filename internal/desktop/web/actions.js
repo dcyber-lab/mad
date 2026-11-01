@@ -546,7 +546,7 @@ function agentMenu(a, anchor, opts) {
     { label: "Changes", desc: "what it changed in its directory", icon: "diff", disabled: !a.chat, onclick: () => { show(a.id); openChanges(a.id); } },
     { label: "Message on the bus", desc: "a DM it reads when its turn is over", icon: "chat", disabled: !a.chat || (!!a.role && !a.team), onclick: () => messageAgent(a) },
     { label: "Save as skill", desc: "asks it to write down what worked; you approve it", icon: "skill", disabled: !a.chat || (!!a.role && !a.team), onclick: () => saveAsSkill(a) },
-    { label: "Interrupt", desc: interruptWhy(a), icon: "stop", disabled: a.status !== "running" || !a.chat || interruptSent(a), onclick: () => interruptAgent(a) },
+    { label: "打断", desc: interruptWhy(a), icon: "stop", disabled: a.status !== "running" || !a.chat || interruptSent(a), onclick: () => interruptAgent(a) },
     { label: "Put to sleep", icon: "sleep", disabled: off, onclick: () => sleepAgent(a),
       desc: off ? "it is not running" : waits ? "ends its process to free memory: what it asks you now is lost; a message wakes it" : "ends its process to free memory; a message wakes it where it left off" },
     "-",
@@ -606,21 +606,21 @@ function interruptSent(a) {
 
 // interruptWhy is what the menu says of Interrupt for agent a.
 function interruptWhy(a) {
-  if (interruptSent(a)) return "sent: it stops in a moment";
-  if (a.status === "running") return "stops what it does now, as Esc in its TUI; it stays up";
-  if (a.status === "waiting") return windowed(a) ? "it waits on you: deny what it asks instead, on its card" : "it waits on you: cancel its prompt instead, with Cancel (Esc) on its card";
-  return "it is not working";
+  if (interruptSent(a)) return "已发出：它马上停下";
+  if (a.status === "running") return "马上停下它在做的事，和终端里按 Esc 一样；它不会退出";
+  if (a.status === "waiting") return windowed(a) ? "它在等你：请在它的卡片上拒绝它的请求" : "它在等你：请在它的卡片上取消它的提问（取消 (Esc)）";
+  return "它没有在工作";
 }
 
 // interruptButton is agent a's Interrupt on a row or a card; sent, it
 // says so.
 function interruptButton(a) {
   if (interruptSent(a)) {
-    const b = rowButton("Interrupting…", "", () => {}, "sent: it stops in a moment");
+    const b = rowButton("打断中…", "", () => {}, "已发出：它马上停下");
     b.disabled = true;
     return b;
   }
-  return rowButton("Interrupt", "", () => interruptAgent(a), "stop what it does now, as Esc in its TUI", `${a.id}\ninterrupt`);
+  return rowButton("打断", "", () => interruptAgent(a), "马上停下它在做的事，和终端里按 Esc 一样", `${a.id}\ninterrupt`);
 }
 
 async function interruptAgent(a) {
@@ -630,7 +630,7 @@ async function interruptAgent(a) {
   try {
     await api("POST", "/api/interrupt", { id: a.id });
     interrupts.set(a.id, { at: Date.now(), status: a.status });
-    toast(`Interrupted ${label(a)}`);
+    toast(`已打断 ${label(a)}`);
   } catch (e) {
     interrupts.delete(a.id);
     toast(e.message, "err");
@@ -1000,7 +1000,7 @@ async function phoneDialog() {
     copy.onclick = async () => {
       try {
         await navigator.clipboard.writeText(s.url);
-        toast("Copied");
+        toast("已复制");
       } catch (_) { /* no clipboard here */ }
     };
     url.append(el("span", "", s.url), copy);
