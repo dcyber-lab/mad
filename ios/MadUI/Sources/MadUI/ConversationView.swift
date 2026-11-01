@@ -22,6 +22,7 @@ public struct ConversationView: View {
             messages
             if let ask = model.ask {
                 AskCardView(card: ask, act: { actions.act(ask.id, $0, $1) })
+                    .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }
