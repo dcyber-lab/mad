@@ -162,13 +162,6 @@ struct BottomWatch {
     }
 }
 
-extension View {
-    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
-    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
-    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
-        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
-    }
-}
 #endif
 
 /// What the link to the Mac says when it is not good ("连不上这台 Mac。"), for the Mac's name pill to show in place of
@@ -205,5 +198,13 @@ struct PillSubline: View {
         } else if !text.isEmpty {
             Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
         }
+    }
+}
+
+extension View {
+    /// Keeps a scroll view at its bottom through size changes (the keyboard coming and going, the composer growing) as the
+    /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
+    @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
+        if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
     }
 }

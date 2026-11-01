@@ -16,6 +16,10 @@ public struct ConversationView: View {
     #else
     /// The end marker is on screen: new things are followed only then.
     @State private var atEnd = true
+    @State private var endShown = true
+    @State private var endFoot: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    @State private var bottomInset: CGFloat = 0
     #endif
 
     public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true) {
@@ -105,8 +109,11 @@ public struct ConversationView: View {
                         #if os(macOS)
                         .onDisappear { if keeper.leftBottom() { DispatchQueue.main.async { proxy.scrollTo("end") } } }
                         #else
-                        .onAppear { atEnd = true }
-                        .onDisappear { atEnd = false }
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { endFoot = g.frame(in: .named("conversationList")).maxY; endShown = true; judgeEnd() }
+                                .onChange(of: g.frame(in: .named("conversationList")).maxY) { _, y in endFoot = y; judgeEnd() }
+                        })
+                        .onDisappear { endShown = false; atEnd = false }
                         #endif
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
@@ -123,6 +130,7 @@ public struct ConversationView: View {
                 #endif
             }
             .defaultScrollAnchor(.bottom)
+            .pinnedToBottomThroughResizes()
             .scrollDismissesKeyboardIfAvailable()
             .onChange(of: model.entries.count) { _, _ in follow(proxy) }
             .onChange(of: model.live) { _, _ in follow(proxy) }
@@ -132,6 +140,18 @@ public struct ConversationView: View {
                 Color.clear.onChange(of: g.size) { _, _ in
                     if keeper.resized() { DispatchQueue.main.async { proxy.scrollTo("end") } }
                 }
+            })
+            #else
+            .coordinateSpace(name: "conversationList")
+            .background(GeometryReader { g in
+                Color.clear.onAppear { viewportHeight = g.size.height; bottomInset = g.safeAreaInsets.bottom; judgeEnd() }
+                    .onChange(of: g.size.height) { _, h in viewportHeight = h; judgeEnd() }
+                    .onChange(of: g.safeAreaInsets.bottom) { _, inset in
+                        // the keyboard, the ask card or the composer changed what covers the foot: a list at its end is put
+                        // back at its end once
+                        bottomInset = inset
+                        if atEnd { proxy.scrollTo("end", anchor: .bottom) } else { judgeEnd() }
+                    }
             })
             #endif
             #if os(macOS)
@@ -150,8 +170,16 @@ public struct ConversationView: View {
         #if os(iOS)
         guard atEnd else { return }
         #endif
-        proxy.scrollTo("end")
+        proxy.scrollTo("end", anchor: .bottom)
     }
+
+    #if os(iOS)
+    /// At the end: the end marker is realized and its foot is within the list's visible height (its frame is already cut
+    /// down by the head, the composer and the keyboard).
+    private func judgeEnd() {
+        atEnd = endShown && endFoot <= viewportHeight + 2
+    }
+    #endif
 
     // MARK: composer
 

@@ -13,6 +13,13 @@ public struct ChannelView: View {
     @State private var gallery = false
     @State private var nearBottom = true
     @State private var viewport = CGSize.zero
+    #if os(iOS)
+    // The list is full-bleed: the head, the composer and the keyboard are insets over it, and the end marker is still
+    // realized while it sits under them. The end is judged by where the marker's foot is against the visible part.
+    @State private var markerShown = true
+    @State private var markerFoot: CGFloat = 0
+    @State private var bottomInset: CGFloat = 0
+    #endif
     #if os(macOS)
     // The Mac's window is resized by the person and keeps its list at the bottom through that (see `BottomWatch`).
     @State private var keeper = BottomKeeper()
@@ -169,9 +176,11 @@ public struct ChannelView: View {
                     // in and out of view, so a person who has scrolled up to read is not pulled down.
                     Color.clear.frame(height: 1).id(Self.bottom)
                         #if os(iOS)
-                        // at the bottom while the marker is on screen; the keyboard no longer moves the list, so that is all
-                        .onAppear { nearBottom = true }
-                        .onDisappear { nearBottom = false }
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { markerFoot = g.frame(in: .named(Self.space)).maxY; markerShown = true; judge() }
+                                .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in markerFoot = y; judge() }
+                        })
+                        .onDisappear { markerShown = false; nearBottom = false }
                         #else
                         .background(GeometryReader { g in
                             // where the marker's foot is in the scroll view, kept without drawing the view again
@@ -225,8 +234,26 @@ public struct ChannelView: View {
                 }
             }
             .background(GeometryReader { g in
-                Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
+                Color.clear.onAppear {
+                    viewport = g.size
+                    #if os(iOS)
+                    bottomInset = g.safeAreaInsets.bottom
+                    judge() // the marker's foot may have been measured before the viewport was
+                    #endif
+                }
+                #if os(iOS)
+                .onChange(of: g.safeAreaInsets.bottom) { _, inset in
+                    // the keyboard, the composer growing or the ask card changed what covers the list's foot: a list that was
+                    // at its end is put back at its end once (the offset is kept through the change)
+                    bottomInset = inset
+                    if nearBottom { stick(proxy) } else { judge() }
+                }
+                #endif
+                .onChange(of: g.size) { _, size in
                     viewport = size
+                    #if os(iOS)
+                    judge()
+                    #endif
                     #if os(macOS)
                     // a list at its bottom stays there as the viewport changes: put back at once, not after a wait
                     if nearBottom || keeper.resized() { stick(proxy) }
@@ -250,9 +277,7 @@ public struct ChannelView: View {
             .simultaneousGesture(edgeOpen)
             #endif
             .defaultScrollAnchor(.bottom)
-            #if os(macOS)
-            .pinnedToBottomThroughResizes()
-            #endif
+            .pinnedToBottomThroughResizes() // iOS 18 and the Mac: the system keeps the bottom through size changes
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
@@ -310,6 +335,14 @@ public struct ChannelView: View {
         if keeper.leftBottom() { stick(proxy) }
     }
 
+    #endif
+
+    #if os(iOS)
+    /// At the end: the marker is realized and its foot is within the list's visible height. (`viewport` is the list's own
+    /// frame, which the head, the composer and the keyboard already cut down: a marker realized under them is below it.)
+    private func judge() {
+        nearBottom = markerShown && markerFoot <= viewport.height + 2
+    }
     #endif
 
     /// Back to the bottom once the layout has settled (after a resize that moved it).

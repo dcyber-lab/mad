@@ -1,3 +1,4 @@
+#if os(macOS)
 import XCTest
 @testable import MadUI
 
@@ -62,3 +63,4 @@ final class BottomWatchTests: XCTestCase {
         XCTAssertFalse(back.leftWithResize, "it came back")
     }
 }
+#endif
