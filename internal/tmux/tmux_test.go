@@ -345,3 +345,36 @@ func TestSeen(t *testing.T) {
 		}
 	}
 }
+
+// StartCommands is what display-message says of each pane, in one call; a
+// command with a newline keeps its first line and leaves the others alone.
+func TestStartCommands(t *testing.T) {
+	useServer(t)
+	var ids []string
+	for i, cmd := range []string{"sleep 30 # mad host claude#1", "sleep 30 # one\nsleep 31 # two", "sleep 32"} {
+		id, err := Out("new-session", "-d", "-s", fmt.Sprint("s", i), "-P", "-F", "#{pane_id}", cmd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	got, err := StartCommands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %q", got)
+	}
+	for i, id := range ids {
+		want, _ := Out("display-message", "-p", "-t", id, "#{pane_start_command}")
+		if i == 1 {
+			want, _, _ = strings.Cut(want, "\n")
+		}
+		if got[id] != want {
+			t.Errorf("%s: %q, display-message %q", id, got[id], want)
+		}
+	}
+	if !strings.Contains(got[ids[0]], "host claude#1") {
+		t.Errorf("host command = %q", got[ids[0]])
+	}
+}

@@ -129,6 +129,26 @@ func ListPanes() ([]Pane, error) {
 	return parsePanes(out), nil
 }
 
+// StartCommands is the command every pane was started with, by pane id,
+// in one call. A command with a newline in it keeps its first line.
+func StartCommands() (map[string]string, error) {
+	out, err := Out("list-panes", "-a", "-F", "#{pane_id}\t#{pane_start_command}")
+	if err != nil {
+		return nil, err
+	}
+	return parseStartCommands(out), nil
+}
+
+func parseStartCommands(out string) map[string]string {
+	cmds := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		if id, cmd, ok := strings.Cut(line, "\t"); ok && strings.HasPrefix(id, "%") {
+			cmds[id] = cmd
+		}
+	}
+	return cmds
+}
+
 // parsePanes reads ListPanes' lines.
 func parsePanes(out string) []Pane {
 	var panes []Pane

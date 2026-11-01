@@ -360,15 +360,38 @@ func (codex) Transcripts(_, sid string) []string {
 	if v, ok := codexRollouts.Load(sid); ok {
 		return []string{v.(string)}
 	}
-	matches, _ := filepath.Glob(filepath.Join(codexSessionsDir(), "*", "*", "*", "rollout-*-"+sid+".jsonl"))
-	for _, m := range matches {
-		if strings.HasSuffix(m, "-"+sid+".jsonl") {
-			codexRollouts.Store(sid, m)
-			return []string{m}
+	// A session started a moment ago is under today's day, or yesterday's
+	// just past midnight; every day is looked through only now and then
+	// while its rollout isn't written yet.
+	now := codexNow()
+	days := []string{now.Format("2006/01/02"), now.AddDate(0, 0, -1).Format("2006/01/02")}
+	if v, ok := codexMissed.Load(sid); !ok || now.Sub(v.(time.Time)) >= codexMissEvery {
+		days = append(days, filepath.Join("*", "*", "*"))
+	}
+	for _, day := range days {
+		matches, _ := filepath.Glob(filepath.Join(codexSessionsDir(), day, "rollout-*-"+sid+".jsonl"))
+		for _, m := range matches {
+			if strings.HasSuffix(m, "-"+sid+".jsonl") {
+				codexRollouts.Store(sid, m)
+				codexMissed.Delete(sid)
+				return []string{m}
+			}
 		}
+	}
+	if len(days) > 2 {
+		codexMissed.Store(sid, now)
 	}
 	return nil
 }
+
+// codexMissed keeps when every day was last looked through for a thread
+// whose rollout was not there; codexNow is replaceable in tests.
+var (
+	codexMissed sync.Map
+	codexNow    = time.Now
+)
+
+const codexMissEvery = 30 * time.Second
 
 var tokenCountKey = []byte(`"token_count"`)
 
