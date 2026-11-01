@@ -136,7 +136,7 @@ final class ChannelFoldTests: MadUITestCase {
         XCTAssertTrue(members.waitForExistence(timeout: 10), "群信息 did not open with “成员 · 8”")
         shot("群信息")
         for name in ["architect", "builder", "reviewer", "designer", "tester", "docs", "ops", "kim"] {
-            let row = web.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", name, "Idle")).firstMatch
+            let row = web.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", name, "空闲")).firstMatch
             XCTAssertTrue(row.exists, "群信息 has no member row for “\(name)”")
         }
         XCTAssertTrue(elements(containing: "负责人").firstMatch.exists, "the lead has no 负责人 tag")

@@ -60,10 +60,15 @@ public struct Deck: Equatable, Decodable, Sendable {
         return channels.first { $0.id == id }
     }
 
-    /// The deck's word for a shown state ("Working", "Needs you"); the state itself when unknown.
+    /// The word the apps show for a shown state ("在工作", "在等你"). The deck's own words stay
+    /// English for the TUI; the apps translate by the server's word, and an unknown state is shown as it is.
     public func word(for state: String) -> String {
-        states.first { $0.state == state }?.word ?? state.prefix(1).uppercased() + state.dropFirst()
+        let word = states.first { $0.state == state }?.word ?? state.prefix(1).uppercased() + state.dropFirst()
+        return Deck.stateWords[word] ?? word
     }
+
+    static let stateWords = ["Needs you": "在等你", "Working": "在工作", "Idle": "空闲", "Stopped": "已停止",
+                             "Finished": "已完成", "Asleep": "已休眠", "Starting": "启动中"]
 
     /// The tone of a shown state: working, needs, finished, quiet or error.
     public func tone(for state: String) -> String {
@@ -370,6 +375,28 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
 
     /// "open" sends nothing: the surface goes to where the item is settled.
     public var isOpen: Bool { verb == "open" }
+
+    /// What the apps' button says. The server's label stays English (the TUI draws it), so this maps
+    /// by the act's verb and flags, never by its text; an act with no word here (an option's own
+    /// label, "Open #chan") keeps the server's.
+    public var shownLabel: String {
+        switch verb {
+        case "allow": return option == nil ? "允许" : label
+        case "always": return "总是允许"
+        case "deny": return input ? (row ? "继续规划" : "改为告诉它…") : row ? "拒绝" : "取消 (Esc)"
+        case "answer": return input ? "回复" : label
+        case "reply": return "回复"
+        case "approve": return "批准"
+        case "discard": return "丢弃"
+        case "seen": return "标为已读"
+        case "send": return "立即发送"
+        case "drop": return "放弃"
+        case "resume": return "继续"
+        case "raise": return option.map { "加 $\($0)" } ?? label
+        case "lift": return "今天不限"
+        default: return label
+        }
+    }
 
     enum CodingKeys: String, CodingKey { case verb, label, option, input, row, primary }
     public init(from d: Decoder) throws {

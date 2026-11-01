@@ -71,8 +71,8 @@ struct MacsView: View {
             }
             .overlay {
                 if store.macs.isEmpty && store.pending.isEmpty {
-                    ContentUnavailableView("No Mac yet", systemImage: "qrcode.viewfinder",
-                        description: Text("Run mad phone on your Mac, then scan its QR code."))
+                    ContentUnavailableView("还没有 Mac", systemImage: "qrcode.viewfinder",
+                        description: Text("在 Mac 上运行 mad phone，然后扫描它的二维码。"))
                 }
             }
             .navigationTitle("mad")
@@ -100,8 +100,8 @@ struct MacsView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("Scan QR code", systemImage: "qrcode.viewfinder") { scanning = true }
-                        Button("Paste link", systemImage: "doc.on.clipboard") { pasted = ""; pasting = true }
+                        Button("扫描二维码", systemImage: "qrcode.viewfinder") { scanning = true }
+                        Button("粘贴链接", systemImage: "doc.on.clipboard") { pasted = ""; pasting = true }
                     } label: { Image(systemName: "plus") }
                 }
             }

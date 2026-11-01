@@ -64,7 +64,7 @@ final class DeckDecodingTests: XCTestCase {
         XCTAssertEqual(d.inbox.finished, [])
 
         XCTAssertEqual(d.states.map(\.state), ["waiting", "running", "finished", "idle", "asleep", "starting", "stopped"])
-        XCTAssertEqual(d.word(for: "running"), "Working")
+        XCTAssertEqual(d.word(for: "running"), "在工作")
         XCTAssertEqual(d.tone(for: "waiting"), "needs")
         XCTAssertNotNil(d.at)
         XCTAssertEqual(d.working, ["work0001-aaaa", "team0001-bld0"], "the agents at work")

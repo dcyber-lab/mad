@@ -112,8 +112,13 @@ function label(a) {
 // word, glyph and tone is read from it, by shown state or by the raw
 // status folded into one (exited reads as stopped).
 let looks = new Map();
+// stateWords are the words the page shows for the deck's state words, which stay
+// English on the server (the TUI draws them).
+const stateWords = { "Needs you": "在等你", Working: "在工作", Idle: "空闲", Stopped: "已停止", Finished: "已完成", Asleep: "已休眠", Starting: "启动中" };
+
 function look(state) {
-  return looks.get(state) || { state, word: state, meaning: "", glyph: "", tone: "quiet" };
+  const l = looks.get(state) || { state, word: state, meaning: "", glyph: "", tone: "quiet" };
+  return stateWords[l.word] ? { ...l, word: stateWords[l.word] } : l;
 }
 
 // shownStatus is the state drawn for agent a on every surface: its tab, its
@@ -1819,7 +1824,7 @@ function drawLive(o) {
   const running = windowed(a) && o.hs ? o.hs.status === "running" : a && a.status === "running";
   if (!shown && running && busy) {
     const n = el("div", "busy");
-    n.append(el("span", "spin"), el("span", "shimmer", a.tool ? [a.tool, a.target].filter(Boolean).join(" · ") : "Working"));
+    n.append(el("span", "spin"), el("span", "shimmer", a.tool ? [a.tool, a.target].filter(Boolean).join(" · ") : "在工作"));
     parts.push(n);
   }
   setChildren(box, parts);
@@ -2125,7 +2130,7 @@ function askCard(o, r) {
       }
       return out;
     };
-    const send = button("Answer", "primary", () => {
+    const send = button("回答", "primary", () => {
       const a = answers();
       if (a) reply({ allow: true, answers: a });
     });
@@ -2135,24 +2140,24 @@ function askCard(o, r) {
       // One question, one choice: picking is answering.
       if (qs.length === 1 && !qs[0][0].multiSelect && qs[0][2]()) send.click();
     });
-    acts.append(send, button("Skip", "", () => reply({ allow: false, message: "The user skipped the question." })));
+    acts.append(send, button("跳过", "", () => reply({ allow: false, message: "The user skipped the question." })));
   } else if (r.kind === "plan") {
-    head.append(icon("todo", "ai"), el("span", "t", "Its plan"));
+    head.append(icon("todo", "ai"), el("span", "t", "它的计划"));
     body.append(md(r.plan || ""));
-    acts.append(button("Approve", "primary", () => reply({ allow: true })),
-      instead("Or say what to change, and press Enter", (msg) => reply({ allow: false, message: msg })));
+    acts.append(button("批准", "primary", () => reply({ allow: true })),
+      instead("或者说说要改什么，按回车发送", (msg) => reply({ allow: false, message: msg })));
   } else {
     // Drawn as the call will be: a change as its diff.
     const v = r.args ? toolView(r.tool, parseArgs(r.args), ctxOf(o)) : r.tool === "apply_patch" && r.input ? patchView(r.input, ctxOf(o)) : null;
-    head.append(icon(v?.icon || toolIcon(r.tool), "ai"), el("span", "t", r.title || `Allow ${r.tool}?`));
+    head.append(icon(v?.icon || toolIcon(r.tool), "ai"), el("span", "t", r.title || `允许 ${r.tool}？`));
     const what = v?.sub || (!r.title && r.label);
     if (what) head.append(el("span", "al", what));
     if (v?.body) body.append(v.body);
     else if (r.input) body.append(el("pre", "input", r.input));
-    acts.append(button("Allow", "primary", () => reply({ allow: true })));
-    if (r.always) acts.append(button("Always allow", "", () => reply({ allow: true, always: true })));
-    acts.append(button("Deny", "", () => reply({ allow: false })),
-      instead("Or tell it what to do instead, and press Enter", (msg) => reply({ allow: false, message: msg })));
+    acts.append(button("允许", "primary", () => reply({ allow: true })));
+    if (r.always) acts.append(button("总是允许", "", () => reply({ allow: true, always: true })));
+    acts.append(button("拒绝", "", () => reply({ allow: false })),
+      instead("或者告诉它改做什么，按回车发送", (msg) => reply({ allow: false, message: msg })));
   }
   card.append(head, body, acts);
   return card;
