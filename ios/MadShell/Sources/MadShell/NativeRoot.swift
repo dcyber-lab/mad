@@ -85,6 +85,8 @@ public struct NativeRoot: View {
             .environment(store)
             // Polls while the app is active; the task restarts when it comes back, so it looks at once.
             .task(id: scenePhase) {
+                // leaving the foreground: what the device keeps of the Mac is written now, not after its pause
+                if scenePhase != .active { SnapshotCache.flushAll() }
                 guard scenePhase == .active else { return }
                 await store.run()
             }

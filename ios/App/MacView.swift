@@ -35,7 +35,7 @@ struct MacView: View {
                         self.expiry = nil
                     }
                 }
-                NativeRoot(api: MadClient(mac: model.mac), title: model.mac.name, onSwitchMac: { dismiss() },
+                NativeRoot(api: MadClient(mac: model.mac, cache: SnapshotCache.standard(for: model.mac)), title: model.mac.name, onSwitchMac: { dismiss() },
                            openWeb: { web = WebSheet(mac: model.mac, target: $0) })
             }
                 .background(Color(.systemBackground).ignoresSafeArea())

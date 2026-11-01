@@ -27,10 +27,13 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
 public struct MadClient: Sendable {
     public var mac: Mac
     public var session: URLSession
+    /// What it sees is kept here for the next start (nil: nothing is kept).
+    public var cache: SnapshotCache?
 
-    public init(mac: Mac, session: URLSession = .shared) {
+    public init(mac: Mac, session: URLSession = .shared, cache: SnapshotCache? = nil) {
         self.mac = mac
         self.session = session
+        self.cache = cache
     }
 
     /// The request for a path. The token travels in the Authorization
@@ -94,8 +97,18 @@ public struct MadClient: Sendable {
 
     public func chat(agent: String, file: String = "", from: Int64 = 0) async throws -> ChatPage {
         let (data, response) = try await runRequest(chatRequest(agent: agent, file: file, from: from))
-        try Self.check(data, response, [200])
-        return try Self.decodeJSON(ChatPage.self, data)
+        try checked { try Self.check(data, response, [200]) }
+        let page = try Self.decodeJSON(ChatPage.self, data)
+        cache?.mergeChat(agent, page: data)
+        return page
+    }
+
+    /// Runs a check of an answer; a refused token takes what was kept of this Mac with it.
+    func checked<T>(_ body: () throws -> T) throws -> T {
+        do { return try body() } catch ConnectionError.refused {
+            cache?.clear()
+            throw ConnectionError.refused
+        }
     }
 
     /// GET /api/live: held until the message changed after `since`.
@@ -191,7 +204,14 @@ public struct MadClient: Sendable {
         } catch {
             throw ConnectionError.offline
         }
-        return try Self.decode(data, response)
+        let deck = try checked { try Self.decode(data, response) }
+        cache?.saveDeck(data)
+        return deck
+    }
+
+    /// The deck a cache holds, for the first look.
+    public static func cachedDeck(_ cache: SnapshotCache?) -> Deck? {
+        cache?.loadDeck().flatMap { try? JSONDecoder().decode(Deck.self, from: $0) }
     }
 
     /// Maps a response to a snapshot or the error the person should see.

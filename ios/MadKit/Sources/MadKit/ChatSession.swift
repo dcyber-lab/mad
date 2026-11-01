@@ -3,6 +3,8 @@ import Foundation
 
 /// What a conversation needs of the Mac; `MadClient` is it, a test's fake can be.
 public protocol ChatAPI {
+    /// What the app keeps of this Mac on the device; nil for a fake.
+    var cache: SnapshotCache? { get }
     func chat(agent: String, file: String, from: Int64) async throws -> ChatPage
     func live(agent: String, since: Int64) async throws -> LiveMessage?
     func send(agent: String, text: String) async throws
@@ -11,6 +13,10 @@ public protocol ChatAPI {
 }
 
 extension MadClient: ChatAPI {}
+
+extension ChatAPI {
+    public var cache: SnapshotCache? { nil }
+}
 
 /// One agent's conversation: its transcript read by looks that never overlap,
 /// the message being written, and sending to it.
@@ -40,6 +46,11 @@ public final class ChatSession: ObservableObject {
         if let sample {
             transcript.apply(sample.page)
             if let m = sample.live { live.receive(m) }
+            loaded = true
+        } else if let raw = api.cache?.loadChat(agentID), let page = try? JSONDecoder().decode(ChatPage.self, from: raw),
+                  !page.entries.isEmpty {
+            // The tail of the conversation as the device kept it: it draws at once, and the looks go on from its offset.
+            transcript.apply(page)
             loaded = true
         }
     }
