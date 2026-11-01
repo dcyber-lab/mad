@@ -62,20 +62,30 @@ public struct ChannelView: View {
 
     // MARK: the chat
 
+    private var composerRow: some View {
+        // the composer has the message column's edges, exactly
+        ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
+                        replying: $replying, send: actions.send)
+            .frame(maxWidth: MadColumn.maxWidth)
+            .padding(.horizontal, MadColumn.side)
+            .frame(maxWidth: .infinity)
+    }
+
     private var chat: some View {
+        #if os(iOS)
+        // PROTOTYPE: the list is full-bleed and never changes its frame; the head (translucent) and the composer are
+        // safe-area insets, so the keyboard changes the list's inset, not its size, and content scrolls under the head.
+        messages
+            .safeAreaInset(edge: .top, spacing: 0) { head.background(.bar) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.bar) }
+            .background(Color.clear)
+        #else
         VStack(spacing: 0) {
-            #if os(iOS)
-            head
-            #endif
             messages
-            // the composer has the message column's edges, exactly
-            ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
-                            replying: $replying, send: actions.send)
-                .frame(maxWidth: MadColumn.maxWidth)
-                .padding(.horizontal, MadColumn.side)
-                .frame(maxWidth: .infinity)
+            composerRow
         }
         .background(Color.clear)
+        #endif
     }
 
     /// The head: back (phone), the tile with the name and how many work, ⓘ. On the Mac it is the window's
@@ -227,6 +237,27 @@ public struct ChannelView: View {
             .defaultScrollAnchor(.bottom)
             .pinnedToBottomThroughResizes()
             .scrollDismissesKeyboard(.interactively)
+            #if DEBUG && os(iOS)
+            // a scripted run for comparing layouts: keyboard up, three lines, scrolls with it up, down, up again, a send
+            .task {
+                guard UserDefaults.standard.bool(forKey: "protoDrive") else { return }
+                func post(_ name: String, _ object: Any? = nil) { NotificationCenter.default.post(name: Notification.Name(name), object: object) }
+                func wait(_ s: Double) async { try? await Task.sleep(for: .seconds(s)) }
+                await wait(4); post("protoFocus")
+                await wait(3); post("protoText", "第一行\n第二行\n第三行")
+                await wait(3)
+                let first = screen.items.first?.id, mid = screen.items.dropFirst(screen.items.count / 2).first?.id
+                if let first { withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(first, anchor: .top) } }
+                await wait(2.5)
+                if let mid { withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(mid, anchor: .center) } }
+                await wait(2.5)
+                withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
+                await wait(2.5); post("protoBlur")
+                await wait(3.5); post("protoFocus")
+                await wait(3); post("protoText", "测试"); await wait(0.5); post("protoSend")
+                await wait(4)
+            }
+            #endif
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
