@@ -1757,6 +1757,8 @@ html.ptype #queue.inchan { padding-inline: 12px; }
   transform: translateX(100%); transition: transform 0.28s ease;
 }
 #chpanel.open .chside { transform: none; }
+/* The panel is one column that scrolls as a whole: a card never shrinks to fit (its rounded clip would cut its last rows). */
+.chside > * { flex: none; }
 @media (prefers-reduced-motion: reduce) { .chside, .chscrim { transition: none; } }
 .cpclose { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: 8px; }
 .cptop { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 12px; text-align: center; }

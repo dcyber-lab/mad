@@ -940,7 +940,8 @@ function drawChanWho() {
   const who = $("#who");
   const what = el("span", "what");
   const g = c ? chanGroups(c) : null;
-  const n = g ? (g.split ? g.team.length : g.rows.length) : 0;
+  // how many can be @-woken: the agents that are there (a role not started, or gone, is not)
+  const n = g ? g.rows.filter((r) => agents.has(r.m.id) && (!g.split || r.team)).length : 0;
   const helpers = g && g.helpers.length ? ` · ${g.helpers.length} 帮手` : "";
   what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"}${helpers} · @ to wake one` : " · reaches it when its turn is over");
   who.replaceChildren(what);

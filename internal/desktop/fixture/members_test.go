@@ -27,7 +27,25 @@ const panelJS = `(() => {
       }));
     }
   }
+  // No card clips what is in it, and the panel reaches its last row.
+  const side = document.querySelector("#chpanel .chside");
+  const clips = [];
+  for (const card of side.querySelectorAll(".cplist")) {
+    const cr = card.getBoundingClientRect();
+    if (card.scrollHeight > card.clientHeight + 0.5) clips.push("card scrolls " + card.scrollHeight + ">" + card.clientHeight + ": " + card.textContent.slice(0, 30));
+    for (const r of card.children) {
+      const b = r.getBoundingClientRect();
+      if (b.top < cr.top - 0.5 || b.bottom > cr.bottom + 0.5 || b.left < cr.left - 0.5 || b.right > cr.right + 0.5) {
+        clips.push("row outside its card: " + r.textContent.slice(0, 30) + " " + Math.round(b.top) + ".." + Math.round(b.bottom) + " in " + Math.round(cr.top) + ".." + Math.round(cr.bottom));
+      }
+    }
+  }
+  side.scrollTop = side.scrollHeight;
+  const last = [...side.querySelectorAll(".cpact")].pop();
+  if (last && last.getBoundingClientRect().bottom > side.getBoundingClientRect().bottom + 0.5) clips.push("the panel does not reach its last row");
+  side.scrollTop = 0;
   return {
+    clips,
     sections: out, who: document.querySelector("#who").textContent,
     head: document.querySelector("#chanhead .chwhat small")?.textContent || "",
     dot: !!document.querySelector('.row[data-key^="t:"] .rdot[aria-label="needs you"]'),
@@ -46,9 +64,10 @@ type panelReport struct {
 		Title string
 		Rows  []panelRow
 	}
-	Who  string
-	Head string
-	Dot  bool
+	Clips []string
+	Who   string
+	Head  string
+	Dot   bool
 }
 
 // openPanel opens channel id of the fixture at url in a window width wide, with its panel, and says what
@@ -130,6 +149,9 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			if len(rep.Sections) < 3 {
 				t.Fatalf("sections: %+v", rep.Sections)
 			}
+			for _, c := range rep.Clips {
+				t.Errorf("clipped: %s", c)
+			}
 			team, helpers := rep.Sections[0], rep.Sections[1]
 			if team.Title != "小组 5" || helpers.Title != "帮手 3" {
 				t.Errorf("headings %q and %q, want 小组 5 and 帮手 3", team.Title, helpers.Title)
@@ -165,7 +187,7 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			if rep.Sections[2].Title != "这个群" {
 				t.Errorf("third heading %q", rep.Sections[2].Title)
 			}
-			if !strings.Contains(rep.Who, "5 agents · 3 帮手") {
+			if !strings.Contains(rep.Who, "3 agents · 3 帮手") {
 				t.Errorf("under the message box: %q", rep.Who)
 			}
 			// What is done and what waits counts everyone, helpers too: kim, a helper, needs the person and ops, another,
@@ -181,6 +203,9 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			rep := openPanel(t, c, foldSrv.URL+"/?channel=fold"+tok, w, "")
 			if len(rep.Sections) < 2 || rep.Sections[0].Title != "成员 · 8" || len(rep.Sections[0].Rows) != 8 {
 				t.Errorf("a channel without a team is one list of 8: %+v", rep.Sections)
+			}
+			for _, c := range rep.Clips {
+				t.Errorf("clipped: %s", c)
 			}
 			for _, s := range rep.Sections {
 				if strings.HasPrefix(s.Title, "小组") || strings.HasPrefix(s.Title, "帮手") {
