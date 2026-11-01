@@ -1,0 +1,3691 @@
+{
+ "deck": {
+  "machine": "Fixture Mac",
+  "projects": [
+   {
+    "name": "mad",
+    "path": "/fixture/mad",
+    "branch": "main",
+    "changed": 0,
+    "ahead": 0,
+    "rollup": [],
+    "agents": [
+     {
+      "id": "fold0001-aaaa",
+      "kind": "claude",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#d97757",
+      "name": "architect"
+     },
+     {
+      "id": "fold0002-aaaa",
+      "kind": "codex",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#10a37f",
+      "name": "builder"
+     },
+     {
+      "id": "fold0003-aaaa",
+      "kind": "claude",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#d97757",
+      "name": "reviewer"
+     },
+     {
+      "id": "fold0004-aaaa",
+      "kind": "codex",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#10a37f",
+      "name": "designer"
+     },
+     {
+      "id": "fold0005-aaaa",
+      "kind": "claude",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#d97757",
+      "name": "tester"
+     },
+     {
+      "id": "fold0006-aaaa",
+      "kind": "codex",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#10a37f",
+      "name": "docs"
+     },
+     {
+      "id": "fold0007-aaaa",
+      "kind": "claude",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#d97757",
+      "name": "ops"
+     },
+     {
+      "id": "fold0008-aaaa",
+      "kind": "codex",
+      "status": "idle",
+      "shown": "idle",
+      "chat": true,
+      "color": "#10a37f",
+      "name": "kim"
+     }
+    ]
+   }
+  ],
+  "bus": [
+   {
+    "id": "fold",
+    "title": "#fold",
+    "members": [
+     {
+      "id": "fold0001-aaaa",
+      "label": "architect",
+      "kind": "claude"
+     },
+     {
+      "id": "fold0002-aaaa",
+      "label": "builder",
+      "kind": "codex"
+     },
+     {
+      "id": "fold0003-aaaa",
+      "label": "reviewer",
+      "kind": "claude"
+     },
+     {
+      "id": "fold0004-aaaa",
+      "label": "designer",
+      "kind": "codex"
+     },
+     {
+      "id": "fold0005-aaaa",
+      "label": "tester",
+      "kind": "claude"
+     },
+     {
+      "id": "fold0006-aaaa",
+      "label": "docs",
+      "kind": "codex"
+     },
+     {
+      "id": "fold0007-aaaa",
+      "label": "ops",
+      "kind": "claude"
+     },
+     {
+      "id": "fold0008-aaaa",
+      "label": "kim",
+      "kind": "codex"
+     }
+    ],
+    "last": 8,
+    "last_text": "architect: 长的交接和汇报都折叠",
+    "last_at": "-1m",
+    "listed": true,
+    "mention": true,
+    "unread": 1,
+    "lead": "fold0001-aaaa"
+   }
+  ],
+  "board": [
+   {
+    "kind": "task",
+    "task": {
+     "id": "t-1",
+     "title": "频道里支持发图片",
+     "owner": "fold0002-aaaa",
+     "status": "doing",
+     "channel": "fold"
+    },
+    "title": "频道里支持发图片",
+    "column": "doing",
+    "channel": "fold",
+    "owner": "fold0002-aaaa",
+    "owner_label": "builder",
+    "age": 600000000000,
+    "since": "-10m"
+   },
+   {
+    "kind": "task",
+    "task": {
+     "id": "t-2",
+     "title": "用量单独一页",
+     "owner": "fold0002-aaaa",
+     "status": "doing",
+     "channel": "fold"
+    },
+    "title": "用量单独一页",
+    "column": "doing",
+    "channel": "fold",
+    "owner": "fold0002-aaaa",
+    "owner_label": "builder",
+    "age": 300000000000,
+    "since": "-5m"
+   },
+   {
+    "kind": "task",
+    "task": {
+     "id": "t-3",
+     "title": "字体放大",
+     "owner": "fold0002-aaaa",
+     "status": "done",
+     "channel": "fold"
+    },
+    "title": "字体放大",
+    "column": "done",
+    "channel": "fold",
+    "owner": "fold0002-aaaa",
+    "owner_label": "builder",
+    "age": 3600000000000,
+    "since": "-1h"
+   },
+   {
+    "kind": "task",
+    "task": {
+     "id": "t-9",
+     "title": "别的群的任务",
+     "owner": "",
+     "status": "todo",
+     "channel": "other"
+    },
+    "title": "别的群的任务",
+    "column": "todo",
+    "channel": "other",
+    "age": 0,
+    "since": "-2h"
+   }
+  ]
+ },
+ "messages": {
+  "fold": [
+   {
+    "seq": 1,
+    "at": "-960m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 通过了 https://example.com/pull/1 好的 我看一下 已经推上去 我看一下 seq，然后重新跑测试"
+   },
+   {
+    "seq": 2,
+    "at": "-957m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 已经推上去 id 好的 我看一下 通过了 通过了 我看一下 id 我看一下 已经推上去 通过了 好的 请看 我看一下 id https://example.com/pull/1 https://example.com/pull/1 请看 好的 请看 请看 通过了 好的 id 好的 已经推上去 这个改动把消息列表的 换成了稳定的 通过了 这个改动把消息列表的 已经推上去 我看一下 请看 换成了稳定的 已经推上去 https://example.com/pull/1 这个改动把消息列表的 我看一下 请看"
+   },
+   {
+    "seq": 3,
+    "at": "-954m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 id seq，然后重新跑测试 我看一下 已经推上去 我看一下 请看 好的 请看 id PR https://example.com/pull/1 已经推上去 通过了 seq，然后重新跑测试 PR 请看 PR seq，然后重新跑测试 换成了稳定的 id 这个改动把消息列表的 id 我看一下 请看 换成了稳定的 已经推上去 PR seq，然后重新跑测试 PR 换成了稳定的 请看 我看一下 我看一下 已经推上去 通过了 这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 PR"
+   },
+   {
+    "seq": 4,
+    "at": "-951m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 https://example.com/pull/1 我看一下 已经推上去 请看 seq，然后重新跑测试 seq，然后重新跑测试 seq，然后重新跑测试 请看 PR 请看 PR 我看一下 我看一下 换成了稳定的 PR https://example.com/pull/1 我看一下 好的 换成了稳定的"
+   },
+   {
+    "seq": 5,
+    "at": "-948m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 https://example.com/pull/1 PR 换成了稳定的 通过了 https://example.com/pull/1 seq，然后重新跑测试 好的 PR seq，然后重新跑测试 这个改动把消息列表的 请看 我看一下 PR 好的 id 换成了稳定的 这个改动把消息列表的 id 通过了 通过了 PR 我看一下 这个改动把消息列表的 PR 通过了 已经推上去 换成了稳定的 这个改动把消息列表的 通过了 已经推上去 换成了稳定的 通过了 seq，然后重新跑测试 https://example.com/pull/1 通过了 id 这个改动把消息列表的 我看一下 这个改动把消息列表的 这个改动把消息列表的 id https://example.com/pull/1 id 好的 PR 请看 这个改动把消息列表的 换成了稳定的 换成了稳定的 好的 这个改动把消息列表的 通过了 已经推上去 seq，然后重新跑测试 请看 请看 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 请看 https://example.com/pull/1 https://example.com/pull/1 好的 PR https://example.com/pull/1 已经推上去 通过了 通过了 通过了"
+   },
+   {
+    "seq": 6,
+    "at": "-945m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 PR https://example.com/pull/1 通过了 好的 id 我看一下 id PR 这个改动把消息列表的 我看一下 seq，然后重新跑测试 请看 好的 我看一下 好的 请看 这个改动把消息列表的 已经推上去 我看一下"
+   },
+   {
+    "seq": 7,
+    "at": "-942m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "请看 好的 我看一下 id 请看 通过了 这个改动把消息列表的 https://example.com/pull/1"
+   },
+   {
+    "seq": 8,
+    "at": "-939m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 请看 seq，然后重新跑测试 PR 我看一下 我看一下 PR PR"
+   },
+   {
+    "seq": 9,
+    "at": "-936m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 换成了稳定的 我看一下 这个改动把消息列表的 我看一下 seq，然后重新跑测试 换成了稳定的 PR 这个改动把消息列表的 已经推上去 好的 id 已经推上去 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 好的 已经推上去 换成了稳定的 https://example.com/pull/1"
+   },
+   {
+    "seq": 10,
+    "at": "-933m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 已经推上去"
+   },
+   {
+    "seq": 11,
+    "at": "-930m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 id 已经推上去 已经推上去 已经推上去 seq，然后重新跑测试 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 12,
+    "at": "-927m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 id id 通过了"
+   },
+   {
+    "seq": 13,
+    "at": "-924m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id id 已经推上去 PR seq，然后重新跑测试 好的 好的 换成了稳定的 PR 换成了稳定的 id 请看 seq，然后重新跑测试 PR seq，然后重新跑测试 seq，然后重新跑测试 我看一下 id 我看一下 id PR id seq，然后重新跑测试 id PR 请看 请看 好的 PR https://example.com/pull/1 seq，然后重新跑测试 https://example.com/pull/1 我看一下 https://example.com/pull/1 我看一下 通过了 id PR 这个改动把消息列表的 通过了 https://example.com/pull/1 seq，然后重新跑测试 我看一下 通过了 PR 通过了 我看一下 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 好的 这个改动把消息列表的 请看 PR https://example.com/pull/1 这个改动把消息列表的 请看 请看 PR https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 已经推上去 这个改动把消息列表的 好的 好的 https://example.com/pull/1 我看一下 已经推上去"
+   },
+   {
+    "seq": 14,
+    "at": "-921m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 通过了 id id 好的 换成了稳定的 id 换成了稳定的 已经推上去 id 请看 seq，然后重新跑测试 换成了稳定的 已经推上去 通过了 这个改动把消息列表的 好的 seq，然后重新跑测试 PR https://example.com/pull/1 请看 已经推上去 通过了 已经推上去 这个改动把消息列表的 已经推上去 这个改动把消息列表的 已经推上去 已经推上去 好的 PR 这个改动把消息列表的 请看 好的 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 PR 请看 我看一下 已经推上去 好的 seq，然后重新跑测试 https://example.com/pull/1 已经推上去 已经推上去 已经推上去 PR 我看一下 已经推上去 好的 id id 换成了稳定的 好的 我看一下 已经推上去 PR 已经推上去 好的 我看一下 PR seq，然后重新跑测试 请看 已经推上去 请看 已经推上去 id 换成了稳定的 PR"
+   },
+   {
+    "seq": 15,
+    "at": "-918m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 PR 已经推上去 id 已经推上去 换成了稳定的 已经推上去 id PR 这个改动把消息列表的 通过了 我看一下 通过了 PR seq，然后重新跑测试 我看一下 https://example.com/pull/1 id 通过了 我看一下 id https://example.com/pull/1 换成了稳定的 我看一下 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 换成了稳定的 这个改动把消息列表的 PR id 我看一下 通过了 PR 这个改动把消息列表的 https://example.com/pull/1 id 这个改动把消息列表的"
+   },
+   {
+    "seq": 16,
+    "at": "-915m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 已经推上去 通过了 seq，然后重新跑测试 通过了 id seq，然后重新跑测试 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 好的 seq，然后重新跑测试 已经推上去 PR PR 好的 通过了 seq，然后重新跑测试 已经推上去 请看 换成了稳定的 已经推上去 我看一下 我看一下 id 我看一下 我看一下 换成了稳定的 换成了稳定的 好的 这个改动把消息列表的 换成了稳定的 这个改动把消息列表的 通过了 https://example.com/pull/1 换成了稳定的 通过了 这个改动把消息列表的 已经推上去 已经推上去 请看 PR seq，然后重新跑测试 我看一下 换成了稳定的 好的 这个改动把消息列表的 通过了 我看一下 换成了稳定的 好的 https://example.com/pull/1 我看一下 换成了稳定的 我看一下 请看 id 我看一下 换成了稳定的 我看一下 PR 好的 seq，然后重新跑测试 已经推上去 通过了 换成了稳定的 请看 这个改动把消息列表的 好的 已经推上去"
+   },
+   {
+    "seq": 17,
+    "at": "-912m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id 我看一下 这个改动把消息列表的 换成了稳定的 好的 这个改动把消息列表的 id 换成了稳定的 https://example.com/pull/1 换成了稳定的 已经推上去 id 换成了稳定的 PR 已经推上去 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 seq，然后重新跑测试 好的 换成了稳定的 好的 好的 好的 已经推上去 已经推上去 id 已经推上去 PR id PR 我看一下 https://example.com/pull/1 https://example.com/pull/1 通过了 https://example.com/pull/1 PR 已经推上去 通过了 已经推上去 换成了稳定的 id id seq，然后重新跑测试 id https://example.com/pull/1 这个改动把消息列表的 通过了 seq，然后重新跑测试 好的 这个改动把消息列表的 好的 我看一下 https://example.com/pull/1 换成了稳定的 通过了 这个改动把消息列表的 好的 我看一下 https://example.com/pull/1 通过了 已经推上去 https://example.com/pull/1 换成了稳定的 请看 id 换成了稳定的 好的 PR 这个改动把消息列表的"
+   },
+   {
+    "seq": 18,
+    "at": "-909m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 PR 好的 换成了稳定的"
+   },
+   {
+    "seq": 19,
+    "at": "-906m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 id 好的 换成了稳定的 id seq，然后重新跑测试"
+   },
+   {
+    "seq": 20,
+    "at": "-903m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 seq，然后重新跑测试 通过了 我看一下"
+   },
+   {
+    "seq": 21,
+    "at": "-900m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 已经推上去 https://example.com/pull/1 id id 已经推上去 好的 我看一下 换成了稳定的 我看一下 这个改动把消息列表的 通过了 请看 好的 通过了 好的 换成了稳定的 换成了稳定的 https://example.com/pull/1 id"
+   },
+   {
+    "seq": 22,
+    "at": "-897m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 已经推上去\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 23,
+    "at": "-894m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 请看 通过了 seq，然后重新跑测试"
+   },
+   {
+    "seq": 24,
+    "at": "-891m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 换成了稳定的 请看 https://example.com/pull/1 这个改动把消息列表的 好的 已经推上去 https://example.com/pull/1 通过了 已经推上去 这个改动把消息列表的 已经推上去 已经推上去 请看 好的 https://example.com/pull/1 请看 https://example.com/pull/1 https://example.com/pull/1 id 我看一下 好的 好的 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 我看一下 通过了 PR 已经推上去 好的 https://example.com/pull/1 好的 https://example.com/pull/1 已经推上去 https://example.com/pull/1 id PR 换成了稳定的 好的 PR 我看一下 已经推上去 已经推上去 我看一下 https://example.com/pull/1 已经推上去 我看一下 PR 换成了稳定的 我看一下 换成了稳定的 id id id https://example.com/pull/1 PR PR 通过了 我看一下 PR https://example.com/pull/1 换成了稳定的 好的 请看 https://example.com/pull/1 https://example.com/pull/1 id 我看一下"
+   },
+   {
+    "seq": 25,
+    "at": "-888m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 换成了稳定的 请看 请看 这个改动把消息列表的 好的 PR 好的 PR 换成了稳定的 https://example.com/pull/1 我看一下 id https://example.com/pull/1 PR 换成了稳定的 已经推上去 换成了稳定的 PR PR PR 我看一下 已经推上去 id 换成了稳定的 我看一下 PR 好的 换成了稳定的 PR 我看一下 已经推上去 PR 换成了稳定的 通过了 id id"
+   },
+   {
+    "seq": 26,
+    "at": "-885m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 我看一下"
+   },
+   {
+    "seq": 27,
+    "at": "-882m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的"
+   },
+   {
+    "seq": 28,
+    "at": "-879m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 已经推上去 换成了稳定的 我看一下 seq，然后重新跑测试 id PR PR 通过了 好的 这个改动把消息列表的 好的 PR https://example.com/pull/1 PR 通过了 换成了稳定的 这个改动把消息列表的 通过了 seq，然后重新跑测试 通过了 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 好的 seq，然后重新跑测试 seq，然后重新跑测试 通过了 我看一下 id 好的 换成了稳定的 换成了稳定的 seq，然后重新跑测试 我看一下 通过了 通过了 请看 我看一下 seq，然后重新跑测试"
+   },
+   {
+    "seq": 29,
+    "at": "-876m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 好的 换成了稳定的 我看一下 好的 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 这个改动把消息列表的 id 换成了稳定的 通过了 已经推上去 seq，然后重新跑测试 id seq，然后重新跑测试 通过了 好的 https://example.com/pull/1 通过了"
+   },
+   {
+    "seq": 30,
+    "at": "-873m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 id 我看一下 好的 通过了 PR 请看 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 PR 好的 已经推上去 这个改动把消息列表的 这个改动把消息列表的 PR 通过了 seq，然后重新跑测试 换成了稳定的 换成了稳定的 换成了稳定的 https://example.com/pull/1 换成了稳定的 通过了 https://example.com/pull/1 id 换成了稳定的 PR 已经推上去 https://example.com/pull/1 通过了 我看一下 这个改动把消息列表的 https://example.com/pull/1 这个改动把消息列表的 我看一下 id 已经推上去 PR 已经推上去"
+   },
+   {
+    "seq": 31,
+    "at": "-870m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR seq，然后重新跑测试 PR 通过了"
+   },
+   {
+    "seq": 32,
+    "at": "-867m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 id id 我看一下"
+   },
+   {
+    "seq": 33,
+    "at": "-864m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 已经推上去 我看一下 seq，然后重新跑测试\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 34,
+    "at": "-861m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 换成了稳定的 请看 id"
+   },
+   {
+    "seq": 35,
+    "at": "-858m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "通过了 通过了"
+   },
+   {
+    "seq": 36,
+    "at": "-855m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 id 通过了 换成了稳定的 seq，然后重新跑测试 好的 PR 换成了稳定的 请看 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 已经推上去 已经推上去 https://example.com/pull/1 id 我看一下 换成了稳定的 id 通过了"
+   },
+   {
+    "seq": 37,
+    "at": "-852m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 PR 通过了 换成了稳定的 好的 这个改动把消息列表的 好的 通过了 PR 请看 PR 好的 我看一下 通过了 已经推上去 PR PR id 我看一下 id"
+   },
+   {
+    "seq": 38,
+    "at": "-849m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 已经推上去 https://example.com/pull/1 我看一下"
+   },
+   {
+    "seq": 39,
+    "at": "-846m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 PR 我看一下 已经推上去 好的 好的 这个改动把消息列表的 id 请看 好的 https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 已经推上去 https://example.com/pull/1 通过了 我看一下 我看一下 我看一下 换成了稳定的 已经推上去 请看 id 通过了 换成了稳定的 id 请看 好的 好的 已经推上去 换成了稳定的 PR 换成了稳定的 seq，然后重新跑测试 https://example.com/pull/1 id PR 已经推上去 id 已经推上去 id 好的 通过了 https://example.com/pull/1 换成了稳定的 好的 好的 id PR https://example.com/pull/1 https://example.com/pull/1 通过了 我看一下 换成了稳定的 id https://example.com/pull/1 通过了 seq，然后重新跑测试 id PR 好的 seq，然后重新跑测试 通过了 seq，然后重新跑测试 https://example.com/pull/1 通过了 id 好的"
+   },
+   {
+    "seq": 40,
+    "at": "-843m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 id PR id 换成了稳定的 id id"
+   },
+   {
+    "seq": 41,
+    "at": "-840m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id 换成了稳定的 换成了稳定的 我看一下 请看 PR 请看 这个改动把消息列表的 id PR 通过了 https://example.com/pull/1 好的 请看 这个改动把消息列表的 通过了 好的 id 好的 请看"
+   },
+   {
+    "seq": 42,
+    "at": "-837m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "通过了 好的 好的 这个改动把消息列表的"
+   },
+   {
+    "seq": 43,
+    "at": "-834m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR seq，然后重新跑测试 我看一下 我看一下 这个改动把消息列表的 seq，然后重新跑测试 id 这个改动把消息列表的 https://example.com/pull/1 已经推上去 PR 好的 换成了稳定的 https://example.com/pull/1 通过了 seq，然后重新跑测试 seq，然后重新跑测试 PR 这个改动把消息列表的 我看一下"
+   },
+   {
+    "seq": 44,
+    "at": "-831m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 换成了稳定的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 45,
+    "at": "-828m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 通过了"
+   },
+   {
+    "seq": 46,
+    "at": "-825m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 id"
+   },
+   {
+    "seq": 47,
+    "at": "-822m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 换成了稳定的 通过了 我看一下 好的 PR id seq，然后重新跑测试 已经推上去 PR id seq，然后重新跑测试 seq，然后重新跑测试 PR 好的 https://example.com/pull/1 通过了 id https://example.com/pull/1 通过了"
+   },
+   {
+    "seq": 48,
+    "at": "-819m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 好的"
+   },
+   {
+    "seq": 49,
+    "at": "-816m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "我看一下 好的 换成了稳定的 id 我看一下 请看 seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 请看 好的 换成了稳定的 seq，然后重新跑测试 换成了稳定的 换成了稳定的 好的 请看 https://example.com/pull/1 我看一下"
+   },
+   {
+    "seq": 50,
+    "at": "-813m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 我看一下"
+   },
+   {
+    "seq": 51,
+    "at": "-810m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 通过了 换成了稳定的 通过了 PR 这个改动把消息列表的 PR 这个改动把消息列表的 好的 换成了稳定的 这个改动把消息列表的 请看 id seq，然后重新跑测试 seq，然后重新跑测试 PR seq，然后重新跑测试 请看 我看一下 已经推上去"
+   },
+   {
+    "seq": 52,
+    "at": "-807m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 这个改动把消息列表的 id 通过了"
+   },
+   {
+    "seq": 53,
+    "at": "-804m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的"
+   },
+   {
+    "seq": 54,
+    "at": "-801m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 已经推上去 seq，然后重新跑测试 这个改动把消息列表的 通过了 我看一下 我看一下 换成了稳定的 请看 我看一下 id 我看一下 通过了 PR PR 这个改动把消息列表的 id 这个改动把消息列表的 通过了 PR"
+   },
+   {
+    "seq": 55,
+    "at": "-798m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 id 已经推上去 https://example.com/pull/1 我看一下 换成了稳定的 换成了稳定的 换成了稳定的 请看 换成了稳定的 seq，然后重新跑测试 换成了稳定的 换成了稳定的 id PR id 这个改动把消息列表的 id id 这个改动把消息列表的 换成了稳定的 请看 id seq，然后重新跑测试 我看一下 通过了 换成了稳定的 id 已经推上去 已经推上去 id https://example.com/pull/1 我看一下 https://example.com/pull/1 PR 好的 我看一下 好的 PR id\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 56,
+    "at": "-795m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 好的 换成了稳定的 id 我看一下 好的 id 请看 请看 id 我看一下 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 PR 请看 换成了稳定的 https://example.com/pull/1 好的 我看一下"
+   },
+   {
+    "seq": 57,
+    "at": "-792m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 请看 seq，然后重新跑测试 id 好的 seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 好的 id 换成了稳定的 好的 请看 https://example.com/pull/1 id 好的 seq，然后重新跑测试 通过了 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 请看 换成了稳定的 我看一下 id 好的 PR 已经推上去 PR 我看一下 通过了 我看一下 通过了 https://example.com/pull/1 已经推上去 这个改动把消息列表的 https://example.com/pull/1 已经推上去 我看一下 https://example.com/pull/1 这个改动把消息列表的 通过了 换成了稳定的 通过了 换成了稳定的 https://example.com/pull/1 换成了稳定的 通过了 好的 换成了稳定的 请看 seq，然后重新跑测试 通过了 通过了 好的 seq，然后重新跑测试 https://example.com/pull/1 id 通过了 通过了 id 好的 通过了 这个改动把消息列表的 通过了 我看一下 我看一下 通过了 请看 seq，然后重新跑测试"
+   },
+   {
+    "seq": 58,
+    "at": "-789m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 这个改动把消息列表的 好的 好的 已经推上去 这个改动把消息列表的 https://example.com/pull/1 通过了 我看一下 请看 请看 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 这个改动把消息列表的 seq，然后重新跑测试 换成了稳定的 这个改动把消息列表的 已经推上去 这个改动把消息列表的"
+   },
+   {
+    "seq": 59,
+    "at": "-786m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 通过了"
+   },
+   {
+    "seq": 60,
+    "at": "-783m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 换成了稳定的 这个改动把消息列表的 好的 PR seq，然后重新跑测试 好的 请看 https://example.com/pull/1 通过了 我看一下 请看 这个改动把消息列表的 https://example.com/pull/1 id 请看 通过了 请看 id PR"
+   },
+   {
+    "seq": 61,
+    "at": "-780m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 id 好的 通过了"
+   },
+   {
+    "seq": 62,
+    "at": "-777m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 通过了 seq，然后重新跑测试 我看一下 这个改动把消息列表的 id id 好的 已经推上去 https://example.com/pull/1 好的 https://example.com/pull/1 seq，然后重新跑测试 我看一下 通过了 请看 PR 已经推上去 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 通过了 换成了稳定的 请看 id 通过了 通过了 https://example.com/pull/1 seq，然后重新跑测试 PR 已经推上去 PR 这个改动把消息列表的 好的 好的 请看 PR PR id PR"
+   },
+   {
+    "seq": 63,
+    "at": "-774m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 PR 通过了 我看一下 我看一下 这个改动把消息列表的 seq，然后重新跑测试 通过了 seq，然后重新跑测试 我看一下 PR 已经推上去 已经推上去 https://example.com/pull/1 好的 好的 https://example.com/pull/1 这个改动把消息列表的 我看一下 seq，然后重新跑测试 已经推上去 我看一下 好的 已经推上去 通过了 https://example.com/pull/1 这个改动把消息列表的 好的 我看一下 请看 我看一下 id 这个改动把消息列表的 PR 换成了稳定的 这个改动把消息列表的 https://example.com/pull/1 id 我看一下"
+   },
+   {
+    "seq": 64,
+    "at": "-771m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 换成了稳定的 这个改动把消息列表的 seq，然后重新跑测试 请看 换成了稳定的 PR 这个改动把消息列表的"
+   },
+   {
+    "seq": 65,
+    "at": "-768m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 PR id 请看 换成了稳定的 请看 已经推上去 id"
+   },
+   {
+    "seq": 66,
+    "at": "-765m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 好的 id 这个改动把消息列表的 通过了 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 67,
+    "at": "-762m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 通过了 这个改动把消息列表的 换成了稳定的 我看一下 已经推上去 好的 https://example.com/pull/1 seq，然后重新跑测试 PR 已经推上去 已经推上去 请看 我看一下 换成了稳定的 已经推上去 https://example.com/pull/1 通过了 seq，然后重新跑测试 换成了稳定的 通过了 seq，然后重新跑测试 请看 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 我看一下 PR id 这个改动把消息列表的 请看 好的 换成了稳定的 已经推上去 换成了稳定的 换成了稳定的 https://example.com/pull/1 请看 https://example.com/pull/1 seq，然后重新跑测试 好的 好的 id 这个改动把消息列表的 换成了稳定的 请看 https://example.com/pull/1 通过了 通过了 已经推上去 seq，然后重新跑测试 好的 这个改动把消息列表的 PR id 请看 https://example.com/pull/1 好的 好的 好的 好的 请看 seq，然后重新跑测试 换成了稳定的 我看一下 已经推上去 seq，然后重新跑测试 已经推上去 id 通过了"
+   },
+   {
+    "seq": 68,
+    "at": "-759m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 请看 这个改动把消息列表的 id seq，然后重新跑测试 请看 PR 这个改动把消息列表的 这个改动把消息列表的 好的 id 这个改动把消息列表的 PR 我看一下 我看一下 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 通过了 换成了稳定的 好的 好的 https://example.com/pull/1 已经推上去 seq，然后重新跑测试 请看 https://example.com/pull/1 请看 PR 请看 已经推上去 PR id 这个改动把消息列表的 好的 好的 好的 已经推上去 好的"
+   },
+   {
+    "seq": 69,
+    "at": "-756m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 id 这个改动把消息列表的 好的 我看一下 好的 请看 已经推上去 https://example.com/pull/1 id 这个改动把消息列表的 通过了 id 已经推上去 请看 https://example.com/pull/1 已经推上去 https://example.com/pull/1 https://example.com/pull/1 通过了"
+   },
+   {
+    "seq": 70,
+    "at": "-753m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 已经推上去 换成了稳定的 我看一下 换成了稳定的 https://example.com/pull/1 好的 PR 已经推上去 好的 通过了 通过了 PR 我看一下 https://example.com/pull/1 PR 这个改动把消息列表的 id 我看一下 换成了稳定的 id https://example.com/pull/1 好的 我看一下 seq，然后重新跑测试 换成了稳定的 好的 换成了稳定的 https://example.com/pull/1 已经推上去 https://example.com/pull/1 通过了 https://example.com/pull/1 已经推上去 换成了稳定的 换成了稳定的 https://example.com/pull/1 id 我看一下 已经推上去"
+   },
+   {
+    "seq": 71,
+    "at": "-750m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 72,
+    "at": "-747m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 这个改动把消息列表的 seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 73,
+    "at": "-744m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 请看 id 通过了 https://example.com/pull/1 https://example.com/pull/1 已经推上去 PR PR 已经推上去 好的 好的 通过了 id 请看 换成了稳定的 id 通过了 请看 请看"
+   },
+   {
+    "seq": 74,
+    "at": "-741m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 这个改动把消息列表的"
+   },
+   {
+    "seq": 75,
+    "at": "-738m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 好的 我看一下 我看一下"
+   },
+   {
+    "seq": 76,
+    "at": "-735m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 好的 好的 好的 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 好的 我看一下 好的 我看一下 请看 seq，然后重新跑测试 id 已经推上去 https://example.com/pull/1 我看一下 通过了 我看一下 id id id 我看一下 好的 好的 https://example.com/pull/1 我看一下 https://example.com/pull/1 https://example.com/pull/1 换成了稳定的 PR 我看一下 这个改动把消息列表的 我看一下 https://example.com/pull/1 id 换成了稳定的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 77,
+    "at": "-732m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "通过了 换成了稳定的 好的 seq，然后重新跑测试 换成了稳定的 换成了稳定的 好的 seq，然后重新跑测试\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 78,
+    "at": "-729m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 已经推上去 PR 换成了稳定的 请看 好的 通过了 好的"
+   },
+   {
+    "seq": 79,
+    "at": "-726m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 seq，然后重新跑测试 PR 好的 已经推上去 请看 id 我看一下 请看 换成了稳定的 这个改动把消息列表的 通过了 好的 已经推上去 id 换成了稳定的 好的 好的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 80,
+    "at": "-723m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 PR 这个改动把消息列表的 PR 请看 seq，然后重新跑测试 已经推上去 换成了稳定的 请看 这个改动把消息列表的 换成了稳定的 id id PR 这个改动把消息列表的 我看一下 https://example.com/pull/1 我看一下 PR 已经推上去"
+   },
+   {
+    "seq": 81,
+    "at": "-720m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 seq，然后重新跑测试"
+   },
+   {
+    "seq": 82,
+    "at": "-717m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 通过了 通过了 我看一下 通过了 https://example.com/pull/1 好的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 83,
+    "at": "-714m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 换成了稳定的 通过了 已经推上去"
+   },
+   {
+    "seq": 84,
+    "at": "-711m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 通过了 https://example.com/pull/1 id PR 这个改动把消息列表的 已经推上去 请看 请看 https://example.com/pull/1 好的 seq，然后重新跑测试 请看 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 PR https://example.com/pull/1 已经推上去 seq，然后重新跑测试 这个改动把消息列表的 PR PR 换成了稳定的 请看 id 这个改动把消息列表的 seq，然后重新跑测试 PR https://example.com/pull/1 id 已经推上去 id 换成了稳定的 换成了稳定的 请看 这个改动把消息列表的 这个改动把消息列表的 id seq，然后重新跑测试"
+   },
+   {
+    "seq": 85,
+    "at": "-708m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 seq，然后重新跑测试 这个改动把消息列表的 id seq，然后重新跑测试 id 换成了稳定的 我看一下 这个改动把消息列表的 https://example.com/pull/1 我看一下 id 通过了 这个改动把消息列表的 这个改动把消息列表的 换成了稳定的 换成了稳定的 通过了 换成了稳定的 id 我看一下 https://example.com/pull/1 我看一下 换成了稳定的 id 通过了 PR 好的 好的 通过了 通过了 id 已经推上去 https://example.com/pull/1 换成了稳定的 PR 好的 这个改动把消息列表的 换成了稳定的 请看"
+   },
+   {
+    "seq": 86,
+    "at": "-705m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 好的 id 通过了 请看 请看 https://example.com/pull/1 通过了 id https://example.com/pull/1 https://example.com/pull/1 https://example.com/pull/1 请看 id https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 我看一下 PR 通过了 seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 我看一下 通过了 id 通过了 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 通过了 PR PR 好的 请看 通过了 已经推上去 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 好的 通过了 PR 我看一下 好的 换成了稳定的 已经推上去 id 这个改动把消息列表的 id 已经推上去 seq，然后重新跑测试 我看一下 请看 PR 已经推上去 id PR 已经推上去 好的 https://example.com/pull/1 seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 通过了 PR id https://example.com/pull/1"
+   },
+   {
+    "seq": 87,
+    "at": "-702m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 已经推上去 我看一下 请看"
+   },
+   {
+    "seq": 88,
+    "at": "-699m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的 换成了稳定的 换成了稳定的 通过了 通过了 好的 好的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 89,
+    "at": "-696m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 通过了"
+   },
+   {
+    "seq": 90,
+    "at": "-693m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 seq，然后重新跑测试 请看 换成了稳定的 我看一下 id 换成了稳定的 通过了 已经推上去 id 通过了 PR id 这个改动把消息列表的 这个改动把消息列表的 我看一下 https://example.com/pull/1 id PR https://example.com/pull/1 已经推上去 id 这个改动把消息列表的 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 通过了 PR 换成了稳定的 已经推上去 https://example.com/pull/1 这个改动把消息列表的 PR seq，然后重新跑测试 id 换成了稳定的 通过了 https://example.com/pull/1 换成了稳定的 通过了 https://example.com/pull/1 这个改动把消息列表的 PR 好的 换成了稳定的 seq，然后重新跑测试 id https://example.com/pull/1 换成了稳定的 seq，然后重新跑测试 PR PR 通过了 请看 https://example.com/pull/1 我看一下 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 换成了稳定的 通过了 好的 我看一下 请看 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 请看"
+   },
+   {
+    "seq": 91,
+    "at": "-690m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的"
+   },
+   {
+    "seq": 92,
+    "at": "-687m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 https://example.com/pull/1 换成了稳定的 换成了稳定的"
+   },
+   {
+    "seq": 93,
+    "at": "-684m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 请看 这个改动把消息列表的 id 这个改动把消息列表的 PR seq，然后重新跑测试 这个改动把消息列表的 id 通过了 已经推上去 这个改动把消息列表的 请看 请看 我看一下 https://example.com/pull/1 已经推上去 https://example.com/pull/1 换成了稳定的 id PR id 已经推上去 我看一下 PR https://example.com/pull/1 我看一下 已经推上去 我看一下 换成了稳定的 通过了 id 这个改动把消息列表的 PR PR 已经推上去 好的 PR PR 这个改动把消息列表的"
+   },
+   {
+    "seq": 94,
+    "at": "-681m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR id PR 这个改动把消息列表的 已经推上去 请看 好的 这个改动把消息列表的 seq，然后重新跑测试 PR 请看 PR https://example.com/pull/1 换成了稳定的 PR seq，然后重新跑测试 通过了 通过了 https://example.com/pull/1 我看一下 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 好的 好的 请看 好的 https://example.com/pull/1 seq，然后重新跑测试 我看一下 已经推上去 PR PR 这个改动把消息列表的 好的 id 通过了 https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 我看一下 https://example.com/pull/1 seq，然后重新跑测试 seq，然后重新跑测试 PR 已经推上去 已经推上去 id 换成了稳定的 通过了 seq，然后重新跑测试 通过了 换成了稳定的 已经推上去 好的 换成了稳定的 换成了稳定的 seq，然后重新跑测试 PR 通过了 seq，然后重新跑测试 已经推上去 换成了稳定的 已经推上去 seq，然后重新跑测试 id https://example.com/pull/1 PR"
+   },
+   {
+    "seq": 95,
+    "at": "-678m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 96,
+    "at": "-675m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 这个改动把消息列表的 请看 https://example.com/pull/1 我看一下 好的 通过了 已经推上去"
+   },
+   {
+    "seq": 97,
+    "at": "-672m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 请看 好的 通过了 换成了稳定的 我看一下 好的 好的 id PR 请看 https://example.com/pull/1 好的 已经推上去 已经推上去 请看 通过了 请看 这个改动把消息列表的 https://example.com/pull/1"
+   },
+   {
+    "seq": 98,
+    "at": "-669m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "请看 https://example.com/pull/1 我看一下 id 好的 https://example.com/pull/1 https://example.com/pull/1 PR https://example.com/pull/1 这个改动把消息列表的 我看一下 https://example.com/pull/1 这个改动把消息列表的 好的 通过了 我看一下 https://example.com/pull/1 好的 seq，然后重新跑测试 这个改动把消息列表的 换成了稳定的 已经推上去 换成了稳定的 换成了稳定的 这个改动把消息列表的 通过了 好的 seq，然后重新跑测试 好的 通过了 请看 https://example.com/pull/1 请看 好的 PR 请看 已经推上去 好的 我看一下 通过了 请看 通过了 PR 我看一下 好的 https://example.com/pull/1 通过了 请看 请看 https://example.com/pull/1 这个改动把消息列表的 PR 通过了 已经推上去 我看一下 我看一下 https://example.com/pull/1 PR id 这个改动把消息列表的 https://example.com/pull/1 好的 通过了 好的 好的 https://example.com/pull/1 https://example.com/pull/1 我看一下 我看一下 id"
+   },
+   {
+    "seq": 99,
+    "at": "-666m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 PR\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 100,
+    "at": "-663m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 请看"
+   },
+   {
+    "seq": 101,
+    "at": "-660m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 好的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 102,
+    "at": "-657m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 我看一下 换成了稳定的 https://example.com/pull/1 已经推上去 PR PR https://example.com/pull/1 换成了稳定的 好的 好的 好的 好的 好的 https://example.com/pull/1 https://example.com/pull/1 请看 我看一下 通过了 换成了稳定的 换成了稳定的 请看 这个改动把消息列表的 PR 请看 好的 seq，然后重新跑测试 seq，然后重新跑测试 请看 PR PR https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 我看一下 seq，然后重新跑测试 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 通过了 PR 通过了 PR 换成了稳定的 请看 seq，然后重新跑测试 换成了稳定的 换成了稳定的 好的 请看 https://example.com/pull/1 请看 seq，然后重新跑测试 请看 好的 这个改动把消息列表的 请看 换成了稳定的 请看 通过了 id 通过了 通过了 https://example.com/pull/1 通过了 请看 id PR 换成了稳定的 好的"
+   },
+   {
+    "seq": 103,
+    "at": "-654m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 换成了稳定的 通过了 这个改动把消息列表的 请看 好的 换成了稳定的 这个改动把消息列表的"
+   },
+   {
+    "seq": 104,
+    "at": "-651m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 换成了稳定的 已经推上去 https://example.com/pull/1 PR seq，然后重新跑测试 已经推上去 我看一下 已经推上去 已经推上去 PR 通过了 id id 换成了稳定的 请看 好的 https://example.com/pull/1 通过了 PR id 换成了稳定的 请看 好的 通过了 PR 已经推上去 我看一下 已经推上去 seq，然后重新跑测试 我看一下 id 通过了 请看 已经推上去 换成了稳定的 已经推上去 seq，然后重新跑测试 PR 已经推上去"
+   },
+   {
+    "seq": 105,
+    "at": "-648m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "id id id id 我看一下 这个改动把消息列表的 换成了稳定的 seq，然后重新跑测试 请看 请看 seq，然后重新跑测试 通过了 已经推上去 这个改动把消息列表的 id 好的 PR seq，然后重新跑测试 我看一下 seq，然后重新跑测试 https://example.com/pull/1 PR 我看一下 这个改动把消息列表的 seq，然后重新跑测试 请看 好的 seq，然后重新跑测试 换成了稳定的 已经推上去 请看 好的 我看一下 好的 id 请看 PR 请看 请看 id"
+   },
+   {
+    "seq": 106,
+    "at": "-645m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 通过了 我看一下 PR 请看 请看 这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 107,
+    "at": "-642m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 108,
+    "at": "-639m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 我看一下 好的 好的"
+   },
+   {
+    "seq": 109,
+    "at": "-636m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 seq，然后重新跑测试"
+   },
+   {
+    "seq": 110,
+    "at": "-633m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR PR 我看一下 请看 https://example.com/pull/1 通过了 我看一下 我看一下 换成了稳定的 seq，然后重新跑测试 请看 id https://example.com/pull/1 我看一下 https://example.com/pull/1 已经推上去 通过了 这个改动把消息列表的 PR 这个改动把消息列表的 seq，然后重新跑测试 id id 这个改动把消息列表的 好的 换成了稳定的 seq，然后重新跑测试 好的 已经推上去 好的 好的 换成了稳定的 已经推上去 https://example.com/pull/1 PR 好的 我看一下 这个改动把消息列表的 seq，然后重新跑测试 好的 id https://example.com/pull/1 换成了稳定的 请看 请看 PR https://example.com/pull/1 我看一下 PR seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 通过了 我看一下 seq，然后重新跑测试 PR 通过了 这个改动把消息列表的 PR id 这个改动把消息列表的 https://example.com/pull/1 好的 PR id 好的 这个改动把消息列表的 id 我看一下 请看\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 111,
+    "at": "-630m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 PR 我看一下 通过了 好的 https://example.com/pull/1 我看一下 PR"
+   },
+   {
+    "seq": 112,
+    "at": "-627m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 id PR 我看一下 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 113,
+    "at": "-624m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 这个改动把消息列表的 PR 已经推上去"
+   },
+   {
+    "seq": 114,
+    "at": "-621m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 换成了稳定的 通过了"
+   },
+   {
+    "seq": 115,
+    "at": "-618m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 这个改动把消息列表的 好的 换成了稳定的 请看 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 换成了稳定的 PR 我看一下 seq，然后重新跑测试 PR PR 我看一下 这个改动把消息列表的 已经推上去 好的 https://example.com/pull/1 https://example.com/pull/1"
+   },
+   {
+    "seq": 116,
+    "at": "-615m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 PR 换成了稳定的 我看一下"
+   },
+   {
+    "seq": 117,
+    "at": "-612m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id seq，然后重新跑测试 通过了 换成了稳定的 id id 我看一下 通过了"
+   },
+   {
+    "seq": 118,
+    "at": "-609m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 这个改动把消息列表的 好的 换成了稳定的 这个改动把消息列表的 https://example.com/pull/1 好的 PR"
+   },
+   {
+    "seq": 119,
+    "at": "-606m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 已经推上去 这个改动把消息列表的 PR 好的 已经推上去 换成了稳定的 这个改动把消息列表的 seq，然后重新跑测试 通过了 好的 通过了 id 换成了稳定的 请看 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 已经推上去 id 这个改动把消息列表的 id 请看 我看一下 我看一下 请看 PR 换成了稳定的 这个改动把消息列表的 id 这个改动把消息列表的 请看 https://example.com/pull/1 https://example.com/pull/1 id 请看 换成了稳定的 id 好的 我看一下"
+   },
+   {
+    "seq": 120,
+    "at": "-603m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 通过了 好的 已经推上去 seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 PR 我看一下 好的 通过了 PR 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 id 这个改动把消息列表的 请看 seq，然后重新跑测试 好的 这个改动把消息列表的 seq，然后重新跑测试 请看 请看 好的 seq，然后重新跑测试 已经推上去 PR 已经推上去 我看一下 我看一下 seq，然后重新跑测试 id seq，然后重新跑测试 通过了 请看 好的 换成了稳定的 我看一下 PR PR 已经推上去 好的 已经推上去 已经推上去 这个改动把消息列表的 好的 id 我看一下 id 请看 这个改动把消息列表的 这个改动把消息列表的 我看一下 换成了稳定的 换成了稳定的 已经推上去 好的 好的 我看一下 id 换成了稳定的 好的 请看 https://example.com/pull/1 请看 PR 已经推上去 id"
+   },
+   {
+    "seq": 121,
+    "at": "-600m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 我看一下 seq，然后重新跑测试 我看一下 这个改动把消息列表的 好的 换成了稳定的 我看一下 PR PR 请看 已经推上去 换成了稳定的 我看一下 我看一下 我看一下 通过了 这个改动把消息列表的 已经推上去 请看 id id 这个改动把消息列表的 https://example.com/pull/1 请看 PR 通过了 这个改动把消息列表的 好的 https://example.com/pull/1 通过了 通过了 请看 请看 已经推上去 好的 通过了 好的 seq，然后重新跑测试 seq，然后重新跑测试 通过了 id seq，然后重新跑测试 通过了 请看 seq，然后重新跑测试 通过了 已经推上去 好的 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 id 通过了 https://example.com/pull/1 https://example.com/pull/1 好的 seq，然后重新跑测试 我看一下 已经推上去 这个改动把消息列表的 我看一下 seq，然后重新跑测试 通过了 id 已经推上去 https://example.com/pull/1 好的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 122,
+    "at": "-597m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 通过了 通过了 PR"
+   },
+   {
+    "seq": 123,
+    "at": "-594m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 好的 好的 https://example.com/pull/1 请看 换成了稳定的 https://example.com/pull/1 请看 换成了稳定的 https://example.com/pull/1 已经推上去 好的 请看 我看一下 换成了稳定的 我看一下 已经推上去 好的 通过了 id 好的 换成了稳定的 我看一下 换成了稳定的 seq，然后重新跑测试 https://example.com/pull/1 这个改动把消息列表的 我看一下 好的 请看 已经推上去 换成了稳定的 我看一下 PR 请看 已经推上去 这个改动把消息列表的 PR 我看一下 已经推上去 这个改动把消息列表的 换成了稳定的 通过了 请看 换成了稳定的 换成了稳定的 id 我看一下 已经推上去 换成了稳定的 PR 请看 请看 id https://example.com/pull/1 通过了 id 已经推上去 seq，然后重新跑测试 PR 已经推上去 换成了稳定的 请看 PR PR 换成了稳定的 好的 id seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 124,
+    "at": "-591m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 已经推上去 通过了 请看"
+   },
+   {
+    "seq": 125,
+    "at": "-588m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 seq，然后重新跑测试 这个改动把消息列表的 id seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 PR 换成了稳定的 换成了稳定的 id 换成了稳定的 好的 好的 这个改动把消息列表的 已经推上去 我看一下 请看 seq，然后重新跑测试 PR"
+   },
+   {
+    "seq": 126,
+    "at": "-585m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "好的 已经推上去 通过了 PR seq，然后重新跑测试 我看一下 已经推上去 id https://example.com/pull/1 这个改动把消息列表的 通过了 seq，然后重新跑测试 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 id 请看 请看 换成了稳定的 已经推上去 我看一下 PR 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 通过了 我看一下 好的 通过了 已经推上去 请看 我看一下 PR 通过了 请看 这个改动把消息列表的 通过了 换成了稳定的 请看 请看 我看一下 通过了 PR PR 换成了稳定的 seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 通过了 已经推上去 已经推上去 请看 通过了 https://example.com/pull/1 seq，然后重新跑测试 好的 PR 通过了 PR 换成了稳定的 这个改动把消息列表的 已经推上去 换成了稳定的 这个改动把消息列表的 通过了 请看 通过了 请看"
+   },
+   {
+    "seq": 127,
+    "at": "-582m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 seq，然后重新跑测试 seq，然后重新跑测试 请看"
+   },
+   {
+    "seq": 128,
+    "at": "-579m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 id 通过了 好的"
+   },
+   {
+    "seq": 129,
+    "at": "-576m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 换成了稳定的"
+   },
+   {
+    "seq": 130,
+    "at": "-573m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 换成了稳定的 已经推上去 换成了稳定的 已经推上去 请看 通过了 已经推上去 已经推上去 https://example.com/pull/1 通过了 通过了 PR seq，然后重新跑测试 好的 请看 https://example.com/pull/1 seq，然后重新跑测试 PR 好的 https://example.com/pull/1 我看一下 已经推上去 id 我看一下 通过了 seq，然后重新跑测试 已经推上去 通过了 https://example.com/pull/1 已经推上去 请看 这个改动把消息列表的 id 通过了 PR 通过了 PR 请看 请看"
+   },
+   {
+    "seq": 131,
+    "at": "-570m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 seq，然后重新跑测试 我看一下 换成了稳定的"
+   },
+   {
+    "seq": 132,
+    "at": "-567m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 我看一下 https://example.com/pull/1 换成了稳定的 seq，然后重新跑测试 已经推上去 通过了 https://example.com/pull/1 这个改动把消息列表的 已经推上去 换成了稳定的 已经推上去 id 已经推上去 id 通过了 这个改动把消息列表的 好的 https://example.com/pull/1 请看 请看 我看一下 seq，然后重新跑测试 请看 https://example.com/pull/1 https://example.com/pull/1 好的 通过了 好的 好的 换成了稳定的 已经推上去 好的 换成了稳定的 通过了 我看一下 请看 好的 https://example.com/pull/1 好的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 133,
+    "at": "-564m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 PR 已经推上去 请看"
+   },
+   {
+    "seq": 134,
+    "at": "-561m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 已经推上去 已经推上去 这个改动把消息列表的 请看 id 通过了 请看"
+   },
+   {
+    "seq": 135,
+    "at": "-558m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 这个改动把消息列表的"
+   },
+   {
+    "seq": 136,
+    "at": "-555m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 好的 我看一下 我看一下 这个改动把消息列表的 已经推上去 PR PR 请看 通过了 好的 https://example.com/pull/1 好的 https://example.com/pull/1 请看 seq，然后重新跑测试 这个改动把消息列表的 id seq，然后重新跑测试 换成了稳定的 这个改动把消息列表的 好的 换成了稳定的 https://example.com/pull/1 我看一下 请看 我看一下 seq，然后重新跑测试 id PR 请看 通过了 好的 好的 id 通过了 请看 好的 PR"
+   },
+   {
+    "seq": 137,
+    "at": "-552m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 id"
+   },
+   {
+    "seq": 138,
+    "at": "-549m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 好的 这个改动把消息列表的 请看"
+   },
+   {
+    "seq": 139,
+    "at": "-546m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 好的 PR 换成了稳定的"
+   },
+   {
+    "seq": 140,
+    "at": "-543m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "请看 换成了稳定的 PR 我看一下 id https://example.com/pull/1 通过了 https://example.com/pull/1 请看 id 通过了 换成了稳定的 通过了 PR 好的 id 我看一下 这个改动把消息列表的 这个改动把消息列表的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 141,
+    "at": "-540m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 好的 换成了稳定的 通过了 已经推上去 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 已经推上去 通过了 seq，然后重新跑测试 通过了 https://example.com/pull/1 我看一下 我看一下 通过了 seq，然后重新跑测试 已经推上去 id 通过了"
+   },
+   {
+    "seq": 142,
+    "at": "-537m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 换成了稳定的 seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 143,
+    "at": "-534m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 换成了稳定的 https://example.com/pull/1 好的 seq，然后重新跑测试 这个改动把消息列表的 id 这个改动把消息列表的 我看一下 id 换成了稳定的 已经推上去 这个改动把消息列表的 已经推上去 PR PR id 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 144,
+    "at": "-531m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 通过了 https://example.com/pull/1 请看"
+   },
+   {
+    "seq": 145,
+    "at": "-528m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 PR 已经推上去 id"
+   },
+   {
+    "seq": 146,
+    "at": "-525m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR https://example.com/pull/1 这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 147,
+    "at": "-522m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "PR 请看 seq，然后重新跑测试 已经推上去 id 通过了 请看 已经推上去 id 这个改动把消息列表的 我看一下 https://example.com/pull/1 已经推上去 我看一下 已经推上去 换成了稳定的 通过了 好的 https://example.com/pull/1 请看 这个改动把消息列表的 换成了稳定的 好的 通过了 我看一下 这个改动把消息列表的 id seq，然后重新跑测试 id https://example.com/pull/1 我看一下 我看一下 已经推上去 seq，然后重新跑测试 已经推上去 换成了稳定的 id 我看一下 换成了稳定的 我看一下"
+   },
+   {
+    "seq": 148,
+    "at": "-519m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 这个改动把消息列表的 通过了 换成了稳定的"
+   },
+   {
+    "seq": 149,
+    "at": "-516m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 PR https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 这个改动把消息列表的 好的"
+   },
+   {
+    "seq": 150,
+    "at": "-513m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 通过了 好的 https://example.com/pull/1 PR id"
+   },
+   {
+    "seq": 151,
+    "at": "-510m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 https://example.com/pull/1 我看一下 这个改动把消息列表的 换成了稳定的 我看一下 换成了稳定的 请看 id https://example.com/pull/1 好的 通过了 好的 请看 这个改动把消息列表的 通过了 id 换成了稳定的 这个改动把消息列表的 通过了"
+   },
+   {
+    "seq": 152,
+    "at": "-507m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 已经推上去 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 请看 id 请看 PR 已经推上去 换成了稳定的 通过了 https://example.com/pull/1 https://example.com/pull/1 请看 seq，然后重新跑测试 好的 我看一下 https://example.com/pull/1 换成了稳定的 好的 请看 请看 好的 id https://example.com/pull/1 我看一下 好的 seq，然后重新跑测试 id seq，然后重新跑测试 我看一下 通过了 通过了 请看 id 换成了稳定的 已经推上去 我看一下 seq，然后重新跑测试 通过了 PR seq，然后重新跑测试 已经推上去 https://example.com/pull/1 https://example.com/pull/1 PR 已经推上去 好的 https://example.com/pull/1 id 通过了 https://example.com/pull/1 已经推上去 这个改动把消息列表的 PR id 好的 已经推上去 换成了稳定的 这个改动把消息列表的 已经推上去 这个改动把消息列表的 https://example.com/pull/1 id 已经推上去 换成了稳定的 id 好的"
+   },
+   {
+    "seq": 153,
+    "at": "-504m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 seq，然后重新跑测试 通过了 我看一下"
+   },
+   {
+    "seq": 154,
+    "at": "-501m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 这个改动把消息列表的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 155,
+    "at": "-498m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR https://example.com/pull/1 PR id id 好的 已经推上去 PR 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 换成了稳定的 这个改动把消息列表的 这个改动把消息列表的 请看 请看 id seq，然后重新跑测试 https://example.com/pull/1 我看一下 已经推上去 通过了 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 请看 PR 通过了 id 我看一下 换成了稳定的 好的 seq，然后重新跑测试 PR id 好的 好的 换成了稳定的 换成了稳定的 id 我看一下 换成了稳定的 PR 我看一下 这个改动把消息列表的 seq，然后重新跑测试 PR PR 请看 seq，然后重新跑测试 换成了稳定的 这个改动把消息列表的 已经推上去 我看一下 好的 好的 PR PR 我看一下 seq，然后重新跑测试 请看 换成了稳定的 我看一下 https://example.com/pull/1 PR 通过了 PR id 已经推上去"
+   },
+   {
+    "seq": 156,
+    "at": "-495m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 seq，然后重新跑测试 我看一下 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 请看 https://example.com/pull/1"
+   },
+   {
+    "seq": 157,
+    "at": "-492m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 https://example.com/pull/1 id 我看一下 这个改动把消息列表的 好的 好的 通过了 这个改动把消息列表的 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 已经推上去 https://example.com/pull/1 这个改动把消息列表的 我看一下 换成了稳定的 请看 seq，然后重新跑测试 通过了 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 seq，然后重新跑测试 id seq，然后重新跑测试 这个改动把消息列表的 已经推上去 seq，然后重新跑测试 换成了稳定的 id 好的 好的 我看一下 请看 https://example.com/pull/1 通过了 好的 id PR 通过了 PR 这个改动把消息列表的 换成了稳定的 请看 请看 https://example.com/pull/1 我看一下 这个改动把消息列表的 id 这个改动把消息列表的 这个改动把消息列表的 PR https://example.com/pull/1 通过了 我看一下 好的 PR PR id id seq，然后重新跑测试 好的 好的 请看 已经推上去 通过了 这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 158,
+    "at": "-489m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的"
+   },
+   {
+    "seq": 159,
+    "at": "-486m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 seq，然后重新跑测试 我看一下 PR 好的 https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 通过了 换成了稳定的 好的 PR 请看 https://example.com/pull/1 seq，然后重新跑测试 请看 id PR 我看一下 已经推上去 seq，然后重新跑测试 已经推上去 PR 通过了 已经推上去 https://example.com/pull/1 这个改动把消息列表的 通过了 请看 请看 我看一下 好的 https://example.com/pull/1 seq，然后重新跑测试 请看 https://example.com/pull/1 换成了稳定的 请看 请看 通过了"
+   },
+   {
+    "seq": 160,
+    "at": "-483m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 seq，然后重新跑测试 已经推上去 https://example.com/pull/1"
+   },
+   {
+    "seq": 161,
+    "at": "-480m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "id id"
+   },
+   {
+    "seq": 162,
+    "at": "-477m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 我看一下 这个改动把消息列表的 https://example.com/pull/1 请看 seq，然后重新跑测试 已经推上去 请看 通过了 seq，然后重新跑测试 已经推上去 id 请看 PR 通过了 换成了稳定的 我看一下 id 这个改动把消息列表的 id 已经推上去 我看一下 id 换成了稳定的 https://example.com/pull/1 我看一下 id 已经推上去 https://example.com/pull/1 换成了稳定的 PR id 已经推上去 PR id 已经推上去 请看 我看一下 已经推上去 请看 请看 我看一下 通过了 https://example.com/pull/1 我看一下 PR 这个改动把消息列表的 已经推上去 已经推上去 已经推上去 我看一下 https://example.com/pull/1 已经推上去 我看一下 PR https://example.com/pull/1 通过了 已经推上去 这个改动把消息列表的 id 请看 PR 我看一下 这个改动把消息列表的 seq，然后重新跑测试 请看 好的 通过了 id 好的"
+   },
+   {
+    "seq": 163,
+    "at": "-474m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 好的 请看 id PR 换成了稳定的 我看一下 这个改动把消息列表的"
+   },
+   {
+    "seq": 164,
+    "at": "-471m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 请看 id 请看 我看一下 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 https://example.com/pull/1 好的 换成了稳定的 我看一下 id seq，然后重新跑测试 已经推上去 已经推上去 seq，然后重新跑测试 PR 好的"
+   },
+   {
+    "seq": 165,
+    "at": "-468m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 我看一下 seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 请看 我看一下 好的 https://example.com/pull/1 id 换成了稳定的 seq，然后重新跑测试 id PR 好的 请看 PR 我看一下 好的 PR 我看一下 我看一下 换成了稳定的 这个改动把消息列表的 这个改动把消息列表的 已经推上去 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 通过了 这个改动把消息列表的 请看 换成了稳定的 已经推上去 换成了稳定的 PR 好的 好的 seq，然后重新跑测试 这个改动把消息列表的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 166,
+    "at": "-465m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 PR 好的 好的 我看一下 这个改动把消息列表的 请看 https://example.com/pull/1 https://example.com/pull/1 请看 通过了 PR 这个改动把消息列表的 PR 通过了 id 请看 已经推上去 我看一下 seq，然后重新跑测试"
+   },
+   {
+    "seq": 167,
+    "at": "-462m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 id 换成了稳定的 这个改动把消息列表的 请看 请看 好的 id"
+   },
+   {
+    "seq": 168,
+    "at": "-459m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 PR seq，然后重新跑测试 请看"
+   },
+   {
+    "seq": 169,
+    "at": "-456m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 seq，然后重新跑测试 seq，然后重新跑测试 好的 seq，然后重新跑测试 请看 PR seq，然后重新跑测试 id 好的 id PR 请看 好的 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 通过了"
+   },
+   {
+    "seq": 170,
+    "at": "-453m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 已经推上去 换成了稳定的 seq，然后重新跑测试 请看 请看 已经推上去 请看"
+   },
+   {
+    "seq": 171,
+    "at": "-450m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 已经推上去 我看一下 id"
+   },
+   {
+    "seq": 172,
+    "at": "-447m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 请看 https://example.com/pull/1 我看一下 seq，然后重新跑测试 换成了稳定的 id 这个改动把消息列表的 https://example.com/pull/1 我看一下 换成了稳定的 seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 https://example.com/pull/1 id seq，然后重新跑测试 已经推上去 通过了 seq，然后重新跑测试"
+   },
+   {
+    "seq": 173,
+    "at": "-444m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 https://example.com/pull/1"
+   },
+   {
+    "seq": 174,
+    "at": "-441m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 已经推上去 seq，然后重新跑测试 id id seq，然后重新跑测试 这个改动把消息列表的 这个改动把消息列表的"
+   },
+   {
+    "seq": 175,
+    "at": "-438m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "好的 https://example.com/pull/1 PR 通过了"
+   },
+   {
+    "seq": 176,
+    "at": "-435m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 请看 换成了稳定的 这个改动把消息列表的 请看 我看一下 这个改动把消息列表的 换成了稳定的 换成了稳定的 换成了稳定的 请看 已经推上去 https://example.com/pull/1 seq，然后重新跑测试 我看一下 id 请看 我看一下 请看 这个改动把消息列表的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 177,
+    "at": "-432m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 seq，然后重新跑测试 PR seq，然后重新跑测试 通过了 我看一下 PR seq，然后重新跑测试"
+   },
+   {
+    "seq": 178,
+    "at": "-429m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 换成了稳定的 已经推上去 好的"
+   },
+   {
+    "seq": 179,
+    "at": "-426m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 换成了稳定的 id 好的"
+   },
+   {
+    "seq": 180,
+    "at": "-423m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 通过了 PR id"
+   },
+   {
+    "seq": 181,
+    "at": "-420m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 已经推上去 https://example.com/pull/1 我看一下 id id 好的 这个改动把消息列表的 请看 好的 我看一下 我看一下 请看 seq，然后重新跑测试 这个改动把消息列表的 好的 id 换成了稳定的 已经推上去 https://example.com/pull/1 好的 https://example.com/pull/1 seq，然后重新跑测试 好的 id seq，然后重新跑测试 seq，然后重新跑测试 好的 https://example.com/pull/1 PR 通过了 请看 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 好的 通过了 好的 我看一下 https://example.com/pull/1"
+   },
+   {
+    "seq": 182,
+    "at": "-417m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 PR 请看 通过了 换成了稳定的 PR 好的 好的 seq，然后重新跑测试 请看 https://example.com/pull/1 seq，然后重新跑测试 好的 通过了 请看 seq，然后重新跑测试 这个改动把消息列表的 我看一下 好的 这个改动把消息列表的 id 这个改动把消息列表的 已经推上去 我看一下 seq，然后重新跑测试 seq，然后重新跑测试 通过了 seq，然后重新跑测试 已经推上去 https://example.com/pull/1 请看 已经推上去 这个改动把消息列表的 https://example.com/pull/1 请看 请看 seq，然后重新跑测试 id 请看 换成了稳定的"
+   },
+   {
+    "seq": 183,
+    "at": "-414m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 好的 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 已经推上去 PR 已经推上去 换成了稳定的 seq，然后重新跑测试 已经推上去 已经推上去 换成了稳定的 这个改动把消息列表的 换成了稳定的 好的 已经推上去 PR 我看一下 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 id 通过了 我看一下 好的 请看 这个改动把消息列表的 我看一下 好的 已经推上去 已经推上去 id 已经推上去 这个改动把消息列表的 换成了稳定的 请看 seq，然后重新跑测试 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 已经推上去 好的 seq，然后重新跑测试 id PR PR id https://example.com/pull/1 seq，然后重新跑测试 通过了 PR id seq，然后重新跑测试 好的 我看一下 https://example.com/pull/1 好的 我看一下 https://example.com/pull/1 通过了 https://example.com/pull/1 seq，然后重新跑测试 好的 id 请看 通过了 通过了 通过了"
+   },
+   {
+    "seq": 184,
+    "at": "-411m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 id 好的 换成了稳定的 好的 换成了稳定的 通过了 id id seq，然后重新跑测试 id seq，然后重新跑测试 通过了 https://example.com/pull/1 换成了稳定的 换成了稳定的 PR id 请看 这个改动把消息列表的 PR 换成了稳定的 这个改动把消息列表的 换成了稳定的 换成了稳定的 我看一下 seq，然后重新跑测试 好的 PR id 这个改动把消息列表的 seq，然后重新跑测试 https://example.com/pull/1 请看 请看 PR id 请看 好的 id seq，然后重新跑测试 好的 PR 这个改动把消息列表的 通过了 这个改动把消息列表的 换成了稳定的 https://example.com/pull/1 好的 我看一下 这个改动把消息列表的 好的 这个改动把消息列表的 换成了稳定的 这个改动把消息列表的 已经推上去 seq，然后重新跑测试 我看一下 这个改动把消息列表的 PR https://example.com/pull/1 通过了 我看一下 通过了 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 通过了 seq，然后重新跑测试 好的"
+   },
+   {
+    "seq": 185,
+    "at": "-408m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id id https://example.com/pull/1 好的 好的 这个改动把消息列表的 已经推上去 请看 id 请看 通过了 我看一下 好的 好的 seq，然后重新跑测试 我看一下 我看一下 我看一下 PR 这个改动把消息列表的 已经推上去 通过了 好的 这个改动把消息列表的 id https://example.com/pull/1 已经推上去 这个改动把消息列表的 https://example.com/pull/1 已经推上去 已经推上去 我看一下 已经推上去 seq，然后重新跑测试 PR 我看一下 seq，然后重新跑测试 id id 我看一下"
+   },
+   {
+    "seq": 186,
+    "at": "-405m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 好的 换成了稳定的 换成了稳定的 我看一下 好的 id 已经推上去"
+   },
+   {
+    "seq": 187,
+    "at": "-402m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 已经推上去\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 188,
+    "at": "-399m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 好的 seq，然后重新跑测试 好的 https://example.com/pull/1 PR 已经推上去 换成了稳定的"
+   },
+   {
+    "seq": 189,
+    "at": "-396m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 通过了 换成了稳定的 通过了 通过了 seq，然后重新跑测试 已经推上去 通过了 通过了 这个改动把消息列表的 通过了 通过了 通过了 这个改动把消息列表的 https://example.com/pull/1 好的 id 请看 已经推上去 换成了稳定的 请看 通过了 id id https://example.com/pull/1 我看一下 我看一下 请看 好的 好的 通过了 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 PR 已经推上去 https://example.com/pull/1 seq，然后重新跑测试 PR"
+   },
+   {
+    "seq": 190,
+    "at": "-393m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 PR https://example.com/pull/1 PR 已经推上去 seq，然后重新跑测试 请看 已经推上去 通过了 id https://example.com/pull/1 通过了 seq，然后重新跑测试 我看一下 通过了 已经推上去 换成了稳定的 请看 https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 我看一下 https://example.com/pull/1 已经推上去 https://example.com/pull/1 id 请看 换成了稳定的 换成了稳定的 PR seq，然后重新跑测试 已经推上去 请看 PR 请看 id 这个改动把消息列表的 我看一下 已经推上去 seq，然后重新跑测试"
+   },
+   {
+    "seq": 191,
+    "at": "-390m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id 已经推上去 这个改动把消息列表的 seq，然后重新跑测试 id https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 https://example.com/pull/1 PR 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 好的 seq，然后重新跑测试 通过了 seq，然后重新跑测试 通过了 我看一下 通过了 这个改动把消息列表的 换成了稳定的 通过了 我看一下 seq，然后重新跑测试 seq，然后重新跑测试 https://example.com/pull/1 已经推上去 已经推上去 换成了稳定的 PR https://example.com/pull/1 我看一下 换成了稳定的 通过了 换成了稳定的 PR 我看一下 PR https://example.com/pull/1"
+   },
+   {
+    "seq": 192,
+    "at": "-387m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 已经推上去 这个改动把消息列表的 好的 https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 PR 已经推上去 https://example.com/pull/1 id 请看 seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 通过了 换成了稳定的 好的 已经推上去 id"
+   },
+   {
+    "seq": 193,
+    "at": "-384m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 换成了稳定的"
+   },
+   {
+    "seq": 194,
+    "at": "-381m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 这个改动把消息列表的"
+   },
+   {
+    "seq": 195,
+    "at": "-378m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 换成了稳定的 seq，然后重新跑测试 换成了稳定的 id 换成了稳定的 PR 我看一下"
+   },
+   {
+    "seq": 196,
+    "at": "-375m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 PR 我看一下 id 这个改动把消息列表的 通过了 换成了稳定的 请看 seq，然后重新跑测试 好的 PR 通过了 seq，然后重新跑测试 好的 换成了稳定的 通过了 通过了 https://example.com/pull/1 请看 换成了稳定的 seq，然后重新跑测试 id 通过了 请看 这个改动把消息列表的 请看 id 请看 seq，然后重新跑测试 我看一下 https://example.com/pull/1 id seq，然后重新跑测试 我看一下 我看一下 PR 通过了 通过了 已经推上去 通过了"
+   },
+   {
+    "seq": 197,
+    "at": "-372m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的 我看一下 请看 请看 PR PR 通过了 通过了 PR 这个改动把消息列表的 我看一下 PR 通过了 PR 这个改动把消息列表的 已经推上去 好的 https://example.com/pull/1 id"
+   },
+   {
+    "seq": 198,
+    "at": "-369m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 通过了 已经推上去 好的 https://example.com/pull/1 换成了稳定的 已经推上去 seq，然后重新跑测试 通过了 PR 我看一下 我看一下 id 我看一下 请看 好的 我看一下 PR 我看一下 id 请看 PR 好的 https://example.com/pull/1 id seq，然后重新跑测试 PR 好的 已经推上去 通过了 请看 这个改动把消息列表的 通过了 好的 https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 id 已经推上去 好的 这个改动把消息列表的 已经推上去 换成了稳定的 已经推上去 换成了稳定的 我看一下 seq，然后重新跑测试 通过了 换成了稳定的 https://example.com/pull/1 换成了稳定的 已经推上去 通过了 已经推上去 通过了 https://example.com/pull/1 好的 换成了稳定的 换成了稳定的 id 通过了 通过了 已经推上去 换成了稳定的 换成了稳定的 id 这个改动把消息列表的 好的 id\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 199,
+    "at": "-366m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 seq，然后重新跑测试 PR https://example.com/pull/1 PR 请看 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 id PR 已经推上去 https://example.com/pull/1 好的 seq，然后重新跑测试 好的 已经推上去 我看一下 通过了 请看 seq，然后重新跑测试 好的 换成了稳定的 id PR 换成了稳定的 id id 请看 请看 PR 通过了 PR id id 好的 这个改动把消息列表的 通过了 https://example.com/pull/1 我看一下"
+   },
+   {
+    "seq": 200,
+    "at": "-363m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 我看一下"
+   },
+   {
+    "seq": 201,
+    "at": "-360m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 好的 已经推上去 这个改动把消息列表的 PR id https://example.com/pull/1 https://example.com/pull/1 换成了稳定的 id 已经推上去 这个改动把消息列表的 这个改动把消息列表的 id 已经推上去 我看一下 PR 我看一下 id 我看一下 好的 通过了 id https://example.com/pull/1 换成了稳定的 PR https://example.com/pull/1 通过了 这个改动把消息列表的 好的 这个改动把消息列表的 好的 这个改动把消息列表的 PR 换成了稳定的 id 请看 seq，然后重新跑测试 已经推上去"
+   },
+   {
+    "seq": 202,
+    "at": "-357m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 换成了稳定的 换成了稳定的 seq，然后重新跑测试 已经推上去 id 这个改动把消息列表的 https://example.com/pull/1 id 通过了 好的 seq，然后重新跑测试 通过了 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 id https://example.com/pull/1 已经推上去 我看一下 id PR 这个改动把消息列表的 这个改动把消息列表的 通过了 seq，然后重新跑测试 https://example.com/pull/1 通过了 我看一下 好的 seq，然后重新跑测试 我看一下 https://example.com/pull/1 id https://example.com/pull/1 已经推上去 已经推上去 我看一下 换成了稳定的 PR seq，然后重新跑测试 好的 PR 我看一下 id PR 换成了稳定的 换成了稳定的 请看 请看 已经推上去 我看一下 id 这个改动把消息列表的 PR 换成了稳定的 id 请看 换成了稳定的 好的 请看 请看 我看一下 好的 seq，然后重新跑测试 id 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 好的"
+   },
+   {
+    "seq": 203,
+    "at": "-354m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 seq，然后重新跑测试 PR PR"
+   },
+   {
+    "seq": 204,
+    "at": "-351m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 我看一下"
+   },
+   {
+    "seq": 205,
+    "at": "-348m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 已经推上去 PR 我看一下 已经推上去 我看一下 这个改动把消息列表的 请看"
+   },
+   {
+    "seq": 206,
+    "at": "-345m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 好的 好的 好的 已经推上去 请看 我看一下 通过了 https://example.com/pull/1 这个改动把消息列表的 通过了 请看 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1"
+   },
+   {
+    "seq": 207,
+    "at": "-342m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 好的"
+   },
+   {
+    "seq": 208,
+    "at": "-339m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 换成了稳定的 这个改动把消息列表的 换成了稳定的 我看一下 我看一下 id 我看一下 这个改动把消息列表的 PR 换成了稳定的 已经推上去 已经推上去 我看一下 seq，然后重新跑测试 PR id 这个改动把消息列表的 请看 已经推上去 好的 已经推上去 换成了稳定的 seq，然后重新跑测试 id 换成了稳定的 通过了 已经推上去 id 这个改动把消息列表的 id 已经推上去 已经推上去 id 我看一下 好的 我看一下 好的 PR 请看 id id 我看一下 这个改动把消息列表的 这个改动把消息列表的 换成了稳定的 好的 通过了 通过了 请看 已经推上去 我看一下 换成了稳定的 请看 我看一下 我看一下 https://example.com/pull/1 请看 id id id 请看 已经推上去 好的 id 我看一下 请看 seq，然后重新跑测试 我看一下 好的"
+   },
+   {
+    "seq": 209,
+    "at": "-336m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 这个改动把消息列表的 换成了稳定的 seq，然后重新跑测试\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 210,
+    "at": "-333m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "PR 请看"
+   },
+   {
+    "seq": 211,
+    "at": "-330m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 seq，然后重新跑测试 通过了 通过了"
+   },
+   {
+    "seq": 212,
+    "at": "-327m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 id"
+   },
+   {
+    "seq": 213,
+    "at": "-324m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的"
+   },
+   {
+    "seq": 214,
+    "at": "-321m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 id id id https://example.com/pull/1 seq，然后重新跑测试 我看一下 好的"
+   },
+   {
+    "seq": 215,
+    "at": "-318m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 PR 已经推上去 seq，然后重新跑测试 我看一下 请看 https://example.com/pull/1 我看一下 id https://example.com/pull/1 好的 seq，然后重新跑测试 通过了 我看一下 https://example.com/pull/1 seq，然后重新跑测试 请看 这个改动把消息列表的 PR https://example.com/pull/1"
+   },
+   {
+    "seq": 216,
+    "at": "-315m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 这个改动把消息列表的 换成了稳定的 换成了稳定的 好的 PR https://example.com/pull/1 请看 这个改动把消息列表的 通过了 通过了 https://example.com/pull/1 已经推上去 换成了稳定的 请看 已经推上去 https://example.com/pull/1 https://example.com/pull/1 我看一下 我看一下 换成了稳定的 id id id 请看 PR 已经推上去 id PR 请看 https://example.com/pull/1 好的 通过了 https://example.com/pull/1 通过了 https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 通过了 通过了 我看一下 id https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 https://example.com/pull/1 请看 通过了 换成了稳定的 好的 换成了稳定的 PR 请看 好的 我看一下 PR 通过了 通过了 请看 换成了稳定的 PR 这个改动把消息列表的 seq，然后重新跑测试 已经推上去 id 我看一下 seq，然后重新跑测试 通过了 PR 请看"
+   },
+   {
+    "seq": 217,
+    "at": "-312m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 218,
+    "at": "-309m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 这个改动把消息列表的"
+   },
+   {
+    "seq": 219,
+    "at": "-306m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR 通过了 https://example.com/pull/1 已经推上去 id 我看一下 id https://example.com/pull/1 https://example.com/pull/1 好的 通过了 这个改动把消息列表的 通过了 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 id seq，然后重新跑测试 请看 通过了 换成了稳定的 PR seq，然后重新跑测试 已经推上去 请看 id 这个改动把消息列表的 通过了 已经推上去 好的 好的 这个改动把消息列表的 我看一下 id PR 请看 https://example.com/pull/1 换成了稳定的 seq，然后重新跑测试 https://example.com/pull/1 我看一下 已经推上去 已经推上去 https://example.com/pull/1 通过了 这个改动把消息列表的 换成了稳定的 https://example.com/pull/1 通过了 我看一下 已经推上去 请看 seq，然后重新跑测试 PR 换成了稳定的 换成了稳定的 seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 https://example.com/pull/1 通过了 已经推上去 https://example.com/pull/1 好的 https://example.com/pull/1 PR PR"
+   },
+   {
+    "seq": 220,
+    "at": "-303m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 好的 https://example.com/pull/1 我看一下 已经推上去 通过了 PR 换成了稳定的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 221,
+    "at": "-300m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 请看 PR 好的 seq，然后重新跑测试 PR 这个改动把消息列表的 好的 换成了稳定的 这个改动把消息列表的 id 请看 请看 已经推上去 好的 通过了 这个改动把消息列表的 请看 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 id 换成了稳定的 已经推上去 好的 通过了 已经推上去 通过了 https://example.com/pull/1 我看一下 https://example.com/pull/1 https://example.com/pull/1 通过了 PR seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 请看 PR"
+   },
+   {
+    "seq": 222,
+    "at": "-297m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 seq，然后重新跑测试"
+   },
+   {
+    "seq": 223,
+    "at": "-294m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 已经推上去 好的 这个改动把消息列表的"
+   },
+   {
+    "seq": 224,
+    "at": "-291m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "已经推上去 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 好的 请看 换成了稳定的 通过了"
+   },
+   {
+    "seq": 225,
+    "at": "-288m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 换成了稳定的 换成了稳定的 PR id 请看 seq，然后重新跑测试 PR"
+   },
+   {
+    "seq": 226,
+    "at": "-285m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 https://example.com/pull/1 换成了稳定的 seq，然后重新跑测试 通过了 seq，然后重新跑测试 通过了 PR 换成了稳定的 我看一下 id 请看 PR 已经推上去 通过了 https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 好的 这个改动把消息列表的"
+   },
+   {
+    "seq": 227,
+    "at": "-282m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 PR https://example.com/pull/1 已经推上去 https://example.com/pull/1 通过了 我看一下 换成了稳定的"
+   },
+   {
+    "seq": 228,
+    "at": "-279m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 通过了 已经推上去 换成了稳定的 https://example.com/pull/1 我看一下 换成了稳定的 PR 好的 好的 已经推上去 请看 换成了稳定的 seq，然后重新跑测试 请看 seq，然后重新跑测试 换成了稳定的 id 我看一下 已经推上去"
+   },
+   {
+    "seq": 229,
+    "at": "-276m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 https://example.com/pull/1"
+   },
+   {
+    "seq": 230,
+    "at": "-273m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 换成了稳定的 这个改动把消息列表的 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 我看一下 通过了 通过了 seq，然后重新跑测试 通过了 通过了 PR seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 这个改动把消息列表的 已经推上去 已经推上去 通过了"
+   },
+   {
+    "seq": 231,
+    "at": "-270m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 这个改动把消息列表的 id seq，然后重新跑测试 https://example.com/pull/1 我看一下 通过了 我看一下 已经推上去 好的 请看 https://example.com/pull/1 id 请看 通过了 通过了 id 请看 换成了稳定的 https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 id https://example.com/pull/1 id 已经推上去 我看一下 换成了稳定的 好的 https://example.com/pull/1 通过了 换成了稳定的 这个改动把消息列表的 https://example.com/pull/1 通过了 请看 换成了稳定的 我看一下 请看 请看 已经推上去 换成了稳定的 请看 id id 换成了稳定的 我看一下 seq，然后重新跑测试 https://example.com/pull/1 请看 我看一下 seq，然后重新跑测试 好的 已经推上去 我看一下 我看一下 seq，然后重新跑测试 id 好的 PR https://example.com/pull/1 这个改动把消息列表的 PR 换成了稳定的 已经推上去 好的 PR 请看 已经推上去 请看\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 232,
+    "at": "-267m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 已经推上去"
+   },
+   {
+    "seq": 233,
+    "at": "-264m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 PR id 换成了稳定的 https://example.com/pull/1 seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 请看 id id 已经推上去 id 换成了稳定的 请看 已经推上去 好的 id 这个改动把消息列表的 好的"
+   },
+   {
+    "seq": 234,
+    "at": "-261m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 通过了 seq，然后重新跑测试 我看一下 https://example.com/pull/1 换成了稳定的 我看一下 请看 我看一下 通过了 通过了 已经推上去 请看 通过了 id https://example.com/pull/1 好的 seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 换成了稳定的 我看一下 https://example.com/pull/1 PR 请看 这个改动把消息列表的 通过了 PR https://example.com/pull/1 请看 PR id seq，然后重新跑测试 请看 id 我看一下 通过了 这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 235,
+    "at": "-258m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 已经推上去 好的 PR"
+   },
+   {
+    "seq": 236,
+    "at": "-255m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 换成了稳定的 id 已经推上去"
+   },
+   {
+    "seq": 237,
+    "at": "-252m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 好的 请看 好的 我看一下 seq，然后重新跑测试 id 通过了 好的 https://example.com/pull/1 https://example.com/pull/1 已经推上去 换成了稳定的 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 这个改动把消息列表的 请看 https://example.com/pull/1 seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 我看一下 好的 这个改动把消息列表的 seq，然后重新跑测试 通过了 好的 PR 我看一下 seq，然后重新跑测试 我看一下 这个改动把消息列表的 seq，然后重新跑测试 PR PR 我看一下 seq，然后重新跑测试 seq，然后重新跑测试 PR 这个改动把消息列表的 我看一下 已经推上去 请看 换成了稳定的 已经推上去 通过了 id seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 好的 id 换成了稳定的 已经推上去 通过了 通过了 这个改动把消息列表的 通过了 这个改动把消息列表的 这个改动把消息列表的 好的 我看一下 id 请看 已经推上去 通过了 好的 好的 我看一下"
+   },
+   {
+    "seq": 238,
+    "at": "-249m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "好的 id 请看 已经推上去 我看一下 seq，然后重新跑测试 seq，然后重新跑测试 请看 已经推上去 PR PR https://example.com/pull/1 id 好的 id id seq，然后重新跑测试 通过了 我看一下 我看一下"
+   },
+   {
+    "seq": 239,
+    "at": "-246m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 id PR PR 请看 请看 https://example.com/pull/1 https://example.com/pull/1 PR 我看一下 请看 好的 PR 这个改动把消息列表的 通过了 https://example.com/pull/1 https://example.com/pull/1 id https://example.com/pull/1 PR PR 请看 这个改动把消息列表的 我看一下 PR 请看 通过了 我看一下 id id 好的 通过了 请看 id https://example.com/pull/1 https://example.com/pull/1 好的 id 我看一下 id"
+   },
+   {
+    "seq": 240,
+    "at": "-243m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 PR"
+   },
+   {
+    "seq": 241,
+    "at": "-240m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 id"
+   },
+   {
+    "seq": 242,
+    "at": "-237m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的 已经推上去 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 243,
+    "at": "-234m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 换成了稳定的 好的 这个改动把消息列表的 PR 好的 PR 我看一下 我看一下 这个改动把消息列表的 这个改动把消息列表的 已经推上去 这个改动把消息列表的 请看 已经推上去 seq，然后重新跑测试 我看一下 已经推上去 通过了 好的 我看一下 好的 已经推上去 https://example.com/pull/1 我看一下 已经推上去 已经推上去 请看 请看 请看 已经推上去 我看一下 好的 https://example.com/pull/1 已经推上去 请看 换成了稳定的 PR 通过了 https://example.com/pull/1"
+   },
+   {
+    "seq": 244,
+    "at": "-231m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "已经推上去 id"
+   },
+   {
+    "seq": 245,
+    "at": "-228m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 已经推上去"
+   },
+   {
+    "seq": 246,
+    "at": "-225m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id 我看一下 https://example.com/pull/1 id https://example.com/pull/1 通过了 我看一下 请看 我看一下 已经推上去 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 我看一下 我看一下 id 我看一下 我看一下 seq，然后重新跑测试 换成了稳定的"
+   },
+   {
+    "seq": 247,
+    "at": "-222m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 换成了稳定的 这个改动把消息列表的 PR 请看 请看 seq，然后重新跑测试 id"
+   },
+   {
+    "seq": 248,
+    "at": "-219m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 我看一下"
+   },
+   {
+    "seq": 249,
+    "at": "-216m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 https://example.com/pull/1"
+   },
+   {
+    "seq": 250,
+    "at": "-213m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 id 已经推上去 通过了 PR 通过了 请看 请看 https://example.com/pull/1 id 我看一下 好的 好的 好的 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 通过了 好的 这个改动把消息列表的 请看 换成了稳定的 PR 换成了稳定的 这个改动把消息列表的 换成了稳定的 换成了稳定的 seq，然后重新跑测试 好的 seq，然后重新跑测试 通过了 我看一下 这个改动把消息列表的 PR 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 PR 请看 seq，然后重新跑测试 换成了稳定的 id 好的 通过了 已经推上去 好的 seq，然后重新跑测试 id 已经推上去 seq，然后重新跑测试 seq，然后重新跑测试 好的 id seq，然后重新跑测试 我看一下 已经推上去 这个改动把消息列表的 我看一下 好的 seq，然后重新跑测试 通过了 https://example.com/pull/1 seq，然后重新跑测试 seq，然后重新跑测试 我看一下 已经推上去 我看一下 PR 这个改动把消息列表的 id"
+   },
+   {
+    "seq": 251,
+    "at": "-210m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 https://example.com/pull/1 https://example.com/pull/1 已经推上去 id 通过了 已经推上去 https://example.com/pull/1 我看一下 https://example.com/pull/1 id id 换成了稳定的 好的 换成了稳定的 通过了 我看一下 这个改动把消息列表的 请看 PR 请看 https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 通过了 id seq，然后重新跑测试 换成了稳定的 好的 我看一下 id https://example.com/pull/1 换成了稳定的 请看 https://example.com/pull/1 https://example.com/pull/1 请看 这个改动把消息列表的 https://example.com/pull/1 我看一下"
+   },
+   {
+    "seq": 252,
+    "at": "-207m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "我看一下 通过了 换成了稳定的 我看一下 我看一下 我看一下 已经推上去 好的 我看一下 seq，然后重新跑测试 我看一下 这个改动把消息列表的 已经推上去 我看一下 PR https://example.com/pull/1 已经推上去 换成了稳定的 PR 这个改动把消息列表的 我看一下 换成了稳定的 换成了稳定的 通过了 通过了 这个改动把消息列表的 PR 我看一下 PR seq，然后重新跑测试 seq，然后重新跑测试 id 好的 通过了 id 我看一下 id seq，然后重新跑测试 https://example.com/pull/1 seq，然后重新跑测试"
+   },
+   {
+    "seq": 253,
+    "at": "-204m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 好的 id 我看一下 我看一下 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 254,
+    "at": "-201m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 好的 这个改动把消息列表的 PR 我看一下 好的 通过了 换成了稳定的 https://example.com/pull/1 我看一下 请看 请看 id 好的 我看一下 换成了稳定的 好的 换成了稳定的 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 这个改动把消息列表的 seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 https://example.com/pull/1 我看一下 id 这个改动把消息列表的 换成了稳定的 通过了 好的"
+   },
+   {
+    "seq": 255,
+    "at": "-198m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 id id 通过了"
+   },
+   {
+    "seq": 256,
+    "at": "-195m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id https://example.com/pull/1 PR 换成了稳定的 好的 好的 我看一下 https://example.com/pull/1"
+   },
+   {
+    "seq": 257,
+    "at": "-192m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 id 换成了稳定的 好的 PR PR PR 我看一下 我看一下 PR 已经推上去 PR 我看一下 通过了 我看一下 PR PR 这个改动把消息列表的 id 通过了"
+   },
+   {
+    "seq": 258,
+    "at": "-189m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 我看一下 id 我看一下 换成了稳定的 seq，然后重新跑测试 PR PR id seq，然后重新跑测试 已经推上去 好的 我看一下 已经推上去 id PR id 请看 请看 通过了"
+   },
+   {
+    "seq": 259,
+    "at": "-186m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "好的 通过了"
+   },
+   {
+    "seq": 260,
+    "at": "-183m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 id 已经推上去 这个改动把消息列表的 已经推上去 seq，然后重新跑测试 id 我看一下 我看一下 PR 换成了稳定的 PR PR 这个改动把消息列表的 我看一下 PR https://example.com/pull/1 seq，然后重新跑测试 我看一下 id 换成了稳定的 https://example.com/pull/1 seq，然后重新跑测试 我看一下 我看一下 PR PR 换成了稳定的 这个改动把消息列表的 已经推上去 好的 https://example.com/pull/1 https://example.com/pull/1 已经推上去 好的 https://example.com/pull/1 PR https://example.com/pull/1 好的 已经推上去"
+   },
+   {
+    "seq": 261,
+    "at": "-180m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id PR https://example.com/pull/1 请看 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 这个改动把消息列表的 通过了 seq，然后重新跑测试 好的 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 id 好的 请看 PR 我看一下 PR id 好的 换成了稳定的 PR 这个改动把消息列表的 id 换成了稳定的 seq，然后重新跑测试 请看 id 我看一下 通过了 好的 https://example.com/pull/1 这个改动把消息列表的 好的 seq，然后重新跑测试 PR id 我看一下 PR seq，然后重新跑测试 已经推上去 PR https://example.com/pull/1 id 请看 id id PR id 换成了稳定的 PR 换成了稳定的 id seq，然后重新跑测试 好的 通过了 这个改动把消息列表的 seq，然后重新跑测试 通过了 https://example.com/pull/1 好的 请看 seq，然后重新跑测试 这个改动把消息列表的 id 好的 这个改动把消息列表的"
+   },
+   {
+    "seq": 262,
+    "at": "-177m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 请看 PR PR 已经推上去 已经推上去 通过了 这个改动把消息列表的 换成了稳定的 id 已经推上去 我看一下 换成了稳定的 通过了 这个改动把消息列表的 这个改动把消息列表的 已经推上去 这个改动把消息列表的 请看 seq，然后重新跑测试 好的 这个改动把消息列表的 id 通过了 这个改动把消息列表的 我看一下 请看 PR 通过了 换成了稳定的 请看 https://example.com/pull/1 id 这个改动把消息列表的 换成了稳定的 通过了 我看一下 好的 通过了 我看一下"
+   },
+   {
+    "seq": 263,
+    "at": "-174m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 我看一下"
+   },
+   {
+    "seq": 264,
+    "at": "-171m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 这个改动把消息列表的 通过了 我看一下 已经推上去 通过了 换成了稳定的 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 265,
+    "at": "-168m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 请看 我看一下 PR id PR https://example.com/pull/1 已经推上去 请看 https://example.com/pull/1 seq，然后重新跑测试 已经推上去 已经推上去 id 通过了 我看一下 请看 换成了稳定的 请看 通过了 这个改动把消息列表的 换成了稳定的 https://example.com/pull/1 id 通过了 seq，然后重新跑测试 已经推上去 换成了稳定的 https://example.com/pull/1 我看一下 好的 请看 https://example.com/pull/1 PR id https://example.com/pull/1 seq，然后重新跑测试 好的 PR PR seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的 PR seq，然后重新跑测试 id 通过了 我看一下 id 已经推上去 通过了 通过了 这个改动把消息列表的 id seq，然后重新跑测试 seq，然后重新跑测试 通过了 https://example.com/pull/1 PR seq，然后重新跑测试 这个改动把消息列表的 id https://example.com/pull/1 id 换成了稳定的 我看一下 好的 已经推上去 这个改动把消息列表的"
+   },
+   {
+    "seq": 266,
+    "at": "-165m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "请看 通过了 https://example.com/pull/1 我看一下 PR 请看 PR seq，然后重新跑测试 请看 已经推上去 seq，然后重新跑测试 seq，然后重新跑测试 通过了 seq，然后重新跑测试 这个改动把消息列表的 PR 好的 https://example.com/pull/1 https://example.com/pull/1 这个改动把消息列表的"
+   },
+   {
+    "seq": 267,
+    "at": "-162m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 我看一下 https://example.com/pull/1 换成了稳定的 已经推上去 https://example.com/pull/1 id https://example.com/pull/1 id 请看 id seq，然后重新跑测试 换成了稳定的 https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 我看一下 请看 PR https://example.com/pull/1"
+   },
+   {
+    "seq": 268,
+    "at": "-159m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 id 好的 请看 已经推上去 通过了 已经推上去 换成了稳定的 好的 我看一下 好的 这个改动把消息列表的 我看一下 id 好的 这个改动把消息列表的 id 这个改动把消息列表的 换成了稳定的 id 好的 好的 我看一下 我看一下 我看一下 id 这个改动把消息列表的 PR seq，然后重新跑测试 我看一下 已经推上去 seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 通过了 PR 换成了稳定的 seq，然后重新跑测试 好的 我看一下"
+   },
+   {
+    "seq": 269,
+    "at": "-156m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 换成了稳定的 我看一下 我看一下 请看 好的 换成了稳定的 这个改动把消息列表的"
+   },
+   {
+    "seq": 270,
+    "at": "-153m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 PR 这个改动把消息列表的 id 请看 已经推上去 好的 这个改动把消息列表的 通过了 通过了 换成了稳定的 好的 id 换成了稳定的 我看一下 PR 我看一下 我看一下 请看 这个改动把消息列表的 id PR PR id 请看 我看一下 https://example.com/pull/1 PR 请看 通过了 这个改动把消息列表的 好的 id 请看 id 我看一下 https://example.com/pull/1 PR id 换成了稳定的 已经推上去 通过了 已经推上去 已经推上去 seq，然后重新跑测试 好的 好的 id 好的 id 已经推上去 换成了稳定的 id https://example.com/pull/1 PR 请看 id 这个改动把消息列表的 id 换成了稳定的 https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 这个改动把消息列表的 好的 id PR seq，然后重新跑测试"
+   },
+   {
+    "seq": 271,
+    "at": "-150m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 换成了稳定的 通过了 seq，然后重新跑测试 已经推上去 换成了稳定的 好的 请看 seq，然后重新跑测试 我看一下 换成了稳定的 好的 seq，然后重新跑测试 已经推上去 id 这个改动把消息列表的 这个改动把消息列表的 https://example.com/pull/1 id PR 好的 id seq，然后重新跑测试 我看一下 已经推上去 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 PR 已经推上去 换成了稳定的 我看一下 我看一下 https://example.com/pull/1 我看一下 请看 通过了 通过了 PR 我看一下 换成了稳定的 https://example.com/pull/1 已经推上去 id PR seq，然后重新跑测试 PR 通过了 seq，然后重新跑测试 已经推上去 PR seq，然后重新跑测试 请看 好的 我看一下 PR 我看一下 https://example.com/pull/1 换成了稳定的 这个改动把消息列表的 好的 已经推上去 这个改动把消息列表的 我看一下 PR https://example.com/pull/1 请看 好的 换成了稳定的 https://example.com/pull/1"
+   },
+   {
+    "seq": 272,
+    "at": "-147m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 seq，然后重新跑测试"
+   },
+   {
+    "seq": 273,
+    "at": "-144m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 这个改动把消息列表的 通过了 我看一下 好的 好的 换成了稳定的 https://example.com/pull/1 这个改动把消息列表的 已经推上去 我看一下 我看一下 seq，然后重新跑测试 这个改动把消息列表的 已经推上去 请看 通过了 这个改动把消息列表的 id"
+   },
+   {
+    "seq": 274,
+    "at": "-141m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 通过了 seq，然后重新跑测试 seq，然后重新跑测试"
+   },
+   {
+    "seq": 275,
+    "at": "-138m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id PR\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 276,
+    "at": "-135m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 我看一下 换成了稳定的 通过了 PR id 这个改动把消息列表的 请看 换成了稳定的 PR 通过了 id 这个改动把消息列表的 id PR 我看一下 已经推上去 seq，然后重新跑测试 id 好的 换成了稳定的 已经推上去 PR 这个改动把消息列表的 请看 seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 https://example.com/pull/1 id https://example.com/pull/1 通过了 好的 好的 id 请看 seq，然后重新跑测试 好的 换成了稳定的"
+   },
+   {
+    "seq": 277,
+    "at": "-132m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "好的 好的 seq，然后重新跑测试 id seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 请看 seq，然后重新跑测试 通过了 通过了 换成了稳定的 我看一下 id 好的 https://example.com/pull/1 通过了 https://example.com/pull/1 请看 id https://example.com/pull/1 好的 这个改动把消息列表的 这个改动把消息列表的 换成了稳定的 换成了稳定的 已经推上去 https://example.com/pull/1 seq，然后重新跑测试 通过了 通过了 换成了稳定的 这个改动把消息列表的 id 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 好的"
+   },
+   {
+    "seq": 278,
+    "at": "-129m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 已经推上去 https://example.com/pull/1 好的 已经推上去"
+   },
+   {
+    "seq": 279,
+    "at": "-126m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 PR PR id seq，然后重新跑测试 seq，然后重新跑测试 id 我看一下 我看一下 我看一下 seq，然后重新跑测试 好的 好的 id seq，然后重新跑测试 我看一下 请看 我看一下 PR 好的"
+   },
+   {
+    "seq": 280,
+    "at": "-123m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "PR https://example.com/pull/1 通过了 换成了稳定的"
+   },
+   {
+    "seq": 281,
+    "at": "-120m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 请看 PR seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 请看 我看一下 请看 请看 已经推上去 我看一下 PR PR 通过了 好的"
+   },
+   {
+    "seq": 282,
+    "at": "-117m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "id id id seq，然后重新跑测试 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 我看一下 https://example.com/pull/1 请看 好的 PR 请看 请看 通过了 好的 这个改动把消息列表的 通过了 我看一下 这个改动把消息列表的 已经推上去 换成了稳定的 已经推上去 seq，然后重新跑测试 我看一下 id 请看 好的 id seq，然后重新跑测试 通过了 这个改动把消息列表的 通过了 https://example.com/pull/1 我看一下 通过了 id seq，然后重新跑测试 换成了稳定的 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 PR 已经推上去 已经推上去 好的 https://example.com/pull/1 这个改动把消息列表的 请看 通过了 已经推上去 这个改动把消息列表的 这个改动把消息列表的 好的 https://example.com/pull/1 已经推上去 我看一下 请看 seq，然后重新跑测试 好的 好的 id 已经推上去 好的 已经推上去 id 已经推上去 PR 这个改动把消息列表的 已经推上去"
+   },
+   {
+    "seq": 283,
+    "at": "-114m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 这个改动把消息列表的 https://example.com/pull/1 PR"
+   },
+   {
+    "seq": 284,
+    "at": "-111m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 这个改动把消息列表的"
+   },
+   {
+    "seq": 285,
+    "at": "-108m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 请看 换成了稳定的 id 通过了 id 已经推上去 https://example.com/pull/1 PR 好的 我看一下 好的 seq，然后重新跑测试 这个改动把消息列表的 id 已经推上去 换成了稳定的 id 已经推上去 这个改动把消息列表的 id 请看 这个改动把消息列表的 id 请看 我看一下 PR 请看 id 换成了稳定的 通过了 已经推上去 好的 PR 好的 PR 我看一下 我看一下 已经推上去 https://example.com/pull/1"
+   },
+   {
+    "seq": 286,
+    "at": "-105m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 PR 这个改动把消息列表的 https://example.com/pull/1 id 已经推上去 seq，然后重新跑测试 通过了 id id id 这个改动把消息列表的 通过了 seq，然后重新跑测试 请看 通过了 换成了稳定的 换成了稳定的 这个改动把消息列表的\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 287,
+    "at": "-102m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "id PR 我看一下 这个改动把消息列表的 id 请看 seq，然后重新跑测试 我看一下 已经推上去 换成了稳定的 这个改动把消息列表的 通过了 PR PR 请看 PR PR 换成了稳定的 PR 已经推上去 id PR 请看 已经推上去 这个改动把消息列表的 已经推上去 这个改动把消息列表的 id 我看一下 seq，然后重新跑测试 通过了 我看一下 通过了 我看一下 seq，然后重新跑测试 通过了 seq，然后重新跑测试 seq，然后重新跑测试 通过了 https://example.com/pull/1 这个改动把消息列表的 PR 请看 已经推上去 好的 好的 PR seq，然后重新跑测试 已经推上去 https://example.com/pull/1 https://example.com/pull/1 通过了 通过了 请看 换成了稳定的 这个改动把消息列表的 已经推上去 https://example.com/pull/1 https://example.com/pull/1 好的 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 seq，然后重新跑测试 https://example.com/pull/1 通过了 seq，然后重新跑测试 请看 请看 https://example.com/pull/1"
+   },
+   {
+    "seq": 288,
+    "at": "-99m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "seq，然后重新跑测试 这个改动把消息列表的 已经推上去 已经推上去"
+   },
+   {
+    "seq": 289,
+    "at": "-96m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 这个改动把消息列表的 换成了稳定的 我看一下 这个改动把消息列表的 好的 请看 seq，然后重新跑测试 PR PR PR 换成了稳定的 seq，然后重新跑测试 已经推上去 好的 seq，然后重新跑测试 已经推上去 已经推上去 seq，然后重新跑测试 https://example.com/pull/1"
+   },
+   {
+    "seq": 290,
+    "at": "-93m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 seq，然后重新跑测试 换成了稳定的 通过了 请看 请看 请看 换成了稳定的 好的 seq，然后重新跑测试 通过了 我看一下 seq，然后重新跑测试 https://example.com/pull/1 已经推上去 好的 换成了稳定的 seq，然后重新跑测试 换成了稳定的 PR"
+   },
+   {
+    "seq": 291,
+    "at": "-90m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "通过了 好的 我看一下 id"
+   },
+   {
+    "seq": 292,
+    "at": "-87m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "好的 这个改动把消息列表的 这个改动把消息列表的 换成了稳定的"
+   },
+   {
+    "seq": 293,
+    "at": "-84m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "id 好的 通过了 换成了稳定的"
+   },
+   {
+    "seq": 294,
+    "at": "-81m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "我看一下 这个改动把消息列表的"
+   },
+   {
+    "seq": 295,
+    "at": "-78m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "已经推上去 我看一下 这个改动把消息列表的 通过了 id 好的 PR 通过了 通过了 我看一下 https://example.com/pull/1 这个改动把消息列表的 请看 这个改动把消息列表的 换成了稳定的 好的 我看一下 好的 这个改动把消息列表的 我看一下 好的 好的 seq，然后重新跑测试 https://example.com/pull/1 这个改动把消息列表的 我看一下 PR 这个改动把消息列表的 我看一下 这个改动把消息列表的 id 请看 seq，然后重新跑测试 https://example.com/pull/1 id seq，然后重新跑测试 我看一下 通过了 seq，然后重新跑测试 通过了"
+   },
+   {
+    "seq": 296,
+    "at": "-75m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 PR id PR 好的 https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 seq，然后重新跑测试 https://example.com/pull/1 https://example.com/pull/1 好的 PR 已经推上去 请看 https://example.com/pull/1 好的 PR"
+   },
+   {
+    "seq": 297,
+    "at": "-72m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 好的 PR PR 好的 请看 https://example.com/pull/1 seq，然后重新跑测试 https://example.com/pull/1 通过了 已经推上去 这个改动把消息列表的 好的 已经推上去 已经推上去 这个改动把消息列表的 PR 这个改动把消息列表的 通过了 这个改动把消息列表的 https://example.com/pull/1 好的 已经推上去 已经推上去 好的 seq，然后重新跑测试 通过了 https://example.com/pull/1 id 请看 通过了 https://example.com/pull/1 通过了 seq，然后重新跑测试 PR 请看 请看 这个改动把消息列表的 seq，然后重新跑测试 通过了\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 298,
+    "at": "-69m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 id https://example.com/pull/1 请看"
+   },
+   {
+    "seq": 299,
+    "at": "-66m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 seq，然后重新跑测试"
+   },
+   {
+    "seq": 300,
+    "at": "-63m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 已经推上去 换成了稳定的 请看 seq，然后重新跑测试 这个改动把消息列表的 请看 已经推上去"
+   },
+   {
+    "seq": 301,
+    "at": "-60m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 我看一下 PR 好的 这个改动把消息列表的 通过了 我看一下 请看 通过了 换成了稳定的 请看 已经推上去 通过了 好的 我看一下 请看 这个改动把消息列表的 我看一下 通过了 换成了稳定的"
+   },
+   {
+    "seq": 302,
+    "at": "-57m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 通过了"
+   },
+   {
+    "seq": 303,
+    "at": "-54m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 我看一下 PR https://example.com/pull/1 seq，然后重新跑测试 我看一下 好的 PR 换成了稳定的 id 我看一下 https://example.com/pull/1 换成了稳定的 换成了稳定的 seq，然后重新跑测试 id 已经推上去 已经推上去 已经推上去 通过了"
+   },
+   {
+    "seq": 304,
+    "at": "-51m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 换成了稳定的 PR https://example.com/pull/1 seq，然后重新跑测试 通过了 https://example.com/pull/1 PR 我看一下 好的 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 好的 请看 已经推上去 这个改动把消息列表的 seq，然后重新跑测试 https://example.com/pull/1 通过了 id 换成了稳定的 已经推上去 好的 PR PR 好的 我看一下 我看一下 好的 id PR 请看 PR 我看一下 换成了稳定的 seq，然后重新跑测试 请看 这个改动把消息列表的 这个改动把消息列表的"
+   },
+   {
+    "seq": 305,
+    "at": "-48m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "我看一下 https://example.com/pull/1 这个改动把消息列表的 已经推上去 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 这个改动把消息列表的 id PR id 换成了稳定的 换成了稳定的 好的 id 这个改动把消息列表的 请看 换成了稳定的 我看一下 https://example.com/pull/1 通过了 已经推上去 请看 PR id 我看一下 通过了 PR seq，然后重新跑测试 https://example.com/pull/1 好的 通过了 id https://example.com/pull/1 PR PR 已经推上去 id 换成了稳定的 这个改动把消息列表的 已经推上去 https://example.com/pull/1 我看一下 已经推上去 seq，然后重新跑测试 通过了 这个改动把消息列表的 这个改动把消息列表的 PR PR PR 换成了稳定的 请看 seq，然后重新跑测试 我看一下 已经推上去 PR 请看 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 通过了 我看一下 这个改动把消息列表的 PR 请看 换成了稳定的 seq，然后重新跑测试"
+   },
+   {
+    "seq": 306,
+    "at": "-45m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "请看 已经推上去 这个改动把消息列表的 seq，然后重新跑测试 好的 seq，然后重新跑测试 id PR 我看一下 换成了稳定的 PR https://example.com/pull/1 seq，然后重新跑测试 请看 https://example.com/pull/1 seq，然后重新跑测试 PR https://example.com/pull/1 id 已经推上去"
+   },
+   {
+    "seq": 307,
+    "at": "-42m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 这个改动把消息列表的 seq，然后重新跑测试 id 请看 id 换成了稳定的 换成了稳定的 id 请看 我看一下 通过了 好的 id 已经推上去 我看一下 id 已经推上去 已经推上去 https://example.com/pull/1 我看一下 id https://example.com/pull/1 我看一下 https://example.com/pull/1 换成了稳定的 我看一下 id https://example.com/pull/1 请看 https://example.com/pull/1 好的 换成了稳定的 好的 通过了 我看一下 换成了稳定的 seq，然后重新跑测试 请看 好的 已经推上去 通过了 seq，然后重新跑测试 请看 已经推上去 这个改动把消息列表的 好的 请看 id 这个改动把消息列表的 id 我看一下 id 我看一下 换成了稳定的 请看 已经推上去 seq，然后重新跑测试 https://example.com/pull/1 通过了 通过了 好的 我看一下 请看 通过了 我看一下 换成了稳定的 已经推上去 这个改动把消息列表的 通过了"
+   },
+   {
+    "seq": 308,
+    "at": "-39m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 好的 好的 好的 通过了 请看 已经推上去 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 309,
+    "at": "-36m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 换成了稳定的 已经推上去 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 这个改动把消息列表的 我看一下 请看 我看一下 这个改动把消息列表的 换成了稳定的 已经推上去"
+   },
+   {
+    "seq": 310,
+    "at": "-33m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "请看 我看一下 已经推上去 PR 通过了 PR 已经推上去 好的 好的 id 通过了 这个改动把消息列表的 id 好的 id seq，然后重新跑测试 id 我看一下 PR 请看 通过了 通过了 seq，然后重新跑测试 PR 好的 id https://example.com/pull/1 好的 PR 已经推上去 id 好的 请看 这个改动把消息列表的 id 我看一下 换成了稳定的 我看一下 seq，然后重新跑测试 我看一下"
+   },
+   {
+    "seq": 311,
+    "at": "-30m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "https://example.com/pull/1 我看一下 通过了 换成了稳定的 我看一下 已经推上去 PR id"
+   },
+   {
+    "seq": 312,
+    "at": "-27m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "这个改动把消息列表的 这个改动把消息列表的 换成了稳定的 通过了 seq，然后重新跑测试 我看一下 已经推上去 通过了 这个改动把消息列表的 请看 好的 PR 我看一下 https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 好的 换成了稳定的 已经推上去 好的 seq，然后重新跑测试 好的 我看一下 已经推上去 id 已经推上去 通过了 这个改动把消息列表的 id https://example.com/pull/1 id 通过了 换成了稳定的 https://example.com/pull/1 PR 我看一下 id PR 好的 id https://example.com/pull/1 通过了 我看一下 id 通过了 我看一下 已经推上去 https://example.com/pull/1 换成了稳定的 seq，然后重新跑测试 seq，然后重新跑测试 id 换成了稳定的 https://example.com/pull/1 https://example.com/pull/1 seq，然后重新跑测试 id 好的 通过了 通过了 通过了 我看一下 这个改动把消息列表的 我看一下 我看一下 好的 已经推上去 id 换成了稳定的 https://example.com/pull/1"
+   },
+   {
+    "seq": 313,
+    "at": "-24m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 已经推上去"
+   },
+   {
+    "seq": 314,
+    "at": "-21m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "PR 换成了稳定的 id 我看一下 https://example.com/pull/1 PR 请看 PR 换成了稳定的 我看一下 请看 PR 这个改动把消息列表的 这个改动把消息列表的 我看一下 PR 通过了 这个改动把消息列表的 https://example.com/pull/1 https://example.com/pull/1 好的 这个改动把消息列表的 请看 好的 我看一下 我看一下 seq，然后重新跑测试 id 好的 id 请看 换成了稳定的 seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 通过了 换成了稳定的 这个改动把消息列表的 PR PR 这个改动把消息列表的 好的 这个改动把消息列表的 我看一下 已经推上去 通过了 id https://example.com/pull/1 这个改动把消息列表的 https://example.com/pull/1 换成了稳定的 我看一下 我看一下 通过了 我看一下 https://example.com/pull/1 id 好的 这个改动把消息列表的 好的 seq，然后重新跑测试 我看一下 换成了稳定的 请看 seq，然后重新跑测试 已经推上去 请看 PR https://example.com/pull/1 请看"
+   },
+   {
+    "seq": 315,
+    "at": "-18m",
+    "from": {
+     "id": "you",
+     "label": "you"
+    },
+    "kind": "text",
+    "text": "id 换成了稳定的 已经推上去 id PR seq，然后重新跑测试 这个改动把消息列表的 seq，然后重新跑测试 seq，然后重新跑测试 已经推上去 已经推上去 请看 id 请看 换成了稳定的 https://example.com/pull/1 已经推上去 这个改动把消息列表的 已经推上去 好的 通过了 通过了 https://example.com/pull/1 请看 这个改动把消息列表的 好的 已经推上去 换成了稳定的 换成了稳定的 我看一下 https://example.com/pull/1 PR seq，然后重新跑测试 已经推上去 PR id 已经推上去 已经推上去 通过了 已经推上去"
+   },
+   {
+    "seq": 316,
+    "at": "-15m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 通过了 好的 换成了稳定的 PR seq，然后重新跑测试 https://example.com/pull/1 id"
+   },
+   {
+    "seq": 317,
+    "at": "-12m",
+    "from": {
+     "id": "fold0002-aaaa",
+     "label": "builder",
+     "kind": "codex"
+    },
+    "kind": "text",
+    "text": "PR seq，然后重新跑测试 换成了稳定的 PR seq，然后重新跑测试 我看一下 seq，然后重新跑测试 https://example.com/pull/1 id id 通过了 https://example.com/pull/1 https://example.com/pull/1 换成了稳定的 https://example.com/pull/1 seq，然后重新跑测试 好的 换成了稳定的 已经推上去 好的 seq，然后重新跑测试 seq，然后重新跑测试 通过了 好的 通过了 请看 已经推上去 https://example.com/pull/1 换成了稳定的 id seq，然后重新跑测试 seq，然后重新跑测试 PR 我看一下 这个改动把消息列表的 PR 我看一下 seq，然后重新跑测试 id 换成了稳定的 PR 好的 这个改动把消息列表的 seq，然后重新跑测试 通过了 PR 换成了稳定的 通过了 这个改动把消息列表的 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 这个改动把消息列表的 这个改动把消息列表的 seq，然后重新跑测试 换成了稳定的 好的 https://example.com/pull/1 id seq，然后重新跑测试 好的 这个改动把消息列表的 好的 通过了 通过了 id 这个改动把消息列表的 seq，然后重新跑测试 已经推上去 我看一下"
+   },
+   {
+    "seq": 318,
+    "at": "-9m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "换成了稳定的 PR"
+   },
+   {
+    "seq": 319,
+    "at": "-6m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "通过了 请看 换成了稳定的 好的 通过了 通过了 这个改动把消息列表的 通过了 好的 seq，然后重新跑测试 我看一下 seq，然后重新跑测试 seq，然后重新跑测试 这个改动把消息列表的 https://example.com/pull/1 好的 请看 id id 好的 请看 https://example.com/pull/1 请看 请看 id 换成了稳定的 我看一下 id id id PR 请看 请看 seq，然后重新跑测试 我看一下 好的 请看 seq，然后重新跑测试 已经推上去 https://example.com/pull/1\n```\ngo test ./...\nok  \tmad/internal/desktop\t0.4s\n```"
+   },
+   {
+    "seq": 320,
+    "at": "-3m",
+    "from": {
+     "id": "fold0001-aaaa",
+     "label": "architect",
+     "kind": "claude"
+    },
+    "kind": "text",
+    "text": "我看一下 已经推上去 PR 我看一下 id id PR 换成了稳定的 通过了 seq，然后重新跑测试 好的 id 我看一下 seq，然后重新跑测试 通过了 id https://example.com/pull/1 通过了 id seq，然后重新跑测试 请看 id 通过了 https://example.com/pull/1 好的 已经推上去 已经推上去 换成了稳定的 换成了稳定的 PR PR PR 好的 好的 https://example.com/pull/1 通过了 PR id 请看 请看"
+   }
+  ]
+ }
+}
