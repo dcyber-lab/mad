@@ -175,6 +175,35 @@ final class ChannelMappingTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(BusMessage.self, from: Data(#"{"seq":5,"kind":"system","text":"x"}"#.utf8)).event, "")
     }
 
+    func testTheNoteOfDroppedMessagesIsTheFirstItemAndOnlyTheLatestCounts() {
+        let s = screen([
+            msg(1, "architect", "one", at: "2026-11-01T08:00:00+08:00"),
+            msg(2, "mad", "Older messages were dropped…", kind: "system", event: "trimmed"),
+            msg(3, "architect", "two", at: "2026-11-01T08:01:00+08:00"),
+            msg(4, "mad", "Older messages were dropped…", kind: "system", event: "trimmed"),
+            msg(5, "mad", "Paused: x", kind: "system", event: "paused"),
+        ])
+        guard case .note(let id, let text) = s.items[0] else { return XCTFail("the first item is not a note: \(s.items[0])") }
+        XCTAssertEqual(id, "trimmed")
+        XCTAssertEqual(text, "更早的消息已清理")
+        let notes = s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } }
+        XCTAssertEqual(notes, ["更早的消息已清理", "群已暂停"], "one trimmed note, first; the pause note stays in place")
+        if case .time = s.items[1] {} else { XCTFail("the oldest message's time line comes after the note: \(s.items[1])") }
+    }
+
+    /// The table the server, the page and native share (internal/bus/testdata/at-you.json).
+    func testTheAtYouRuleIsTheSharedTable() throws {
+        struct Table: Decodable { struct Case: Decodable { var text: String; var want: Bool; var note: String? }; var cases: [Case] }
+        let table = try fixture("at-you", Table.self)
+        XCTAssertGreaterThanOrEqual(table.cases.count, 21)
+        for c in table.cases {
+            XCTAssertEqual(ChannelMapping.asksYou(msg(1, "builder", c.text)), c.want, "“\(c.text)” \(c.note ?? "")")
+        }
+        // the cases the review named
+        for text in ["@you请看一下", "\u{3000}@you 看", "（@you", "@you.", "@you"] { XCTAssertTrue(ChannelMapping.asksYou(msg(1, "builder", text)), text) }
+        for text in ["@you-x", "@young", "x@you"] { XCTAssertFalse(ChannelMapping.asksYou(msg(1, "builder", text)), text) }
+    }
+
     // MARK: runs
 
     func testOneSendersMessagesInARowAreOneRun() {

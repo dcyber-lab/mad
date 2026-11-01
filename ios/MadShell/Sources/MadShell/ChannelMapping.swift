@@ -23,10 +23,14 @@ public enum ChannelMapping {
         let sorted = messages.sorted { $0.seq < $1.seq }
         // The agents' bookkeeping (handoffs, reports, check-ins, nudges, lapsed notices) is not drawn: runs and time lines
         // are built from what is, and a reply keeps its quote of a message that is not (it looks in `sorted`).
-        let visible = sorted.filter { !isHidden($0) }
+        // The note that older messages were dropped is not at its place: the latest of them is the first item, above the
+        // oldest message held.
+        let trimmed = sorted.last { $0.kind == "system" && $0.event == "trimmed" }
+        let visible = sorted.filter { !isHidden($0) && $0.event != "trimmed" }
         var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
         // nothing yet, or only the agents' own work so far: say so, quietly, rather than showing a blank
         if items.isEmpty { if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] } else if loaded { items = [.note(id: emptyID.none, text: noneNote)] } }
+        if let trimmed { items.insert(.note(id: "trimmed", text: noteText(trimmed)), at: 0) }
         let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
         let everyone = members + split.helpers
@@ -182,6 +186,7 @@ public enum ChannelMapping {
         switch m.event {
         case "paused": "群已暂停"
         case "resumed": "群已恢复"
+        case "trimmed": "更早的消息已清理"
         default: m.text
         }
     }
@@ -225,7 +230,9 @@ public enum ChannelMapping {
     /// The person is asked: `@you` in the text (the bus does not list the person among the mentions).
     static func asksYou(_ m: BusMessage) -> Bool {
         if m.mentions.contains("you") { return true }
-        return m.text.range(of: "(^|[\\s(（])@you(?![\\p{L}\\p{N}_-])", options: [.regularExpression, .caseInsensitive]) != nil
+        // one rule with the server and the page (internal/bus/testdata/at-you.json): at the start, or after a space of any
+        // kind or a ( or （, and not followed by an ASCII letter, digit, _ or - (a CJK character right after still counts)
+        return m.text.range(of: "(^|[\\s\\p{Zs}(（])@you(?![A-Za-z0-9_-])", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// The fold of a long message of an agent, nil when it is shown whole: the person's, mad's own, any that asks

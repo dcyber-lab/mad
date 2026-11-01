@@ -211,10 +211,15 @@ public struct ChannelView: View {
         }
     }
 
-    /// The channel's only item is an empty-state note: its text.
+    /// The channel has nothing but notes, one of them an empty-state note (the note of older messages dropped may be
+    /// first): its text.
     private var emptyLine: String? {
-        if screen.items.count == 1, case .note(let id, let text) = screen.items[0], id == "quiet" || id == "empty" { return text }
-        return nil
+        var line: String?
+        for item in screen.items {
+            guard case .note(let id, let text) = item else { return nil }
+            if id == "quiet" || id == "empty" { line = text }
+        }
+        return line
     }
 
     /// Back to the bottom once the layout has settled (after a resize that moved it).

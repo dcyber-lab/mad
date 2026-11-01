@@ -131,7 +131,7 @@
             "kind": "codex"
           }
         ],
-        "last": 8,
+        "last": 9,
         "last_text": "architect: 第一条",
         "last_at": "-1m",
         "listed": true,
@@ -336,6 +336,18 @@
         },
         "kind": "system",
         "text": "Paused by an older mad."
+      },
+      {
+        "seq": 9,
+        "at": "-22m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "event": "trimmed",
+        "text": "Older messages were dropped…"
       }
     ],
     "none": []
