@@ -12,9 +12,11 @@ public struct ChannelMember: Identifiable, Equatable, Sendable {
     /// How it stands, in a words of its own: "在工作 · Bash go test", "空闲".
     public var status: String
     public var isLead: Bool
+    /// Its role in the channel's team ("架构师"); empty for a helper or a channel without a team.
+    public var role: String
 
-    public init(id: String, kind: String, state: CharacterState, name: String, status: String = "", isLead: Bool = false) {
-        self.id = id; self.kind = kind; self.state = state; self.name = name; self.status = status; self.isLead = isLead
+    public init(id: String, kind: String, state: CharacterState, name: String, status: String = "", isLead: Bool = false, role: String = "") {
+        self.id = id; self.kind = kind; self.state = state; self.name = name; self.status = status; self.isLead = isLead; self.role = role
     }
 }
 
@@ -90,12 +92,19 @@ public enum ChannelItem: Identifiable, Equatable, Sendable {
 public struct ChannelPanel: Equatable, Sendable {
     public var name: String
     public var topic: String
+    /// The team (its roles, lead first), or everyone when the channel has no team.
     public var members: [ChannelMember]
+    /// Members the team did not name, working and waiting first; listed under their own heading.
+    public var helpers: [ChannelMember]
+    /// The channel has a team: the lists get headings ("小组 3", "帮手 4").
+    public var sectioned: Bool
     /// How many pictures the channel holds.
     public var pictureCount: Int
     public var paused: Bool
-    public init(name: String, topic: String = "", members: [ChannelMember] = [], pictureCount: Int = 0, paused: Bool = false) {
-        self.name = name; self.topic = topic; self.members = members; self.pictureCount = pictureCount; self.paused = paused
+    public init(name: String, topic: String = "", members: [ChannelMember] = [], helpers: [ChannelMember] = [], sectioned: Bool = false,
+                pictureCount: Int = 0, paused: Bool = false) {
+        self.name = name; self.topic = topic; self.members = members; self.helpers = helpers; self.sectioned = sectioned
+        self.pictureCount = pictureCount; self.paused = paused
     }
 }
 
@@ -104,6 +113,8 @@ public struct ChannelScreen: Equatable, Sendable {
     public var title: String
     /// The characters of its tile, and who is in the channel.
     public var members: [ChannelMember]
+    /// The helpers the team brought in (not in `members`).
+    public var helpers: [ChannelMember]
     /// "2 个在工作".
     public var stateLine: String
     public var items: [ChannelItem]
@@ -113,9 +124,9 @@ public struct ChannelScreen: Equatable, Sendable {
     /// The person may not write here (a DM between two agents).
     public var readOnly: Bool
 
-    public init(title: String, members: [ChannelMember], stateLine: String, items: [ChannelItem], panel: ChannelPanel,
+    public init(title: String, members: [ChannelMember], helpers: [ChannelMember] = [], stateLine: String, items: [ChannelItem], panel: ChannelPanel,
                 placeholder: String, readOnly: Bool = false) {
-        self.title = title; self.members = members; self.stateLine = stateLine; self.items = items
+        self.title = title; self.members = members; self.helpers = helpers; self.stateLine = stateLine; self.items = items
         self.panel = panel; self.placeholder = placeholder; self.readOnly = readOnly
     }
 
