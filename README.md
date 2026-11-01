@@ -208,7 +208,7 @@ mad wait AGENT          wait for the agent's turn to end, print its reply
 mad queue add AGENT TEXT
                         line a message up for when the agent's turn is
                         over; also ls, rm, pause, resume
-mad desktop             open the deck in a window of its own (preview)
+mad desktop             open the deck: the Mac app (madmac.app) if installed, else a window of its own (-web: the latter)
 mad kill-server         stop the deck, every agent in it and what they
                         left running
 mad version             print the version
