@@ -337,7 +337,8 @@ function panelRow(key, label, small, onclick) {
 // so what has the focus keeps it and nothing is fetched again.
 function panelSig(c) {
   if (cp.page === "pics") return JSON.stringify(["pics", cv.pics.map((p) => p.url)]);
-  return JSON.stringify([c.id, c.topic || "", !!c.paused, !!c.dm, c.lead || "", (c.members || []).map((m) => [m.id, m.label])]);
+  const g = chanGroups(c);
+  return JSON.stringify([c.id, c.topic || "", !!c.paused, !!c.dm, c.lead || "", g.split, g.rows.map((r) => [r.m.id, r.m.label, r.role || ""])]);
 }
 
 function bigTile(id) {
@@ -345,6 +346,44 @@ function bigTile(id) {
   t.classList.remove("small");
   t.classList.add("big");
   return t;
+}
+
+// chanGroups: how the panel lists a channel's members. A team's channel has two groups: 小组, the team's
+// roles in their order, the lead first, and 帮手, the other members, the busy ones first, those whose
+// agent is no longer in the deck left out. Any other channel is one list. rows is them all, in the
+// order they are drawn.
+function chanGroups(c) {
+  const members = c.members || [];
+  const roles = (c.team && c.team.roles) || [];
+  if (!roles.length) return { split: false, team: [], helpers: [], rows: members.map((m) => ({ m })) };
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const team = [...roles].sort((a, b) => !!b.lead - !!a.lead).map((r) => ({
+    m: byId.get(r.agent) || { id: r.agent || "", label: r.role, kind: "" }, role: r.role, lead: !!r.lead || r.agent === c.lead, team: true,
+  }));
+  const inTeam = new Set(roles.map((r) => r.agent).filter(Boolean));
+  const busy = (m) => ["running", "waiting"].includes(shownStatus(agents.get(m.id))) ? 0 : 1;
+  const helpers = members.filter((m) => !inTeam.has(m.id) && agents.has(m.id)).sort((a, b) => busy(a) - busy(b)).map((m) => ({ m }));
+  return { split: true, team, helpers, rows: [...team, ...helpers] };
+}
+
+// panelMember is one member's row of the panel; a team member's has its role's name and its kind.
+function panelMember(row, c) {
+  const { m } = row;
+  const a = agents.get(m.id);
+  const r = el("button", "cprow");
+  r.type = "button";
+  r.dataset.key = `m:${m.id}`;
+  r.disabled = !a;
+  r.dataset.st = a ? shownStatus(a) : "";
+  const t = el("span", "t");
+  const n = el("span", "n");
+  n.append(el("span", "nm", row.team ? row.role : m.label));
+  if (row.team ? row.lead : m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
+  if (row.team && (a?.kind || m.kind)) n.append(el("span", "k", a?.kind || m.kind));
+  t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : "不在列表里"));
+  r.append(avatar(a || { kind: m.kind, id: m.id }, false), t);
+  r.onclick = () => { closeChanPanel(true); show(m.id); };
+  return r;
 }
 
 // drawChanPanel draws what the panel says of the channel: its tile, name
@@ -392,26 +431,20 @@ function drawPanelMain(side, c) {
   top.append(bigTile(id), el("b", "", chanName(id)));
   if (c.topic) top.append(el("p", "cptopic", c.topic));
   const parts = [panelClose(), top];
-  // the members
-  const mem = c.members || [];
-  parts.push(el("h3", "cpsec", `成员 · ${mem.length}`));
-  const list = el("div", "cplist");
-  for (const m of mem) {
-    const a = agents.get(m.id);
-    const r = el("button", "cprow");
-    r.type = "button";
-    r.dataset.key = `m:${m.id}`;
-    r.disabled = !a;
-    r.dataset.st = a ? shownStatus(a) : "";
-    const t = el("span", "t");
-    const n = el("span", "n", m.label);
-    if (m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
-    t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : "不在列表里"));
-    r.append(avatar(a || { kind: m.kind, id: m.id }, false), t);
-    r.onclick = () => { closeChanPanel(true); show(m.id); };
-    list.append(r);
+  // the members: a team's channel in two groups, any other in one list
+  const g = chanGroups(c);
+  const section = (title, rows) => {
+    parts.push(el("h3", "cpsec", title));
+    const list = el("div", "cplist");
+    list.append(...rows.map((r) => panelMember(r, c)));
+    parts.push(list);
+  };
+  if (g.split) {
+    section(`小组 ${g.team.length}`, g.team);
+    if (g.helpers.length) section(`帮手 ${g.helpers.length}`, g.helpers);
+  } else {
+    section(`成员 · ${g.rows.length}`, g.rows);
   }
-  parts.push(list);
   // the group
   parts.push(el("h3", "cpsec", "这个群"));
   const acts = el("div", "cplist");
@@ -441,7 +474,7 @@ function patchChanPanel(side, c) {
     top.dataset.sig = tileSig(c.id);
   }
   const rows = [...side.querySelectorAll(".cprow")];
-  (c.members || []).forEach((m, i) => {
+  chanGroups(c).rows.forEach(({ m }, i) => {
     const r = rows[i];
     if (!r) return;
     const a = agents.get(m.id);
@@ -890,8 +923,10 @@ function drawChanWho() {
   const c = busChannel(cv.open);
   const who = $("#who");
   const what = el("span", "what");
-  const n = c ? c.members.length : 0;
-  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"} · @ to wake one` : " · reaches it when its turn is over");
+  const g = c ? chanGroups(c) : null;
+  const n = g ? (g.split ? g.team.length : g.rows.length) : 0;
+  const helpers = g && g.helpers.length ? ` · ${g.helpers.length} 帮手` : "";
+  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} agent${n === 1 ? "" : "s"}${helpers} · @ to wake one` : " · reaches it when its turn is over");
   who.replaceChildren(what);
   who.className = "";
   drawNoWake();
