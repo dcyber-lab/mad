@@ -4,6 +4,7 @@
 const assert = require("assert");
 const { charLook, plan, charSVG, EXPR, SHAPES, COLORS, STRONG, mix } = require("../web/characters.js");
 const vectors = require("../web/testdata/character-vectors.json");
+const fs = require("fs");
 
 assert(vectors.length >= 20, `${vectors.length} vectors`);
 for (const v of vectors) {
@@ -29,4 +30,30 @@ assert(/^#[0-9a-f]{6}$/.test(mix("#6f9bff", 0.55)));
 const styles = new Set(vectors.map((v) => v.style));
 for (const s of ["wander", "circle", "scan", "peek"]) assert(styles.has(s), `no vector has the style ${s}`);
 assert.strictEqual(new Set(vectors.map((v) => v.shape)).size, 8, "the vectors do not cover the 8 shapes");
-console.log(`ok ${vectors.length} vectors`);
+// No rule of the page may reach a part of a character, as `.avatar .dot` (the status dot's) and
+// `.avatar.chara .dot { display: none }` reached the eyes when they were `.dot`: every class a character is
+// drawn with is its own (c-), and the stylesheet only paints them (fill, stroke, font), under `.chara`.
+const markup = [...Object.values(EXPR), ...SHAPES.map((x) => x[2]), charSVG("x"), charSVG("x", [1, 2, 3])].join("\n");
+const used = new Set([...markup.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));
+for (const c of used) assert(c.startsWith("c-"), `a character part has the class "${c}", which another rule of the page may be about`);
+const css = fs.readFileSync(`${__dirname}/../web/style.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const painting = new Set(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "font"]);
+let rules = 0;
+for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  const selectors = m[1].split(",").map((x) => x.trim());
+  const decls = m[2].split(";").map((x) => x.split(":")[0].trim()).filter(Boolean);
+  for (const sel of selectors) {
+    const hit = [...used].find((c) => new RegExp(`\\.${c}(?![\\w-])`).test(sel));
+    if (!hit) continue;
+    rules++;
+    assert(/^\.chara\s/.test(sel), `"${sel}" is about a character part but not under .chara`);
+    for (const d of decls) assert(painting.has(d), `"${sel}" sets ${d} on a character part: it may hide or move it`);
+  }
+}
+for (const part of ["c-body", "c-ink", "c-eye"]) assert(new RegExp(`\\.chara\\s+\\.${part}\\b`).test(css), `no stylesheet rule paints ${part}: the body or the face would be unpainted`);
+assert(rules >= 3, `only ${rules} stylesheet rules about the character's parts`);
+// and no rule of the page hides a whole character's drawing: svg inside .chara
+for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  if (/display\s*:\s*none/.test(m[2]) && m[1].split(",").some((s) => /\.chara(?![\w-])/.test(s) && !/(\.group|\.dot|\[hidden\])/.test(s))) assert.fail(`"${m[1].trim()}" hides a character`);
+}
+console.log(`ok ${vectors.length} vectors, ${rules} rules about the parts`);

@@ -216,6 +216,7 @@ function avatar(a, small) {
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
   const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : "");
+  v.dataset.ck = `${key}|${state}|${stateWord(live ? shownStatus(live) : "")}|${small ? 1 : 0}`; // what the list keeps when it is drawn again (charAdopt)
   v.innerHTML = charSVG(key, null, charExpr(state, key), state === "stop"); // our own constants and a hash: nothing of the page's data
   charWake(v, () => charStart(v, key, state, { blink: !small }));
   v.setAttribute("role", "img");
@@ -286,6 +287,15 @@ function drawSidebar() {
 
 // drawList is the list itself: groups in attention order (see drawSidebar).
 function drawList() {
+  charHolding(true);
+  try {
+    drawListNow();
+  } finally {
+    charHolding(false);
+  }
+}
+
+function drawListNow() {
   const nav = $("#projects");
   const keep = nav.scrollTop;
   agents.clear();
@@ -347,7 +357,9 @@ function drawList() {
     const rk = own && own.classList.contains("rowhit") ? own.closest(".row").dataset.key : null;
     const hi = own && own.classList.contains("head") ? [...nav.querySelectorAll(".project > .head")].indexOf(own) : -1;
     nav.dataset.sig = sig;
+    charAdopt(nav, nodes); // what moves keeps moving
     nav.replaceChildren(...nodes);
+    charArm(nav);
     fitRows(nav);
     nav.scrollTop = keep;
     if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"] .rowhit`)?.focus({ preventScroll: true });
