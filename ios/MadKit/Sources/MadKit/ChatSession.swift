@@ -128,7 +128,7 @@ public final class ChatSession: ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty, !sending else { return false }
         if fixture {
-            notice = "Sample data: nothing was sent."
+            notice = "这是示例数据：什么也没有发出去。"
             return false
         }
         sending = true
@@ -146,7 +146,7 @@ public final class ChatSession: ObservableObject {
 
     public func interrupt() async {
         if fixture {
-            notice = "Sample data: nothing was sent."
+            notice = "这是示例数据：什么也没有发出去。"
             return
         }
         do {

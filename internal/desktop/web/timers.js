@@ -5,6 +5,17 @@
 "use strict";
 
 const weekdayNames = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const weekdayZh = { mon: "周一", tue: "周二", wed: "周三", thu: "周四", fri: "周五", sat: "周六", sun: "周日" };
+
+// everyText words a schedule as the server writes it ("weekdays 09:00",
+// "mon,wed 09:30", "every 30m 08:00-18:00") in Chinese.
+function everyText(s) {
+  const m = /^every (\d+)([mh])(.*)$/.exec(s || "");
+  if (m) return `每 ${m[1]} ${m[2] === "h" ? "小时" : "分钟"}${m[3]}`;
+  const [word, ...rest] = (s || "").split(" ");
+  const days = { daily: "每天", weekdays: "工作日", weekends: "周末" }[word] || word.split(",").map((d) => weekdayZh[d] || d).join("、");
+  return [days, ...rest].join(" ");
+}
 
 // whenText writes a time as 15:04 today, Mon 15:04 within a week, or the date.
 function whenText(iso) {
@@ -22,13 +33,13 @@ function timerStrip() {
   const timers = deck.timers || [];
   const box = el("section", "bsched");
   const h = el("div", "bschedhead");
-  h.append(el("h2", "", "Scheduled"), el("span", "muted", timers.length ? ` ${timers.length}` : ""));
-  h.append(button("+ Routine", "", () => routineDialog()));
+  h.append(el("h2", "", "定时"), el("span", "muted", timers.length ? ` ${timers.length}` : ""));
+  h.append(button("+ 例行任务", "", () => routineDialog()));
   box.append(h);
   const checkins = timers.filter((t) => t.kind === "once" && t.held !== "expired");
   const routines = timers.filter((t) => t.kind === "routine");
   if (!checkins.length && !routines.length) {
-    box.append(el("p", "muted bnone", "Nothing scheduled. A routine posts on a rhythm; an agent books a check-in to look at something later."));
+    box.append(el("p", "muted bnone", "没有定时的事。例行任务按节奏发消息；agent 会预约一次回头看看。"));
   }
   for (const t of checkins) box.append(timerRow(t));
   for (const t of routines) box.append(timerRow(t));
@@ -41,24 +52,24 @@ function timerRow(t) {
   const who = el("span", "twho");
   if (t.kind === "once") {
     if (a) who.append(avatar(a, true));
-    who.append(el("span", "", a ? label(a) : "agent"), el("span", "muted", t.held ? t.why : `in ${ageText((new Date(t.next_at) - Date.now()) * 1e6)}`));
+    who.append(el("span", "", a ? label(a) : "agent"), el("span", "muted", t.held ? t.why : `${ageText((new Date(t.next_at) - Date.now()) * 1e6)}后`));
   } else {
-    who.append(el("b", "", t.every), el("span", "muted", t.channel.startsWith("dm.") ? "DM" : "#" + t.channel));
+    who.append(el("b", "", everyText(t.every)), el("span", "muted", t.channel.startsWith("dm.") ? "私信" : "#" + t.channel));
   }
   row.append(who);
-  const what = t.kind === "once" ? t.note : t.action === "report" ? "post the progress report" : t.text;
+  const what = t.kind === "once" ? t.note : t.action === "report" ? "发进度报告" : t.text;
   row.append(el("span", "twhat", what));
   const meta = el("span", "tmeta muted");
   if (t.kind === "routine") {
-    const bits = [t.paused ? "paused" : `next ${whenText(t.next_at)}`];
-    if (t.missed) bits.push(`${t.missed} missed`);
+    const bits = [t.paused ? "已暂停" : `下次 ${whenText(t.next_at)}`];
+    if (t.missed) bits.push(`错过 ${t.missed} 次`);
     if (t.why) bits.push(t.why);
     meta.textContent = bits.join(" · ");
   }
   row.append(meta);
   const more = el("button", "icon-btn");
   more.type = "button";
-  more.title = t.kind === "once" ? "cancel it" : "pause, fire now, delete";
+  more.title = t.kind === "once" ? "取消它" : "暂停、立即触发、删除";
   more.append(icon("more"));
   more.onclick = (e) => {
     e.stopPropagation();
@@ -81,14 +92,14 @@ function timerMenu(t, anchor) {
   };
   const items = [];
   if (t.kind === "once") {
-    items.push({ label: "Cancel the check-in", desc: "the agent is not woken for it", icon: "trash", danger: true, onclick: call({ op: "rm", id: t.id }) });
+    items.push({ label: "取消这次预约", desc: "不会为它叫醒 agent", icon: "trash", danger: true, onclick: call({ op: "rm", id: t.id }) });
   } else {
-    items.push({ label: t.paused ? "Resume" : "Pause", desc: t.paused ? "from its next time" : "it posts nothing until resumed", icon: t.paused ? "play" : "pause", onclick: call({ op: t.paused ? "resume" : "pause", id: t.id }) });
-    items.push({ label: "Fire now", desc: "posts it once, now", icon: "play", onclick: call({ op: "fire", id: t.id }, "Fired") });
+    items.push({ label: t.paused ? "继续" : "暂停", desc: t.paused ? "从下一次开始" : "继续之前它什么都不发", icon: t.paused ? "play" : "pause", onclick: call({ op: t.paused ? "resume" : "pause", id: t.id }) });
+    items.push({ label: "立即触发", desc: "现在发一次", icon: "play", onclick: call({ op: "fire", id: t.id }, "已触发") });
     items.push("-");
-    items.push({ label: "Delete", icon: "trash", danger: true, onclick: call({ op: "rm", id: t.id }) });
+    items.push({ label: "删除", icon: "trash", danger: true, onclick: call({ op: "rm", id: t.id }) });
   }
-  if (t.channel) items.push({ label: t.channel.startsWith("dm.") ? "Open the DM" : `Open #${t.channel}`, icon: "chat", onclick: () => openChannel(t.channel) });
+  if (t.channel) items.push({ label: t.channel.startsWith("dm.") ? "打开私信" : `打开 #${t.channel}`, icon: "chat", onclick: () => openChannel(t.channel) });
   popup(anchor, items, { right: true });
 }
 
@@ -113,13 +124,13 @@ function scheduleOf(f) {
 async function routineDialog(channel) {
   const chans = (deck.bus || []).filter((c) => !c.dm);
   if (!chans.length) {
-    toast("Make a channel first: a routine posts in one", "err");
+    toast("先建一个群：例行任务要发在群里", "err");
     return;
   }
   const f = { mode: "at", days: [] };
   const body = el("div", "rform");
   const seg = el("div", "seg");
-  const atBtn = el("button", "on", "At a time"), everyBtn = el("button", "", "Every…");
+  const atBtn = el("button", "on", "定时"), everyBtn = el("button", "", "每隔…");
   atBtn.type = everyBtn.type = "button";
   seg.append(atBtn, everyBtn);
 
@@ -131,10 +142,10 @@ async function routineDialog(channel) {
     b.onclick = () => f.days.forEach((d, i) => d.classList.toggle("on", days.includes(i)));
     return b;
   };
-  presets.append(chip("Daily", [0, 1, 2, 3, 4, 5, 6]), chip("Weekdays", [0, 1, 2, 3, 4]), chip("Weekends", [5, 6]));
+  presets.append(chip("每天", [0, 1, 2, 3, 4, 5, 6]), chip("工作日", [0, 1, 2, 3, 4]), chip("周末", [5, 6]));
   const dayRow = el("div", "rchips");
   weekdayNames.forEach((n, i) => {
-    const b = el("button", `rchip day${i < 5 ? " on" : ""}`, n[0].toUpperCase() + n.slice(1, 3));
+    const b = el("button", `rchip day${i < 5 ? " on" : ""}`, weekdayZh[n]);
     b.type = "button";
     b.onclick = () => b.classList.toggle("on");
     f.days.push(b);
@@ -143,7 +154,7 @@ async function routineDialog(channel) {
   f.time = el("input", "say");
   f.time.type = "time";
   f.time.value = "09:00";
-  atBox.append(presets, dayRow, el("label", "rline", "at "), f.time);
+  atBox.append(presets, dayRow, el("label", "rline", "时间 "), f.time);
 
   const everyBox = el("div", "rrow");
   everyBox.hidden = true;
@@ -152,7 +163,7 @@ async function routineDialog(channel) {
   f.n.min = "1";
   f.n.value = "30";
   f.unit = el("select", "say");
-  f.unit.append(new Option("minutes", "m"), new Option("hours", "h"));
+  f.unit.append(new Option("分钟", "m"), new Option("小时", "h"));
   f.window = el("input");
   f.window.type = "checkbox";
   f.from = el("input", "say");
@@ -162,8 +173,8 @@ async function routineDialog(channel) {
   f.to.type = "time";
   f.to.value = "18:00";
   const win = el("label", "rline");
-  win.append(f.window, " only between ");
-  everyBox.append(el("label", "rline", "every "), f.n, f.unit, el("div", "rline"), win, f.from, " and ", f.to);
+  win.append(f.window, " 只在 ");
+  everyBox.append(el("label", "rline", "每隔 "), f.n, f.unit, el("div", "rline"), win, f.from, " 到 ", f.to, " 之间");
 
   const setMode = (m) => {
     f.mode = m;
@@ -182,10 +193,10 @@ async function routineDialog(channel) {
   const doReport = el("input");
   doReport.type = "checkbox";
   const reportRow = el("label", "rline");
-  reportRow.append(doReport, " post the progress report instead of a message");
+  reportRow.append(doReport, " 发进度报告，不发消息");
   const text = el("textarea", "say wide rtext");
   text.rows = 3;
-  text.placeholder = "what to post, e.g. @all what did you do yesterday?";
+  text.placeholder = "要发的话，例如 @all 昨天做了什么？";
   const sug = el("div", "suggest rsug");
   const complete = () => {
     const before = text.value.slice(0, text.selectionStart);
@@ -214,11 +225,11 @@ async function routineDialog(channel) {
   text.onclick = complete;
   doReport.onchange = () => { text.hidden = doReport.checked; sug.hidden = doReport.checked; };
 
-  body.append(seg, atBox, everyBox, el("label", "rline", "in"), where, text, sug, reportRow,
-    el("p", "dtext muted", "A routine counts as your order: it posts even when you are away. At least every 15 minutes."));
+  body.append(seg, atBox, everyBox, el("label", "rline", "发在"), where, text, sug, reportRow,
+    el("p", "dtext muted", "例行任务算你的指令：你不在也会发。最短每 15 分钟一次。"));
   const v = await dialog({
-    title: "A new routine", body,
-    actions: [{ label: "Cancel", value: null }, { label: "Add", cls: "primary", value: "ok" }],
+    title: "新的例行任务", body,
+    actions: [{ label: "取消", value: null }, { label: "添加", cls: "primary", value: "ok" }],
     ready: () => text.focus(),
   });
   if (v !== "ok") return;
@@ -226,7 +237,7 @@ async function routineDialog(channel) {
     await api("POST", "/api/timer", {}, {
       op: "add", every: scheduleOf(f), channel: where.value, text: text.value.trim(), action: doReport.checked ? "report" : "post",
     });
-    toast("Routine added");
+    toast("已添加例行任务");
     await refresh();
   } catch (e) {
     toast(e.message, "err");

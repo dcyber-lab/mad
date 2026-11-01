@@ -44,23 +44,23 @@ function closeUsage() {
   $("#empty").style.display = "";
 }
 
-// inWords says how long until t: "2h 10m", "3d 4h", "under a minute".
+// inWords says how long until t: "2 小时 10 分", "3 天 4 小时", "不到 1 分钟".
 function inWords(ms) {
   const m = Math.floor(ms / 60000);
-  if (m < 1) return "under a minute";
+  if (m < 1) return "不到 1 分钟";
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
-  if (d) return `${d}d ${h}h`;
-  if (h) return `${h}h ${m % 60}m`;
-  return `${m}m`;
+  if (d) return `${d} 天 ${h} 小时`;
+  if (h) return `${h} 小时 ${m % 60} 分`;
+  return `${m} 分钟`;
 }
 
 function resetWords(at) {
   const t = new Date(at);
   const ms = t - Date.now();
-  if (!(ms > 0)) return "resets now";
+  if (!(ms > 0)) return "马上重置";
   const clock = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   const day = t.toDateString() === new Date().toDateString() ? "" : `${t.toLocaleDateString([], { weekday: "short" })} `;
-  return `resets in ${inWords(ms)}, at ${day}${clock}`;
+  return `${inWords(ms)}后重置，${day}${clock}`;
 }
 
 // money is dollars as the page says them.
@@ -129,7 +129,7 @@ function drawUsage() {
   if (mad && deck.spend.closed) page.append(mad);
   let n = 0;
   for (const [kind, w] of Object.entries(deck.quota || {})) {
-    for (const [key, name] of [["five_hour", "5 hours"], ["seven_day", "This week"]]) {
+    for (const [key, name] of [["five_hour", "5 小时"], ["seven_day", "本周"]]) {
       const win = w[key];
       if (!win || (!win.used && !win.reset_at)) continue;
       n++;
@@ -141,12 +141,12 @@ function drawUsage() {
       const fill = el("i", used >= 100 ? "over" : used >= 80 ? "hot" : "");
       fill.style.width = `${Math.min(100, used)}%`;
       bar.append(fill);
-      card.append(bar, el("div", "usleft", `${Math.max(0, 100 - used)}% left`));
+      card.append(bar, el("div", "usleft", `剩 ${Math.max(0, 100 - used)}%`));
       if (win.reset_at) card.append(el("div", "usreset", resetWords(win.reset_at)));
       page.append(card);
     }
   }
   if (mad && !deck.spend.closed) page.append(mad);
-  if (!n && !mad) page.append(el("p", "muted", "No usage figures yet."));
+  if (!n && !mad) page.append(el("p", "muted", "还没有用量数据"));
   root.append(page);
 }

@@ -32,7 +32,7 @@ let made = ""; // see ownToken
         break;
       }
       if (r.status === 403) {
-        window.madPairError = "That pairing code was used or has expired: mad phone shows a new one.";
+        window.madPairError = "这个配对码已经用过或过期了：在 Mac 上运行 mad phone 会给出新的。";
         try { sessionStorage.removeItem("mad.pairtoken"); } catch (_) { /* none */ }
         hash.delete("pair");
         replace(hash);
@@ -83,9 +83,9 @@ async function exchange(code, token) {
       signal: ctl.signal,
     });
     if (r.ok) return { status: r.status, ok: true };
-    return { status: r.status, error: `the server answered ${r.status}` };
+    return { status: r.status, error: `服务器返回了 ${r.status}` };
   } catch (e) {
-    return { status: 0, error: ctl.signal.aborted ? "no answer in 10 seconds" : String(e.message || e) };
+    return { status: 0, error: ctl.signal.aborted ? "10 秒没有回应" : String(e.message || e) };
   } finally {
     clearTimeout(timer);
   }
@@ -104,9 +104,9 @@ function retry(why) {
     box.id = "pairretry";
     box.style.cssText = "position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#000c;color:#fff;font:16px system-ui;z-index:9999;padding:24px;text-align:center";
     const msg = document.createElement("p");
-    msg.textContent = `Could not pair with mad (${why}).`;
+    msg.textContent = `没能和 mad 配对（${why}）。`;
     const btn = document.createElement("button");
-    btn.textContent = "Retry";
+    btn.textContent = "重试";
     btn.style.cssText = "font:inherit;font-weight:600;padding:10px 28px;border:0;border-radius:999px;background:#fff;color:#000";
     btn.onclick = () => { box.remove(); resolve(); };
     box.append(msg, btn);

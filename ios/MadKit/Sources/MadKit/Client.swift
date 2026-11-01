@@ -15,9 +15,9 @@ public enum ConnectionError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .refused: return "Token refused, re-pair."
-        case .offline: return "Offline: the Mac cannot be reached."
-        case .pairingRefused: return "The Mac refused to pair: scan a new QR code."
+        case .refused: return "这台 Mac 不认这个令牌了：请重新配对。"
+        case .offline: return "连不上这台 Mac：请检查它是否开着、和手机在同一个网络。"
+        case .pairingRefused: return "这台 Mac 拒绝了配对：请重新扫描一个新的二维码。"
         case .conflict(let why), .unexpected(let why): return why
         }
     }
@@ -71,14 +71,14 @@ public struct MadClient: Sendable {
     /// 204 is done; 409 carries the server's message; 403 is a refused token.
     public static func checkAct(_ data: Data, _ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else {
-            throw ConnectionError.unexpected("Not an HTTP answer.")
+            throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
         }
         let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch http.statusCode {
         case 204, 200: return
         case 403: throw ConnectionError.refused
         case 409: throw ConnectionError.conflict(message.isEmpty ? "It is not waiting on you any more." : message)
-        default: throw ConnectionError.unexpected(message.isEmpty ? "The Mac answered HTTP \(http.statusCode)." : message)
+        default: throw ConnectionError.unexpected(message.isEmpty ? "这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。" : message)
         }
     }
 
@@ -166,7 +166,7 @@ public struct MadClient: Sendable {
     /// 403 is a refused token, 409 carries the server's message.
     public static func check(_ data: Data, _ response: URLResponse, _ ok: Set<Int>) throws {
         guard let http = response as? HTTPURLResponse else {
-            throw ConnectionError.unexpected("Not an HTTP answer.")
+            throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
         }
         if ok.contains(http.statusCode) { return }
         let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -174,13 +174,13 @@ public struct MadClient: Sendable {
         case 403: throw ConnectionError.refused
         case 409: throw ConnectionError.conflict(message.isEmpty ? "The Mac could not do that now." : message)
         case 404: throw ConnectionError.unexpected(message.isEmpty ? "No such agent." : message)
-        default: throw ConnectionError.unexpected(message.isEmpty ? "The Mac answered HTTP \(http.statusCode)." : message)
+        default: throw ConnectionError.unexpected(message.isEmpty ? "这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。" : message)
         }
     }
 
     static func decodeJSON<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
         do { return try JSONDecoder().decode(type, from: data) } catch {
-            throw ConnectionError.unexpected("This does not look like mad's answer.")
+            throw ConnectionError.unexpected("这不像是 mad 的回应：请检查链接是不是 mad 的。")
         }
     }
 
@@ -197,17 +197,17 @@ public struct MadClient: Sendable {
     /// Maps a response to a snapshot or the error the person should see.
     public static func decode(_ data: Data, _ response: URLResponse) throws -> Deck {
         guard let http = response as? HTTPURLResponse else {
-            throw ConnectionError.unexpected("Not an HTTP answer.")
+            throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
         }
         switch http.statusCode {
         case 200: break
         case 403: throw ConnectionError.refused
-        default: throw ConnectionError.unexpected("The Mac answered HTTP \(http.statusCode).")
+        default: throw ConnectionError.unexpected("这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。")
         }
         do {
             return try JSONDecoder().decode(Deck.self, from: data)
         } catch {
-            throw ConnectionError.unexpected("This does not look like mad's answer.")
+            throw ConnectionError.unexpected("这不像是 mad 的回应：请检查链接是不是 mad 的。")
         }
     }
 }
@@ -261,20 +261,20 @@ public struct PendingPairing: Equatable, Sendable {
 
     public static func check(_ data: Data, _ response: URLResponse) throws -> PairResult {
         guard let http = response as? HTTPURLResponse else {
-            throw ConnectionError.unexpected("Not an HTTP answer.")
+            throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
         }
         switch http.statusCode {
         case 200:
             struct Reply: Decodable { var id: String; var machine: String? }
             guard let r = try? JSONDecoder().decode(Reply.self, from: data), !r.id.isEmpty else {
-                throw ConnectionError.unexpected("This does not look like mad's answer.")
+                throw ConnectionError.unexpected("这不像是 mad 的回应：请检查链接是不是 mad 的。")
             }
             let m = r.machine?.trimmingCharacters(in: .whitespacesAndNewlines)
             return PairResult(id: r.id, machine: (m?.isEmpty ?? true) ? nil : m)
         case 400, 403:
             throw ConnectionError.pairingRefused
         default:
-            throw ConnectionError.unexpected("The Mac answered HTTP \(http.statusCode).")
+            throw ConnectionError.unexpected("这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。")
         }
     }
 }

@@ -54,13 +54,13 @@ public enum PairingError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .empty: return "Nothing to pair with: the code is empty."
-        case .notURL: return "This is not a link."
-        case .notHTTPS: return "The link must start with https://."
-        case .noHost: return "The link has no host name."
-        case .noToken: return "The link has no #pair=… or #token=… part. Show the code again with mad phone."
-        case .badToken: return "The token must be 32 hex characters."
-        case .badCode: return "The pairing code must be 32 hex characters."
+        case .empty: return "没有可配对的内容：请扫描二维码，或粘贴 mad phone 显示的链接。"
+        case .notURL: return "这不是一个链接：请粘贴 mad phone 显示的链接。"
+        case .notHTTPS: return "链接必须以 https:// 开头：请粘贴 mad phone 显示的链接。"
+        case .noHost: return "链接里没有主机名：请粘贴 mad phone 显示的完整链接。"
+        case .noToken: return "链接里没有 #pair=… 或 #token=… 部分：请在 Mac 上再运行一次 mad phone 获取。"
+        case .badToken: return "令牌必须是 32 位十六进制字符：请粘贴 mad phone 显示的完整链接。"
+        case .badCode: return "配对码必须是 32 位十六进制字符：请粘贴 mad phone 显示的完整链接。"
         }
     }
 }
