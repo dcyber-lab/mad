@@ -19,20 +19,27 @@ struct ReceiptLine: View {
 
     var body: some View {
         let word = receipt?.word ?? ""
-        Text(word)
-            .font(MadType.small)
-            .foregroundStyle(receipt?.isUnread == true ? Color.chatBlue : Color.secondary)
-            .lineLimit(1)
-            .contentTransition(.opacity)
-            .animation(.easeInOut(duration: 0.15), value: word)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing, 4)
-            .frame(height: 20)
-            .contentShape(Rectangle())
-            .onTapGesture { if receipt != nil { card = true } }
-            .popover(isPresented: $card, arrowEdge: Self.arrowEdge) {
-                if let receipt { ReceiptCard(receipt: receipt).presentationCompactAdaptation(.popover) }
-            }
+        // The word is its own view at its own width, right-aligned by the row around it: the card hangs on the word, and
+        // its arrow points at it. The touch area is padded to 44pt and the padding taken off again, so the line keeps
+        // its 20pt and nothing moves.
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Text(word)
+                .font(MadType.small)
+                .foregroundStyle(receipt?.isUnread == true ? Color.chatBlue : Color.secondary)
+                .lineLimit(1)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.15), value: word)
+                .popover(isPresented: $card, arrowEdge: Self.arrowEdge) {
+                    if let receipt { ReceiptCard(receipt: receipt).presentationCompactAdaptation(.popover) }
+                }
+                .padding(.vertical, 12).padding(.horizontal, 8)
+                .contentShape(Rectangle())
+                .onTapGesture { if receipt != nil { card = true } }
+                .padding(.vertical, -12).padding(.horizontal, -8)
+        }
+        .padding(.trailing, 4)
+        .frame(height: 20)
             #if DEBUG
             .task { // `-receiptCard YES`: opens the card a moment after the line shows, to look at it
                 guard UserDefaults.standard.bool(forKey: "receiptCard"), receipt != nil else { return }
