@@ -26,7 +26,11 @@ const panelJS = `(() => {
       }));
     }
   }
-  return { sections: out, who: document.querySelector("#who").textContent };
+  return {
+    sections: out, who: document.querySelector("#who").textContent,
+    head: document.querySelector("#chanhead .chwhat small")?.textContent || "",
+    dot: !!document.querySelector('.row[data-key^="t:"] .rdot[aria-label="needs you"]'),
+  };
 })()`
 
 type panelRow struct {
@@ -39,7 +43,9 @@ type panelReport struct {
 		Title string
 		Rows  []panelRow
 	}
-	Who string
+	Who  string
+	Head string
+	Dot  bool
 }
 
 // openPanel opens channel id of the fixture at url in a window width wide, with its panel, and says what
@@ -138,6 +144,14 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			}
 			if !strings.Contains(rep.Who, "3 agents · 3 帮手") {
 				t.Errorf("under the message box: %q", rep.Who)
+			}
+			// What is done and what waits counts everyone, helpers too: kim, a helper, needs the person and ops, another,
+			// works. The head says so, and the channel's row has the red dot.
+			if rep.Head != "1 个在等你 · 1 个在工作" {
+				t.Errorf("the head says %q, want 1 个在等你 · 1 个在工作", rep.Head)
+			}
+			if !rep.Dot {
+				t.Error("the channel's row has no \"needs you\" dot, though a helper waits on the person")
 			}
 		})
 		t.Run(fmt.Sprintf("no team/%d", w), func(t *testing.T) {

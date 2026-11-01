@@ -219,7 +219,35 @@
         "age": 0,
         "since": "-2h"
       }
-    ]
+    ],
+    "inbox": {
+      "needs": 1,
+      "items": [
+        {
+          "key": "k-kim",
+          "kind": "permission",
+          "agent": "fold0008-aaaa",
+          "title": "kim",
+          "context": "Bash",
+          "text": "rm -rf build",
+          "mono": true,
+          "since": "-1m",
+          "acts": [
+            {
+              "verb": "allow",
+              "label": "Allow",
+              "row": true,
+              "primary": true
+            },
+            {
+              "verb": "deny",
+              "label": "Deny",
+              "row": true
+            }
+          ]
+        }
+      ]
+    }
   },
   "messages": {
     "team": [

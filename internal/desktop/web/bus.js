@@ -71,8 +71,16 @@ function groupChar(members, small) {
 // chanDot: 1 when something in channel c waits on the person (an @you, an
 // unread DM, a member with an item in the inbox), else 0.
 function chanDot(c) {
-  const ids = c.team ? (c.team.roles || []).map((r) => r.agent) : (c.members || []).map((m) => m.id);
-  return c.mention || (c.dm && c.unread) || ids.some((id) => id && needAgents.has(id)) ? 1 : 0;
+  const ids = chanLive(c).map((a) => a.id);
+  return c.mention || (c.dm && c.unread) || ids.some((id) => needAgents.has(id)) ? 1 : 0;
+}
+
+// chanLive are all the agents in channel c that are in the deck, the team's and its helpers: what is
+// done in a channel and what waits on the person counts everyone, while membership (the 小组 count, the
+// tile's faces) is the team's alone (chanAgents).
+function chanLive(c) {
+  const ids = new Set([...(c.members || []).map((m) => m.id), ...((c.team && c.team.roles) || []).map((r) => r.agent)]);
+  return [...ids].map((id) => id && agents.get(id)).filter(Boolean);
 }
 
 // chanAgents are the agents in channel c, as the page knows them.
@@ -94,7 +102,8 @@ function chanMatch(c, q) {
 // red dot when it @you or a member waits on you.
 function teamRow(c, found) {
   const mem = chanAgents(c);
-  const n = (s) => mem.filter((a) => shownStatus(a) === s).length;
+  const live = chanLive(c);
+  const n = (s) => live.filter((a) => shownStatus(a) === s).length;
   const parts = [n("waiting") ? `${n("waiting")} needs you` : "", n("running") ? `${n("running")} working` : ""].filter(Boolean);
   // a DM is its agent's own character; a channel, its members' tile
   const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
@@ -221,12 +230,15 @@ function chanName(id) {
   return chanTitle(id).replace(/^[#@]/, "");
 }
 
-// chanSub is the head's one small line: how many work, or that it is quiet.
+// chanSub is the head's one small line: how many wait on the person and how many work (every agent in
+// the channel, helpers too), or that it is quiet.
 function chanSub(c) {
   if (c && c.paused) return "已暂停";
-  const n = c ? chanAgents(c).filter((a) => shownStatus(a) === "running").length : 0;
-  if (c && c.dm) return n ? "在工作" : "空闲";
-  return n ? `${n} 个在工作` : "空闲";
+  const live = c ? chanLive(c) : [];
+  const n = live.filter((a) => shownStatus(a) === "running").length;
+  const w = live.filter((a) => shownStatus(a) === "waiting").length;
+  if (c && c.dm) return w ? "在等你" : n ? "在工作" : "空闲";
+  return [w ? `${w} 个在等你` : "", n ? `${n} 个在工作` : ""].filter(Boolean).join(" · ") || "空闲";
 }
 
 // tileSig says how the channel's tile stands (its members' states), so a tile is
