@@ -4,6 +4,8 @@ A SwiftUI app for mad. It pairs with a Mac by the QR code `mad phone` shows
 (or its pasted link), lists what waits on you as native cards you can act on,
 and shows the full deck page in a second tab. The README at the top of the
 repository tells how to build and install it; this file is for working on it.
+[PROGRESS.md](PROGRESS.md) records where the work stands: what shipped, what was
+decided and what is left.
 
 - `MadKit/` is a Swift package with the core, tested with `swift test` on the
   Mac (no simulator needed): pairing-link parsing (`Pairing`), the pairing
