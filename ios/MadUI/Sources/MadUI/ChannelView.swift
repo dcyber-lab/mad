@@ -75,7 +75,7 @@ public struct ChannelView: View {
             }
             Button { panelOpen = true } label: {
                 HStack(spacing: 10) {
-                    GroupTile(members: screen.members.map { ($0.id, $0.kind, $0.state) }, size: 32)
+                    GroupTile(members: (screen.members + screen.helpers).map { ($0.id, $0.kind, $0.state) }, size: 32) // activity counts helpers too
                     VStack(alignment: .leading, spacing: 0) {
                         Text(screen.title).font(.headline).lineLimit(1)
                         if !screen.stateLine.isEmpty { Text(screen.stateLine).font(.caption).foregroundStyle(.secondary).lineLimit(1) }

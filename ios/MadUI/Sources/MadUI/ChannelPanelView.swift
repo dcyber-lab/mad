@@ -26,7 +26,7 @@ struct ChannelPanelView: View {
         ScrollView {
             VStack(spacing: 0) {
                 VStack(spacing: 8) {
-                    GroupTile(members: panel.members.map { ($0.id, $0.kind, $0.state) }, size: 64)
+                    GroupTile(members: (panel.members + panel.helpers).map { ($0.id, $0.kind, $0.state) }, size: 64)
                     Text(panel.name).font(.title3.weight(.bold))
                     if !panel.topic.isEmpty {
                         Text(panel.topic).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
