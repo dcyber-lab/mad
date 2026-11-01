@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -15,6 +16,17 @@ import (
 func Truncate(s string, n int) string {
 	if n <= 0 {
 		return ""
+	}
+	// A long plain string (a command, a tool's whole input) is measured
+	// only as far as it needs: when a head of it is already wider than n,
+	// cutting the head is cutting the string.
+	if head := 4*n + 16; len(s) > 2*head && strings.IndexByte(s, 0x1b) < 0 {
+		for head > 0 && !utf8.RuneStart(s[head]) {
+			head--
+		}
+		if h := s[:head]; ansi.StringWidth(h) > n {
+			return ansi.Truncate(h, n, "…")
+		}
 	}
 	return ansi.Truncate(s, n, "…")
 }

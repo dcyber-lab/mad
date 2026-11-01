@@ -96,6 +96,9 @@ func (d *Day) update(path string, f *dayFile, loc *time.Location) {
 		if !bytes.Contains(line, usageKey) {
 			continue // most lines: no response to price
 		}
+		if at, ok := discover.LineTime(line); ok && at.In(loc).Format(time.DateOnly) != d.date {
+			continue // an earlier day's, in a session resumed today: not parsed
+		}
 		e, ok := f.p.Parse(line)
 		if !ok || e.Usage == nil || e.At.In(loc).Format(time.DateOnly) != d.date {
 			continue
