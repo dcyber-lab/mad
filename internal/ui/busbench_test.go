@@ -10,7 +10,8 @@ import (
 )
 
 // BenchmarkBusLook is one look at a bus of 30 channels with 500 messages
-// each: when a file moved (the whole read) and when none did (the stat).
+// each: when a post moved one file (the look again, the one channel's new
+// line parsed) and when none did (the stat).
 //
 //	go test -run '^$' -bench BusLook -benchtime 10x ./internal/ui
 func BenchmarkBusLook(b *testing.B) {
@@ -31,7 +32,14 @@ func BenchmarkBusLook(b *testing.B) {
 		}
 	}
 	b.Run("moved", func(b *testing.B) {
+		loadBus(st, map[string]string{}, time.Now(), "")
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			if err := bus.PostSystem("c0", "one more line"); err != nil {
+				b.Fatal(err)
+			}
+			b.StartTimer()
 			loadBus(st, map[string]string{}, time.Now(), "")
 		}
 	})

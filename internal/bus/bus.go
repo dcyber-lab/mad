@@ -178,26 +178,6 @@ func (cl *chanList) find(id string) *Channel {
 	return nil
 }
 
-// readMsgs reads a channel's messages; a line that does not parse is
-// skipped.
-func readMsgs(ch string) ([]Message, error) {
-	data, err := os.ReadFile(msgFile(ch))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var out []Message
-	for _, line := range strings.Split(string(data), "\n") {
-		var m Message
-		if line != "" && json.Unmarshal([]byte(line), &m) == nil {
-			out = append(out, m)
-		}
-	}
-	return out, nil
-}
-
 func lastSeq(msgs []Message) int {
 	if len(msgs) == 0 {
 		return 0
