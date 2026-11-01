@@ -395,3 +395,24 @@ final class FlowLayoutTests: XCTestCase {
     }
     #endif
 }
+
+final class ChannelTailTests: XCTestCase {
+    private func screen(_ items: [ChannelItem]) -> ChannelScreen {
+        ChannelScreen(title: "t", members: [], stateLine: "", items: items,
+                      panel: ChannelPanel(name: "t", topic: "", members: [], pictureCount: 0, paused: false), placeholder: "")
+    }
+
+    private func run(_ ids: [Int]) -> ChannelItem {
+        .run(ChannelRun(sender: ChannelMember(id: "a", kind: "agent", state: .idle, name: "a", status: "", isLead: false),
+                        bubbles: ids.map { ChannelBubble(id: $0, text: "x", images: [], quote: nil, fold: nil) }))
+    }
+
+    func testTailChangesWhenAMessageJoinsTheLastRun() {
+        XCTAssertNotEqual(screen([run([1])]).tail, screen([run([1, 2])]).tail)
+    }
+
+    func testTailIsSteadyWhenNothingIsAdded() {
+        XCTAssertEqual(screen([run([1, 2])]).tail, screen([run([1, 2])]).tail)
+        XCTAssertEqual(screen([]).tail, "")
+    }
+}

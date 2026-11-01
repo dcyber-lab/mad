@@ -24,8 +24,9 @@ public struct NativeRoot: View {
         self.onSwitchMac = onSwitchMac
         _store = State(initialValue: DeckStore(api: api))
         #if DEBUG
-        // `-openRow <id>` opens a row at launch, to look at a detail without tapping to it.
-        _selection = State(initialValue: UserDefaults.standard.string(forKey: "openRow"))
+        // Debug builds: `-nativeOpen <row id>` opens a row at once (a channel or an agent), to look at it
+        // without a tap (the simulator cannot be tapped from a script).
+        if let row = UserDefaults.standard.string(forKey: "nativeOpen"), !row.isEmpty { _selection = State(initialValue: row) }
         #endif
     }
 
@@ -52,19 +53,24 @@ public struct NativeRoot: View {
             .overlay(alignment: .top) { LinkNote(link: store.link) }
     }
 
+    /// Whether the row's own view draws its head and way back (a channel, an agent): the iPhone's bar stays out of it.
+    private func drawsOwnHead(_ id: HomeRow.ID) -> Bool { store.channel(id: id) != nil || store.agent(id: id) != nil }
+
     @ViewBuilder private var content: some View {
         #if os(macOS)
         NavigationSplitView {
             HomeSidebar(model: model, selection: $selection, actions: actions)
         } detail: {
-            Detail(selection: selection, api: api)
+            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 })
         }
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
             NavigationStack {
-                Detail(selection: id, api: api, onBack: { selection = nil })
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } }
+                Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 })
+                    // a channel and an agent draw their own head, with their own way back
+                    .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
             }
         } else {
             HomeView(model: model, actions: actions)
@@ -73,18 +79,21 @@ public struct NativeRoot: View {
     }
 }
 
-/// What a row opens. A placeholder: it says what it will be.
+/// What a row opens: a channel is the native channel view; an agent is still a placeholder.
 struct Detail: View {
     @Environment(DeckStore.self) private var store
     let selection: HomeRow.ID?
     let api: MadAPI
     /// The iPhone's way back to the list; the Mac's detail pane has none.
     var onBack: (() -> Void)?
+    /// Opens another row (a member of the channel).
+    let open: (HomeRow.ID) -> Void
 
     var body: some View {
         if let id = selection {
-            if let channel = store.channel(id: id) {
-                placeholder(channel.dm ? channel.title : channel.id, "The channel view comes here (ChannelStore).")
+            if store.channel(id: id) != nil {
+                ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
+                    .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
                 AgentDetail(api: api, id: agent.id, onBack: onBack).id(agent.id)
             } else {

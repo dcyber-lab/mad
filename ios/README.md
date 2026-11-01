@@ -104,6 +104,23 @@ share three local packages:
 
 In Debug builds, the iPhone app opens `NativeRoot` instead of the page with `-nativeHome YES`.
 
+### The channel view
+
+`ChannelView(screen:actions:)` (MadUI) is the channel: a one-line head, grey bubbles for agents and blue
+ones for the person, runs of one sender grouped, time lines after ten quiet minutes, and a one-line
+composer (pictures from the photo library or the pasteboard, at most 6). Handoffs, results and long
+messages fold into one bordered line that opens in place; the person's own and `@you` stay whole.
+"群信息" slides in from the right (iPhone) or is the trailing inspector (Mac). Long-press a message for
+回复/复制.
+
+`ChannelMapping.screen(channel:messages:deck:paused:)` (MadShell) turns a channel's messages and the deck
+into a `ChannelScreen`, with the web's folding rules; `ChannelDetail` owns the `ChannelStore`.
+
+Debug launch arguments for looking at it against the fixture server (`-scenario channel-fold`):
+`-nativeRoot YES` (iPhone: the native shell at once), `-nativeOpen <row id>`, `-nativePanel YES`; the Mac
+app also takes `-snapshotTo <png>` (writes its window to a file and quits; the inspector does not show
+in it).
+
 `make ios` builds the iPhone app (simulator) and the Mac app. `make mac` builds the Mac app and opens
 it (`ios/build/mac/Build/Products/Debug/madmac.app`, signed to run locally, ad hoc, not sandboxed).
 
