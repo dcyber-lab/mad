@@ -74,13 +74,10 @@ public struct MacSidebar: View {
                 searching.toggle()
                 if searching { searchFocused = true } else { query = "" }
             }
-            HomeNewMenu(action: actions.create)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
+            HomeNewMenu(action: actions.create, style: .round)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
                 .fixedSize()
-                .frame(width: 30, height: 30)
-                .background(Color.chatComposer, in: Circle())
-                .overlay(Circle().strokeBorder(Color.chatLine.opacity(0.7)))
         }
         .padding(.horizontal, 14)
         .frame(height: 32)
