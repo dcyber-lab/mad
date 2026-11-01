@@ -163,6 +163,7 @@ func newHandler(name, web string) (http.Handler, error) {
 	mux.HandleFunc("GET /api/bus/messages", f.messages)
 	mux.HandleFunc("GET /api/bus/image", f.image)
 	mux.HandleFunc("POST /api/pair", f.pair)
+	mux.HandleFunc("POST /api/budget", f.budget)
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
 		mux.HandleFunc("GET /api/"+p, func(w http.ResponseWriter, r *http.Request) { reply(w, []any{}) })
 	}
@@ -177,6 +178,9 @@ func newHandler(name, web string) (http.Handler, error) {
 
 type fixture struct {
 	scn *scenario
+	// spend: the day's budget after the person raised or lifted it (/api/budget); nil until then.
+	spendMu sync.Mutex
+	spend   map[string]any
 	// pairTried: the codes that failed once already (32 c's).
 	mu        sync.Mutex
 	pairTried map[string]bool
@@ -202,6 +206,11 @@ func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
 	for k, v := range f.scn.Deck {
 		d[k] = v
 	}
+	f.spendMu.Lock()
+	if f.spend != nil {
+		d["spend"] = f.spend
+	}
+	f.spendMu.Unlock()
 	relative(d, now)
 	if _, ok := f.scn.Deck["working"]; !ok {
 		d["working"] = running(d)
@@ -261,6 +270,18 @@ func relative(v any, now time.Time) {
 // chat answers an agent's transcript: the scenario's, or an empty one.
 func (f *fixture) chat(w http.ResponseWriter, r *http.Request) {
 	if raw, ok := f.scn.Chat[r.URL.Query().Get("id")]; ok {
+		// A client that has read it (its file, from the end) is told there is nothing new, as the
+		// real one does, so a poll does not add the entries again.
+		var seen struct {
+			File   string `json:"file"`
+			Offset int64  `json:"offset"`
+		}
+		q := r.URL.Query()
+		from, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		if json.Unmarshal(raw, &seen) == nil && seen.File != "" && q.Get("file") == seen.File && from >= seen.Offset {
+			reply(w, map[string]any{"file": seen.File, "offset": seen.Offset, "entries": []any{}})
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(raw)
 		return
@@ -323,6 +344,44 @@ func (f *fixture) image(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	_ = png.Encode(w, img)
+}
+
+// budget answers POST /api/budget {op, usd} as the real one does: raise adds to the day's
+// dollars (and, if the day is then not spent, opens it again); open lifts it for the day.
+func (f *fixture) budget(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Op  string
+		USD float64
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || (req.Op != "raise" && req.Op != "open") {
+		http.Error(w, "op is raise or open", http.StatusBadRequest)
+		return
+	}
+	f.spendMu.Lock()
+	defer f.spendMu.Unlock()
+	if f.spend == nil {
+		f.spend = map[string]any{"day": time.Now().Format("2006-01-02"), "usd": 0.0, "turns": 0, "budget_usd": 20.0, "budget_turns": 150, "open_today": false, "closed": false, "part": 0.0}
+		if sp, ok := f.scn.Deck["spend"].(map[string]any); ok {
+			for k, v := range sp {
+				f.spend[k] = v
+			}
+		}
+	}
+	num := func(k string) float64 { v, _ := f.spend[k].(float64); return v }
+	switch req.Op {
+	case "raise":
+		f.spend["budget_usd"] = num("budget_usd") + req.USD
+	case "open":
+		f.spend["open_today"] = true
+	}
+	part := 0.0
+	if b := num("budget_usd"); b > 0 {
+		part = num("usd") / b
+	}
+	f.spend["part"] = part
+	f.spend["hot"] = part >= 0.8
+	f.spend["closed"] = part >= 1 && f.spend["open_today"] != true
+	reply(w, f.spend)
 }
 
 var hex32 = regexp.MustCompile(`^[0-9a-f]{32}$`)

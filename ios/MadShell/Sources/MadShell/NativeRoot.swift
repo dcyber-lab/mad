@@ -23,6 +23,11 @@ public struct NativeRoot: View {
         self.title = title
         self.onSwitchMac = onSwitchMac
         _store = State(initialValue: DeckStore(api: api))
+        #if DEBUG
+        // Debug builds: `-nativeOpen <row id>` opens a row at once (a channel or an agent), to look at it
+        // without a tap (the simulator cannot be tapped from a script).
+        if let row = UserDefaults.standard.string(forKey: "nativeOpen"), !row.isEmpty { _selection = State(initialValue: row) }
+        #endif
     }
 
     private var model: HomeModel {
@@ -48,19 +53,24 @@ public struct NativeRoot: View {
             .overlay(alignment: .top) { LinkNote(link: store.link) }
     }
 
+    /// Whether the row's own view draws its head and way back (a channel, an agent): the iPhone's bar stays out of it.
+    private func drawsOwnHead(_ id: HomeRow.ID) -> Bool { store.channel(id: id) != nil || store.agent(id: id) != nil }
+
     @ViewBuilder private var content: some View {
         #if os(macOS)
         NavigationSplitView {
             HomeSidebar(model: model, selection: $selection, actions: actions)
         } detail: {
-            Detail(selection: selection)
+            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 })
         }
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
             NavigationStack {
-                Detail(selection: id)
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } }
+                Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 })
+                    // a channel and an agent draw their own head, with their own way back
+                    .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
             }
         } else {
             HomeView(model: model, actions: actions)
@@ -69,17 +79,23 @@ public struct NativeRoot: View {
     }
 }
 
-/// What a row opens. A placeholder: it says what it will be.
+/// What a row opens: a channel is the native channel view; an agent is still a placeholder.
 struct Detail: View {
     @Environment(DeckStore.self) private var store
     let selection: HomeRow.ID?
+    let api: MadAPI
+    /// The iPhone's way back to the list; the Mac's detail pane has none.
+    var onBack: (() -> Void)?
+    /// Opens another row (a member of the channel).
+    let open: (HomeRow.ID) -> Void
 
     var body: some View {
         if let id = selection {
-            if let channel = store.channel(id: id) {
-                placeholder(channel.dm ? channel.title : channel.id, "The channel view comes here (ChannelStore).")
+            if store.channel(id: id) != nil {
+                ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
+                    .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
-                placeholder(agent.label, "The agent's conversation comes here (AgentStore).")
+                AgentDetail(api: api, id: agent.id, onBack: onBack).id(agent.id)
             } else {
                 placeholder(id, "It is gone.")
             }
@@ -118,5 +134,84 @@ public struct LinkNote: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.regularMaterial)
+    }
+}
+
+/// An agent's conversation: an `AgentStore` that runs while this is on screen, drawn by `ConversationView`.
+struct AgentDetail: View {
+    @Environment(DeckStore.self) private var deck
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var store: AgentStore
+    @State private var failure: String?
+    private let api: MadAPI
+    private let id: String
+    private let onBack: (() -> Void)?
+
+    init(api: MadAPI, id: String, onBack: (() -> Void)?) {
+        self.api = api
+        self.id = id
+        self.onBack = onBack
+        _store = State(initialValue: AgentStore(id: id, api: api))
+    }
+
+    var body: some View {
+        let model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0) }
+            ?? AgentConversation(title: id, agentID: id, canSend: false, sendHint: "")
+        ConversationView(model: model, actions: actions, showsBack: onBack != nil)
+            #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+            #endif
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                await store.run()
+            }
+            .overlay(alignment: .top) { NoticeBar(text: store.notice ?? failure) { store.dismissNotice(); failure = nil } }
+    }
+
+    private var actions: ConversationActions {
+        ConversationActions(
+            send: { text in Task { _ = await store.send(text) } },
+            act: { cardID, actID, text in Task { await answer(cardID, actID, text) } },
+            interrupt: { Task { await store.interrupt() } },
+            loadImage: { image in try? await api.pictureData(url: image.source) },
+            back: { onBack?() })
+    }
+
+    private func answer(_ cardID: String, _ actID: String, _ text: String?) async {
+        // the item as the deck says now: a card that is not it any more sends nothing
+        guard let d = deck.deck, let a = AgentMapping.answer(cardID: cardID, actID: actID, text: text, agent: id, deck: d) else {
+            failure = "它现在在问别的了"
+            await deck.refresh()
+            return
+        }
+        do {
+            try await api.act(key: a.key, verb: a.verb, option: a.option, text: a.text)
+            failure = nil
+            await deck.refresh()
+            await store.look()
+        } catch {
+            failure = (error as? ConnectionError)?.localizedDescription ?? error.localizedDescription
+        }
+    }
+}
+
+/// A line under the top that says what the Mac refused, with a way to dismiss it.
+struct NoticeBar: View {
+    let text: String?
+    let dismiss: () -> Void
+
+    var body: some View {
+        if let text {
+            Button(action: dismiss) {
+                Label(text, systemImage: "exclamationmark.triangle")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.regularMaterial)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("dismisses")
+        }
     }
 }

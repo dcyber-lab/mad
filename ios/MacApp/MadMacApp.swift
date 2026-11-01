@@ -84,11 +84,31 @@ struct RootView: View {
             }
         }
         .task { await server.start() }
+        #if DEBUG
+        .task { await Self.snapshotIfAsked() }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
             server.stop()
         }
     }
 }
+
+#if DEBUG
+extension RootView {
+    /// Debug builds only: `-snapshotTo <path>` writes the window's own view to a PNG once it has
+    /// settled, then quits. The system's window capture needs a permission a build script lacks.
+    @MainActor static func snapshotIfAsked() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-snapshotTo"), i + 1 < args.count else { return }
+        try? await Task.sleep(for: .seconds(6))
+        guard let view = NSApp.windows.first(where: { $0.contentView != nil })?.contentView?.superview,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 1]))
+        NSApp.terminate(nil)
+    }
+}
+#endif
 
 struct SettingsView: View {
     @AppStorage(ServerModel.madPathKey) private var madPath = ""
