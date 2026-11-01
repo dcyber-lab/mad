@@ -51,7 +51,7 @@ public final class DeckStore {
     public func refresh() async {
         do {
             let d = try await api.deck()
-            deck = d
+            apply(d)
             link = .ok
             // once per launch, after the first good look: what the device kept of channels and agents that are gone goes
             api.cache?.pruneOnce(channels: Set(d.channels.map(\.id)), agents: Set(d.projects.flatMap { $0.agents.map(\.id) }))
@@ -59,6 +59,14 @@ public final class DeckStore {
             if Task.isCancelled { return }
             link = LinkState(error)
         }
+    }
+
+    /// Takes a look in: a deck that differs from the one held only in the time the Mac made it (`at`) is no news, and
+    /// publishing it would draw every screen that reads the deck once a second.
+    func apply(_ d: Deck) {
+        var held = d
+        held.at = deck?.at
+        if held != deck { deck = d }
     }
 
     /// Looks, waits `interval`, looks again, until the task is cancelled.
@@ -151,8 +159,9 @@ public final class ChannelStore {
             messages.append(m)
             last = m.seq
         }
-        paused = page.paused
-        receipts = page.receipts
+        // an @Observable tells its readers on every write, equal or not: the view hears of what changed only
+        if paused != page.paused { paused = page.paused }
+        if receipts != page.receipts { receipts = page.receipts }
     }
 
     public func run() async {

@@ -39,6 +39,56 @@ private func bubbles(_ s: ChannelScreen) -> [ChannelBubble] {
 }
 
 final class ChannelMappingTests: XCTestCase {
+    // MARK: receipts
+
+    private func target(_ label: String, _ state: String) -> BusReceipt.Target { .init(id: "id-\(label)", label: label, state: state) }
+
+    func testTargetsKeepTheirIdsAndTheKindTheDeckKnowsAndComeFurthestFirst() {
+        let r = BusReceipt(seq: 1, targets: [target("ops", "waiting"), target("builder", "read"), target("architect", "replied"), target("qa", "delivered")])
+        let receipt = ChannelMapping.receipt(r, paused: false, kind: { $0 == "id-builder" ? "codex" : "claude" })
+        XCTAssertEqual(receipt.targets.map(\.name), ["architect", "builder", "qa", "ops"])
+        XCTAssertEqual(receipt.targets.map(\.step), [.replied, .read, .delivered, .waiting])
+        XCTAssertEqual(receipt.targets.map(\.id), ["id-architect", "id-builder", "id-qa", "id-ops"])
+        XCTAssertEqual(receipt.targets[1].kind, "codex")
+        XCTAssertEqual(receipt.targets[0].kind, "claude")
+    }
+
+    func testOnlyTheLatestOwnMessageHasTheLine() {
+        let all = [msg(1, "you"), msg(2, "architect"), msg(3, "you"), msg(4, "builder")]
+        let receipts = [BusReceipt(seq: 1, targets: [target("builder", "read")]), BusReceipt(seq: 3, targets: [target("builder", "delivered")])]
+        let s = ChannelMapping.screen(channel: "fold", messages: all, deck: nil, receipts: receipts, calendar: cal, now: now)
+        let byID = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0) })
+        XCTAssertFalse(byID[1]!.lastOwn)
+        XCTAssertNil(byID[1]!.receipt, "an older own message has none")
+        XCTAssertTrue(byID[3]!.lastOwn)
+        XCTAssertEqual(byID[3]!.receipt?.word, "未读")
+        XCTAssertFalse(byID[4]!.lastOwn, "an agent's message has no line")
+    }
+
+    func testTheLineIsThereBeforeItsReceiptComes() {
+        let s = ChannelMapping.screen(channel: "fold", messages: [msg(1, "you")], deck: nil, calendar: cal, now: now)
+        let b = bubbles(s)[0]
+        XCTAssertTrue(b.lastOwn)
+        XCTAssertNil(b.receipt, "reserved, empty")
+    }
+
+    /// A send moves the line from the old message to the new one in one look: the old row loses it, the new one has it, and
+    /// no other row differs. A receipt moving on changes only its own row and not the tail the list follows.
+    func testASendMovesTheLineInOneLookAndAReceiptMovingOnDoesNotMoveTheTail() {
+        let before = [msg(1, "architect"), msg(2, "you")]
+        let after = before + [msg(3, "you")]
+        let r = [BusReceipt(seq: 2, targets: [target("builder", "read")])]
+        let a = ChannelMapping.screen(channel: "fold", messages: before, deck: nil, receipts: r, calendar: cal, now: now)
+        let b = ChannelMapping.screen(channel: "fold", messages: after, deck: nil, receipts: r, calendar: cal, now: now)
+        XCTAssertEqual(Array(b.items.map(\.id).prefix(a.items.count)), a.items.map(\.id))
+        XCTAssertEqual(zip(a.items, b.items).filter { $0 != $1 }.count, 1, "only the old own message changed (it lost the line)")
+        XCTAssertNotEqual(a.tail, b.tail)
+        let moved = ChannelMapping.screen(channel: "fold", messages: before, deck: nil, receipts: [BusReceipt(seq: 2, targets: [target("builder", "replied")])],
+                                          calendar: cal, now: now)
+        XCTAssertEqual(a.tail, moved.tail, "a receipt moving on must not make the list follow (a person reading above is left alone)")
+        XCTAssertEqual(zip(a.items, moved.items).filter { $0 != $1 }.count, 1)
+    }
+
     /// A message that arrives leaves every row it did not touch with the id it had: the list keeps those rows
     /// (a changed id would build them again), whether the message joins a run, starts one, is the person's, or comes after a quiet while.
     func testRowIdsStayTheSameWhenAMessageArrives() {

@@ -15,6 +15,7 @@ public enum ChannelMapping {
 
     /// `loaded`: the first look at the channel has come (or it is kept from last time): only then can it be said to be empty.
     public static func screen(channel id: String, messages: [BusMessage], deck: Deck?, paused: Bool = false, loaded: Bool = true,
+                              receipts: [BusReceipt] = [],
                               calendar: Calendar = .current, now: Date = Date()) -> ChannelScreen {
         let channel = deck?.channel(id: id)
         let title = Self.title(id: id, channel: channel)
@@ -27,7 +28,8 @@ public enum ChannelMapping {
         // oldest message held.
         let trimmed = sorted.last { effectiveEvent($0) == "trimmed" }
         let visible = sorted.filter { !isHidden($0) && effectiveEvent($0) != "trimmed" }
-        var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
+        let isPaused = paused || (channel?.paused ?? false)
+        var items = Self.items(visible, all: sorted, channel: channel, deck: deck, receipts: receipts, paused: isPaused, calendar: calendar, now: now)
         // nothing yet, or only the agents' own work so far: say so, quietly, rather than showing a blank
         if items.isEmpty {
             if !sorted.isEmpty { items = [.note(id: emptyID.quiet, text: quietNote)] }
@@ -39,7 +41,6 @@ public enum ChannelMapping {
         let everyone = members + split.helpers
         let working = everyone.filter { $0.state == .working }.count
         let needing = everyone.filter { $0.state == .needsYou }.count
-        let isPaused = paused || (channel?.paused ?? false)
         // as the page's head says it: paused, else who waits and who works, else quiet
         let line: String
         if channel == nil { line = "" }
@@ -155,8 +156,13 @@ public enum ChannelMapping {
     // MARK: items
 
     /// `messages` are the ones that are drawn, `all` every one (for what a reply quotes).
-    static func items(_ messages: [BusMessage], all: [BusMessage], channel: Channel?, deck: Deck?, calendar: Calendar, now: Date) -> [ChannelItem] {
+    static func items(_ messages: [BusMessage], all: [BusMessage], channel: Channel?, deck: Deck?, receipts: [BusReceipt] = [], paused: Bool = false,
+                      calendar: Calendar, now: Date) -> [ChannelItem] {
         var out: [ChannelItem] = []
+        // what a reply quotes may be a message that is not drawn: it is looked for among all of them
+        let bySeq = Dictionary(all.map { ($0.seq, $0) }, uniquingKeysWith: { a, _ in a })
+        let lastOwnSeq = messages.last { $0.from.isYou }?.seq
+        let receiptOf = Dictionary(receipts.map { ($0.seq, $0) }, uniquingKeysWith: { a, _ in a })
         var previous: BusMessage?
         var openRun = false // the last item is a run a message may join
         for m in messages {
@@ -170,7 +176,11 @@ public enum ChannelMapping {
                 out.append(.time(id: String(m.seq), text: label))
                 openRun = false
             }
-            let bubble = Self.bubble(m, messages: all, channel: channel, deck: deck)
+            var bubble = Self.bubble(m, by: bySeq, channel: channel, deck: deck)
+            if m.from.isYou && m.seq == lastOwnSeq {
+                bubble.lastOwn = true
+                if let r = receiptOf[m.seq] { bubble.receipt = receipt(r, paused: paused, kind: { deck?.agent(id: $0)?.kind ?? "" }) }
+            }
             if m.from.isYou {
                 out.append(.mine(bubble))
                 openRun = false
@@ -229,14 +239,23 @@ public enum ChannelMapping {
 
     // MARK: a bubble
 
-    static func bubble(_ m: BusMessage, messages: [BusMessage], channel: Channel?, deck: Deck?) -> ChannelBubble {
-        ChannelBubble(id: m.seq, text: m.text, images: m.images.map(\.id), quote: quote(of: m, in: messages),
+    static func bubble(_ m: BusMessage, by bySeq: [Int: BusMessage], channel: Channel?, deck: Deck?) -> ChannelBubble {
+        ChannelBubble(id: m.seq, text: m.text, images: m.images.map(\.id), quote: quote(of: m, by: bySeq),
                       fold: fold(m, channel: channel, deck: deck))
     }
 
-    static func quote(of m: BusMessage, in messages: [BusMessage]) -> ChannelQuote? {
+    /// What a message of the person's reached: each agent it woke at the furthest step it got to. `kind` says what
+    /// kind an agent is (for its character on the card); `paused` is whether the channel is paused.
+    public static func receipt(_ r: BusReceipt, paused: Bool, kind: (String) -> String = { _ in "" }) -> ChannelReceipt {
+        let steps: [String: ChannelReceipt.Step] = ["replied": .replied, "read": .read, "delivered": .delivered, "waiting": .waiting]
+        return ChannelReceipt(targets: r.targets.map {
+            ChannelReceipt.Target(id: $0.id, kind: kind($0.id), name: $0.label, step: steps[$0.state] ?? .waiting)
+        }, paused: paused)
+    }
+
+    static func quote(of m: BusMessage, by bySeq: [Int: BusMessage]) -> ChannelQuote? {
         guard m.replyTo > 0 else { return nil }
-        guard let parent = messages.first(where: { $0.seq == m.replyTo }) else {
+        guard let parent = bySeq[m.replyTo] else {
             return ChannelQuote(seq: m.replyTo, who: "#\(m.replyTo)", text: "")
         }
         let text = parent.text.isEmpty && !parent.images.isEmpty ? "[图片]" : ChannelQuote.snippet(plain(parent.text))

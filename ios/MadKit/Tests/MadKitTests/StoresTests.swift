@@ -44,6 +44,27 @@ private func msg(_ seq: Int, _ text: String = "m", from: String = "kim") -> BusM
 
 @MainActor
 final class DeckStoreTests: XCTestCase {
+    /// A look that differs from the last only in the time the Mac made it tells nobody: every screen that reads the
+    /// deck would be drawn again once a second for nothing.
+    func testADeckThatDiffersOnlyInItsTimeIsNotNews() async {
+        let mac = FakeMac()
+        var a = Deck(machine: "Studio"), same = Deck(machine: "Studio"), changed = Deck(machine: "Studio")
+        a.at = Date(timeIntervalSince1970: 100); same.at = Date(timeIntervalSince1970: 101)
+        changed.at = Date(timeIntervalSince1970: 102); changed.working = ["x"]
+        mac.deckAnswers = [.success(a), .success(same), .success(changed)]
+        let s = DeckStore(api: mac)
+        await s.refresh()
+        var heard = 0
+        func watch() { withObservationTracking { _ = s.deck } onChange: { heard += 1 } }
+        watch()
+        await s.refresh()
+        XCTAssertEqual(heard, 0, "the same deck, an instant later, was announced")
+        XCTAssertEqual(s.deck?.at, a.at, "the first time stays")
+        await s.refresh()
+        XCTAssertEqual(heard, 1, "a changed deck is news")
+        XCTAssertEqual(s.deck?.working, ["x"])
+    }
+
     func testALookFillsTheDeckAndSetsTheLinkOK() async {
         let mac = FakeMac()
         mac.deckAnswers = [.success(Deck(machine: "Studio", projects: [Project(name: "p", agents: [Agent(id: "a1", name: "ios")])]))]
@@ -90,6 +111,24 @@ final class DeckStoreTests: XCTestCase {
 
 @MainActor
 final class ChannelStoreTests: XCTestCase {
+    /// A look that brings the same receipts and the same pause tells nobody: a view that reads them is not drawn again.
+    func testALookThatChangesNothingDoesNotTellTheView() async {
+        let mac = FakeMac()
+        let r = BusReceipt(seq: 1, targets: [.init(id: "a", label: "a", state: "read")])
+        mac.pages = [.success(MessagesPage(channel: "c", messages: [msg(1)], last: 1, receipts: [r])),
+                     .success(MessagesPage(channel: "c", messages: [], last: 1, receipts: [r])),
+                     .success(MessagesPage(channel: "c", messages: [], last: 1, paused: true, receipts: [r]))]
+        let s = ChannelStore(id: "c", api: mac)
+        await s.refresh()
+        var heard = 0
+        func watch() { withObservationTracking { _ = s.receipts; _ = s.paused } onChange: { heard += 1 } }
+        watch()
+        await s.refresh()
+        XCTAssertEqual(heard, 0, "the same receipts and pause were told again")
+        await s.refresh()
+        XCTAssertEqual(heard, 1, "a pause is news")
+    }
+
     func testEachLookAsksForWhatCameAfterTheLastOne() async {
         let mac = FakeMac()
         mac.pages = [.success(MessagesPage(channel: "c", messages: [msg(1), msg(2)], last: 2)),
