@@ -126,3 +126,19 @@ final class HomeMappingTests: XCTestCase {
         XCTAssertEqual(HomeMapping.model(from: Deck(channels: [c, a, b])).sections[0].rows.map(\.id), ["c", "a", "b"])
     }
 }
+
+/// Every ⋯ item that is not native yet opens the page on its view; switching Mac is the app's own.
+final class WebMenuTests: XCTestCase {
+    func testEveryMenuItemButSwitchMacOpensAPageView() {
+        for item in HomeMenuItem.allCases {
+            if item == .switchMac {
+                XCTAssertNil(NativeRoot.webView(for: item))
+            } else {
+                XCTAssertNotNil(NativeRoot.webView(for: item), "\(item) has no page view")
+            }
+        }
+        XCTAssertEqual(NativeRoot.webView(for: .devices), .phone)
+        XCTAssertEqual(NativeRoot.webView(for: .notifications), .notify)
+        XCTAssertEqual(NativeRoot.webView(for: .addProject), .addproject)
+    }
+}

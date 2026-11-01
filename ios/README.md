@@ -102,7 +102,20 @@ share three local packages:
   iPhone. Channel and agent details are placeholders for now; the other agents' views plug in there,
   mapping their store's messages to their own view-model structs the same way.
 
-In Debug builds, the iPhone app opens `NativeRoot` instead of the page with `-nativeHome YES`.
+Both apps open `NativeRoot` by default. What has no native screen yet opens the web page: the ⋯ menu's
+用量, 看板, 技能, 手机和已配对设备, 通知, 添加项目 and 主题 open it on that view (`#open=usage|board|skills|phone|notify|addproject|theme`
+in the page's URL fragment; `WebTarget` in MadKit builds the URL), in a sheet on the iPhone and a window of its own on the Mac;
+an agent's conversation has a header button that opens the page on that agent (`#agent=<id>`) for its terminal and changes.
+
+"使用网页版" shows the whole old web deck instead: on the iPhone, long-press the Mac in the Macs list (the choice is
+kept per Mac; the same menu says "使用原生版" to go back); on the Mac, the toggle in Settings. Debug builds also take
+`-webDeck YES|NO`.
+
+### Installing
+
+- iPhone: `make ios-device` (free Apple ID, see above).
+- Mac: `make mac` builds and runs it from `ios/build/`; `make mac-install` builds a Release `madmac.app`
+  and puts it in `/Applications` (ad hoc signed; the first time, open it with right-click → Open).
 
 ### The channel view
 
@@ -175,8 +188,7 @@ if the app is killed the pipe closes and the child exits by itself. These are `L
 Both apps take a server to talk to instead of the real one: `MAD_FIXTURE_URL=<url>` in the environment,
 or the launch argument `-fixtureURL <url>` (`FixtureHook`). Run the server with
 `go run ./internal/desktop/fixture -addr 127.0.0.1:0 -scenario edge-home`. On the iPhone (Debug builds)
-it is opened at once as a Mac named "Fixture", and `-nativeHome YES` shows the native shell instead of
-the page. For the simulator pass the variable as `SIMCTL_CHILD_MAD_FIXTURE_URL`.
+it is opened at once as a Mac named "Fixture" (native screens; `-webDeck YES` shows the page instead). For the simulator pass the variable as `SIMCTL_CHILD_MAD_FIXTURE_URL`.
 
 ## UI tests
 

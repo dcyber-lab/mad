@@ -17,6 +17,9 @@ struct MacsView: View {
     /// running that crosses the 2-day line shows its note.
     @State private var expiry: String?
 
+    /// What the person chose this session, so the menu's wording follows at once.
+    @State private var webChoice: [UUID: Bool] = [:]
+
     /// `opening` is the Mac last used: the app starts inside it, and on the list
     /// when there is none.
     init(opening: Mac? = nil) {
@@ -24,7 +27,7 @@ struct MacsView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             List {
                 ForEach(store.pending) { p in
                     HStack {
@@ -42,14 +45,26 @@ struct MacsView: View {
                 }
                 .onDelete { store.dropPending(at: $0) }
                 ForEach(store.macs) { mac in
-                    NavigationLink(value: mac) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(mac.name).font(.body)
-                            Text(mac.baseURL.host ?? "").font(.subheadline).foregroundStyle(.secondary)
+                    // The Mac opens over the list (not pushed on it): its screens have navigation of their own.
+                    Button { path = [mac] } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(mac.name).font(.body).foregroundStyle(.primary)
+                                Text(mac.baseURL.host ?? "").font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .contextMenu {
                         Button("Rename") { newName = mac.name; renaming = mac }
+                        Button((webChoice[mac.id] ?? WebDeckChoice.uses(for: mac)) ? "使用原生版" : "使用网页版") {
+                            let on = !(webChoice[mac.id] ?? WebDeckChoice.uses(for: mac))
+                            WebDeckChoice.set(on, for: mac)
+                            webChoice[mac.id] = on
+                        }
                     }
                 }
                 .onDelete { store.delete(at: $0) }
@@ -79,7 +94,9 @@ struct MacsView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { expiry = MacsView.expiryNotice() }
             }
-            .navigationDestination(for: Mac.self) { MacView(mac: $0) }
+            .fullScreenCover(isPresented: Binding(get: { !path.isEmpty }, set: { if !$0 { path = [] } })) {
+                if let mac = path.first { MacView(mac: mac) }
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {

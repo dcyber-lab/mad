@@ -8,7 +8,8 @@ import SwiftUI
 ///
 /// It owns the `DeckStore` for `api`, polls it while the app is active, and offers it to the views below
 /// through the environment (`@Environment(DeckStore.self)`). `onSwitchMac` is the way back to the list
-/// of Macs (the iPhone's; the Mac app has no such list).
+/// of Macs (the iPhone's; the Mac app has no such list). `openWeb` shows the page on a view that has no
+/// native screen yet (the ⋯ menu's usage, board ...; an agent's terminal and changes).
 public struct NativeRoot: View {
     @State private var store: DeckStore
     @State private var selection: HomeRow.ID?
@@ -17,11 +18,14 @@ public struct NativeRoot: View {
     private let api: MadAPI
     private let title: String
     private let onSwitchMac: (() -> Void)?
+    private let openWeb: ((WebTarget) -> Void)?
 
-    public init(api: MadAPI, title: String = "mad", onSwitchMac: (() -> Void)? = nil) {
+    public init(api: MadAPI, title: String = "mad", onSwitchMac: (() -> Void)? = nil,
+                openWeb: ((WebTarget) -> Void)? = nil) {
         self.api = api
         self.title = title
         self.onSwitchMac = onSwitchMac
+        self.openWeb = openWeb
         _store = State(initialValue: DeckStore(api: api))
         #if DEBUG
         // Debug builds: `-nativeOpen <row id>` opens a row at once (a channel or an agent), to look at it
@@ -39,7 +43,23 @@ public struct NativeRoot: View {
         HomeActions(
             open: { selection = $0 },
             switchMac: { onSwitchMac?() },
-            menu: { item in if item == .switchMac { onSwitchMac?() } })
+            menu: { item in
+                if item == .switchMac { onSwitchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
+            })
+    }
+
+    /// The page's view for a ⋯ menu item that is not native yet.
+    static func webView(for item: HomeMenuItem) -> WebTarget.View? {
+        switch item {
+        case .usage: .usage
+        case .board: .board
+        case .skills: .skills
+        case .devices: .phone
+        case .notifications: .notify
+        case .addProject: .addproject
+        case .theme: .theme
+        case .switchMac: nil
+        }
     }
 
     public var body: some View {
@@ -60,14 +80,16 @@ public struct NativeRoot: View {
         #if os(macOS)
         NavigationSplitView {
             HomeSidebar(model: model, selection: $selection, actions: actions)
+                // wide enough for the rows to read as they do on the phone, not "clau…"
+                .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
         } detail: {
-            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 })
+            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb)
         }
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
             NavigationStack {
-                Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 })
+                Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 }, openWeb: openWeb)
                     // a channel and an agent draw their own head, with their own way back
                     .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
@@ -88,6 +110,7 @@ struct Detail: View {
     var onBack: (() -> Void)?
     /// Opens another row (a member of the channel).
     let open: (HomeRow.ID) -> Void
+    var openWeb: ((WebTarget) -> Void)?
 
     var body: some View {
         if let id = selection {
@@ -95,12 +118,12 @@ struct Detail: View {
                 ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
                     .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
-                AgentDetail(api: api, id: agent.id, onBack: onBack).id(agent.id)
+                AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb).id(agent.id)
             } else {
                 placeholder(id, "It is gone.")
             }
         } else {
-            placeholder("mad", "Choose a chat or an agent.")
+            placeholder("mad", "选一个群聊或 agent")
         }
     }
 
@@ -146,11 +169,13 @@ struct AgentDetail: View {
     private let api: MadAPI
     private let id: String
     private let onBack: (() -> Void)?
+    private let openWeb: ((WebTarget) -> Void)?
 
-    init(api: MadAPI, id: String, onBack: (() -> Void)?) {
+    init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil) {
         self.api = api
         self.id = id
         self.onBack = onBack
+        self.openWeb = openWeb
         _store = State(initialValue: AgentStore(id: id, api: api))
     }
 
@@ -174,7 +199,8 @@ struct AgentDetail: View {
             act: { cardID, actID, text in Task { await answer(cardID, actID, text) } },
             interrupt: { Task { await store.interrupt() } },
             loadImage: { image in try? await api.pictureData(url: image.source) },
-            back: { onBack?() })
+            back: { onBack?() },
+            openWeb: openWeb.map { open in { open(.agent(id)) } })
     }
 
     private func answer(_ cardID: String, _ actID: String, _ text: String?) async {
