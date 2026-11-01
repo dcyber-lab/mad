@@ -21,3 +21,16 @@ func TestBlobCache(t *testing.T) {
 		t.Errorf("only %d of the 7 checks ran:\n%s", n, out)
 	}
 }
+
+// The characters' look and plan (web/characters.js) are checked against the vectors the SwiftUI
+// port reads (web/testdata/character-vectors.json), by node; skipped where there is no node.
+func TestCharacters(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node: web/characters.js is not checked")
+	}
+	out, err := exec.Command(node, "testdata/character_check.js").CombinedOutput()
+	if err != nil {
+		t.Fatalf("character_check.js: %v\n%s", err, out)
+	}
+}

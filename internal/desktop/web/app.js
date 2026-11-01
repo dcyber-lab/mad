@@ -186,50 +186,12 @@ function switchMac() {
   window.webkit?.messageHandlers?.mad?.postMessage({ type: "switchMac" });
 }
 
-// avatar is agent a's kind as a tile in its color, with its status as a
-// dot on the corner. It carries the status itself: a card or a message
-// has no row around it to color the dot.
-// On a phone (html.ptype) it is a character instead: one of eight shapes
-// with a face and a color, picked by a stable hash of the agent's id, so an
-// agent looks the same everywhere. It hops and blinks while it works.
-const CHAR_SHAPES = [ // [name, face offset, svg of the body]
-  ["pebble", 0, '<circle class="body" cx="24" cy="26" r="18"/>'],
-  ["toast", 0, '<path class="body" d="M8 20 a10 10 0 0 1 10 -12 h12 a10 10 0 0 1 10 12 v16 a6 6 0 0 1 -6 6 h-20 a6 6 0 0 1 -6 -6 z"/>'],
-  ["bean", 0, '<ellipse class="body" cx="24" cy="27" rx="20" ry="15" transform="rotate(-8 24 27)"/>'],
-  ["drop", 4, '<path class="body" d="M24 5 C33 16 41 23 41 31 a17 17 0 0 1 -34 0 C7 23 15 16 24 5 z"/>'],
-  ["cat", 4, '<path class="body" d="M8 40 V16 L15 8 L20 14 h8 L33 8 L40 16 V40 a4 4 0 0 1 -4 4 h-24 a4 4 0 0 1 -4 -4 z"/>'],
-  ["hex", 0, '<path class="body" d="M24 6 l15 8.6 a4 4 0 0 1 2 3.5 v13.8 a4 4 0 0 1 -2 3.5 L24 44 l-15 -8.6 a4 4 0 0 1 -2 -3.5 V18.1 a4 4 0 0 1 2 -3.5 z"/>'],
-  ["puff", 0, '<path class="body" d="M12 40 a8 8 0 0 1 -3 -15 a10 10 0 0 1 14 -12 a10 10 0 0 1 16 6 a8 8 0 0 1 0 21 z"/>'],
-  ["sprout", 4, '<path d="M24 14 C22 8 16 6 12 8 C14 13 19 14 24 14 Z" fill="#59b85a"/><path d="M24 14 C26 7 32 5 36 7 C34 13 29 14 24 14 Z" fill="#7fd36b"/><rect class="body" x="9" y="14" width="30" height="29" rx="14.5"/>'],
-];
-const CHAR_FACES = [
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M21 29 q3 2.6 6 0"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><circle cx="24" cy="30" r="2"/>',
-  '<path class="eye mo" d="M16.5 23 q2.5 -2.6 5 0"/><path class="eye mo" d="M26.5 23 q2.5 -2.6 5 0"/><path class="mo" d="M22 29 h4"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><circle class="eye" cx="29" cy="23" r="2.6"/><path class="mo" d="M20 28.5 q2 2 4 0 q2 2 4 0"/>',
-  '<circle class="eye" cx="19" cy="23" r="2.6"/><path class="mo" d="M26.5 23.5 h5"/><path class="mo" d="M21 28.5 q3 3 6 0"/>',
-];
-const CHAR_COLORS = ["#6f9bff", "#ffb36b", "#3dcf9c", "#b48cff", "#ff8fb3", "#ffd34e", "#5fd0e8", "#9be07f"];
-
-function charHash(key) {
-  let h = 2166136261;
-  for (const c of String(key)) h = Math.imul(h ^ c.codePointAt(0), 16777619) >>> 0;
-  return h;
-}
-
-// charLook is what a key looks like: its shape, face and color.
-function charLook(key) {
-  const h = charHash(key);
-  return { shape: CHAR_SHAPES[h % 8], face: CHAR_FACES[(h >>> 6) % 5], color: CHAR_COLORS[(h >>> 3) % 8] };
-}
-
-// charSVG is the character's drawing, 48 by 48; with box, nested at x y w.
-function charSVG(key, box) {
-  const l = charLook(key);
-  const body = `${l.shape[2]}<g transform="translate(0 ${l.shape[1]})" class="face">${l.face}</g>`;
-  return box
-    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`
-    : `<svg viewBox="0 0 48 48" style="--c:${l.color}">${body}</svg>`;
+// avatar is agent a as a character (characters.js): one of eight shapes in a pastel, a face with an expression for
+// its state (moving, in its own way, while it works), picked by a stable hash of the agent's id, so an agent
+// looks the same everywhere.
+// charState is the state a character acts: work, need, stop, or idle.
+function charState(st) {
+  return st === "running" ? "work" : st === "waiting" ? "need" : st === "stopped" || st === "exited" ? "stop" : "idle";
 }
 
 // stateWord is what a character says about its agent, for a screen reader or a test:
@@ -261,7 +223,10 @@ function avatar(a, small) {
   if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
-  v.innerHTML = charSVG(a.id || a.kind || "?"); // our own constants and a hash: nothing of the page's data
+  const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : "");
+  v.dataset.ck = charAvatarKey(key, state, live ? shownStatus(live) : "", small); // what a place drawn again keeps (charAdopt)
+  v.innerHTML = charSVG(key, null, charExpr(state, key), state === "stop"); // our own constants and a hash: nothing of the page's data
+  charWake(v, () => charStart(v, key, state)); // idle ones blink too, small or not: the blinks share one timer, and only what is on the screen blinks
   v.setAttribute("role", "img");
   v.setAttribute("aria-label", stateWord(live ? shownStatus(live) : ""));
   return v;
@@ -330,6 +295,15 @@ function drawSidebar() {
 
 // drawList is the list itself: groups in attention order (see drawSidebar).
 function drawList() {
+  charHolding(true);
+  try {
+    drawListNow();
+  } finally {
+    charHolding(false);
+  }
+}
+
+function drawListNow() {
   const nav = $("#projects");
   const keep = nav.scrollTop;
   agents.clear();
@@ -391,7 +365,9 @@ function drawList() {
     const rk = own && own.classList.contains("rowhit") ? own.closest(".row").dataset.key : null;
     const hi = own && own.classList.contains("head") ? [...nav.querySelectorAll(".project > .head")].indexOf(own) : -1;
     nav.dataset.sig = sig;
+    charAdopt(nav, nodes); // what moves keeps moving
     nav.replaceChildren(...nodes);
+    charArm(nav);
     fitRows(nav);
     nav.scrollTop = keep;
     if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"] .rowhit`)?.focus({ preventScroll: true });
@@ -544,6 +520,15 @@ function drawWait(o, a) {
 // you (cards, to act on in place), what works and what finished. With no
 // agents at all it is the hero.
 function drawHome() {
+  charHolding(true);
+  try {
+    drawHomeNow();
+  } finally {
+    charHolding(false);
+  }
+}
+
+function drawHomeNow() {
   const root = $("#empty");
   if (root.style.display === "none") return $("#home").replaceChildren(); // hidden: no box of its own to take the focus
   const none = !agents.size;
@@ -595,7 +580,9 @@ function drawHome() {
   const k = (ks, t) => { const s = el("span", ""); s.append(...ks.map((x) => el("kbd", "", x)), ` ${t}`); return s; };
   keys.append(k(["⌥", "N"], "next"), k(["⌘", "N"], "new chat"), k(["⌘", "K"], "search"), k(["⌥", "B"], "board"));
   h.append(keys);
+  charAdopt(box, [h]); // what moves keeps moving
   box.replaceChildren(h);
+  charArm(box);
 }
 
 // workCard is a working agent: its line, and its todo list's progress.
@@ -788,7 +775,7 @@ function drawWho(a) {
   const o = opened.get(a.id);
   if (windowed(a) && o && o.hs) {
     // Run here: its model to pick, and what its host says it does.
-    const parts = [avatar(a, true), what];
+    const parts = [what];
     const name = modelName(o.hs);
     keepModels(a.kind, o.hs.models);
     if (o.hs.models && o.hs.models.length) {
@@ -809,11 +796,11 @@ function drawWho(a) {
       parts.push(b);
     }
     parts.push(statusPill(a));
-    who.replaceChildren(...parts);
+    charPut(who, () => [avatar(a, true), ...parts]);
     who.className = `s-${shownStatus(a)}`;
     return;
   }
-  who.replaceChildren(avatar(a, true), what, statusPill(a));
+  charPut(who, () => [avatar(a, true), what, statusPill(a)]);
   who.className = `s-${shownStatus(a)}`;
 }
 
@@ -1145,6 +1132,32 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
+// The build this page was served by, and whether the server has moved on to another (stale.js).
+const pageBuild = document.querySelector('meta[name="mad-build"]')?.content || "";
+let updateNote = null;
+// pageBusy: something is being written or answered, which a reload would lose.
+function pageBusy() {
+  if (!$("#dialog").hidden || !$("#popup").hidden || pendingReads > 0) return true;
+  const a = document.activeElement;
+  if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && !["checkbox", "radio", "button"].includes(a.type)))) return true;
+  return [...document.querySelectorAll("textarea")].some((t) => t.value.trim());
+}
+// checkBuild reloads for a newer page (the token, the embed and the window's id are kept: storage and
+// the fragment survive a reload). Busy, it says so with a toast to tap; the reload comes when the person
+// taps it, or when the composer is empty and let go of.
+function checkBuild(seen) {
+  const act = staleAction({ mine: pageBuild, seen, busy: pageBusy() });
+  if (act === "reload") { location.reload(); return; }
+  if (act === "none") { updateNote?.remove(); updateNote = null; return; }
+  if (updateNote?.isConnected) return;
+  updateNote = el("button", "toast update");
+  updateNote.type = "button";
+  updateNote.style.pointerEvents = "auto";
+  updateNote.append(icon("check"), el("span", "", "mad 已更新 · 刷新"));
+  updateNote.onclick = () => location.reload();
+  $("#toasts").append(updateNote);
+}
+
 // setOffline says, over the whole page, that what it draws is old: a
 // failed look leaves the last one on screen, and an agent that looks
 // working may not be. The banner names when it was last true.
@@ -1170,6 +1183,7 @@ async function refresh() {
   try {
     const r = await authFetch("/api/deck");
     if (!r.ok) throw new Error(r.status);
+    checkBuild(r.headers.get("X-Mad-Build") || "");
     deck = await r.json();
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");
@@ -1429,7 +1443,7 @@ function drawTitle() {
   }
   sub.title = `${a.kind} · ${a.project.name}`;
   what.append(el("span", "pt", label(a)), sub);
-  t.replaceChildren(avatar(a, true), what);
+  charPut(t, () => [avatar(a, true), what]);
   t.className = `s-${shownStatus(a)}`;
   t.dataset.agent = "1";
 }

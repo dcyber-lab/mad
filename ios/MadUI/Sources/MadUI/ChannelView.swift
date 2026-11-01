@@ -221,6 +221,9 @@ public struct ChannelView: View {
                         .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { panelOpen = false } }
                         .accessibilityHidden(true)
                 }
+                // built only while open or being dragged: a closed panel off screen would keep its
+                // member rows and group tile animating unseen. Its slide in and out is the transition.
+                if panelOpen || drag != 0 {
                 panelView
                     .frame(width: width)
                     .offset(x: panelOffset(width))
@@ -235,6 +238,8 @@ public struct ChannelView: View {
                     .accessibilityHidden(!panelOpen)
                     .accessibilityAddTraits(.isModal)
                     .accessibilityAction(.escape) { panelOpen = false }
+                    .transition(.move(edge: .trailing))
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         }

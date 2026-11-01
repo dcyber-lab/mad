@@ -745,6 +745,7 @@ pre.output.lines .ln i { display: inline-block; width: 44px; padding-right: 12px
   transition: opacity 0.4s, transform 0.4s;
 }
 .toast .i { width: 15px; height: 15px; }
+.toast.update { border: 0; font: inherit; font-size: 13px; cursor: pointer; }
 .toast.err { background: var(--stopped); color: #fff; }
 .toast.out { opacity: 0; transform: translateY(6px); }
 
@@ -1498,30 +1499,14 @@ html.ptype .phonebox .pdev { font-size: 14px; }
 .avatar.chara { background: none; border-radius: 0; width: 40px; height: 40px; font-size: 0; overflow: visible; opacity: 1; }
 .avatar.chara.small { width: 28px; height: 28px; }
 .avatar.chara svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.chara .body { fill: var(--c); }
-.chara .face .eye { fill: #1d1d1f; }
-.chara .face .mo { fill: none; stroke: #1d1d1f; stroke-width: 2; stroke-linecap: round; }
-.chara .face .eye.mo { stroke-width: 2.2; }
-.chara .face circle:not(.eye) { fill: #1d1d1f; }
-.chara .tile { fill: var(--raise-2); }
-.chara .hash { fill: var(--text-3); font: 700 20px var(--font); }
-.chara .eye { transform-box: fill-box; transform-origin: center; }
-.chara.s-running svg { transform-origin: 50% 100%; animation: hop 1.15s ease-in-out infinite; }
-.chara.s-running .eye { animation: blink 2.8s infinite; }
-.chara.group.s-running svg { animation: none; }
-.chara.group.s-running .mini { transform-box: fill-box; transform-origin: 50% 100%; animation: hop 1.15s ease-in-out infinite; }
-.chara.group.s-running .mini.m2 { animation-delay: 0.2s; }
-.chara.group.s-running .mini.m3 { animation-delay: 0.4s; }
-@keyframes hop {
-  0%, 100% { transform: translateY(0) scale(1, 1); }
-  45% { transform: translateY(-3px) scale(0.97, 1.04); }
-  60% { transform: translateY(0) scale(1.05, 0.95); }
-}
-@keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(0.1); } }
-@media (prefers-reduced-motion: reduce) {
-  .chara *, .chara svg { animation: none !important; }
-}
-.avatar.chara .dot { display: none; }
+.chara .c-body { fill: var(--fill); }
+.chara svg g { transform-box: fill-box; }
+/* the face: strokes and dots in a deep shade of the bot's strong color; no outline on the body */
+.chara .c-ink { fill: none; stroke: var(--face); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.chara .c-eye, .chara text { fill: var(--face); }
+.chara .c-tile { fill: var(--raise-2); }
+.chara .c-hash { fill: var(--text-3); font: 700 20px var(--font); }
+.avatar.chara > .dot { display: none; }
 .avwrap { position: relative; display: grid; flex: none; }
 /* a group tile keeps the 4px that .group gives it (as it had on its own), so its dot is 4px down to stay on the tile's corner */
 .avwrap.ofgroup > .rdot { top: 4px; }
@@ -1536,7 +1521,7 @@ html .row .t1 .nm { font-weight: 600; }
 html .row .t2 { font-size: 13px; line-height: 18px; }
 html .row.sel { --row: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07); }
 html .row .tag, html .row .meta, html .row .t1 .ctx, html .row .rt .cnt { display: none; }
-html .row.s-stopped .avatar, html .row.s-asleep .avatar { opacity: 0.5; }
+html .row.s-asleep .avatar { opacity: 0.5; }
 
 /* the header: the Mac's name, then search, new chat, more */
 #brand .mark, #brand .mword, #conn, #boardbtn { display: none; }
@@ -1809,3 +1794,6 @@ html.ptype #queue.inchan { padding-inline: 12px; }
 #embed-menu .rdot { position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; border: 2px solid var(--sidebar, var(--bg)); }
 .popup li .rdot { flex: none; align-self: center; width: 9px; height: 9px; margin-left: auto; border-radius: 50%; background: #ff3b30; }
 .usageline.closed, .usageline.closed:hover { color: var(--stopped); font-weight: 600; }
+/* The menu's rule is a line on every screen: the sheet's and the phone type's padding for touch targets
+   (.popup li, html.ptype .popup li) must not make a button of it. */
+.popup li.rule, html.ptype .popup li.rule { min-height: 0; height: 1px; padding: 0; margin: 5px 6px; }
