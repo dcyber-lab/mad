@@ -210,17 +210,19 @@ function redDot() {
   return d;
 }
 
-function avatar(a, small) {
+// still: a character with no agent behind it (a role not started, an agent gone) is drawn as a stopped one.
+function avatar(a, small, still) {
   // a channel's own tile (the channel view's header): its members huddled, as in the chat list
   if (a.kind === "channel" && a.members) return groupChar(a.members.map((id) => agents.get(id)).filter(Boolean), small);
   const live = a.id && agents.get(a.id); // a message's sender is not the snapshot's entry
   const v = el("span", `avatar chara${small ? " small" : ""}${live ? ` s-${shownStatus(live)}` : ""}`);
-  const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : "");
-  v.dataset.ck = charAvatarKey(key, state, live ? shownStatus(live) : "", small); // what a place drawn again keeps (charAdopt)
+  const key = a.id || a.kind || "?", state = charState(live ? shownStatus(live) : still ? "stopped" : "");
+  const shown = live ? shownStatus(live) : still ? "stopped" : "";
+  v.dataset.ck = charAvatarKey(key, state, shown, small); // what a place drawn again keeps (charAdopt)
   v.innerHTML = charSVG(key, null, charExpr(state, key), state === "stop"); // our own constants and a hash: nothing of the page's data
   charWake(v, () => charStart(v, key, state)); // idle ones blink too, small or not: the blinks share one timer, and only what is on the screen blinks
   v.setAttribute("role", "img");
-  v.setAttribute("aria-label", stateWord(live ? shownStatus(live) : ""));
+  v.setAttribute("aria-label", stateWord(shown));
   return v;
 }
 

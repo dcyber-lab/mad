@@ -1,0 +1,289 @@
+{
+  "deck": {
+    "machine": "Fixture Mac",
+    "projects": [
+      {
+        "name": "mad",
+        "path": "/fixture/mad",
+        "branch": "main",
+        "changed": 0,
+        "ahead": 0,
+        "rollup": [],
+        "agents": [
+          {
+            "id": "fold0001-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "architect"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "builder"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "reviewer"
+          },
+          {
+            "id": "fold0004-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "designer"
+          },
+          {
+            "id": "fold0005-aaaa",
+            "kind": "claude",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#d97757",
+            "name": "tester"
+          },
+          {
+            "id": "fold0006-aaaa",
+            "kind": "codex",
+            "status": "idle",
+            "shown": "idle",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "docs"
+          },
+          {
+            "id": "fold0007-aaaa",
+            "kind": "claude",
+            "status": "running",
+            "shown": "running",
+            "chat": true,
+            "color": "#d97757",
+            "name": "ops"
+          },
+          {
+            "id": "fold0008-aaaa",
+            "kind": "codex",
+            "status": "waiting",
+            "shown": "waiting",
+            "chat": true,
+            "color": "#10a37f",
+            "name": "kim"
+          }
+        ]
+      }
+    ],
+    "bus": [
+      {
+        "id": "team",
+        "title": "#team",
+        "members": [
+          {
+            "id": "fold0001-aaaa",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "label": "builder",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "label": "reviewer",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0006-aaaa",
+            "label": "docs",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0007-aaaa",
+            "label": "ops",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0008-aaaa",
+            "label": "kim",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0009-aaaa",
+            "label": "ghost",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0010-aaaa",
+            "label": "tester-gone",
+            "kind": "claude"
+          }
+        ],
+        "last": 2,
+        "last_text": "architect: 三个角色，四个帮手",
+        "last_at": "-1m",
+        "listed": true,
+        "lead": "fold0001-aaaa",
+        "team": {
+          "name": "team",
+          "template": "",
+          "roles": [
+            {
+              "role": "builder",
+              "agent": "fold0002-aaaa"
+            },
+            {
+              "role": "reviewer",
+              "agent": "fold0003-aaaa"
+            },
+            {
+              "role": "architect",
+              "agent": "fold0001-aaaa",
+              "lead": true
+            },
+            {
+              "role": "designer"
+            },
+            {
+              "role": "tester",
+              "agent": "fold0010-aaaa"
+            }
+          ]
+        }
+      }
+    ],
+    "board": [
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-1",
+          "title": "频道里支持发图片",
+          "owner": "fold0002-aaaa",
+          "status": "doing",
+          "channel": "fold"
+        },
+        "title": "频道里支持发图片",
+        "column": "doing",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 600000000000,
+        "since": "-10m"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-2",
+          "title": "用量单独一页",
+          "owner": "fold0002-aaaa",
+          "status": "doing",
+          "channel": "fold"
+        },
+        "title": "用量单独一页",
+        "column": "doing",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 300000000000,
+        "since": "-5m"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-3",
+          "title": "字体放大",
+          "owner": "fold0002-aaaa",
+          "status": "done",
+          "channel": "fold"
+        },
+        "title": "字体放大",
+        "column": "done",
+        "channel": "fold",
+        "owner": "fold0002-aaaa",
+        "owner_label": "builder",
+        "age": 3600000000000,
+        "since": "-1h"
+      },
+      {
+        "kind": "task",
+        "task": {
+          "id": "t-9",
+          "title": "别的群的任务",
+          "owner": "",
+          "status": "todo",
+          "channel": "other"
+        },
+        "title": "别的群的任务",
+        "column": "todo",
+        "channel": "other",
+        "age": 0,
+        "since": "-2h"
+      }
+    ],
+    "inbox": {
+      "needs": 1,
+      "items": [
+        {
+          "key": "k-kim",
+          "kind": "permission",
+          "agent": "fold0008-aaaa",
+          "title": "kim",
+          "context": "Bash",
+          "text": "rm -rf build",
+          "mono": true,
+          "since": "-1m",
+          "acts": [
+            {
+              "verb": "allow",
+              "label": "Allow",
+              "row": true,
+              "primary": true
+            },
+            {
+              "verb": "deny",
+              "label": "Deny",
+              "row": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "messages": {
+    "team": [
+      {
+        "seq": 1,
+        "at": "-2m",
+        "from": {
+          "id": "you",
+          "label": "you"
+        },
+        "kind": "text",
+        "text": "开始吧"
+      },
+      {
+        "seq": 2,
+        "at": "-1m",
+        "from": {
+          "id": "fold0001-aaaa",
+          "label": "architect",
+          "kind": "claude"
+        },
+        "kind": "text",
+        "text": "三个角色，四个帮手。"
+      }
+    ]
+  }
+}
