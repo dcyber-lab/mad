@@ -98,6 +98,7 @@ const el = (tag, cls, text) => {
 };
 
 let deck = { projects: [] };
+let deckTag = ""; // the ETag of deck, sent back on the next poll
 const agents = new Map(); // id → snapshot entry, with project
 const opened = new Map(); // id → { term, fit, ws, box, tab, chat, log, view, ... }
 let current = null;
@@ -1190,10 +1191,14 @@ async function refresh() {
     toast(pairError, "err");
   }
   try {
-    const r = await authFetch("/api/deck");
-    if (!r.ok) throw new Error(r.status);
+    // Named by the deck held: while nothing but its time moved, the answer is 304 with no deck.
+    const r = await authFetch("/api/deck", { cache: "no-store", headers: deckTag ? { "If-None-Match": deckTag } : {} });
+    if (!r.ok && r.status !== 304) throw new Error(r.status);
     checkBuild(r.headers.get("X-Mad-Build") || "");
-    deck = await r.json();
+    if (r.status !== 304) {
+      deck = await r.json();
+      deckTag = r.headers.get("ETag") || "";
+    }
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     $("#conn").classList.add("ok");
     $("#conn").title = "已连接";

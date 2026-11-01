@@ -50,9 +50,10 @@ func TestSourceReadsOnlyOnChange(t *testing.T) {
 }
 
 // BenchmarkWindowPollBus is the bus part of one window poll, on a bus of
-// 30 channels with 500 messages each and 30 tasks: as the poller did it
-// (Board, Channels and YourChannels every poll) and through a Source
-// when nothing moved.
+// 30 channels with 500 messages each and 30 tasks: as the poller does it
+// (Board, Channels and YourChannels) with no channel read yet, with none
+// moved since the last read, and after a post to one; and through a
+// Source when nothing moved.
 //
 //	go test -run '^$' -bench WindowPollBus -benchtime 20x ./internal/bus
 func BenchmarkWindowPollBus(b *testing.B) {
@@ -80,13 +81,45 @@ func BenchmarkWindowPollBus(b *testing.B) {
 	}
 	statuses := map[string]string{idArch: status.Running, idBuild: status.Idle}
 	at := time.Now()
-	b.Run("derive", func(b *testing.B) {
+	derive := func(b *testing.B) {
+		if _, err := Board(st, statuses, at); err != nil {
+			b.Fatal(err)
+		}
+		_, _ = Channels()
+		_, _ = YourChannels()
+	}
+	forget := func() {
+		msgCacheMu.Lock()
+		clear(msgCaches)
+		msgCacheMu.Unlock()
+	}
+	// cold: every channel read from its file, as on a deck's first look.
+	b.Run("cold", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			if _, err := Board(st, statuses, at); err != nil {
+			forget()
+			derive(b)
+		}
+	})
+	// derive: read again with no file moved (a status flipped, or
+	// FullEvery passed).
+	b.Run("derive", func(b *testing.B) {
+		derive(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			derive(b)
+		}
+	})
+	// posted: read again after a post to one of the channels.
+	b.Run("posted", func(b *testing.B) {
+		derive(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			if err := PostSystem("c0", "one more line"); err != nil {
 				b.Fatal(err)
 			}
-			_, _ = Channels()
-			_, _ = YourChannels()
+			b.StartTimer()
+			derive(b)
 		}
 	})
 	b.Run("cached", func(b *testing.B) {
