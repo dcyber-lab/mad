@@ -148,6 +148,18 @@ const charSeen = typeof IntersectionObserver === "function" ? new IntersectionOb
   }
 }) : null;
 
+// What a drawn character is keyed by, to keep it when its place is drawn again: the agent, its state and its
+// raw shown status (a stopped and an exited one look alike, but are not the same node: the page styles by status).
+function charAvatarKey(key, state, shown, small) {
+  return `${key}|${state}|${shown}|${small ? 1 : 0}`;
+}
+
+// A group tile is keyed by all its members and their statuses, not only the three it shows: the label says
+// what all of them do.
+function charTileKey(members, small) {
+  return `g:${members.map((a) => `${a.id}:${a.shown}`).join(",")}|${small ? 1 : 0}`;
+}
+
 // charHold: while true, characters made are not yet followed: the list is built each second and kept only
 // when it changed, so what is built is followed (charArm) once it is on the page.
 let charHold = false;
@@ -157,6 +169,7 @@ function charHolding(on) {
 
 // charWake runs start (which calls charStart for what is drawn in el) when el is first on the screen.
 function charWake(el, start) {
+  el.__start = start; // kept: Reduce Motion turned off again starts it again (charRestart)
   if (!charSeen) return start();
   el.__wake = start;
   if (!charHold) charSeen.observe(el);
@@ -183,20 +196,57 @@ function charAdopt(old, nodes) {
     live.get(e.dataset.ck).push(e);
   }
   const used = new Map();
-  for (const n of nodes) {
-    for (const e of n.querySelectorAll ? [...n.querySelectorAll(".avatar.chara[data-ck]")] : []) {
-      const k = e.dataset.ck, i = used.get(k) || 0;
-      used.set(k, i + 1);
-      const keep = live.get(k)?.[i];
+  const take = (e) => {
+    const k = e.dataset.ck, i = used.get(k) || 0;
+    used.set(k, i + 1);
+    return live.get(k)?.[i];
+  };
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (!n || !n.querySelectorAll) continue;
+    if (n.matches?.(".avatar.chara[data-ck]")) { // a character itself: the one that was kept takes its place in nodes
+      const keep = take(n);
+      if (keep) nodes[i] = keep;
+      continue;
+    }
+    for (const e of [...n.querySelectorAll(".avatar.chara[data-ck]")]) {
+      const keep = take(e);
       if (keep) e.replaceWith(keep);
     }
   }
+  return nodes;
 }
 
-// The blinks of every idle character come from one timer, which runs while there is one to blink.
+// charPut sets the children of container to what build() makes: a place drawn each second. The characters
+// made are held (not followed), those that were there with the same look are kept, with their motion, and
+// the new ones are followed once they are on the page.
+function charPut(container, build) {
+  charHolding(true);
+  let nodes;
+  try {
+    nodes = build();
+  } finally {
+    charHolding(false);
+  }
+  charAdopt(container, nodes);
+  container.replaceChildren(...nodes);
+  charArm(container);
+}
+
+// The blinks of every idle character come from one timer: a single timeout, set for the next edge (a blink
+// begins or ends) of all of them, and set again when one is added or leaves.
 const charBlinkers = new Set();
 let charBlinkTimer = 0;
+function charBlinkPlan() {
+  clearTimeout(charBlinkTimer);
+  charBlinkTimer = 0;
+  if (!charBlinkers.size) return;
+  let next = Infinity;
+  for (const r of charBlinkers) next = Math.min(next, r.blink.until || r.blink.next);
+  charBlinkTimer = setTimeout(charBlinkTick, Math.max(0, next - performance.now()));
+}
 function charBlinkTick() {
+  charBlinkTimer = 0;
   const now = performance.now();
   for (const r of charBlinkers) {
     const b = r.blink;
@@ -208,6 +258,7 @@ function charBlinkTick() {
       b.next = now + b.period;
     }
   }
+  charBlinkPlan();
 }
 
 // charStart gives the character drawn in root (an element holding its .c-head, .c-facein, .c-all and .c-leaf)
@@ -220,7 +271,7 @@ function charStart(root, key, state, opts = {}) {
   const facein = root.querySelector(".c-facein"), head = root.querySelector(".c-head"), all = root.querySelector(".c-all"), leaf = root.querySelector(".c-leaf");
   if (!facein || !head) return null;
   const set = (k) => { facein.innerHTML = EXPR[k]; };
-  const run = { root, anims: [], ticks: [], handles: [], on: false };
+  const run = { root, anims: [], ticks: [], handles: [], on: false, reset: () => set(charExpr(state, key)) };
   const still = charReduced.matches;
   if (state === "work") {
     const p = plan(key);
@@ -262,7 +313,7 @@ function charStart(root, key, state, opts = {}) {
       run.blink.next = performance.now() + run.blink.period;
       run.blink.until = 0;
       charBlinkers.add(run);
-      if (!charBlinkTimer) charBlinkTimer = setInterval(charBlinkTick, 70);
+      charBlinkPlan();
     }
   };
   run.pause = () => {
@@ -274,7 +325,7 @@ function charStart(root, key, state, opts = {}) {
       if (run.blink.until) run.blink.set("calm");
       run.blink.until = 0;
       charBlinkers.delete(run);
-      if (!charBlinkers.size && charBlinkTimer) { clearInterval(charBlinkTimer); charBlinkTimer = 0; }
+      charBlinkPlan();
     }
   };
   run.stop = () => {
@@ -300,4 +351,22 @@ if (typeof document !== "undefined") setInterval(() => {
   }
 }, 2000);
 
-if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG, charExpr };
+// Reduce Motion turned on while the page is open: every character that moves stops, with the face of its state.
+// Turned off: those that wait on the page move again.
+if (charReduced.addEventListener) {
+  charReduced.addEventListener("change", () => {
+    for (const r of [...charLive]) {
+      r.stop();
+      r.reset();
+    }
+    if (typeof document === "undefined") return;
+    for (const el of document.querySelectorAll(".avatar.chara")) {
+      el.__chars = [];
+      if (charReduced.matches || !el.__start) continue;
+      charSeen?.unobserve(el); // observing it again then reports where it is
+      charWake(el, el.__start);
+    }
+  });
+}
+
+if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG, charExpr, charAvatarKey, charTileKey, charAdopt, charStart, charBlinkers, get charBlinkTimer() { return charBlinkTimer; } };
