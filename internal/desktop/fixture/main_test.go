@@ -103,7 +103,7 @@ func TestMessagesAndImages(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Messages) != 8 || m.Last != 13 {
+	if len(m.Messages) != 9 || m.Last != 14 {
 		t.Errorf("after 5: %d messages, last %d", len(m.Messages), m.Last)
 	}
 	r, b = get(t, "channel-fold", "/api/bus/image?id=fx-before")
