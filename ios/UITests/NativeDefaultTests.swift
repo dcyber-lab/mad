@@ -4,7 +4,19 @@ import XCTest
 final class NativeDefaultTests: MadUITestCase {
     override func setUp() {
         super.setUp()
-        launch(native: true)
+        // the expiry case launches for itself, with the profile about to run out
+        if !name.contains("Expiry") { launch(native: true) }
+    }
+
+    /// The build running out is told on the native home too, and ✕ puts it away for the day.
+    func testTheExpiryBannerShowsOverTheNativeHomeAndIsPutAway() {
+        launch(native: true, extra: ["-profileHoursLeft", "30"])
+        let banner = elements(containing: "这个版本 2 天后失效").firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 40), "the expiry banner did not show over the native home")
+        XCTAssertTrue(screenFrame.contains(banner.frame), "the banner is off the screen")
+        shot("expiry banner over the native home")
+        app.buttons["关闭"].firstMatch.tap()
+        waitUntilGone(elements(containing: "这个版本").firstMatch, "the banner stayed after ✕")
     }
 
     private func row(beginningWith text: String) -> XCUIElement {

@@ -28,8 +28,18 @@ struct MacView: View {
         if usesWebDeck {
             pageBody
         } else {
-            NativeRoot(api: MadClient(mac: model.mac), title: model.mac.name, onSwitchMac: { dismiss() },
-                       openWeb: { web = WebSheet(mac: model.mac, target: $0) })
+            VStack(spacing: 0) {
+                if let expiry {
+                    ExpiryBar(text: expiry.chinese) {
+                        UserDefaults.standard.set(ExpiryDismissal.dayKey(Date()), forKey: Self.dismissedKey)
+                        self.expiry = nil
+                    }
+                }
+                NativeRoot(api: MadClient(mac: model.mac), title: model.mac.name, onSwitchMac: { dismiss() },
+                           openWeb: { web = WebSheet(mac: model.mac, target: $0) })
+            }
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onChange(of: scenePhase) { _, phase in if phase == .active { refreshExpiry() } }
                 .onAppear { store.opened(model.mac); refreshExpiry() }
                 .task { if let name = await model.machineName() { store.adoptMachineName(name, for: model.mac) } }
                 .sheet(item: $web) { WebSheetView(sheet: $0) }
@@ -104,18 +114,19 @@ struct WebSheet: Identifiable {
 
 struct WebSheetView: View {
     let sheet: WebSheet
-    @State private var host: DeckWebHost
+    /// Made once, when the sheet appears: a web view starts loading as it is made, and a view's init runs
+    /// again whenever its parent redraws.
+    @State private var host: DeckWebHost?
     @Environment(\.dismiss) private var dismiss
 
-    init(sheet: WebSheet) {
-        self.sheet = sheet
-        _host = State(initialValue: DeckWebHost(url: sheet.mac.webURL(sheet.target)))
-    }
+    init(sheet: WebSheet) { self.sheet = sheet }
 
     var body: some View {
         NavigationStack {
-            DeckWebView(host: host)
-                .ignoresSafeArea(.container, edges: .bottom)
+            Group {
+                if let host { DeckWebView(host: host).ignoresSafeArea(.container, edges: .bottom) } else { Color.clear }
+            }
+                .onAppear { if host == nil { host = DeckWebHost(url: sheet.mac.webURL(sheet.target)) } }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }

@@ -2,6 +2,7 @@ import AppKit
 import MadKit
 import MadShell
 import SwiftUI
+import UniformTypeIdentifiers
 import WebKit
 
 /// mad for the Mac. It talks to the server of the Mac it runs on: the phone server if that is up,
@@ -40,15 +41,30 @@ struct WebPage: NSViewRepresentable {
         config.websiteDataStore = .nonPersistent()
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
         view.load(URLRequest(url: url))
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let origin: WebOrigin
         init(origin: WebOrigin) { self.origin = origin }
+
+        /// A file input (the page's 📎): the page asks the app for the open panel.
+        func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+            let panel = NSOpenPanel()
+            panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+            panel.canChooseDirectories = parameters.allowsDirectories
+            panel.allowedContentTypes = [.image]
+            if let window = webView.window {
+                panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
+            } else {
+                completionHandler(panel.runModal() == .OK ? panel.urls : nil)
+            }
+        }
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

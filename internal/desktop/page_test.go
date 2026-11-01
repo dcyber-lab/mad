@@ -37,4 +37,8 @@ func TestPageOpensTheViewsTheAppsAskFor(t *testing.T) {
 			t.Errorf("app.js does not open #open=%s", view)
 		}
 	}
+	// #open=__proto__, valueOf and hasOwnProperty are names an object has, not views
+	if !regexp.MustCompile(`Object\.hasOwn\(views, appAsks\.view\)`).Match(b) {
+		t.Error("app.js looks #open= up in views without checking it is an own key")
+	}
 }
