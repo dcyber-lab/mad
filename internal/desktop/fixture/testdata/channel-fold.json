@@ -380,6 +380,18 @@
         },
         "kind": "text",
         "text": "命令：`go test -race ./internal/desktop/... -run TestSomethingWithAVeryLongNameThatNeverEndsAndKeepsGoingForever -count=1 -v`\n\n```\nGOFLAGS=-mod=mod go test -race ./internal/desktop/fixture/ ./internal/desktop/ ./internal/cli/ ./internal/bus/ 2>&1 | tail -n 40\n```"
+      },
+      {
+        "seq": 14,
+        "at": "-1m",
+        "from": {
+          "id": "fold0002-aaaa",
+          "label": "builder",
+          "kind": "codex"
+        },
+        "kind": "text",
+        "reply_to": 13,
+        "text": "跑过了：`go test -race ./internal/desktop/... -run TestSomethingWithAVeryLongNameThatNeverEndsAndKeepsGoingForever -count=1 -v` 通过。长词 Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious 也在这条里。"
       }
     ]
   }
