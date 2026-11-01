@@ -38,4 +38,11 @@ final class BottomWatchTests: XCTestCase {
         guard case .recheck(let after) = w.disappeared(at: t0.addingTimeInterval(2.1)) else { return XCTFail("not deferred") }
         XCTAssertEqual(after, 0.4, accuracy: 1e-3)
     }
+
+    func testAnEmptyBandUnderTheLastRowIsPastTheEnd() {
+        XCTAssertTrue(BottomWatch.pastEnd(markerShown: true, markerFoot: 440, viewportHeight: 640))
+        XCTAssertFalse(BottomWatch.pastEnd(markerShown: true, markerFoot: 632, viewportHeight: 640), "the marker's foot sits 10 above the edge when at the bottom")
+        XCTAssertFalse(BottomWatch.pastEnd(markerShown: false, markerFoot: 440, viewportHeight: 640), "a marker out of sight is the person reading above")
+        XCTAssertFalse(BottomWatch.pastEnd(markerShown: true, markerFoot: 440, viewportHeight: 0), "not measured yet")
+    }
 }
