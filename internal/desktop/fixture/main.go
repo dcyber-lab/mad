@@ -162,6 +162,7 @@ func newHandler(name, web string) (http.Handler, error) {
 	mux.HandleFunc("GET /api/live", f.live)
 	mux.HandleFunc("GET /api/bus/messages", f.messages)
 	mux.HandleFunc("GET /api/bus/image", f.image)
+	mux.HandleFunc("POST /api/bus/post", f.post)
 	mux.HandleFunc("POST /api/pair", f.pair)
 	mux.HandleFunc("POST /api/budget", f.budget)
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
@@ -184,6 +185,8 @@ type fixture struct {
 	// pairTried: the codes that failed once already (32 c's).
 	mu        sync.Mutex
 	pairTried map[string]bool
+	// posted: what the person said through /api/bus/post, by channel; they follow the scenario's messages.
+	posted map[string][]json.RawMessage
 }
 
 func reply(w http.ResponseWriter, v any) {
@@ -307,7 +310,10 @@ func (f *fixture) messages(w http.ResponseWriter, r *http.Request) {
 	out := []any{}
 	last := 0
 	now := time.Now()
-	for _, raw := range f.scn.Messages[ch] {
+	f.mu.Lock()
+	all := append(append([]json.RawMessage{}, f.scn.Messages[ch]...), f.posted[ch]...)
+	f.mu.Unlock()
+	for _, raw := range all {
 		var m map[string]any
 		if json.Unmarshal(raw, &m) != nil {
 			continue
@@ -323,6 +329,36 @@ func (f *fixture) messages(w http.ResponseWriter, r *http.Request) {
 		out = append(out, m)
 	}
 	reply(w, map[string]any{"channel": ch, "messages": out, "last": last, "paused": false, "receipts": []any{}})
+}
+
+// post takes the person's message into the channel, as the next one, so a native client can be seen sending.
+func (f *fixture) post(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Channel string `json:"channel"`
+		Text    string `json:"text"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Channel == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	seq := 0
+	for _, raw := range append(append([]json.RawMessage{}, f.scn.Messages[in.Channel]...), f.posted[in.Channel]...) {
+		var m struct {
+			Seq int `json:"seq"`
+		}
+		if json.Unmarshal(raw, &m) == nil && m.Seq > seq {
+			seq = m.Seq
+		}
+	}
+	seq++
+	raw, _ := json.Marshal(map[string]any{"seq": seq, "at": "-0s", "from": map[string]any{"id": "you", "label": "you"}, "kind": "text", "text": in.Text})
+	if f.posted == nil {
+		f.posted = map[string][]json.RawMessage{}
+	}
+	f.posted[in.Channel] = append(f.posted[in.Channel], raw)
+	reply(w, map[string]any{"seq": seq, "woke": []string{}})
 }
 
 // image answers a small PNG, its color the id's.

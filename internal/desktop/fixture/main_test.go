@@ -271,3 +271,40 @@ func TestChatIsReadOnce(t *testing.T) {
 		t.Errorf("second look: %+v", again)
 	}
 }
+
+// A post to a channel is the next message after the last, and the messages after it carry it: a native client can be seen sending.
+func TestPostBecomesTheNextMessage(t *testing.T) {
+	h, err := newHandler("channel-fold", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/bus/post", "application/json", strings.NewReader(`{"channel":"fold","text":"hello there"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res struct{ Seq int }
+	_ = json.NewDecoder(r.Body).Decode(&res)
+	r.Body.Close()
+	if res.Seq != 15 {
+		t.Fatalf("seq %d, want 15", res.Seq)
+	}
+	r, err = http.Get(srv.URL + "/api/bus/messages?channel=fold&since=14")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var m struct {
+		Messages []struct {
+			Seq  int
+			Text string
+			From struct{ ID string }
+		}
+		Last int
+	}
+	_ = json.NewDecoder(r.Body).Decode(&m)
+	if len(m.Messages) != 1 || m.Messages[0].Seq != 15 || m.Messages[0].Text != "hello there" || m.Messages[0].From.ID != "you" || m.Last != 15 {
+		t.Errorf("after the post: %+v", m)
+	}
+}

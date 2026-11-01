@@ -14,6 +14,8 @@ public struct ChannelView: View {
     @State private var nearBottom = true
     @State private var viewport = CGSize.zero
     @State private var keeper = BottomKeeper()
+    /// When the list last followed a new message to the bottom: the marker leaving then is the message pushing it, not the person scrolling.
+    @State private var followedAt = Date.distantPast
     @State private var expanded: Set<Int> = []
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
@@ -144,6 +146,8 @@ public struct ChannelView: View {
                     Color.clear.frame(height: 1).id(Self.bottom)
                         .onAppear { nearBottom = true }
                         .onDisappear {
+                            // a message that arrives pushes the marker out for a moment; the list follows at once
+                            guard Date().timeIntervalSince(followedAt) > 0.5 else { return }
                             nearBottom = false
                             if keeper.leftBottom() { stick(proxy) }
                         }
@@ -199,7 +203,9 @@ public struct ChannelView: View {
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
-                if nearBottom || mine { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
+                // No animation: a lazy list scrolled under an animation while its rows are measured draws
+                // gaps, and the new message pushing the marker out would flash the way-down button.
+                if nearBottom || mine { followedAt = Date(); stick(proxy) }
             }
         }
     }
