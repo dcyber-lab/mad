@@ -19,6 +19,11 @@ public struct ChannelView: View {
     @State private var markerShown = true
     @State private var markerFoot: CGFloat = 0
     @State private var bottomInset: CGFloat = 0
+    /// The list was at its end when it was last judged with the same viewport and inset: what a size change finds it as,
+    /// whatever the change itself did to the marker (a marker pushed out by the keyboard is not a reader who scrolled up).
+    @State private var endLatch = true
+    @State private var judgedViewport: CGFloat = -1
+    @State private var judgedInset: CGFloat = -1
     #endif
     #if os(macOS)
     // The Mac's window is resized by the person and keeps its list at the bottom through that (see `BottomWatch`).
@@ -180,7 +185,12 @@ public struct ChannelView: View {
                             Color.clear.onAppear { markerFoot = g.frame(in: .named(Self.space)).maxY; markerShown = true; judge() }
                                 .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in markerFoot = y; judge() }
                         })
-                        .onDisappear { markerShown = false; nearBottom = false }
+                        .onDisappear {
+                            markerShown = false
+                            nearBottom = false
+                            // gone with the viewport unchanged: the person scrolled; gone with a resize: the resize did it
+                            if judgedViewport == viewport.height && judgedInset == bottomInset { endLatch = false }
+                        }
                         #else
                         .background(GeometryReader { g in
                             // where the marker's foot is in the scroll view, kept without drawing the view again
@@ -246,13 +256,15 @@ public struct ChannelView: View {
                     // the keyboard, the composer growing or the ask card changed what covers the list's foot: a list that was
                     // at its end is put back at its end once (the offset is kept through the change)
                     bottomInset = inset
-                    if nearBottom { stick(proxy) } else { judge() }
+                    judge()
+                    if endLatch { stick(proxy) }
                 }
                 #endif
                 .onChange(of: g.size) { _, size in
                     viewport = size
                     #if os(iOS)
                     judge()
+                    if endLatch { stick(proxy) }
                     #endif
                     #if os(macOS)
                     // a list at its bottom stays there as the viewport changes: put back at once, not after a wait
@@ -342,6 +354,9 @@ public struct ChannelView: View {
     /// frame, which the head, the composer and the keyboard already cut down: a marker realized under them is below it.)
     private func judge() {
         nearBottom = markerShown && markerFoot <= viewport.height + 2
+        if judgedViewport == viewport.height && judgedInset == bottomInset { endLatch = nearBottom }
+        judgedViewport = viewport.height
+        judgedInset = bottomInset
     }
     #endif
 
