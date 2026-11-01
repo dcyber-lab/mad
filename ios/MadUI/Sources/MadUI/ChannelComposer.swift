@@ -71,6 +71,12 @@ struct ChannelComposer: View {
                     }
             }
         }
+        #if DEBUG && os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("protoFocus"))) { _ in focused = true }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("protoBlur"))) { _ in focused = false }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("protoText"))) { n in text = (n.object as? String) ?? "" }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("protoSend"))) { _ in submit() }
+        #endif
         .photosPicker(isPresented: $picking, selection: $picked, maxSelectionCount: max(1, ChannelLimits.images - images.count), matching: .images)
         .onChange(of: picked) { _, items in loadPicked(items) }
         .onChange(of: text) { _, _ in pick = 0 }

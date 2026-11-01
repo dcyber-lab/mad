@@ -145,8 +145,8 @@ public struct ChannelView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     // Each row is drawn again only when what it shows changed: a look that brought nothing new (or one
                     // new message) leaves the other rows alone.
-                    ForEach(screen.items) { item in
-                        DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
+                    ForEach(screen.items.reversed()) { item in
+                        DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id).scaleEffect(x: 1, y: -1)
                             .onAppear { realized.count += 1 }
                             .onDisappear { realized.count -= 1 }
                     }
@@ -226,9 +226,29 @@ public struct ChannelView: View {
             })
             .simultaneousGesture(edgeOpen)
             #endif
-            .defaultScrollAnchor(.bottom)
-            .pinnedToBottomThroughResizes()
+            .scaleEffect(x: 1, y: -1) // PROTOTYPE: the list is upside down, its rows too: the bottom is the top of the scroll view
             .scrollDismissesKeyboard(.interactively)
+            #if DEBUG && os(iOS)
+            // a scripted run for comparing layouts: keyboard up, three lines, scrolls with it up, down, up again, a send
+            .task {
+                guard UserDefaults.standard.bool(forKey: "protoDrive") else { return }
+                func post(_ name: String, _ object: Any? = nil) { NotificationCenter.default.post(name: Notification.Name(name), object: object) }
+                func wait(_ s: Double) async { try? await Task.sleep(for: .seconds(s)) }
+                await wait(4); post("protoFocus")
+                await wait(3); post("protoText", "第一行\n第二行\n第三行")
+                await wait(3)
+                let first = screen.items.first?.id, mid = screen.items.dropFirst(screen.items.count / 2).first?.id
+                if let first { withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(first, anchor: .bottom) } }
+                await wait(2.5)
+                if let mid { withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(mid, anchor: .center) } }
+                await wait(2.5)
+                withAnimation(.easeInOut(duration: 1.2)) { proxy.scrollTo(Self.bottom, anchor: .top) }
+                await wait(2.5); post("protoBlur")
+                await wait(3.5); post("protoFocus")
+                await wait(3); post("protoText", "测试"); await wait(0.5); post("protoSend")
+                await wait(4)
+            }
+            #endif
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
