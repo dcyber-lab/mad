@@ -20,8 +20,13 @@ public enum ChannelMapping {
         let split = Self.split(channel: channel, deck: deck)
         let members = split.team
         let sorted = messages.sorted { $0.seq < $1.seq }
-        let items = Self.items(sorted, channel: channel, deck: deck, calendar: calendar, now: now)
-        let pictures = sorted.reduce(0) { $0 + $1.images.count }
+        // The agents' bookkeeping (handoffs, reports, check-ins, nudges, lapsed notices) is not drawn: runs and time lines
+        // are built from what is, and a reply keeps its quote of a message that is not (it looks in `sorted`).
+        let visible = sorted.filter { !isHidden($0) }
+        var items = Self.items(visible, all: sorted, channel: channel, deck: deck, calendar: calendar, now: now)
+        // only the agents' own work so far: say so, once, rather than showing an empty channel
+        if items.isEmpty, !sorted.isEmpty { items = [.note(id: "quiet", text: quietNote)] }
+        let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
         let everyone = members + split.helpers
         let working = everyone.filter { $0.state == .working }.count
@@ -41,6 +46,22 @@ public enum ChannelMapping {
             panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
                                 pictureCount: pictures, paused: isPaused),
             placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
+    }
+
+    /// What an empty-looking channel says when everything in it is hidden.
+    public static let quietNote = "agent 们在后台协作，有事会在这里 @ 你。"
+
+    /// The kinds of message that are the agents' bookkeeping and are not drawn: a handoff, what answers it, a
+    /// check-in, a nudge (the lapsed notice of a handoff is a system message that carries the handoff).
+    public static let hiddenKinds: Set<String> = ["handoff", "done", "declined", "timer", "nudge"]
+
+    /// Whether a message is left out of the channel: the bookkeeping kinds and the lapsed notices, unless the message
+    /// @mentions the person (it is then an ordinary message, whatever its kind). The bus's own pause and resume
+    /// notes stay.
+    public static func isHidden(_ m: BusMessage) -> Bool {
+        if asksYou(m) { return false }
+        if hiddenKinds.contains(m.kind) { return true }
+        return m.kind == "system" && m.handoff != nil
     }
 
     static func title(id: String, channel: Channel?) -> String {
@@ -120,7 +141,8 @@ public enum ChannelMapping {
 
     // MARK: items
 
-    static func items(_ messages: [BusMessage], channel: Channel?, deck: Deck?, calendar: Calendar, now: Date) -> [ChannelItem] {
+    /// `messages` are the ones that are drawn, `all` every one (for what a reply quotes).
+    static func items(_ messages: [BusMessage], all: [BusMessage], channel: Channel?, deck: Deck?, calendar: Calendar, now: Date) -> [ChannelItem] {
         var out: [ChannelItem] = []
         var previous: BusMessage?
         var openRun = false // the last item is a run a message may join
@@ -135,7 +157,7 @@ public enum ChannelMapping {
                 out.append(.time(id: String(m.seq), text: label))
                 openRun = false
             }
-            let bubble = Self.bubble(m, messages: messages, channel: channel, deck: deck)
+            let bubble = Self.bubble(m, messages: all, channel: channel, deck: deck)
             if m.from.isYou {
                 out.append(.mine(bubble))
                 openRun = false
@@ -193,31 +215,15 @@ public enum ChannelMapping {
         return m.text.range(of: "(^|[\\s(（])@you(?![\\p{L}\\p{N}_-])", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    static func isReport(_ m: BusMessage) -> Bool {
-        ["handoff", "done", "declined"].contains(m.kind)
-    }
-
-    /// The fold of an agent's message, nil when it is shown whole: the person's, mad's own, any that asks
+    /// The fold of a long message of an agent, nil when it is shown whole: the person's, mad's own, any that asks
     /// the person, and whatever an agent says in a DM with the person (all of it is addressed to them).
     static func fold(_ m: BusMessage, channel: Channel?, deck: Deck?) -> ChannelBubble.Fold? {
         if m.from.isYou || m.from.id == "mad" || m.kind == "system" { return nil }
         if let c = channel, c.dm, c.yours { return nil }
         if asksYou(m) { return nil }
         let lines = m.text.split(separator: "\n", omittingEmptySubsequences: true).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard isReport(m) || lines.count > foldLines || m.text.count > foldChars else { return nil }
-        let declined = m.kind == "declined" || m.handoff?.status == "declined"
-        var first = firstSentence(String(lines.first ?? ""))
-        let head: String
-        switch m.kind {
-        case "handoff":
-            let to = m.handoff?.to ?? ""
-            head = "→ " + (deck?.agent(id: to)?.label ?? to)
-        case "done", "declined":
-            head = declined ? "拒绝" : "完成"
-            first = first.replacingOccurrences(of: "^(done|declined|完成|拒绝)[:：]\\s*", with: "", options: [.regularExpression, .caseInsensitive])
-        default: head = ""
-        }
-        return ChannelBubble.Fold(head: head, summary: first)
+        guard lines.count > foldLines || m.text.count > foldChars else { return nil }
+        return ChannelBubble.Fold(summary: firstSentence(String(lines.first ?? "")))
     }
 
     // MARK: text

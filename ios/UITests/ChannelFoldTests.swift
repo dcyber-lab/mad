@@ -1,14 +1,13 @@
 import XCTest
 
-/// A long channel (`channel-fold` scenario): folded handoffs and reports as thin lines,
+/// A long channel (`channel-fold` scenario): no handoffs and reports, long messages as thin lines,
 /// whole @you and own messages, pictures with a lightbox, a long URL, a long quote,
 /// the 群信息 panel, and the long-press menu.
 final class ChannelFoldTests: MadUITestCase {
-    /// The folded lines: buttons named by their text ("→ builder：…", "完成：…"). Four of the
-    /// scenario's messages fold: the handoff, the done report, and two long ones.
+    /// The folded lines: buttons named by their text. Two of the scenario's messages fold, the long ones
+    /// (the handoff and the done report are not drawn).
     private var lines: XCUIElementQuery {
-        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@",
-                                         "→ builder", "完成", "修改在这里", "命令"))
+        web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "修改在这里", "命令"))
     }
     private var handoff: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "→ builder")).firstMatch }
     private var done: XCUIElement { web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "完成")).firstMatch }
@@ -35,24 +34,18 @@ final class ChannelFoldTests: MadUITestCase {
 
     // MARK: Folded lines
 
-    func testHandoffAndDoneAreThinLinesThatOpenInPlaceAndFoldAgain() {
-        // At least the handoff and the done report are one line each (the fixture has two long messages more).
-        XCTAssertGreaterThanOrEqual(lines.count, 2, "the handoff and the done report should each be one line: \(lines.count)")
-        XCTAssertTrue(handoff.label.contains("Images in bus channels and DMs"), "the handoff line says: “\(handoff.label)”")
-        XCTAssertTrue(done.label.contains("Done: PR #88 adds pictures to channels"), "the done line says: “\(done.label)”")
-        XCTAssertFalse(done.label.contains("PR PR"), "the done line repeats PR: “\(done.label)”")
-        shot("folded")
-        // The rest of the report is not on the page until the line is opened, there, and folds again.
-        let rest = elements(containing: "One thing to know")
-        XCTAssertEqual(rest.count, 0, "the done report's text is shown while it is folded")
-        done.tap()
-        XCTAssertTrue(rest.firstMatch.waitForExistence(timeout: 5), "tapping the done line did not open its text")
-        XCTAssertEqual(elements(containing: "Do it on a branch").count, 0, "opening one line opened the handoff too")
-        shot("the done report open")
-        done.tap()
-        waitUntilGone(rest.firstMatch, "tapping the done line again did not fold it")
-        handoff.tap()
-        XCTAssertTrue(elements(containing: "Do it on a branch").firstMatch.waitForExistence(timeout: 5), "tapping the handoff did not open it")
+    func testTheAgentsBookkeepingIsNotDrawnAndLongMessagesStillFold() {
+        // The handoff and the done report are the agents' bookkeeping: no line, no text, whatever opens or not.
+        XCTAssertEqual(handoff.exists, false, "the handoff is drawn: “\(handoff.label)”")
+        XCTAssertEqual(done.exists, false, "the done report is drawn: “\(done.label)”")
+        XCTAssertEqual(elements(containing: "Images in bus channels and DMs").count, 0, "the handoff's text is on the page")
+        XCTAssertEqual(elements(containing: "One thing to know").count, 0, "the done report's text is on the page")
+        // The two long messages are still one line each, and open in place.
+        XCTAssertEqual(lines.count, 2, "the two long messages should each be one line: \(lines.count)")
+        shot("no handoff and no done")
+        let long = web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "修改在这里")).firstMatch
+        long.tap()
+        XCTAssertEqual(long.exists, true)
     }
 
     func testNoShowMoreAndNoMemberStripAnywhere() {

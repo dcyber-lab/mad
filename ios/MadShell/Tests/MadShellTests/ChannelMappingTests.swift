@@ -47,15 +47,12 @@ final class ChannelMappingTests: XCTestCase {
     func testWhatTheFixtureFoldsAndWhatItShowsWhole() throws {
         let s = try foldScreen()
         let folded = Dictionary(uniqueKeysWithValues: bubbles(s).map { ($0.id, $0.fold) })
-        XCTAssertEqual(folded.keys.count, 13)
-        // a handoff, a result, a long message and a code block fold; the rest are whole
-        for seq in [2, 3, 11, 13] { XCTAssertNotNil(folded[seq] ?? nil, "#\(seq) should be folded") }
+        // the handoff (#2) and its result (#3) are not drawn; the rest are
+        XCTAssertEqual(folded.keys.sorted(), [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+        // a long message and a code block fold; the rest are whole
+        for seq in [11, 13] { XCTAssertNotNil(folded[seq] ?? nil, "#\(seq) should be folded") }
         for seq in [1, 4, 5, 6, 7, 8, 9, 10, 12] { XCTAssertNil(folded[seq] ?? nil, "#\(seq) should be whole") }
-        XCTAssertEqual(try XCTUnwrap(folded[2] ?? nil).head, "→ builder", "the handoff names whom it hands to, by label")
-        XCTAssertEqual(try XCTUnwrap(folded[2] ?? nil).summary, "Images in bus channels and DMs.")
-        XCTAssertEqual(try XCTUnwrap(folded[3] ?? nil).head, "完成")
-        XCTAssertEqual(try XCTUnwrap(folded[3] ?? nil).summary, "PR #88 adds pictures to channels.", "a PR's address is its number, and 'Done:' is the head's")
-        XCTAssertEqual(bubbles(s).first { $0.id == 3 }?.text.hasPrefix("Done: PR https://"), true, "the whole text stays for the tap")
+        XCTAssertEqual(try XCTUnwrap(folded[11] ?? nil).summary, "修改在这里：PR #88 看第二处。", "a link is its text and a PR's address its number")
     }
 
     func testTheRulesOfFolding() {
@@ -68,15 +65,12 @@ final class ChannelMappingTests: XCTestCase {
         XCTAssertFalse(folded(msg(1, "builder", lines3)), "three lines is not past")
         XCTAssertTrue(folded(msg(1, "builder", lines4)), "four is")
         XCTAssertFalse(folded(msg(1, "builder", "a\n\n\nb\n\nc")), "blank lines do not count")
-        // reports fold however short
-        XCTAssertTrue(folded(msg(1, "builder", "done", kind: "done")))
-        XCTAssertTrue(folded(msg(1, "builder", "no", kind: "declined")))
-        XCTAssertTrue(folded(msg(1, "builder", "no", kind: "done", handoff: .init(id: "h-1", status: "declined"))))
-        XCTAssertTrue(folded(msg(1, "architect", "go", kind: "handoff", handoff: .init(id: "h-1", to: "x"))))
+        // a short message is whole, whatever it is (reports are not drawn at all: see testTheBookkeepingIsNotDrawn)
+        XCTAssertFalse(folded(msg(1, "builder", "ok")))
         // the person's own never; one that asks the person never
         XCTAssertFalse(folded(msg(1, "you", long)))
         XCTAssertFalse(folded(msg(1, "builder", "@you " + long)))
-        XCTAssertFalse(folded(msg(1, "builder", "please look, @You", kind: "done")), "the case of @you does not matter")
+        XCTAssertFalse(folded(msg(1, "builder", "please look, @You " + long, kind: "done")), "the case of @you does not matter")
         XCTAssertFalse(folded(msg(1, "builder", long, mentions: ["you"])))
         XCTAssertTrue(folded(msg(1, "builder", "write to me@you.com " + long)), "an address is not an @you")
         XCTAssertTrue(folded(msg(1, "builder", "@younger " + long)), "nor @younger")
@@ -99,6 +93,68 @@ final class ChannelMappingTests: XCTestCase {
         XCTAssertEqual(ChannelMapping.firstSentence("[the PR](https://github.com/x/y/pull/5) is up"), "the PR is up")
         XCTAssertEqual(ChannelMapping.firstSentence(String(repeating: "a", count: 300)).count, 120)
         XCTAssertEqual(ChannelMapping.firstSentence("v1.2 is out"), "v1.2 is out", "a dot inside a word is not an end")
+    }
+
+    // MARK: the agents' bookkeeping is not drawn
+
+    private func handoffMessage(_ seq: Int, to: String = "builder") -> BusMessage {
+        msg(seq, "architect", "Do this.", kind: "handoff", handoff: .init(id: "h-\(seq)", to: to))
+    }
+
+    func testTheBookkeepingIsNotDrawn() {
+        let kinds = ["handoff", "done", "declined", "timer", "nudge"]
+        for kind in kinds {
+            let s = screen([msg(1, "architect", "x", kind: kind)])
+            XCTAssertFalse(s.items.contains { if case .run = $0 { true } else { false } }, "a \(kind) is not drawn")
+        }
+        // the lapsed notice of a handoff is a system message that carries the handoff
+        XCTAssertTrue(ChannelMapping.isHidden(msg(1, "mad", "h-1 lapsed: builder ended its turn without bus_done.", kind: "system", handoff: .init(id: "h-1"))))
+        // the bus's own pause and resume notes stay
+        XCTAssertFalse(ChannelMapping.isHidden(msg(1, "mad", "Paused: waiting for you", kind: "system")))
+        XCTAssertFalse(ChannelMapping.isHidden(msg(1, "builder", "hello")))
+        XCTAssertFalse(ChannelMapping.isHidden(msg(1, "builder", "[a picture]", images: ["p1"])))
+    }
+
+    func testAMessageThatMentionsThePersonIsAnOrdinaryBubbleWhateverItsKind() throws {
+        for kind in ["handoff", "done", "declined", "timer", "nudge"] {
+            let m = msg(1, "builder", "@you 请看一下 #88", kind: kind)
+            XCTAssertFalse(ChannelMapping.isHidden(m), "\(kind) with @you stays")
+            let b = try XCTUnwrap(bubbles(screen([m])).first, "\(kind) with @you is a bubble")
+            XCTAssertNil(b.fold, "never a fold line")
+            XCTAssertEqual(b.text, "@you 请看一下 #88")
+        }
+        XCTAssertFalse(ChannelMapping.isHidden(msg(1, "builder", "look", kind: "done", mentions: ["you"])))
+    }
+
+    func testARunStaysOneRunAcrossAHiddenMessageAndItAddsNoTimeLine() {
+        let s = screen([
+            msg(1, "builder", "one", at: "2026-11-01T08:00:00+08:00"),
+            handoffMessage(2), // hidden, from someone else, an hour on
+            msg(3, "builder", "two", at: "2026-11-01T08:01:00+08:00"),
+        ].map { var m = $0; if m.seq == 2 { m.at = ISO8601DateFormatter().date(from: "2026-11-01T09:30:00+08:00") }; return m })
+        let runs = s.items.compactMap { item -> ChannelRun? in if case .run(let r) = item { r } else { nil } }
+        XCTAssertEqual(runs.map { $0.bubbles.map(\.id) }, [[1, 3]], "one run: a hidden message between does not split it")
+        XCTAssertEqual(s.items.filter { if case .time = $0 { true } else { false } }.count, 1, "and adds no time line")
+    }
+
+    func testAReplyKeepsItsQuoteOfAHiddenMessage() throws {
+        let s = screen([handoffMessage(5), msg(6, "builder", "got it", replyTo: 5)])
+        let b = try XCTUnwrap(bubbles(s).first)
+        XCTAssertEqual(b.id, 6)
+        XCTAssertEqual(b.quote?.seq, 5)
+        XCTAssertEqual(b.quote?.who, "architect")
+        XCTAssertEqual(b.quote?.text, "Do this.")
+    }
+
+    func testAChannelOfOnlyHiddenMessagesSaysTheAgentsWorkInTheBackground() {
+        let s = screen([handoffMessage(1), msg(2, "builder", "ok", kind: "done")])
+        XCTAssertEqual(s.items, [.note(id: "quiet", text: "agent 们在后台协作，有事会在这里 @ 你。")])
+        XCTAssertEqual(screen([]).items, [], "a channel with nothing in it says nothing")
+        // and a hidden message that arrives later changes nothing on screen
+        let one = screen([msg(1, "builder", "hi")])
+        let two = screen([msg(1, "builder", "hi"), handoffMessage(2), msg(3, "architect", "x", kind: "nudge")])
+        XCTAssertEqual(one.items, two.items)
+        XCTAssertEqual(one.tail, two.tail, "nothing to follow")
     }
 
     // MARK: runs
