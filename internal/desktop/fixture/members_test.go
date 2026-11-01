@@ -83,18 +83,26 @@ func openPanel(t *testing.T, c *cdp, url string, width int, shot string) panelRe
 	if _, err := c.call("Page.navigate", map[string]any{"url": url}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 100; i++ {
-		time.Sleep(150 * time.Millisecond)
-		if v, err := c.eval(`document.querySelectorAll("#chanlog .cmsg").length`); err == nil {
-			if n, _ := strconv.Atoi(string(v)); n >= 1 {
-				break
-			}
-		}
+	if !waitFor(20*time.Second, func() bool {
+		v, err := c.eval(`document.querySelectorAll("#chanlog .cmsg").length`)
+		n, _ := strconv.Atoi(string(v))
+		return err == nil && n >= 1
+	}) {
+		t.Fatal("the channel did not draw")
 	}
 	if _, err := c.eval(`openChanPanel()`); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(600 * time.Millisecond)
+	// Settled: the panel is open and nothing that ends is still running (its slide). What loops (a working
+	// character) is not waited for.
+	const settled = `(() => document.querySelector("#chpanel").classList.contains("open") &&
+		document.getAnimations().every((a) => a.playState !== "running" || a.effect.getComputedTiming().iterations === Infinity))()`
+	if !waitFor(10*time.Second, func() bool {
+		v, err := c.eval(settled)
+		return err == nil && string(v) == "true"
+	}) {
+		t.Fatal("the panel did not settle")
+	}
 	v, err := c.eval(panelJS)
 	if err != nil {
 		t.Fatal(err)
