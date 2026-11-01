@@ -21,11 +21,11 @@ function everyText(s) {
 function whenText(iso) {
   const d = new Date(iso);
   if (!iso || isNaN(d) || d.getFullYear() < 2000) return "";
-  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const hm = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const days = (d - new Date()) / 864e5;
   if (d.toDateString() === new Date().toDateString()) return hm;
-  if (days > 0 && days < 6) return `${d.toLocaleDateString([], { weekday: "short" })} ${hm}`;
-  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${hm}`;
+  if (days > 0 && days < 6) return `${d.toLocaleDateString("zh-CN", { weekday: "short" })} ${hm}`;
+  return `${d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" })} ${hm}`;
 }
 
 // timerStrip draws the Scheduled strip: check-ins, then routines.

@@ -986,7 +986,7 @@ async function phoneDialog() {
   } else if (!s.on) {
     body.append(el("p", "dtext", cf
       ? "通过 Cloudflare Tunnel 把这个窗口送到你的手机上，在哪里都能用（用 mad phone on --cloudflare 选的）：知道地址的人都能连上，但进去要输入它显示的验证码。"
-      : `通过 Tailscale 把这个窗口送到你的手机上，地址是 ${s.host}：只有你自己的设备连得上，进去要输入它显示的验证码。`));
+      : `通过 Tailscale 把这个窗口送到你的手机上${s.host ? `，地址是 ${s.host}` : ""}：只有你自己的设备连得上，进去要输入它显示的验证码。`));
     actions = [{ label: "取消", value: null }, { label: "打开", cls: "primary", value: "on" }];
   } else {
     const img = el("img", "qr");

@@ -58,8 +58,8 @@ function resetWords(at) {
   const t = new Date(at);
   const ms = t - Date.now();
   if (!(ms > 0)) return "马上重置";
-  const clock = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  const day = t.toDateString() === new Date().toDateString() ? "" : `${t.toLocaleDateString([], { weekday: "short" })} `;
+  const clock = t.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = t.toDateString() === new Date().toDateString() ? "" : `${t.toLocaleDateString("zh-CN", { weekday: "short" })} `;
   return `${inWords(ms)}后重置，${day}${clock}`;
 }
 

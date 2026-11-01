@@ -657,7 +657,7 @@ async function loadChannel(first) {
 // as "今天 21:05", yesterday's, or the date.
 function timeLine(at) {
   const d = new Date(at);
-  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const hm = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(new Date()) - day(d)) / 864e5);
   const when = days === 0 ? "今天" : days === 1 ? "昨天" : `${d.getMonth() + 1}月${d.getDate()}日`;
@@ -897,7 +897,7 @@ function agentLabel(id) {
 
 function clock(at) {
   const d = new Date(at);
-  return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return isNaN(d) ? "" : d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 // mentionsBold marks @label in markdown text, the agents' labels first

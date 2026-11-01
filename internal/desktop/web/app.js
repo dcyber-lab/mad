@@ -1177,7 +1177,7 @@ function setOffline(off) {
   bar.hidden = !off;
   document.body.classList.toggle("stale", off);
   if (off) {
-    const at = new Date(lastGood).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const at = new Date(lastGood).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
     bar.textContent = lastGood ? `离线 · 数据截至 ${at} · 正在重连` : "离线 · 正在重连";
   }
 }
