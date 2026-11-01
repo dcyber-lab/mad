@@ -161,6 +161,13 @@ public struct ChannelView: View {
                 #endif
                 .padding(.bottom, 10)
             }
+            .overlay(alignment: .top) {
+                // an empty channel: one quiet line, a third of the way down the list area (the list itself is bottom-anchored)
+                if let line = emptyLine {
+                    Text(line).font(MadType.small).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .padding(.horizontal, 24).padding(.top, max(0, viewport.height / 3)).allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .bottom) {
                 if !nearBottom {
                     Button { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } } label: {
@@ -204,6 +211,12 @@ public struct ChannelView: View {
         }
     }
 
+    /// The channel's only item is an empty-state note: its text.
+    private var emptyLine: String? {
+        if screen.items.count == 1, case .note(let id, let text) = screen.items[0], id == "quiet" || id == "empty" { return text }
+        return nil
+    }
+
     /// Back to the bottom once the layout has settled (after a resize that moved it).
     private func stick(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.async { proxy.scrollTo(Self.bottom, anchor: .bottom) }
@@ -213,10 +226,8 @@ public struct ChannelView: View {
         switch item {
         case .time(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
-        case .note(let id, let text) where id == "quiet" || id == "empty":
-            // an empty channel: one quiet line, about a third of the way down the list area
-            Text(text).font(MadType.small).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity).padding(.top, max(0, viewport.height / 3))
+        case .note(let id, _) where id == "quiet" || id == "empty":
+            Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
         case .mine(let b):

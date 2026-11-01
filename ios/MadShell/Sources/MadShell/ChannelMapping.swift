@@ -152,7 +152,7 @@ public enum ChannelMapping {
         var openRun = false // the last item is a run a message may join
         for m in messages {
             if m.kind == "system" {
-                out.append(.note(id: String(m.seq), text: m.text))
+                out.append(.note(id: String(m.seq), text: noteText(m)))
                 openRun = false
                 previous = m
                 continue
@@ -175,6 +175,15 @@ public enum ChannelMapping {
             previous = m
         }
         return out
+    }
+
+    /// What mad's own note says, in Chinese where it is known what happened (the server's English otherwise).
+    static func noteText(_ m: BusMessage) -> String {
+        switch m.event {
+        case "paused": "群已暂停"
+        case "resumed": "群已恢复"
+        default: m.text
+        }
     }
 
     static func sender(_ m: BusMessage, deck: Deck?) -> ChannelMember {

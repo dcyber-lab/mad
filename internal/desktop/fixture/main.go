@@ -27,7 +27,7 @@
 //
 // /api/bus/image?id= answers a small PNG whose color is the id's.
 //
-// Scenarios (testdata/): edge-home, empty, many-channels, channel-fold, team-members, long-title,
+// Scenarios (testdata/): edge-home, empty, many-channels, channel-fold, channel-quiet, team-members, long-title,
 // usage and pairing; the files say what is in each.
 //
 // What the page gives a test to find (web/): a list row is a button

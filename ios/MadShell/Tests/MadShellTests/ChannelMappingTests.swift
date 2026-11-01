@@ -15,9 +15,11 @@ private func fixture<T: Decodable>(_ name: String, _ type: T.Type) throws -> T {
 
 /// A message by hand, for a rule on its own.
 private func msg(_ seq: Int, _ who: String = "architect", _ text: String = "hello", kind: String = "text", at: String = "2026-11-01T08:00:00+08:00",
-                 mentions: [String] = [], replyTo: Int = 0, images: [String] = [], handoff: BusMessage.Handoff? = nil) -> BusMessage {
+                 mentions: [String] = [], replyTo: Int = 0, images: [String] = [], handoff: BusMessage.Handoff? = nil,
+                 event: String = "") -> BusMessage {
     var m = BusMessage(seq: seq, at: ISO8601DateFormatter().date(from: at), from: .init(id: who == "you" ? "you" : "id-\(who)", label: who),
-                       kind: kind, text: text, mentions: mentions, replyTo: replyTo, handoff: handoff, images: images.map { BusImage(id: $0) })
+                       kind: kind, text: text, mentions: mentions, replyTo: replyTo, handoff: handoff, images: images.map { BusImage(id: $0) },
+                       event: event)
     m.seq = seq
     return m
 }
@@ -157,6 +159,20 @@ final class ChannelMappingTests: XCTestCase {
         let two = screen([msg(1, "builder", "hi"), handoffMessage(2), msg(3, "architect", "x", kind: "nudge")])
         XCTAssertEqual(one.items, two.items)
         XCTAssertEqual(one.tail, two.tail, "nothing to follow")
+    }
+
+    func testThePauseAndResumeNotesAreInChineseAndOlderOnesKeepTheirText() throws {
+        let s = screen([
+            msg(1, "mad", "Paused: waiting for you", kind: "system", event: "paused"),
+            msg(2, "mad", "Resumed by a person.", kind: "system", event: "resumed"),
+            msg(3, "mad", "Paused by an older mad.", kind: "system"),
+        ])
+        XCTAssertEqual(s.items.compactMap { item -> String? in if case .note(_, let t) = item { t } else { nil } },
+                       ["群已暂停", "群已恢复", "Paused by an older mad."])
+        // and the field is read from the server's JSON
+        let m = try JSONDecoder().decode(BusMessage.self, from: Data(#"{"seq":4,"kind":"system","text":"x","event":"paused"}"#.utf8))
+        XCTAssertEqual(m.event, "paused")
+        XCTAssertEqual(try JSONDecoder().decode(BusMessage.self, from: Data(#"{"seq":5,"kind":"system","text":"x"}"#.utf8)).event, "")
     }
 
     // MARK: runs
