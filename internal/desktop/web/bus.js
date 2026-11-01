@@ -389,11 +389,15 @@ function panelMember(row, c) {
   r.dataset.st = a ? shownStatus(a) : "";
   const t = el("span", "t");
   const n = el("span", "n");
+  if (!a && row.team) r.dataset.gone = m.id ? "已离开" : "未启动";
   n.append(el("span", "nm", row.team ? row.role : m.label));
   if (row.team ? row.lead : m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
   if (row.team && (a?.kind || m.kind)) n.append(el("span", "k", a?.kind || m.kind));
-  t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : "不在列表里"));
-  r.append(avatar(a || { kind: m.kind, id: m.id }, false), t);
+  // A team's role with no agent yet is "未启动", one whose agent is gone from the deck "已离开"; either is a
+  // still, faded character.
+  const gone = row.team ? (m.id ? "已离开" : "未启动") : "不在列表里";
+  t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : gone));
+  r.append(avatar(a || { kind: m.kind, id: m.id }, false, !a), t);
   r.onclick = () => { closeChanPanel(true); show(m.id); };
   return r;
 }
@@ -493,10 +497,10 @@ function patchChanPanel(side, c) {
     const st = a ? shownStatus(a) : "";
     r.disabled = !a;
     if (r.dataset.st !== st) {
-      r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false));
+      r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false, !a));
       r.dataset.st = st;
     }
-    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : "不在列表里";
+    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : r.dataset.gone || "不在列表里";
     if (line.textContent !== text) line.textContent = text;
   });
   const set = (key, text) => {

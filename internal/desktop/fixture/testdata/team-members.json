@@ -124,6 +124,11 @@
             "id": "fold0009-aaaa",
             "label": "ghost",
             "kind": "claude"
+          },
+          {
+            "id": "fold0010-aaaa",
+            "label": "tester-gone",
+            "kind": "claude"
           }
         ],
         "last": 2,
@@ -147,6 +152,13 @@
               "role": "architect",
               "agent": "fold0001-aaaa",
               "lead": true
+            },
+            {
+              "role": "designer"
+            },
+            {
+              "role": "tester",
+              "agent": "fold0010-aaaa"
             }
           ]
         }

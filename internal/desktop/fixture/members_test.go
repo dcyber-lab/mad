@@ -23,6 +23,7 @@ const panelJS = `(() => {
     else if (cur && e.classList.contains("cplist")) {
       cur.rows = [...e.querySelectorAll(".cprow")].map((r) => ({
         name: r.querySelector(".nm").textContent, kind: r.querySelector(".k")?.textContent || "", st: r.dataset.st, lead: !!r.querySelector(".tag"),
+        line: r.querySelector(".s").textContent, face: r.querySelector('[role="img"]')?.getAttribute("aria-label") || "", off: r.disabled,
       }));
     }
   }
@@ -36,6 +37,8 @@ const panelJS = `(() => {
 type panelRow struct {
 	Name, Kind, St string
 	Lead           bool
+	Line, Face     string // what the row says of its state, and its character's label
+	Off            bool   // the row is dim (no agent to open)
 }
 
 type panelReport struct {
@@ -128,21 +131,41 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 				t.Fatalf("sections: %+v", rep.Sections)
 			}
 			team, helpers := rep.Sections[0], rep.Sections[1]
-			if team.Title != "小组 3" || helpers.Title != "帮手 3" {
-				t.Errorf("headings %q and %q, want 小组 3 and 帮手 3", team.Title, helpers.Title)
+			if team.Title != "小组 5" || helpers.Title != "帮手 3" {
+				t.Errorf("headings %q and %q, want 小组 5 and 帮手 3", team.Title, helpers.Title)
 			}
-			wantTeam := []panelRow{{"architect", "claude", "idle", true}, {"builder", "codex", "idle", false}, {"reviewer", "claude", "idle", false}}
+			// A role with no agent yet says 未启动, one whose agent is gone 已离开: both dim, with a still character
+			// that counts in the 小组 number. The others' lines are the agents' own.
+			wantNew := []panelRow{
+				{Name: "designer", St: "", Line: "未启动", Face: "stopped", Off: true},
+				{Name: "tester", Kind: "claude", St: "", Line: "已离开", Face: "stopped", Off: true},
+			}
+			for i := range team.Rows {
+				if i < 3 {
+					team.Rows[i].Line, team.Rows[i].Face = "", ""
+				}
+			}
+			if len(team.Rows) == 5 {
+				if got := team.Rows[3:]; !reflect.DeepEqual(got, wantNew) {
+					t.Errorf("roles without an agent: %+v, want %+v", got, wantNew)
+				}
+				team.Rows = team.Rows[:3]
+			}
+			for i := range helpers.Rows {
+				helpers.Rows[i].Line, helpers.Rows[i].Face = "", ""
+			}
+			wantTeam := []panelRow{{Name: "architect", Kind: "claude", St: "idle", Lead: true}, {Name: "builder", Kind: "codex", St: "idle"}, {Name: "reviewer", Kind: "claude", St: "idle"}}
 			if !reflect.DeepEqual(team.Rows, wantTeam) {
 				t.Errorf("小组: %+v, want %+v", team.Rows, wantTeam)
 			}
-			wantHelpers := []panelRow{{"ops", "", "running", false}, {"kim", "", "waiting", false}, {"docs", "", "idle", false}}
+			wantHelpers := []panelRow{{Name: "ops", St: "running"}, {Name: "kim", St: "waiting"}, {Name: "docs", St: "idle"}}
 			if !reflect.DeepEqual(helpers.Rows, wantHelpers) {
 				t.Errorf("帮手: %+v, want %+v (the busy first, ghost, whose agent is gone, left out)", helpers.Rows, wantHelpers)
 			}
 			if rep.Sections[2].Title != "这个群" {
 				t.Errorf("third heading %q", rep.Sections[2].Title)
 			}
-			if !strings.Contains(rep.Who, "3 agents · 3 帮手") {
+			if !strings.Contains(rep.Who, "5 agents · 3 帮手") {
 				t.Errorf("under the message box: %q", rep.Who)
 			}
 			// What is done and what waits counts everyone, helpers too: kim, a helper, needs the person and ops, another,
