@@ -197,7 +197,8 @@ public struct ChannelView: View {
             .background(GeometryReader { g in
                 Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, size in
                     viewport = size
-                    if keeper.resized() { stick(proxy) }
+                    // a list at its bottom stays there as the viewport changes: put back at once, not after a wait
+                    if nearBottom || keeper.resized() { stick(proxy) }
                     watch.resized()
                     settle(proxy)
                 }
