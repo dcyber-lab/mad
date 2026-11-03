@@ -39,7 +39,7 @@ var HiddenKinds = []string{"handoff", "done", "declined", "timer", "nudge"}
 // system line about a handoff). Whatever @mentions the person is never quiet, of any kind, and mad's own
 // pause and resume notes are not a handoff's, so they are not either.
 func Quiet(m Message) bool {
-	if youRe.MatchString(m.Text) {
+	if mentionsYou(m.Text) {
 		return false
 	}
 	if m.Kind == "system" {
@@ -64,43 +64,50 @@ func lastLine(m Message) string {
 	return m.From.Label + ": " + text
 }
 
-// YourChannels says how each channel stands for the person, by id.
+// YourChannels says how each channel stands for the person, by id. It
+// takes no lock: channels.json and the cursors are replaced whole by a
+// rename, and a channel's file is appended to or replaced so (readMsgs), so
+// a look never sees one half written, and agents posting don't wait on it.
 func YourChannels() (map[string]Yours, error) {
 	out := map[string]Yours{}
-	err := locked(func() error {
-		cl, err := loadChannels()
-		if err != nil {
-			return err
+	cl, err := loadChannels()
+	if err != nil {
+		return out, err
+	}
+	cs, err := loadCursors(You)
+	if err != nil {
+		return out, err
+	}
+	for _, c := range cl.Channels {
+		if c.Archived {
+			continue
 		}
-		cs, err := loadCursors(You)
+		msgs, err := readMsgs(c.ID)
 		if err != nil {
-			return err
+			return out, err
 		}
-		for _, c := range cl.Channels {
-			if c.Archived {
-				continue
-			}
-			msgs, err := readMsgs(c.ID)
-			if err != nil {
-				return err
-			}
-			var y Yours
-			for _, m := range msgs {
-				y.Last = max(y.Last, m.Seq)
+		var y Yours
+		last := -1 // the last visible message
+		for i, m := range msgs {
+			y.Last = max(y.Last, m.Seq)
+			if m.Kind == "system" || Quiet(m) {
 				// the hidden kinds count for nothing here: a channel whose last messages are all bookkeeping keeps
 				// its last visible line (LastLine stays empty if it has none)
-				if m.Kind != "system" && !Quiet(m) && (strings.TrimSpace(m.Text) != "" || len(m.Images) > 0) {
-					y.LastLine, y.LastAt = lastLine(m), m.At
-				}
-				if m.Seq > cs[c.ID].Read && m.Kind != "system" && !Quiet(m) && m.From.ID != You {
-					y.Unread++
-					y.Mention = y.Mention || isYourDM(c.ID) || youRe.MatchString(m.Text)
-				}
+				continue
 			}
-			y.Listed = (y.Unread > 0 || c.Paused) && (!isDM(c.ID) || isYourDM(c.ID))
-			out[c.ID] = y
+			if strings.TrimSpace(m.Text) != "" || len(m.Images) > 0 {
+				last = i
+			}
+			if m.Seq > cs[c.ID].Read && m.From.ID != You {
+				y.Unread++
+				y.Mention = y.Mention || isYourDM(c.ID) || mentionsYou(m.Text)
+			}
 		}
-		return nil
-	})
-	return out, err
+		if last >= 0 {
+			y.LastLine, y.LastAt = lastLine(msgs[last]), msgs[last].At
+		}
+		y.Listed = (y.Unread > 0 || c.Paused) && (!isDM(c.ID) || isYourDM(c.ID))
+		out[c.ID] = y
+	}
+	return out, nil
 }

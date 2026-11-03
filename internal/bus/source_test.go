@@ -49,6 +49,84 @@ func TestSourceReadsOnlyOnChange(t *testing.T) {
 	}
 }
 
+// The board is made again when an agent moves between waiting, at rest and
+// at work, not between two ways of being at rest; the channels only when a
+// file moved.
+func TestSourceStatusClasses(t *testing.T) {
+	setup(t)
+	st, _ := state.Load()
+	at := time.Date(2026, 10, 30, 14, 2, 0, 0, time.UTC)
+	mustCreate(t, "ops", idArch)
+	var s Source
+	s.Look(st, map[string]string{idArch: status.Idle}, at)
+	if _, read := s.Look(st, map[string]string{idArch: status.Asleep}, at.Add(time.Second)); read {
+		t.Error("read again for idle → asleep")
+	}
+	if _, read := s.Look(st, map[string]string{idArch: status.Running}, at.Add(2*time.Second)); !read {
+		t.Error("not read for asleep → running")
+	}
+	if _, read := s.Look(st, map[string]string{idArch: status.Running, idBuild: status.Running}, at.Add(3*time.Second)); !read {
+		t.Error("not read for an agent that came")
+	}
+}
+
+// BenchmarkBusLong is the bus part of one poll on a bus of 30 channels with
+// 500 messages each of about 400 characters, as agents write them: read
+// from the files (cold) and again with no file moved (derive).
+//
+//	go test -run '^$' -bench BusLong -benchtime 10x ./internal/bus
+func BenchmarkBusLong(b *testing.B) {
+	b.Setenv("XDG_STATE_HOME", b.TempDir())
+	b.Setenv("HOME", b.TempDir())
+	st := &state.State{}
+	p, _ := st.AddProject("/code/a")
+	p.Agents = []*state.Agent{{ID: idArch, Kind: "claude", Name: "architect"}, {ID: idBuild, Kind: "claude", Name: "builder"}}
+	if err := st.Save(); err != nil {
+		b.Fatal(err)
+	}
+	text := "I looked at the failing test in internal/bus: the cursor is written before the message it points at, so a reader " +
+		"that comes in between sees a cursor past the end and counts nothing as unread. 我把写入顺序调换了，先写消息再写 cursor，" +
+		"并加了一个测试覆盖这个竞态。Next I will run the whole suite with -race and then hand the review to the builder (see #ops)."
+	for i := 0; i < 30; i++ {
+		n := fmt.Sprintf("c%d", i)
+		if _, err := Create(n, "", []string{idArch, idBuild}, me); err != nil {
+			b.Fatal(err)
+		}
+		for j := 0; j < 500; j++ {
+			if _, err := Post(n, arch, fmt.Sprintf("%d %s", j, text), 0); err != nil {
+				b.Fatal(err)
+			}
+		}
+		if _, err := SetTask(arch, TaskChange{Title: sp("task " + n), Owner: sp(idBuild), Channel: sp(n)}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	statuses := map[string]string{idArch: status.Running, idBuild: status.Idle}
+	at := time.Now()
+	look := func(b *testing.B) {
+		if _, err := Board(st, statuses, at); err != nil {
+			b.Fatal(err)
+		}
+		_, _ = Channels()
+		_, _ = YourChannels()
+	}
+	b.Run("cold", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			msgCacheMu.Lock()
+			clear(msgCaches)
+			msgCacheMu.Unlock()
+			look(b)
+		}
+	})
+	b.Run("derive", func(b *testing.B) {
+		look(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			look(b)
+		}
+	})
+}
+
 // BenchmarkWindowPollBus is the bus part of one window poll, on a bus of
 // 30 channels with 500 messages each and 30 tasks: as the poller does it
 // (Board, Channels and YourChannels) with no channel read yet, with none
