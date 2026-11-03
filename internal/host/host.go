@@ -265,14 +265,18 @@ func (h *Host) update(fn func(s *State)) {
 	h.st.Version++
 	now := h.st.Status
 	h.writeAsks(time.Now())
-	data, _ := json.Marshal(Line{Type: "state", State: &h.st})
-	for c := range h.clients {
-		// Each holds the latest state only: one behind gets that.
-		select {
-		case <-c:
-		default:
+	// Marshalled only for someone looking: a long message is long to
+	// marshal, and a stream updates it with each piece.
+	if len(h.clients) > 0 {
+		data, _ := json.Marshal(Line{Type: "state", State: &h.st})
+		for c := range h.clients {
+			// Each holds the latest state only: one behind gets that.
+			select {
+			case <-c:
+			default:
+			}
+			c <- data
 		}
-		c <- data
 	}
 	h.mu.Unlock()
 	if now != was {

@@ -157,7 +157,7 @@ func (p *pi) line(data []byte) {
 			kind := map[string]string{"text_start": "text", "thinking_start": "thinking", "toolcall_start": "tool"}[e.Type]
 			p.h.hub.Block(p.h.agent, id, e.Index, func(b *live.Block) { *b = live.Block{Kind: kind} })
 		case "text_delta", "thinking_delta", "toolcall_delta":
-			p.h.hub.Block(p.h.agent, id, e.Index, func(b *live.Block) { b.Text += e.Delta })
+			p.h.hub.Block(p.h.agent, id, e.Index, func(b *live.Block) { b.Append(e.Delta) })
 		case "text_end", "thinking_end":
 			p.h.hub.Block(p.h.agent, id, e.Index, func(b *live.Block) { b.Done = true })
 		case "toolcall_end":

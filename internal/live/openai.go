@@ -121,7 +121,7 @@ func (r *responsesEvents) event(data []byte) {
 	case "response.output_text.delta", "response.reasoning_summary_text.delta", "response.reasoning_text.delta",
 		"response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		if ev.Delta != "" {
-			r.hub.Block(r.agent, r.resp, ev.Index, func(b *Block) { b.Text += ev.Delta })
+			r.hub.Block(r.agent, r.resp, ev.Index, func(b *Block) { b.Append(ev.Delta) })
 		}
 	case "response.output_item.done":
 		r.hub.Block(r.agent, r.resp, ev.Index, func(b *Block) { b.Done = true })
