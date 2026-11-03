@@ -12,11 +12,7 @@ import (
 func TestDeckNotModified(t *testing.T) {
 	isolate(t)
 	s := New(manageKinds)
-	set := func(snap Snapshot) {
-		s.poll.mu.Lock()
-		s.poll.snap = snap
-		s.poll.mu.Unlock()
-	}
+	set := s.poll.setSnap
 	get := func(tag string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("GET", "/api/deck?token="+s.Token, nil)

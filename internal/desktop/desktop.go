@@ -11,11 +11,9 @@ package desktop
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"html"
 	"io/fs"
@@ -297,31 +295,6 @@ func headers(h http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy", csp)
 		h.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	if s.Build != "" {
-		w.Header().Set(BuildHeader, s.Build)
-	}
-	snap := s.poll.Snapshot()
-	tag := deckTag(snap)
-	w.Header().Set("ETag", tag)
-	if r.Header.Get("If-None-Match") == tag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(snap)
-}
-
-// deckTag names what snap says, the time it was made aside: a poller
-// asking every second gets 304 Not Modified, and no deck, while nothing
-// changed. The page and the apps hold the deck they have then.
-func deckTag(snap Snapshot) string {
-	snap.At = time.Time{}
-	h := sha256.New()
-	_ = json.NewEncoder(h).Encode(snap)
-	return `"` + hex.EncodeToString(h.Sum(nil)[:12]) + `"`
 }
 
 // Serve listens on a free port of 127.0.0.1, calls ready with the page's

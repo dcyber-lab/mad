@@ -1137,9 +1137,38 @@ function xtermColor(n) {
   return `rgb(${c(Math.floor(n / 36))},${c(Math.floor(n / 6) % 6)},${c(n % 6)})`;
 }
 
+// The deck comes by a long poll (watchDeck): the server answers when it changes, or with 304 after a while
+// with nothing new. The page is drawn again every second all the same (poll), from the deck it holds: what it
+// shows moves with the clock too, and some of it acts on time passing.
 async function poll() {
-  await refresh();
+  if (deckOK && Date.now() - lastDraw > 900) {
+    try {
+      draw();
+    } catch (err) {
+      console.error("draw", err);
+    }
+  }
   setTimeout(poll, 1000);
+}
+
+// watchDeck asks for the deck again as soon as it has one. Against a server that cannot wait (no X-Mad-Wait:
+// an older mad), it asks once a second. A failure is tried again after 1, 2, 4… up to 10 seconds.
+async function watchDeck() {
+  let backoff = 0;
+  for (;;) {
+    const ac = new AbortController();
+    deckAbort = ac;
+    try {
+      if (await fetchDeck(deckWait, ac.signal)) draw();
+      backoff = 0;
+      if (!deckWait) await sleep(1000);
+    } catch (e) {
+      if (e.name === "AbortError") continue; // refresh took over: ask again with the deck it brought
+      deckFailed(e);
+      backoff = Math.min(backoff ? backoff * 2 : 1000, 10000);
+      await sleep(backoff);
+    }
+  }
 }
 
 // The build this page was served by, and whether the server has moved on to another (stale.js).
@@ -1183,47 +1212,78 @@ function setOffline(off) {
   }
 }
 
-// refresh takes the deck's latest look and draws it.
+// refresh takes the deck's latest look at once and draws it: after an action, to show what it did. The long
+// poll in flight is dropped and asked again with the deck this brings.
 let pairToasted = false;
 async function refresh() {
   if (pairError && !pairToasted && typeof toast === "function") {
     pairToasted = true;
     toast(pairError, "err");
   }
+  deckAbort?.abort();
   try {
-    // Named by the deck held: while nothing but its time moved, the answer is 304 with no deck.
-    const r = await authFetch("/api/deck", { cache: "no-store", headers: deckTag ? { "If-None-Match": deckTag } : {} });
-    if (!r.ok && r.status !== 304) throw new Error(r.status);
-    checkBuild(r.headers.get("X-Mad-Build") || "");
-    if (r.status !== 304) {
-      deck = await r.json();
-      deckTag = r.headers.get("ETag") || "";
-    }
-    looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
-    $("#conn").classList.add("ok");
-    $("#conn").title = "已连接";
-    setOffline(false);
-    drawUsage();
-    drawMachine();
-    drawUsageLine();
-    drawSpendDot();
-    drawSidebar();
-    openWanted();
-    if (cv.open) drawChanHead();
-    drawBoard();
-    const o = opened.get(current);
-    if (o && agents.get(current)?.chat) {
-      loadChat(current, o);
-      try {
-        drawLive(o); // what the agent is doing, as of this look
-      } catch (err) {
-        console.error("live", err);
-      }
-    }
+    await fetchDeck(0);
+    draw();
   } catch (e) {
-    $("#conn").classList.remove("ok");
-    $("#conn").title = `连不上 mad（${e.message || e}）`;
-    setOffline(true);
+    deckFailed(e);
+  }
+}
+
+// deckOK: the last ask for the deck was answered; deckWait: how long the server lets a request wait for news,
+// in seconds (0: it answers at once); deckAbort: the long poll in flight.
+let deckOK = false;
+let deckWait = 0;
+let deckAbort = null;
+
+// fetchDeck asks for the deck, naming the one held: a new one replaces it (true), 304 keeps it (false). With
+// wait, the server answers when the deck changes or after wait seconds.
+async function fetchDeck(wait, signal) {
+  const q = wait ? `?wait=${wait}` : "";
+  const r = await authFetch("/api/deck" + q, { cache: "no-store", signal, headers: deckTag ? { "If-None-Match": deckTag } : {} });
+  if (!r.ok && r.status !== 304) throw new Error(r.status);
+  checkBuild(r.headers.get("X-Mad-Build") || "");
+  deckWait = Math.max(0, Number(r.headers.get("X-Mad-Wait")) || 0);
+  let fresh = false;
+  if (r.status !== 304) {
+    deck = await r.json();
+    deckTag = r.headers.get("ETag") || "";
+    looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
+    fresh = true;
+  }
+  deckOK = true;
+  $("#conn").classList.add("ok");
+  $("#conn").title = "已连接";
+  setOffline(false);
+  return fresh;
+}
+
+function deckFailed(e) {
+  deckOK = false;
+  $("#conn").classList.remove("ok");
+  $("#conn").title = `连不上 mad（${e.message || e}）`;
+  setOffline(true);
+}
+
+// draw draws the page from the deck held; lastDraw is when it last did.
+let lastDraw = 0;
+function draw() {
+  lastDraw = Date.now();
+  drawUsage();
+  drawMachine();
+  drawUsageLine();
+  drawSpendDot();
+  drawSidebar();
+  openWanted();
+  if (cv.open) drawChanHead();
+  drawBoard();
+  const o = opened.get(current);
+  if (o && agents.get(current)?.chat) {
+    loadChat(current, o);
+    try {
+      drawLive(o); // what the agent is doing, as of this look
+    } catch (err) {
+      console.error("live", err);
+    }
   }
 }
 
@@ -2282,4 +2342,4 @@ function localStorageGet(k) { try { return localStorage.getItem(k); } catch (_) 
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private window */ } }
 
 holdWindow();
-poll();
+refresh().then(() => { poll(); watchDeck(); });
