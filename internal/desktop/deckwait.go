@@ -68,7 +68,7 @@ func (p *poller) current() *deckVersion {
 	tag := deckTag(snap)
 	body, err := json.Marshal(snap)
 	if err != nil {
-		body = []byte("{}")
+		body, tag = []byte("{}"), `"unencodable"` // the tag names what is served
 	}
 	body = append(body, '\n')
 	n := &deckVersion{tag: tag, body: body, gz: gzipped(body), gen: p.gen, machine: m, changed: make(chan struct{})}
@@ -111,7 +111,7 @@ func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
 	}
 	held := r.Header.Get("If-None-Match")
 	v := s.poll.current()
-	if held == v.tag {
+	if holds(held, v.tag) {
 		if wait := waitOf(r); wait > 0 {
 			t := time.NewTimer(wait)
 			defer t.Stop()
@@ -124,7 +124,7 @@ func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
 				return // gone, or its device revoked
 			}
 		}
-		if held == v.tag {
+		if holds(held, v.tag) {
 			w.Header().Set("ETag", v.tag)
 			w.WriteHeader(http.StatusNotModified)
 			return
@@ -138,6 +138,19 @@ func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
+}
+
+// holds reports whether an If-None-Match of ifNoneMatch names tag. A
+// proxy may weaken a tag (W/"…", Cloudflare does when it re-encodes) or a
+// client send a list; a tag that never matched would answer every long
+// poll at once with the whole deck.
+func holds(ifNoneMatch, tag string) bool {
+	for _, t := range strings.Split(ifNoneMatch, ",") {
+		if strings.TrimPrefix(strings.TrimSpace(t), "W/") == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // waitOf is how long r may wait for news: its wait parameter in seconds,

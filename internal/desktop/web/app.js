@@ -1152,24 +1152,56 @@ async function poll() {
 }
 
 // watchDeck asks for the deck again as soon as it has one. Against a server that cannot wait (no X-Mad-Wait:
-// an older mad), it asks once a second. A failure is tried again after 1, 2, 4… up to 10 seconds.
+// an older mad) it asks once a second; so does every tab of the page but one (deckLeader), as the browser lets
+// a page hold only a few requests to its server at once. A new deck that came at once with no tag, or with the
+// tag it was asked with, waits a second too: a proxy that drops or weakens tags must not make it spin. A
+// failure is tried again after 1, 2, 4 and then every 5 seconds, and at once when the page shows again or the
+// network comes back.
 async function watchDeck() {
   let backoff = 0;
   for (;;) {
     const ac = new AbortController();
     deckAbort = ac;
+    const sent = deckTag;
+    const wait = deckLeader ? deckWait : 0;
     try {
-      if (await fetchDeck(deckWait, ac.signal)) draw();
+      const fresh = await fetchDeck(wait, ac.signal);
+      if (fresh) {
+        try {
+          draw();
+        } catch (err) {
+          console.error("draw", err);
+        }
+      }
       backoff = 0;
-      if (!deckWait) await sleep(1000);
+      if (!wait || (fresh && (!deckTag || deckTag === sent))) await sleepOr(1000, ac.signal);
     } catch (e) {
-      if (e.name === "AbortError") continue; // refresh took over: ask again with the deck it brought
+      if (e.name === "AbortError") continue; // refresh took over, or the page woke: ask again
       deckFailed(e);
-      backoff = Math.min(backoff ? backoff * 2 : 1000, 10000);
-      await sleep(backoff);
+      backoff = Math.min(backoff ? backoff * 2 : 1000, 5000);
+      await sleepOr(backoff, ac.signal).catch(() => {});
     }
   }
 }
+
+// sleepOr waits ms, ending early (rejected) when signal aborts.
+function sleepOr(ms, signal) {
+  return new Promise((ok, fail) => {
+    const t = setTimeout(ok, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); fail(new DOMException("aborted", "AbortError")); }, { once: true });
+  });
+}
+
+// deckLeader: this tab holds the long poll for the page's server (a Web Lock, let go when the tab closes).
+// Without Web Locks every tab is its own leader.
+let deckLeader = !navigator.locks;
+navigator.locks?.request("mad.deck.wait", () => new Promise(() => {
+  deckLeader = true;
+  deckAbort?.abort(); // ask again, waiting this time
+}));
+// A page shown again, or a network back, asks at once instead of at the end of a backoff.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) deckAbort?.abort(); });
+window.addEventListener("online", () => deckAbort?.abort());
 
 // The build this page was served by, and whether the server has moved on to another (stale.js).
 const pageBuild = document.querySelector('meta[name="mad-build"]')?.content || "";
@@ -1234,10 +1266,14 @@ async function refresh() {
 let deckOK = false;
 let deckWait = 0;
 let deckAbort = null;
+// deckAsked numbers the asks for the deck; deckTook is the number of the one whose deck is held.
+let deckAsked = 0;
+let deckTook = 0;
 
 // fetchDeck asks for the deck, naming the one held: a new one replaces it (true), 304 keeps it (false). With
 // wait, the server answers when the deck changes or after wait seconds.
 async function fetchDeck(wait, signal) {
+  const seq = ++deckAsked;
   const q = wait ? `?wait=${wait}` : "";
   const r = await authFetch("/api/deck" + q, { cache: "no-store", signal, headers: deckTag ? { "If-None-Match": deckTag } : {} });
   if (!r.ok && r.status !== 304) throw new Error(r.status);
@@ -1245,7 +1281,11 @@ async function fetchDeck(wait, signal) {
   deckWait = Math.max(0, Number(r.headers.get("X-Mad-Wait")) || 0);
   let fresh = false;
   if (r.status !== 304) {
-    deck = await r.json();
+    const got = await r.json();
+    // A refresh and the long poll can cross: a deck asked for before the one drawn is older than it.
+    if (seq < deckTook) return false;
+    deckTook = seq;
+    deck = got;
     deckTag = r.headers.get("ETag") || "";
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     fresh = true;

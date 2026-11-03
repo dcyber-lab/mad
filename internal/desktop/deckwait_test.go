@@ -168,3 +168,26 @@ func TestDeckGzip(t *testing.T) {
 		}
 	}
 }
+
+// A tag a proxy weakened, or one in a list, still names the deck: the
+// request waits instead of taking the whole deck again at once.
+func TestDeckHolds(t *testing.T) {
+	tag := `"abc"`
+	for _, h := range []string{`"abc"`, `W/"abc"`, `"x", W/"abc"`, ` "abc" `} {
+		if !holds(h, tag) {
+			t.Errorf("%q does not hold %s", h, tag)
+		}
+	}
+	for _, h := range []string{"", `"ab"`, `W/"abcd"`, "*"} {
+		if holds(h, tag) {
+			t.Errorf("%q holds %s", h, tag)
+		}
+	}
+	isolate(t)
+	s := New(manageKinds)
+	s.poll.setSnap(idleDeck("idle"))
+	weak := "W/" + deckGet(s, context.Background(), "", 0, false).Header().Get("ETag")
+	if w := deckGet(s, context.Background(), weak, 1, false); w.Code != 304 {
+		t.Fatalf("a weakened tag: %d, want 304 after the wait", w.Code)
+	}
+}
