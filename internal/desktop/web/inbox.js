@@ -82,7 +82,8 @@ function tick(at, suffix = "") {
 }
 function tickText(s) {
   const a = short(s.dataset.at);
-  s.textContent = a === "now" ? a : a + s.dataset.suf;
+  const t = a === "now" ? a : a + s.dataset.suf;
+  if (s.textContent !== t) s.textContent = t; // the same age is left alone: a selection in it stays
 }
 setInterval(() => {
   for (const s of document.querySelectorAll(".t[data-at]")) tickText(s);
