@@ -138,6 +138,7 @@ function openChannel(id, seq) {
   $("#chanview").hidden = false;
   if (fresh) {
     cv.last = 0;
+    cv.tag = ""; // a 304 is about what was drawn: a fresh log has drawn nothing
     cv.paused = false;
     cv.lastAt = 0;
     cv.run = null;
@@ -621,12 +622,20 @@ async function loadChannel(first) {
   if (!id) return;
   const n = ++cv.seq;
   let r;
+  let tag = "";
   try {
-    r = await api("GET", "/api/bus/messages", { channel: id, since: cv.last });
+    // Named by the answer last drawn: nothing new is a 304, with no body to read or draw.
+    const q = new URLSearchParams({ channel: id, since: cv.last });
+    const res = await authFetch(`/api/bus/messages?${q}`, { cache: "no-store", headers: cv.tag ? { "If-None-Match": cv.tag } : {} });
+    if (res.status === 304) return;
+    if (!res.ok) throw new Error(res.status);
+    tag = res.headers.get("ETag") || "";
+    r = await res.json();
   } catch (_) {
     return; // a DM not made yet, or the next look
   }
   if (n !== cv.seq || id !== cv.open) return;
+  cv.tag = tag;
   const scroll = $("#chanscroll");
   const atEnd = first || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
   for (const m of r.messages) {

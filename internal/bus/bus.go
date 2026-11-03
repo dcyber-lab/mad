@@ -535,33 +535,30 @@ func Read(channel string, since, limit int) ([]Message, int, error) {
 		limit = 30
 	}
 	limit = min(limit, 200)
+	// No lock: channels.json is replaced by a rename and the channel's file
+	// appended to or renamed (readMsgs), and a window reads every second.
+	cl, err := loadChannels()
+	if err != nil {
+		return nil, 0, err
+	}
+	if cl.find(channel) == nil {
+		return nil, 0, fmt.Errorf("no channel #%s", channel)
+	}
+	msgs, err := readMsgs(channel)
+	if err != nil {
+		return nil, 0, err
+	}
+	last := lastSeq(msgs)
+	if since <= 0 {
+		return msgs[max(0, len(msgs)-limit):], last, nil
+	}
 	var out []Message
-	var last int
-	err := locked(func() error {
-		cl, err := loadChannels()
-		if err != nil {
-			return err
+	for _, m := range msgs {
+		if m.Seq > since && len(out) < limit {
+			out = append(out, m)
 		}
-		if cl.find(channel) == nil {
-			return fmt.Errorf("no channel #%s", channel)
-		}
-		msgs, err := readMsgs(channel)
-		if err != nil {
-			return err
-		}
-		last = lastSeq(msgs)
-		if since <= 0 {
-			out = msgs[max(0, len(msgs)-limit):]
-			return nil
-		}
-		for _, m := range msgs {
-			if m.Seq > since && len(out) < limit {
-				out = append(out, m)
-			}
-		}
-		return nil
-	})
-	return out, last, err
+	}
+	return out, last, nil
 }
 
 // Resume lets a paused channel go on, with a line saying so, and wakes the

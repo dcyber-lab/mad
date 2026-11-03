@@ -1,7 +1,9 @@
 package desktop
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -103,11 +105,14 @@ func busChannels(st *state.State, look bus.Look) []BusChannel {
 }
 
 // busMessages answers GET /api/bus/messages?channel=&since=: a channel's
-// messages after since (the last 200 without it).
+// messages after since (the last 200 without it). A window asks every
+// second or two while the channel is open, mostly for nothing new: the
+// answer carries an ETag, and one that names it (If-None-Match) gets 304.
 func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	ch := q.Get("channel")
-	if _, ok, err := bus.Find(ch); err != nil || !ok {
+	c, ok, err := bus.Find(ch)
+	if err != nil || !ok {
 		fail(w, http.StatusNotFound, errors.New("no such channel"))
 		return
 	}
@@ -121,11 +126,29 @@ func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	c, _, _ := bus.Find(ch)
 	if msgs == nil {
 		msgs = []bus.Message{}
 	}
-	reply(w, map[string]any{"channel": ch, "messages": msgs, "last": last, "paused": c.Paused, "receipts": busReceipts(ch)})
+	body, err := json.Marshal(map[string]any{"channel": ch, "messages": msgs, "last": last, "paused": c.Paused, "receipts": busReceipts(ch)})
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	sum := sha256.Sum256(body)
+	tag := `"` + hex.EncodeToString(sum[:12]) + `"`
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", tag)
+	w.Header().Set("Vary", "Accept-Encoding")
+	if holds(r.Header.Get("If-None-Match"), tag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	body = append(body, '\n')
+	if len(body) > 1024 && acceptsGzip(r) {
+		w.Header().Set("Content-Encoding", "gzip")
+		body = gzipped(body)
+	}
+	_, _ = w.Write(body)
 }
 
 // BusReceipt is how one of the person's messages stands: the agents it
