@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -340,6 +341,74 @@ func TestStatusLineHook(t *testing.T) {
 	}
 	if _, ok := status.ReadQuota("claude"); ok {
 		t.Error("quota written without rate limits")
+	}
+}
+
+// Claude runs the status line after every message: only a report whose
+// numbers moved is written and pokes the sidebar.
+func TestStatusLinePokesOnChange(t *testing.T) {
+	dir := isolate(t)
+	t.Chdir(dir)
+	short, err := os.MkdirTemp("", "mad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(short)
+	t.Setenv("XDG_STATE_HOME", short)
+	got := make(chan string, 10)
+	l, err := poke.Listen(func(cmd string) { got <- cmd })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	// next is the first command the sidebar got after the step: a marker
+	// sent last says no poke came before it.
+	recv := func() string {
+		t.Helper()
+		select {
+		case cmd := <-got:
+			return cmd
+		case <-time.After(2 * time.Second):
+			t.Fatal("sidebar got nothing")
+			return ""
+		}
+	}
+	// none is what the sidebar got before a marker sent after the step:
+	// the marker itself when the step poked no one.
+	none := func() string {
+		t.Helper()
+		if err := poke.Send("marker"); err != nil {
+			t.Fatal(err)
+		}
+		return recv()
+	}
+	line := func(used int) string {
+		return fmt.Sprintf(`{"rate_limits":{"five_hour":{"used_percentage":%d,"resets_at":1893456000},"seven_day":{"used_percentage":31}}}`, used)
+	}
+	t0 := time.Now()
+	step := func(used int, now time.Time) {
+		t.Helper()
+		hook([]string{"claude", "statusline"}, strings.NewReader(line(used)), io.Discard, now)
+	}
+
+	step(62, t0)
+	if cmd := recv(); cmd != poke.Poll {
+		t.Fatalf("first report: sidebar got %q", cmd)
+	}
+	step(62, t0.Add(time.Minute))
+	if cmd := none(); cmd != "marker" {
+		t.Fatalf("unchanged report: sidebar got %q", cmd)
+	}
+	if q, _ := status.ReadQuota("claude"); !q.At.Equal(t0) {
+		t.Errorf("unchanged report rewrote the file: at %v", q.At)
+	}
+	later := t0.Add(2 * time.Minute)
+	step(63, later)
+	if cmd := recv(); cmd != poke.Poll {
+		t.Fatalf("moved report: sidebar got %q", cmd)
+	}
+	if q, _ := status.ReadQuota("claude"); q.FiveHour.Used != 63 || !q.At.Equal(later) {
+		t.Errorf("moved report not written: %+v", q)
 	}
 }
 
