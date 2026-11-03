@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,16 +32,34 @@ const WaitHeader = "X-Mad-Wait"
 // URLSession's default request timeout (60 s).
 const maxWait = 25 * time.Second
 
-// deckVersion is one deck as served: its tag, its JSON, that gzipped, and
-// changed, closed once a deck with another tag replaces it. The JSON
-// follows the deck's time (At); the tag and changed do not.
+// deckVersion is one deck as served: its tag, changed, closed once a deck
+// with another tag replaces it, and its JSON and that gzipped, made when a
+// request first asks for them. A poll whose deck says nothing new costs its
+// tag only: the long polls waiting want no body, and most polls are such.
+// The JSON follows the deck's time (At); the tag and changed do not.
 type deckVersion struct {
-	tag      string
-	body, gz []byte
-	changed  chan struct{}
+	tag     string
+	changed chan struct{}
+	snap    Snapshot
 	// What it was made from: the snapshot's generation and the Mac's name.
 	gen     uint64
 	machine string
+
+	once     sync.Once
+	body, gz []byte
+}
+
+// encoded is v's JSON, and that gzipped.
+func (v *deckVersion) encoded() (body, gz []byte) {
+	v.once.Do(func() {
+		b, err := json.Marshal(v.snap)
+		if err != nil {
+			b = []byte("{}")
+		}
+		v.body = append(b, '\n')
+		v.gz = gzipped(v.body)
+	})
+	return v.body, v.gz
 }
 
 // setSnap takes a new snapshot in and wakes the requests waiting on the
@@ -65,13 +84,8 @@ func (p *poller) current() *deckVersion {
 	}
 	snap := p.snap
 	snap.Machine = m
-	tag := deckTag(snap)
-	body, err := json.Marshal(snap)
-	if err != nil {
-		body, tag = []byte("{}"), `"unencodable"` // the tag names what is served
-	}
-	body = append(body, '\n')
-	n := &deckVersion{tag: tag, body: body, gz: gzipped(body), gen: p.gen, machine: m, changed: make(chan struct{})}
+	n := &deckVersion{tag: deckTag(snap), snap: snap, gen: p.gen, machine: m, changed: make(chan struct{})}
+	tag := n.tag
 	if v != nil && v.tag == tag {
 		n.changed = v.changed // only its time moved: no news to wake anyone for
 	} else if v != nil {
@@ -86,19 +100,31 @@ func (p *poller) stop() {
 	p.stopOnce.Do(func() { close(p.stopped) })
 }
 
-// deckTag names what snap says, the time it was made aside.
+// deckTag names what snap says, the time it was made aside. A deck that
+// can't be encoded (it can't: plain data) is named as what is served then.
 func deckTag(snap Snapshot) string {
 	snap.At = time.Time{}
 	h := sha256.New()
-	_ = json.NewEncoder(h).Encode(snap)
+	if json.NewEncoder(h).Encode(snap) != nil {
+		return `"unencodable"`
+	}
 	return `"` + hex.EncodeToString(h.Sum(nil)[:12]) + `"`
 }
 
+// gzipWriters are kept between decks: a writer's tables are most of what
+// making one costs.
+var gzipWriters = sync.Pool{New: func() any {
+	z, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+	return z
+}}
+
 func gzipped(b []byte) []byte {
 	var out bytes.Buffer
-	z, _ := gzip.NewWriterLevel(&out, gzip.BestSpeed)
+	z := gzipWriters.Get().(*gzip.Writer)
+	z.Reset(&out)
 	_, _ = z.Write(b)
 	_ = z.Close()
+	gzipWriters.Put(z)
 	return out.Bytes()
 }
 
@@ -131,10 +157,10 @@ func (s *Server) deck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("ETag", v.tag)
-	body := v.body
+	body, gz := v.encoded()
 	if acceptsGzip(r) {
 		w.Header().Set("Content-Encoding", "gzip")
-		body = v.gz
+		body = gz
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
