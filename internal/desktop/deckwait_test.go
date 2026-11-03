@@ -191,3 +191,37 @@ func TestDeckHolds(t *testing.T) {
 		t.Fatalf("a weakened tag: %d, want 304 after the wait", w.Code)
 	}
 }
+
+// benchDeck is a deck of 20 agents and 30 channels.
+func benchDeck() Snapshot {
+	s := Snapshot{Projects: []Project{}, At: time.Now()}
+	for p := 0; p < 5; p++ {
+		pr := Project{Name: "proj" + strconv.Itoa(p), Path: "/code/proj" + strconv.Itoa(p), Branch: "feat/x", Agents: []Agent{}}
+		for a := 0; a < 4; a++ {
+			pr.Agents = append(pr.Agents, Agent{ID: "claude#" + strconv.Itoa(p*4+a), Kind: "claude", Title: "Refactor the bus cache and add tests",
+				Status: "running", Shown: "running", Cost: 3.14, Chat: true})
+		}
+		s.Projects = append(s.Projects, pr)
+	}
+	for c := 0; c < 30; c++ {
+		s.Bus = append(s.Bus, BusChannel{ID: "c" + strconv.Itoa(c), Title: "#c" + strconv.Itoa(c), Last: 400,
+			LastText: "claude#1: the review found two things to fix in the cursor code", LastAt: time.Now()})
+	}
+	return s
+}
+
+// BenchmarkDeckPoll is what a poll costs the deck's serving when nothing but
+// its time moved and no request asks for the body (the windows wait).
+//
+//	go test -run '^$' -bench DeckPoll -benchmem ./internal/desktop
+func BenchmarkDeckPoll(b *testing.B) {
+	b.Setenv("XDG_STATE_HOME", b.TempDir())
+	s := New(manageKinds)
+	snap := benchDeck()
+	s.poll.setSnap(snap)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		snap.At = snap.At.Add(time.Second)
+		s.poll.setSnap(snap)
+	}
+}
