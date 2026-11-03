@@ -162,6 +162,12 @@ type poller struct {
 
 	mu   sync.Mutex
 	snap Snapshot
+	gen  uint64       // bumped with every snapshot (setSnap)
+	cur  *deckVersion // the deck as served (deckwait.go)
+	// stopped is closed when Run ends, waking the requests waiting on the
+	// deck.
+	stopped  chan struct{}
+	stopOnce sync.Once
 
 	// Owned by Run's goroutine.
 	trackers map[string]*status.Tracker
@@ -181,6 +187,7 @@ func newPoller(kinds []agent.Kind, l *looks) *poller {
 		infos:    map[string]transcript.Info{},
 		gits:     map[string]git.Info{},
 		snap:     Snapshot{Projects: []Project{}, States: status.Looks, Machine: machine()},
+		stopped:  make(chan struct{}),
 	}
 }
 
@@ -195,6 +202,7 @@ func (p *poller) Snapshot() Snapshot {
 func (p *poller) Run(ctx context.Context) {
 	tick := time.NewTicker(screenEvery)
 	defer tick.Stop()
+	defer p.stop()
 	for {
 		p.Poll(time.Now())
 		select {
@@ -323,9 +331,7 @@ func (p *poller) Poll(now time.Time) {
 	}
 	snap.Teams = rollUp(snap.Projects, view)
 
-	p.mu.Lock()
-	p.snap = snap
-	p.mu.Unlock()
+	p.setSnap(snap)
 }
 
 // rollUp gives each agent its activity line and each project its roll-up,
