@@ -371,13 +371,30 @@ func parseClaudeSession(path string) *Session {
 	return s
 }
 
+// claudeMissed keeps when every project was last looked through for a
+// session that was in none; claudeNow is replaceable in tests.
+var (
+	claudeMissed sync.Map
+	claudeNow    = time.Now
+)
+
+const claudeMissEvery = 5 * time.Second
+
 // Transcripts finds the session under dir's project, else under any
 // project (an adopted session that ran elsewhere).
 func (claude) Transcripts(dir, sid string) []string {
 	base := claudeProjectDir(dir)
 	main := filepath.Join(base, sid+".jsonl")
-	if _, err := os.Stat(main); err != nil {
+	if _, err := os.Stat(main); err == nil {
+		claudeMissed.Delete(sid)
+	} else {
 		main = ""
+		// Elsewhere, every project is looked in: not again for a while
+		// after a miss (a session not written yet is asked about every
+		// second while its chat is open).
+		if at, ok := claudeMissed.Load(sid); ok && claudeNow().Sub(at.(time.Time)) < claudeMissEvery {
+			return nil
+		}
 		entries, _ := os.ReadDir(claudeProjectsDir())
 		for _, e := range entries {
 			p := filepath.Join(claudeProjectsDir(), e.Name(), sid+".jsonl")
@@ -387,8 +404,10 @@ func (claude) Transcripts(dir, sid string) []string {
 			}
 		}
 		if main == "" {
+			claudeMissed.Store(sid, claudeNow())
 			return nil
 		}
+		claudeMissed.Delete(sid)
 	}
 	out := []string{main}
 	subs, _ := filepath.Glob(filepath.Join(base, sid, "subagents", "*.jsonl"))

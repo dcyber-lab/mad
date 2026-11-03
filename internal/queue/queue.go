@@ -8,6 +8,7 @@
 package queue
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -90,6 +91,9 @@ func Update(agentID string, fn func(*Queue) error) error {
 	data, err := json.MarshalIndent(q, "", "  ")
 	if err != nil {
 		return err
+	}
+	if old, err := os.ReadFile(path(agentID)); err == nil && bytes.Equal(old, data) {
+		return nil // nothing changed (the dispatcher looks every second): no write, no rename
 	}
 	tmp := path(agentID) + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
