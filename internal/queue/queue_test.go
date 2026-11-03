@@ -82,3 +82,33 @@ func TestPushBus(t *testing.T) {
 		t.Error("not added after the first was taken")
 	}
 }
+
+// An update that changes nothing writes nothing: the dispatcher's looks
+// every second leave the file as it was.
+func TestUpdateUnchangedWritesNothing(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if _, err := Push("a1", "hello", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path("a1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if err := Update("a1", func(*Queue) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path("a1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) || !os.SameFile(before, after) {
+		t.Fatal("an update that changed nothing rewrote the file")
+	}
+	if err := Update("a1", func(q *Queue) error { q.Paused = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := Load("a1"); !q.Paused {
+		t.Fatal("a change was not written")
+	}
+}

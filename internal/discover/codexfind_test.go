@@ -53,3 +53,36 @@ func TestCodexTranscriptsMissed(t *testing.T) {
 		t.Fatalf("today's rollout at once: %v", got)
 	}
 }
+
+// A claude session in no project is looked for in every project again only
+// every claudeMissEvery; one under the agent's own project at once.
+func TestClaudeTranscriptsMissed(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now()
+	old := claudeNow
+	t.Cleanup(func() { claudeNow = old })
+	claudeNow = func() time.Time { return now }
+	app, other := f.project("app"), f.project("other")
+	c := claude{}
+	if got := c.Transcripts(app, "s9"); got != nil {
+		t.Fatalf("no session yet: %v", got)
+	}
+	elsewhere := filepath.Join(claudeProjectDir(other), "s9.jsonl")
+	f.write(elsewhere, []any{map[string]any{"type": "user"}}, now)
+	if got := c.Transcripts(app, "s9"); got != nil {
+		t.Fatalf("every project looked through again within %v: %v", claudeMissEvery, got)
+	}
+	now = now.Add(claudeMissEvery)
+	if got := c.Transcripts(app, "s9"); len(got) != 1 || got[0] != elsewhere {
+		t.Fatalf("after %v: %v", claudeMissEvery, got)
+	}
+
+	if got := c.Transcripts(app, "s10"); got != nil {
+		t.Fatalf("no session yet: %v", got)
+	}
+	own := filepath.Join(claudeProjectDir(app), "s10.jsonl")
+	f.write(own, []any{map[string]any{"type": "user"}}, now)
+	if got := c.Transcripts(app, "s10"); len(got) != 1 || got[0] != own {
+		t.Fatalf("under its own project at once: %v", got)
+	}
+}
