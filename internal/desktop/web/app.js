@@ -99,6 +99,9 @@ const el = (tag, cls, text) => {
 
 let deck = { projects: [] };
 let deckTag = ""; // the ETag of deck, sent back on the next poll
+// deckGen is one more for each deck taken and each change the page makes to one in place: the list and home are
+// built again only when it (or the page's own state) moved, so code that changes deck in place must bump it.
+let deckGen = 0;
 const agents = new Map(); // id → snapshot entry, with project
 const opened = new Map(); // id → { term, fit, ws, box, tab, chat, log, view, ... }
 let current = null;
@@ -137,6 +140,12 @@ function shownStatus(a) {
   return s === "running" || s === "waiting" || s === "starting" ? s : a.shown;
 }
 
+// liveKey says how every agent stands as the page draws it, which moves between decks too: its host's word
+// (shownStatus), an Interrupt in flight (interruptSent, which times out).
+function liveKey() {
+  return [...agents.values()].map((a) => `${a.id}:${shownStatus(a)}${interruptSent(a) ? ":i" : ""}`).join();
+}
+
 function money(v) {
   if (!v) return "";
   return v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v)}`;
@@ -146,8 +155,11 @@ function money(v) {
 // the app for another Mac.
 function drawMachine() {
   const n = $("#brand .mname");
+  const name = deck.machine || "mad";
+  if (n.dataset.name === name) return; // drawn each second: the same name stays as it is
+  n.dataset.name = name;
   // the name gives way (an ellipsis); the ▾ beside it stays
-  n.replaceChildren(el("span", "mtext", deck.machine || "mad"));
+  n.replaceChildren(el("span", "mtext", name));
   if (embed) {
     const c = el("span", "mcaret", "▾");
     c.setAttribute("role", "button");
@@ -313,7 +325,6 @@ function drawList() {
 
 function drawListNow() {
   const nav = $("#projects");
-  const keep = nav.scrollTop;
   agents.clear();
   let count = 0;
   for (const p of deck.projects) {
@@ -329,6 +340,12 @@ function drawListNow() {
   const has = (...s) => !q || s.some((x) => (x || "").toLowerCase().includes(q));
   const agentHas = (a) => a && has(label(a), a.title, a.kind, a.tool, a.target, a.project.name);
   needAgents = new Set(needsYou().map((it) => it.agent).filter(Boolean));
+  const sum = `${count} 个 agent`;
+  if ($("#summary").textContent !== sum) $("#summary").textContent = sum;
+  // Built only when what it is drawn from changed: the deck, how its agents stand, the search, the folds,
+  // what is open. The page draws each second, and most seconds none of it did.
+  const key = JSON.stringify([deckGen, q, [...collapsed], current, cv.open, liveKey()]);
+  if (key === listKey) return;
   // A team with a channel is one row of the chats: its members are not listed again.
   const teamed = new Set();
   for (const c of deck.bus || []) {
@@ -364,10 +381,12 @@ function drawListNow() {
     }
     nodes.push(box);
   }
+  listKey = key;
   // What drew the same as last time stays: the page polls each second, and
   // a list set again under a hand or a caret is a list that moves.
   const sig = nodes.map((n) => n.outerHTML).join("");
   if (sig !== nav.dataset.sig) {
+    const keep = nav.scrollTop; // read here, not on every draw: it lays the page out
     const ae = document.activeElement;
     const own = ae && ae !== document.body && nav.contains(ae) ? ae : null;
     const rk = own && own.classList.contains("rowhit") ? own.closest(".row").dataset.key : null;
@@ -381,11 +400,13 @@ function drawListNow() {
     if (rk) nav.querySelector(`.row[data-key="${CSS.escape(rk)}"] .rowhit`)?.focus({ preventScroll: true });
     else if (hi >= 0) nav.querySelectorAll(".project > .head")[hi]?.focus({ preventScroll: true });
   }
-  $("#summary").textContent = `${count} 个 agent`;
 }
 
 // needAgents: the agents with an item in the inbox, as of the last drawList.
 let needAgents = new Set();
+// listKey, homeKey: what the list and home were last built from (drawListNow, drawHomeNow).
+let listKey = "";
+let homeKey = "";
 
 // lastLine is a row's one line: what the agent said last, else what it is doing, else how it stands.
 function lastLine(a, st) {
@@ -538,14 +559,27 @@ function drawHome() {
 
 function drawHomeNow() {
   const root = $("#empty");
-  if (root.style.display === "none") return $("#home").replaceChildren(); // hidden: no box of its own to take the focus
+  if (root.style.display === "none") { // hidden: no box of its own to take the focus
+    homeKey = "";
+    return $("#home").replaceChildren();
+  }
   const none = !agents.size;
   root.classList.toggle("overview", !none);
   $("#empty .hero").hidden = !none;
   $("#empty > .keys").hidden = !none;
   const box = $("#home");
   box.hidden = none;
-  if (none) return box.replaceChildren();
+  if (none) {
+    homeKey = "";
+    return box.replaceChildren();
+  }
+  // Built only when what it is drawn from changed: the deck, how its agents stand, what was acted on, opened
+  // or unfolded here. A box set again drops a hover and a selection in it. Its ages are kept current in place.
+  const key = JSON.stringify([deckGen, liveKey(), ib.more, [...ib.pending], ib.nextKey, ib.reply]);
+  if (key === homeKey) {
+    for (const s of box.querySelectorAll(".t[data-at]")) tickText(s);
+    return;
+  }
   const needs = needsYou(), fin = finishedItems();
   const work = (deck.working || []).map((id) => agents.get(id)).filter(Boolean);
   const h = el("div", "home");
@@ -588,6 +622,7 @@ function drawHomeNow() {
   const k = (ks, t) => { const s = el("span", ""); s.append(...ks.map((x) => el("kbd", "", x)), ` ${t}`); return s; };
   keys.append(k(["⌥", "N"], "下一个"), k(["⌘", "N"], "新对话"), k(["⌘", "K"], "搜索"), k(["⌥", "B"], "看板"));
   h.append(keys);
+  homeKey = key;
   charAdopt(box, [h]); // what moves keeps moving
   box.replaceChildren(h);
   charArm(box);
@@ -712,7 +747,10 @@ function drawQueue(fresh) {
   $("#qinput").placeholder = `发消息给 ${nm.length > 28 ? nm.slice(0, 27) + "…" : nm}，输入 / 用命令`;
   if (!a) return;
   const q = fresh || a.queue || { items: [] };
-  if (fresh) a.queue = fresh;
+  if (fresh) {
+    a.queue = fresh;
+    deckGen++;
+  }
   const items = q.items || [];
   const list = $("#qitems");
   const key = JSON.stringify([current, items.map((i) => i.id)]);
@@ -1286,6 +1324,7 @@ async function fetchDeck(wait, signal) {
     if (seq < deckTook) return false;
     deckTook = seq;
     deck = got;
+    deckGen++;
     deckTag = r.headers.get("ETag") || "";
     looks = new Map((deck.states || []).flatMap((l) => [[l.state, l], ...(l.also || []).map((raw) => [raw, l])]));
     fresh = true;
@@ -2041,6 +2080,7 @@ async function claim(id, o, now) {
   }
   // The deck's next look says so too; till then, the page knows.
   for (const x of [a, agents.get(id)]) if (x) x.mode = "window";
+  deckGen++;
   unfollow(o);
   hostConnect(id, o);
   if (id === current) drawQueue();

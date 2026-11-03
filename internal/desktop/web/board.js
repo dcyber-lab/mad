@@ -63,7 +63,7 @@ function drawBoardNow() {
   const cards = (deck.board || []).filter((c) => !bd.channel || c.channel === bd.channel);
   const waiting = bd.channel ? [] : needsYou();
   const key = bd.channel + JSON.stringify(cards.map((c) => [c.kind, c.task && c.task.id, c.column, c.why, c.owner, c.note, c.message && c.message.seq, Math.floor(c.age / 6e10)]))
-    + JSON.stringify([...agents.values()].map((a) => a.shown))
+    + liveKey()
     + JSON.stringify(waiting.map((it) => [it.key, it.context, it.text, it.acts.length])) + JSON.stringify(ib.reply) + ib.nextKey + JSON.stringify(deck.spend || {})
     + JSON.stringify((deck.timers || []).map((t) => [t.id, t.next_at, t.paused, t.held, t.why, t.fired, t.missed]));
   if (key === bd.key) return;

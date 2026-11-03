@@ -96,7 +96,10 @@ function spendCard(s) {
       b.disabled = true;
       try {
         const r = await api("POST", "/api/budget", {}, body);
-        if (r) deck.spend = r;
+        if (r) {
+          deck.spend = r;
+          deckGen++;
+        }
         us.sig = "";
         drawUsage();
         drawSpendDot();
