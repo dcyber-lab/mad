@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dcyber-lab/mad/internal/paths"
 )
@@ -30,14 +31,14 @@ func mcpEnv() map[string]string {
 }
 
 // agentIDRe is what an agent id looks like, to be put on a command line.
-var agentIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+var agentIDRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`) })
 
 // MCPFlags put mad's MCP server on agent id's command line: claude's
 // --mcp-config (beside the user's own servers), codex's -c
 // mcp_servers.mad, pi's extension (pibus.go) with the server to run; ""
 // for other kinds.
 func MCPFlags(kind, id string) string {
-	if !agentIDRe.MatchString(id) {
+	if !agentIDRe().MatchString(id) {
 		return ""
 	}
 	switch kind {
@@ -66,7 +67,7 @@ func MCPFlags(kind, id string) string {
 // CodexMCPArgs are codex's -c pairs that start mad's MCP server for
 // agent id, as arguments (codex app-server takes them too).
 func CodexMCPArgs(id string) []string {
-	if !agentIDRe.MatchString(id) {
+	if !agentIDRe().MatchString(id) {
 		return nil
 	}
 	cmd, _ := json.Marshal(paths.Self())

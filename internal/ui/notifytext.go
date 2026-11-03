@@ -50,26 +50,30 @@ func fenceOf(l string) string {
 }
 
 var (
-	ruleRe   = regexp.MustCompile(`^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$|^={3,}$`)
-	borderRe = regexp.MustCompile(`^[|+:\-=\s]+$`)
-	tagRe    = regexp.MustCompile(`</?[A-Za-z][^>]*>`)
-	listRe   = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d{1,3}[.)]\s+)`)
-	boldRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	underRe  = regexp.MustCompile(`\b__(.+?)__\b`)
+	ruleRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$|^={3,}$`)
+	})
+	borderRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[|+:\-=\s]+$`) })
+	tagRe    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`</?[A-Za-z][^>]*>`) })
+	listRe   = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d{1,3}[.)]\s+)`)
+	})
+	boldRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\*\*(.+?)\*\*`) })
+	underRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\b__(.+?)__\b`) })
 )
 
 // plainLine is l without markdown's marks, or "" when the line only
 // decorates (a rule, a table border, a bare HTML tag).
 func plainLine(l string) string {
-	if l == "" || ruleRe.MatchString(l) || (strings.ContainsAny(l, "-=") && borderRe.MatchString(l)) {
+	if l == "" || ruleRe().MatchString(l) || (strings.ContainsAny(l, "-=") && borderRe().MatchString(l)) {
 		return ""
 	}
 	if strings.HasPrefix(l, "<details") || strings.HasPrefix(l, "<summary") {
 		return ""
 	}
-	l = strings.TrimSpace(tagRe.ReplaceAllString(l, ""))
+	l = strings.TrimSpace(tagRe().ReplaceAllString(l, ""))
 	for {
-		n := strings.TrimSpace(listRe.ReplaceAllString(l, ""))
+		n := strings.TrimSpace(listRe().ReplaceAllString(l, ""))
 		if n == l {
 			break
 		}
@@ -78,8 +82,8 @@ func plainLine(l string) string {
 	if strings.HasPrefix(l, "|") {
 		l = strings.TrimSpace(strings.Trim(l, "| "))
 	}
-	l = boldRe.ReplaceAllString(l, "$1")
-	l = underRe.ReplaceAllString(l, "$1")
+	l = boldRe().ReplaceAllString(l, "$1")
+	l = underRe().ReplaceAllString(l, "$1")
 	l = strings.ReplaceAll(l, "`", "")
 	return strings.Join(strings.Fields(l), " ")
 }

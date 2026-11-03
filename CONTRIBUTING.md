@@ -115,6 +115,12 @@ go test -run '^$' -bench . -benchtime 20x ./internal/ui
 A poll with 50 busy agents takes about 17ms (one tmux call captures every
 screen); keep it far below the 500ms interval.
 
+Every mad process runs the init of every package, `mad hook` too, which
+claude starts a few times per tool call of each agent. Package-level
+values that cost anything to build, regexps included, are built on first
+use (`sync.OnceValue`); `GODEBUG=inittrace=1 ./mad hook claude </dev/null`
+shows what init costs.
+
 ## Pull requests
 
 - Keep changes focused; one topic per PR.

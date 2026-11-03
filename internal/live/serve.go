@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -141,7 +142,7 @@ func anthropicUpstream(self string) *url.URL {
 // posts to it. None when the hub does not answer, as an agent pointed at
 // no proxy could not work, nor when claude talks to another cloud's API.
 func Env(kind, id string) []string {
-	if kind != "claude" && kind != "pi" || !agentIDRe.MatchString(id) {
+	if kind != "claude" && kind != "pi" || !agentIDRe().MatchString(id) {
 		return nil
 	}
 	if kind == "claude" && (os.Getenv("CLAUDE_CODE_USE_BEDROCK") != "" || os.Getenv("CLAUDE_CODE_USE_VERTEX") != "") {
@@ -163,7 +164,7 @@ func Env(kind, id string) []string {
 // extension. Empty when the hub does not answer.
 func Vars(kind, id string) map[string]string {
 	vars := map[string]string{"{codex_live}": "", "{pi_live}": ""}
-	if kind != "codex" && kind != "pi" || !agentIDRe.MatchString(id) {
+	if kind != "codex" && kind != "pi" || !agentIDRe().MatchString(id) {
 		return vars
 	}
 	if kind == "codex" && (os.Getenv("OPENAI_BASE_URL") != "" || codexBaseURLSet()) {
@@ -182,7 +183,7 @@ func Vars(kind, id string) map[string]string {
 	return vars
 }
 
-var baseURLKey = regexp.MustCompile(`(?m)^\s*openai_base_url\s*=`)
+var baseURLKey = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?m)^\s*openai_base_url\s*=`) })
 
 // codexBaseURLSet reports whether codex's config.toml sets openai_base_url.
 func codexBaseURLSet() bool {
@@ -191,7 +192,7 @@ func codexBaseURLSet() bool {
 		home = filepath.Join(paths.Home(), ".codex")
 	}
 	data, _ := os.ReadFile(filepath.Join(home, "config.toml"))
-	return baseURLKey.Match(data)
+	return baseURLKey().Match(data)
 }
 
 func alive(addr string) bool {

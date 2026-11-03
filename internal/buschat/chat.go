@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -40,7 +41,7 @@ var (
 	stPlain = lipgloss.NewStyle()
 )
 
-var mention = regexp.MustCompile(`@[\p{L}\p{N}_.\-]+`)
+var mention = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`@[\p{L}\p{N}_.\-]+`) })
 
 type tickMsg time.Time
 
@@ -360,7 +361,7 @@ func (m *Model) renderMsg(msg bus.Message, w int) []string {
 
 // styleLine makes @mentions bold in a line drawn in st.
 func styleLine(l string, st lipgloss.Style) string {
-	idx := mention.FindAllStringIndex(l, -1)
+	idx := mention().FindAllStringIndex(l, -1)
 	if len(idx) == 0 {
 		return st.Render(l)
 	}

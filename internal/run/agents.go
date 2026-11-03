@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -140,7 +141,7 @@ func codexModels() []codexModel {
 	return out
 }
 
-var configModelRe = regexp.MustCompile(`^\s*model\s*=\s*"([^"]+)"`)
+var configModelRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*model\s*=\s*"([^"]+)"`) })
 
 // codexConfigModel is the model codex's config.toml sets at its top.
 func codexConfigModel() string {
@@ -152,7 +153,7 @@ func codexConfigModel() string {
 		if strings.HasPrefix(strings.TrimSpace(line), "[") {
 			break
 		}
-		if m := configModelRe.FindStringSubmatch(line); m != nil {
+		if m := configModelRe().FindStringSubmatch(line); m != nil {
 			return m[1]
 		}
 	}

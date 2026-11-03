@@ -68,7 +68,7 @@ func (h *Hub) pi(token string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		agent := strings.TrimPrefix(r.URL.Path, piPrefix)
 		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if r.Method != http.MethodPost || !agentIDRe.MatchString(agent) || subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+		if r.Method != http.MethodPost || !agentIDRe().MatchString(agent) || subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

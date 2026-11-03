@@ -55,7 +55,7 @@ func (codex) Placeholders() map[string]string {
 
 // notifyKey matches a `notify = ...` line in codex's config.toml, at the top
 // level or in a profile.
-var notifyKey = regexp.MustCompile(`^\s*notify\s*=`)
+var notifyKey = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*notify\s*=`) })
 
 // codexUserNotify is the notify command the user set in codex's
 // config.toml. codex takes a single notify command, so mad's -c notify=...
@@ -73,13 +73,13 @@ func codexUserNotify() (argv []string, set bool) {
 		if strings.HasPrefix(strings.TrimSpace(line), "[") {
 			// A table: no top-level keys follow.
 			for _, l := range lines[i:] {
-				if notifyKey.MatchString(l) {
+				if notifyKey().MatchString(l) {
 					return nil, true
 				}
 			}
 			return nil, false
 		}
-		if !notifyKey.MatchString(line) {
+		if !notifyKey().MatchString(line) {
 			continue
 		}
 		value := line[strings.Index(line, "=")+1:] + "\n" + strings.Join(lines[i+1:], "\n")
@@ -554,7 +554,7 @@ func (codex) ProcessSession(pid int, args []string) string {
 			best = f
 		}
 	}
-	if m := uuidTail.FindStringSubmatch(best); m != nil {
+	if m := uuidTail().FindStringSubmatch(best); m != nil {
 		return m[1]
 	}
 	return ""

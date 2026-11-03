@@ -202,15 +202,15 @@ func Parse(data []byte) (Template, error) {
 }
 
 var (
-	nameRe        = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-	placeholderRe = regexp.MustCompile(`\{\{\s*([^}]*?)\s*\}\}`)
+	nameRe        = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`) })
+	placeholderRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\{\{\s*([^}]*?)\s*\}\}`) })
 )
 
 // Check says everything that is wrong with a template, or nil.
 func Check(t Template) error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
-	if !nameRe.MatchString(t.Name) {
+	if !nameRe().MatchString(t.Name) {
 		bad("name %q: lowercase letters, digits and dashes", t.Name)
 	}
 	switch {
@@ -222,7 +222,7 @@ func Check(t Template) error {
 	names, leads := map[string]bool{}, 0
 	for _, r := range t.Roles {
 		switch {
-		case !nameRe.MatchString(r.Name):
+		case !nameRe().MatchString(r.Name):
 			bad("role %q: name it with lowercase letters, digits and dashes", r.Name)
 		case names[r.Name]:
 			bad("role %s: twice", r.Name)
@@ -253,7 +253,7 @@ func Check(t Template) error {
 		bad("%d leads: exactly one role leads", leads)
 	}
 	for _, text := range []run.Text{t.Topic, t.Kickoff} {
-		for _, m := range placeholderRe.FindAllStringSubmatch(string(text), -1) {
+		for _, m := range placeholderRe().FindAllStringSubmatch(string(text), -1) {
 			if m[1] != "goal" {
 				bad("unknown placeholder {{%s}} (there is {{goal}})", m[1])
 			}
@@ -273,8 +273,8 @@ func contains(list []string, s string) bool {
 
 // render fills a template text's {{goal}}.
 func render(tpl, goal string) string {
-	return placeholderRe.ReplaceAllStringFunc(tpl, func(m string) string {
-		if placeholderRe.FindStringSubmatch(m)[1] == "goal" {
+	return placeholderRe().ReplaceAllStringFunc(tpl, func(m string) string {
+		if placeholderRe().FindStringSubmatch(m)[1] == "goal" {
 			return goal
 		}
 		return m

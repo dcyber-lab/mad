@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -86,7 +87,7 @@ func contentImages(raw json.RawMessage) []Image {
 				_ = json.Unmarshal(p.ImageURL, &o)
 				url = o.URL
 			}
-			if m := dataURLRe.FindStringSubmatch(url); m != nil {
+			if m := dataURLRe().FindStringSubmatch(url); m != nil {
 				img = Image{Mime: m[1], Data: url[len(m[0]):]}
 			}
 		}
@@ -111,7 +112,7 @@ func partsShown(raw json.RawMessage) (string, []Image) {
 	return text, imgs
 }
 
-var dataURLRe = regexp.MustCompile(`^data:([\w/+.-]+);base64,`)
+var dataURLRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^data:([\w/+.-]+);base64,`) })
 
 // sniffImage tells an image's type by how its base64 starts.
 func sniffImage(data string) string {
@@ -160,7 +161,7 @@ func shownN(s string, n int) string {
 
 var (
 	messageKey = []byte(`"message"`)
-	tagRe      = regexp.MustCompile(`(?s)<([a-z][a-z-]*)>(.*?)</[a-z][a-z-]*>`)
+	tagRe      = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?s)<([a-z][a-z-]*)>(.*?)</[a-z][a-z-]*>`) })
 )
 
 // Chat: the user's messages and commands, the agent's text and tool
@@ -256,7 +257,7 @@ func withSent(out []Entry, imgs []Image, at time.Time) []Entry {
 // user ran, and their output, as tagged text; other tagged text (a
 // notification, a hook's output) is not the user's.
 func claudeUserChat(text string, at time.Time) []Entry {
-	text = strings.TrimSpace(reminderRe.ReplaceAllString(text, ""))
+	text = strings.TrimSpace(reminderRe().ReplaceAllString(text, ""))
 	if text == "" || strings.HasPrefix(text, "Caveat:") {
 		return nil
 	}
@@ -264,7 +265,7 @@ func claudeUserChat(text string, at time.Time) []Entry {
 		return []Entry{{Kind: EntryUser, Text: text, At: at}}
 	}
 	tags := map[string]string{}
-	for _, m := range tagRe.FindAllStringSubmatch(text, -1) {
+	for _, m := range tagRe().FindAllStringSubmatch(text, -1) {
 		tags[m[1]] = strings.TrimSpace(m[2])
 	}
 	switch {
@@ -430,7 +431,7 @@ func (codex) Chat(line []byte) []Entry {
 		// codex hands the model its context as user messages too. An image
 		// sent has a tag in the text naming it.
 		text, imgs := partsShown(p.Content)
-		text = strings.TrimSpace(codexImageTagRe.ReplaceAllString(text, ""))
+		text = strings.TrimSpace(codexImageTagRe().ReplaceAllString(text, ""))
 		if text == "" && len(imgs) == 0 || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") {
 			return nil
 		}
@@ -460,22 +461,22 @@ func (codex) Chat(line []byte) []Entry {
 
 var (
 	responseItemKey = []byte(`"response_item"`)
-	codexCmdRe      = regexp.MustCompile(`"(?:cmd|command)"\s*:\s*("(?:[^"\\]|\\.)*")`)
-	codexImageTagRe = regexp.MustCompile(`</?image\b[^>]*>`)
-	patchFileRe     = regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$`)
+	codexCmdRe      = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`"(?:cmd|command)"\s*:\s*("(?:[^"\\]|\\.)*")`) })
+	codexImageTagRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`</?image\b[^>]*>`) })
+	patchFileRe     = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$`) })
 )
 
 // codexLabel says what a custom tool call (a script for exec, a patch) is
 // pointed at: the command it runs, the file it changes, else its first
 // line.
 func codexLabel(input string) string {
-	if m := codexCmdRe.FindStringSubmatch(input); m != nil {
+	if m := codexCmdRe().FindStringSubmatch(input); m != nil {
 		var cmd string
 		if json.Unmarshal([]byte(m[1]), &cmd) == nil {
 			return textutil.Truncate(strings.SplitN(cmd, "\n", 2)[0], 80)
 		}
 	}
-	if m := patchFileRe.FindStringSubmatch(input); m != nil {
+	if m := patchFileRe().FindStringSubmatch(input); m != nil {
 		return textutil.Truncate(m[1], 80)
 	}
 	return textutil.Truncate(strings.TrimSpace(strings.SplitN(input, "\n", 2)[0]), 80)

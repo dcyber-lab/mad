@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -60,9 +61,9 @@ func (p prompt) Text() string {
 const promptLines = 30
 
 var (
-	optionRe = regexp.MustCompile(`^(\s*)([❯›>]\s*)?([1-9])\.\s+(\S.*)$`)
+	optionRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(\s*)([❯›>]\s*)?([1-9])\.\s+(\S.*)$`) })
 	// a hint of the key that also picks it: "(y)", "(esc)", "(shift+tab)"
-	hintRe = regexp.MustCompile(`\s+\([a-z][a-z+]{0,11}\)$`)
+	hintRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\s+\([a-z][a-z+]{0,11}\)$`) })
 )
 
 // option labels that open a field to type in, which keys from here
@@ -97,7 +98,7 @@ func parsePrompt(screen string) (prompt, bool) {
 	cursor, top, col := 0, -1, -1
 	for i := foot - 1; i >= 0; i-- {
 		l := lines[i]
-		if m := optionRe.FindStringSubmatch(l); m != nil {
+		if m := optionRe().FindStringSubmatch(l); m != nil {
 			n, _ := strconv.Atoi(m[3])
 			opts = append([]option{{N: n, Label: strings.TrimSpace(m[4]), Under: strings.Join(under, " ")}}, opts...)
 			under = nil
@@ -173,7 +174,7 @@ func parsePrompt(screen string) (prompt, bool) {
 	h.Write([]byte(p.Foot + "\n"))
 	seen := map[string]bool{}
 	for _, o := range opts {
-		o.Label, o.Under = hintRe.ReplaceAllString(o.Label, ""), hintRe.ReplaceAllString(o.Under, "")
+		o.Label, o.Under = hintRe().ReplaceAllString(o.Label, ""), hintRe().ReplaceAllString(o.Under, "")
 		if strings.HasPrefix(o.Label, "[") {
 			return prompt{}, false // a checkbox: several picks, then submit
 		}

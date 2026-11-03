@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -19,7 +20,9 @@ import (
 const minPost = 12
 
 // ackRe matches a post that is only an acknowledgment.
-var ackRe = regexp.MustCompile(`(?i)^\s*(ok|okay|thanks|thank you|got it|noted|done|sounds good|👍)[\s[:punct:]]*$`)
+var ackRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`(?i)^\s*(ok|okay|thanks|thank you|got it|noted|done|sounds good|👍)[\s[:punct:]]*$`)
+})
 
 // errAck is why an acknowledgment is not posted.
 var errAck = errors.New("not posted: a message that only acknowledges needs no reply, and reading one needs no answer; post only to ask or tell someone something")
@@ -350,7 +353,7 @@ func post(sp postSpec) (PostResult, error) {
 		return PostResult{}, errors.New("nothing to post")
 	}
 	byAgent := sp.from.ID != You
-	if byAgent && sp.kind == "" && (utf8.RuneCountInString(text) < minPost || ackRe.MatchString(text)) {
+	if byAgent && sp.kind == "" && (utf8.RuneCountInString(text) < minPost || ackRe().MatchString(text)) {
 		return PostResult{}, errAck
 	}
 	if isDM(sp.channel) && sp.from.ID != system && !dmMember(sp.channel, sp.from.ID) {
@@ -517,7 +520,7 @@ func post(sp postSpec) (PostResult, error) {
 // "@you请看" count and "@you-x" does not. Go has no lookahead, so the end is matched ($ or a character that
 // is not one of those). The page's rule is the same (bus.js YOU_MENTION), as native's is; testdata/at-you.json
 // is the table all three are held to.
-var youRe = regexp.MustCompile(`(?i)(^|[\s\p{Zs}(（])@you($|[^A-Za-z0-9_-])`)
+var youRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)(^|[\s\p{Zs}(（])@you($|[^A-Za-z0-9_-])`) })
 
 // mentionsYou reports whether text has an @you (youRe). The regex begins
 // with an alternation, so it has no prefix to look for and is slow on long
@@ -526,7 +529,7 @@ var youRe = regexp.MustCompile(`(?i)(^|[\s\p{Zs}(（])@you($|[^A-Za-z0-9_-])`)
 func mentionsYou(text string) bool {
 	for i := strings.IndexByte(text, '@'); i >= 0; {
 		if len(text)-i > 3 && strings.EqualFold(text[i+1:i+4], "you") {
-			return youRe.MatchString(text)
+			return youRe().MatchString(text)
 		}
 		j := strings.IndexByte(text[i+1:], '@')
 		if j < 0 {

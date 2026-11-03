@@ -56,7 +56,7 @@ func (h *Hub) openai(chatgpt, api *url.URL) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		agent, rest, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, codexPrefix), "/")
-		if !agentIDRe.MatchString(agent) {
+		if !agentIDRe().MatchString(agent) {
 			http.NotFound(w, r)
 			return
 		}
