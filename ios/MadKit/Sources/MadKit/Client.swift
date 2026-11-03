@@ -209,6 +209,32 @@ public struct MadClient: Sendable {
         return deck
     }
 
+    /// GET /api/deck naming the deck held: If-None-Match carries its tag, and `wait` lets the Mac hold the answer
+    /// until the deck changes, up to that many seconds.
+    public func deckWaitRequest(holding tag: String?, wait: Int) -> URLRequest {
+        var r = request("/api/deck", query: wait > 0 ? [URLQueryItem(name: "wait", value: String(wait))] : [])
+        if let tag { r.setValue(tag, forHTTPHeaderField: "If-None-Match") }
+        // The 304 is the app's to read, not a cache's to answer from.
+        r.cachePolicy = .reloadIgnoringLocalCacheData
+        if wait > 0 { r.timeoutInterval = TimeInterval(wait) + 15 } // the server holds it open up to wait seconds
+        return r
+    }
+
+    public func deck(holding tag: String?, wait: Int) async throws -> DeckAnswer {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: deckWaitRequest(holding: tag, wait: wait))
+        } catch {
+            throw ConnectionError.offline
+        }
+        let http = response as? HTTPURLResponse
+        let waits = max(0, Int(http?.value(forHTTPHeaderField: "X-Mad-Wait") ?? "") ?? 0)
+        if http?.statusCode == 304 { return DeckAnswer(deck: nil, tag: tag, wait: waits) }
+        let deck = try checked { try Self.decode(data, response) }
+        cache?.saveDeck(data)
+        return DeckAnswer(deck: deck, tag: http?.value(forHTTPHeaderField: "ETag"), wait: waits)
+    }
+
     /// The deck a cache holds, for the first look.
     public static func cachedDeck(_ cache: SnapshotCache?) -> Deck? {
         cache?.loadDeck().flatMap { try? JSONDecoder().decode(Deck.self, from: $0) }

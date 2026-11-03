@@ -5,6 +5,9 @@ import Foundation
 public protocol MadAPI: ChatAPI {
     /// GET /api/deck.
     func deck() async throws -> Deck
+    /// GET /api/deck naming the deck held (`tag`, its ETag). With `wait` > 0 the Mac holds the answer until the deck
+    /// changes or `wait` seconds pass (a long poll); a Mac that cannot wait answers at once.
+    func deck(holding tag: String?, wait: Int) async throws -> DeckAnswer
     /// GET /api/bus/messages?channel&since.
     func messages(channel: String, since: Int) async throws -> MessagesPage
     /// POST /api/bus/post.
@@ -23,7 +26,27 @@ public protocol MadAPI: ChatAPI {
 
 extension MadClient: MadAPI {}
 
+/// An answer to a look at the deck that names the deck held.
+public struct DeckAnswer: Sendable {
+    /// The Mac's deck now; nil when the one held still is (304).
+    public var deck: Deck?
+    /// The deck's tag (ETag), to name it by on the next look; nil when the Mac sent none.
+    public var tag: String?
+    /// How long the Mac lets a look wait for news, in seconds (X-Mad-Wait); 0 for a Mac that answers at once (an
+    /// older mad), which is looked at every `interval` instead.
+    public var wait: Int
+
+    public init(deck: Deck?, tag: String?, wait: Int) {
+        self.deck = deck; self.tag = tag; self.wait = wait
+    }
+}
+
 extension MadAPI {
+    /// A fake of the Mac that knows no long poll answers each look at once with its deck, and cannot wait.
+    public func deck(holding tag: String?, wait: Int) async throws -> DeckAnswer {
+        DeckAnswer(deck: try await deck(), tag: nil, wait: 0)
+    }
+
     /// A fake of the Mac that has no pictures need not say so.
     public func pictureData(url: String) async throws -> Data { throw ConnectionError.unexpected("No picture.") }
 }
