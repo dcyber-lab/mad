@@ -122,7 +122,7 @@ func answered(later []Message, m Message, id string, dm bool) bool {
 		if x.From.ID != id || x.Kind == "system" {
 			continue
 		}
-		if dm || x.ReplyTo == m.Seq || youRe.MatchString(x.Text) {
+		if dm || x.ReplyTo == m.Seq || mentionsYou(x.Text) {
 			return true
 		}
 	}

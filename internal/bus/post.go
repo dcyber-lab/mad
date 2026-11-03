@@ -506,7 +506,7 @@ func post(sp postSpec) (PostResult, error) {
 	case paused:
 		tell(sp.channel, sp.from, "#"+sp.channel+" is paused: it waits for you")
 	case mads(sp.kind): // its "@you" is for the agent to use, not a message for the person
-	case sp.wake == You || youRe.MatchString(text):
+	case sp.wake == You || mentionsYou(text):
 		tell(sp.channel, sp.from, text)
 	}
 	return res, nil
@@ -518,6 +518,24 @@ func post(sp postSpec) (PostResult, error) {
 // is not one of those). The page's rule is the same (bus.js YOU_MENTION), as native's is; testdata/at-you.json
 // is the table all three are held to.
 var youRe = regexp.MustCompile(`(?i)(^|[\s\p{Zs}(（])@you($|[^A-Za-z0-9_-])`)
+
+// mentionsYou reports whether text has an @you (youRe). The regex begins
+// with an alternation, so it has no prefix to look for and is slow on long
+// text; it is run only on text with "@you" in it, in any case (y, o and u
+// fold to nothing but their ASCII cases).
+func mentionsYou(text string) bool {
+	for i := strings.IndexByte(text, '@'); i >= 0; {
+		if len(text)-i > 3 && strings.EqualFold(text[i+1:i+4], "you") {
+			return youRe.MatchString(text)
+		}
+		j := strings.IndexByte(text[i+1:], '@')
+		if j < 0 {
+			break
+		}
+		i += j + 1
+	}
+	return false
+}
 
 // tell lets the person know about a message for them, as the deck's
 // notifications do (on their phone too); replaced in tests.

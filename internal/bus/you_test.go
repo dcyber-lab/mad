@@ -245,5 +245,33 @@ func TestAtYouRule(t *testing.T) {
 		if got := youRe.MatchString(c.Text); got != c.Want {
 			t.Errorf("%q: found=%v, want %v", c.Text, got, c.Want)
 		}
+		if got := mentionsYou(c.Text); got != c.Want {
+			t.Errorf("%q: mentionsYou=%v, want %v", c.Text, got, c.Want)
+		}
+	}
+}
+
+// mentionsYou says what youRe says, on text built around every way an
+// @you can be near-missed: case, what comes before and after, several @.
+func TestMentionsYouIsYouRe(t *testing.T) {
+	before := []string{"", " ", "a", "(", "（", "\u3000", "\t", "\n", "x@", "@", "é"}
+	middle := []string{"@you", "@YOU", "@You", "@yOu", "@yo", "@yu", "@ you", "@@you", "@yous", "＠you"}
+	after := []string{"", " ", "s", "_", "-", "1", "请", ".", "!", ")", "@you", "\n"}
+	n := 0
+	for _, b := range before {
+		for _, m := range middle {
+			for _, a := range after {
+				for _, pad := range []string{"", strings.Repeat("long text ", 50)} {
+					text := pad + b + m + a + pad
+					if got, want := mentionsYou(text), youRe.MatchString(text); got != want {
+						t.Errorf("%q: mentionsYou=%v, youRe=%v", text, got, want)
+					}
+					n++
+				}
+			}
+		}
+	}
+	if n < 1000 {
+		t.Fatalf("only %d texts", n)
 	}
 }

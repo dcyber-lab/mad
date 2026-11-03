@@ -92,6 +92,9 @@ type boardData struct {
 	msgs  map[string][]Message
 	// read is how far the person has read each channel (their cursor).
 	read map[string]cursor
+	// posted is when each author last posted in any channel (lastBy), made
+	// on first use.
+	posted map[string]time.Time
 }
 
 func (d *boardData) messages(ch string) []Message {
@@ -138,7 +141,7 @@ func (d *boardData) pendingAsk(ch, id string, since time.Time) *Message {
 	}
 	var found *Message
 	for _, m := range d.messages(ch) {
-		if m.From.ID == id && m.Kind == "text" && !m.At.Before(since) && (isYourDM(ch) || youRe.MatchString(m.Text)) {
+		if m.From.ID == id && m.Kind == "text" && !m.At.Before(since) && (isYourDM(ch) || mentionsYou(m.Text)) {
 			m := m
 			found = &m
 		}
@@ -149,17 +152,20 @@ func (d *boardData) pendingAsk(ch, id string, since time.Time) *Message {
 	return found
 }
 
-// lastBy is when agent id last posted in any channel.
+// lastBy is when agent id last posted in any channel. Every channel is
+// read once for every author, not once for each task asked about.
 func (d *boardData) lastBy(id string) time.Time {
-	var at time.Time
-	for _, c := range d.chans.Channels {
-		for _, m := range d.messages(c.ID) {
-			if m.From.ID == id && m.At.After(at) {
-				at = m.At
+	if d.posted == nil {
+		d.posted = map[string]time.Time{}
+		for _, c := range d.chans.Channels {
+			for _, m := range d.messages(c.ID) {
+				if m.At.After(d.posted[m.From.ID]) {
+					d.posted[m.From.ID] = m.At
+				}
 			}
 		}
 	}
-	return at
+	return d.posted[id]
 }
 
 func (d *boardData) label(id string) string {

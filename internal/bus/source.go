@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/status"
 )
 
 // A poller that shows the bus every second or two need not read it every
@@ -56,34 +57,52 @@ type Look struct {
 // Source keeps the bus's Look between looks. It is safe for concurrent
 // use, but meant for one poller.
 type Source struct {
-	mu   sync.Mutex
-	sig  string
-	at   time.Time
-	look Look
+	mu sync.Mutex
+	// sig and at: the files the channels were read with, and when.
+	sig string
+	at  time.Time
+	// boardSig and boardAt: the same for the board, whose columns also
+	// depend on how the agents stand.
+	boardSig string
+	boardAt  time.Time
+	look     Look
 }
 
-// Look is the bus as of now: read again only when Signature or the
-// agents' statuses moved (Board's columns depend on them), or FullEvery
-// passed; else the last look. statuses are the agents' tracked statuses
+// Look is the bus as of now. The channels are read again only when
+// Signature moved, the board also when an agent moved between waiting, at
+// rest and at work (all Board tells apart), and both when FullEvery passed;
+// else the last look is returned. statuses are the agents' tracked statuses
 // by id, nil before the first poll (the cards are left out). read says
 // whether this call read the bus.
 func (s *Source) Look(st *state.State, statuses map[string]string, now time.Time) (l Look, read bool) {
-	sig := Signature() + "|" + statusSig(statuses)
+	files := Signature()
+	board := files + "|" + statusSig(statuses)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if sig == s.sig && now.Sub(s.at) < FullEvery {
+	chans := files != s.sig || now.Sub(s.at) >= FullEvery
+	cards := board != s.boardSig || now.Sub(s.boardAt) >= FullEvery
+	if !chans && !cards {
 		return s.look, false
 	}
-	if statuses != nil {
-		l.Cards, l.Err = Board(st, statuses, now)
+	l = s.look
+	if cards {
+		l.Cards, l.Err = nil, nil
+		if statuses != nil {
+			l.Cards, l.Err = Board(st, statuses, now)
+		}
+		s.boardSig, s.boardAt = board, now
 	}
-	l.Channels, _ = Channels()
-	l.Yours, _ = YourChannels()
-	s.sig, s.at, s.look = sig, now, l
+	if chans {
+		l.Channels, _ = Channels()
+		l.Yours, _ = YourChannels()
+		s.sig, s.at = files, now
+	}
+	s.look = l
 	return l, true
 }
 
-// statusSig is statuses as a string, the same for the same map.
+// statusSig is statuses as Board reads them, the same for the same map:
+// each agent waiting (w), at rest (r) or at work (o).
 func statusSig(statuses map[string]string) string {
 	if statuses == nil {
 		return "-"
@@ -95,7 +114,14 @@ func statusSig(statuses map[string]string) string {
 	sort.Strings(ids)
 	var b strings.Builder
 	for _, id := range ids {
-		b.WriteString(id + "=" + statuses[id] + ";")
+		class := "o"
+		switch s := statuses[id]; {
+		case s == status.Waiting:
+			class = "w"
+		case atRest(s):
+			class = "r"
+		}
+		b.WriteString(id + "=" + class + ";")
 	}
 	return b.String()
 }

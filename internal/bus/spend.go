@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -141,6 +142,9 @@ func changeSpend(at time.Time, fn func(*Spend)) error {
 		data, err := json.Marshal(s)
 		if err != nil {
 			return err
+		}
+		if old, err := os.ReadFile(spendFile()); err == nil && bytes.Equal(old, data) {
+			return nil // unchanged: a write would move the bus's signature, and every poller would read it all again
 		}
 		return writeAtomic(spendFile(), data)
 	})
