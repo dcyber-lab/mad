@@ -47,9 +47,9 @@ public struct MacSidebar: View {
                             .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
                         ForEach(section.rows) { row in
                             Button { selection = row.id; actions.open(row.id) } label: {
-                                HomeRowView(row: row, size: 40)
+                                HomeRowView(row: row, size: 38)
                                     .padding(.horizontal, 10).padding(.vertical, 7)
-                                    .background(selection == row.id ? Color.primary.opacity(0.08) : Color.clear,
+                                    .background(selection == row.id ? Color.primary.opacity(0.09) : Color.clear,
                                                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -97,9 +97,9 @@ public struct MacSidebar: View {
     /// The machine: its agents' characters in one big tile, and its name.
     private var identity: some View {
         VStack(spacing: 8) {
-            GroupTile(members: faces, size: 72, dot: false)
+            GroupTile(members: faces, size: 68, dot: false)
             // up to two lines, centred; cut only past that
-            Text(model.machine).font(MadType.label.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center)
+            Text(model.machine).font(MadType.label.weight(.medium)).lineLimit(2).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 18)
         }
         .frame(maxWidth: .infinity)

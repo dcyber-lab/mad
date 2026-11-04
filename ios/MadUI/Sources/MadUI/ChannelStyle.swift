@@ -16,7 +16,7 @@ extension Color {
     }
 
     /// An agent's bubble.
-    static var chatBubble: Color { dynamic(light: 0xf0f0f3, dark: 0x1f1f22) }
+    static var chatBubble: Color { dynamic(light: 0xf0f0f3, dark: 0x1c1c1f) }
     /// The person's bubble, and the send button.
     static var chatBlue: Color { dynamic(light: 0x1f6bff, dark: 0x2f7bff) }
     /// The composer's field, the round buttons, the panel's lists.
@@ -26,9 +26,9 @@ extension Color {
     /// The Mac's composer bar and menus: a surface over the window.
     public static var chatComposer: Color { dynamic(light: 0xffffff, dark: 0x1c1c1f) }
     /// The Mac's detail pane behind the messages.
-    public static var chatBackdrop: Color { dynamic(light: 0xffffff, dark: 0x121214) }
+    public static var chatBackdrop: Color { dynamic(light: 0xffffff, dark: 0x0e0e10) }
     /// The Mac's sidebar.
-    static var chatSidebar: Color { dynamic(light: 0xf6f6f8, dark: 0x1a1a1d) }
+    static var chatSidebar: Color { dynamic(light: 0xf6f6f8, dark: 0x131315) }
     /// The 群信息 panel.
     static var chatPanel: Color { dynamic(light: 0xf7f7f9, dark: 0x0e0e10) }
 }

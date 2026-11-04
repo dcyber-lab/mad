@@ -124,7 +124,7 @@ struct ChannelComposer: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(canSend ? Color.chatBlue : Color.chatBlue.opacity(0.35), in: Circle())
+                .background(canSend ? Color.chatBlue : Color.chatBlue.opacity(0.6), in: Circle())
         }
         .buttonStyle(.plain)
         .disabled(!canSend)

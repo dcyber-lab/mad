@@ -121,14 +121,27 @@ public struct ChannelView: View {
         .padding(.bottom, 10)
     }
 
+    /// The tile beside the name: the Mac's pill is one line tall, the phone's has a sub line.
+    private var pillTile: CGFloat {
+        #if os(macOS)
+        24
+        #else
+        32
+        #endif
+    }
+
     private var nameButton: some View {
         Button { panelOpen = true } label: {
             HStack(spacing: 10) {
-                GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 32,
+                GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: pillTile,
                           dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
                 VStack(alignment: .leading, spacing: 0) {
                     Text(screen.title).font(MadType.title).lineLimit(1)
+                    #if os(macOS)
+                    PillSubline(text: screen.stateLine, onlyProblems: true)
+                    #else
                     PillSubline(text: screen.stateLine)
+                    #endif
                 }
                 #if os(iOS)
                 Spacer(minLength: 0)
@@ -147,12 +160,11 @@ public struct ChannelView: View {
     private var namePill: some View {
         // hugs its text, never passes the pane (less the side margins): a long name is cut at the end
         nameButton
-            .padding(.horizontal, 14).padding(.vertical, 6)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.chatLine.opacity(0.6)))
-            .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+            .padding(.horizontal, 12)
+            // 32pt tall with its centre 16pt from the top: on the traffic lights' line, as the sidebar's round buttons are
+            .frame(minHeight: 32)
+            .background(Color.chatComposer, in: Capsule())
             .padding(.horizontal, MadColumn.side)
-            .padding(.top, 12)
     }
     #endif
 
