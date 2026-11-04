@@ -13,6 +13,9 @@ import SwiftUI
 public struct NativeRoot: View {
     @State private var store: DeckStore
     @State private var selection: HomeRow.ID?
+    #if os(macOS)
+    @State private var showPhone = false
+    #endif
     @Environment(\.scenePhase) private var scenePhase
 
     private let api: MadAPI
@@ -31,6 +34,10 @@ public struct NativeRoot: View {
         // Debug builds: `-nativeOpen <row id>` opens a row at once (a channel or an agent), to look at it
         // without a tap (the simulator cannot be tapped from a script).
         if let row = UserDefaults.standard.string(forKey: "nativeOpen"), !row.isEmpty { _selection = State(initialValue: row) }
+        #if os(macOS)
+        // `-nativePhone YES` shows the 手机设备 sheet at once
+        if UserDefaults.standard.bool(forKey: "nativePhone") { _showPhone = State(initialValue: true) }
+        #endif
         #endif
     }
 
@@ -40,20 +47,27 @@ public struct NativeRoot: View {
     }
 
     private var actions: HomeActions {
+        #if os(macOS)
+        // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
+        Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true })
+        #else
         Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb)
+        #endif
     }
 
     /// What the home's controls do: a row opens, the title's ▾ and ⋯'s 切换 Mac switch Mac, and everything that is not
     /// native yet (the ⋯ items, the + items) opens the page on its view. The search needs nothing of the app: the
     /// list filters itself.
     static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
-                            openWeb: ((WebTarget) -> Void)?) -> HomeActions {
+                            openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil) -> HomeActions {
         HomeActions(
             open: open,
             switchMac: { switchMac?() },
             create: { item in openWeb?(.view(Self.webView(forNew: item))) },
             menu: { item in
-                if item == .switchMac { switchMac?() } else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
+                if item == .switchMac { switchMac?() }
+                else if item == .devices, let openPhone { openPhone() }
+                else if let v = Self.webView(for: item) { openWeb?(.view(v)) }
             })
     }
 
@@ -110,6 +124,9 @@ public struct NativeRoot: View {
         }
         // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
         .environment(\.madLinkNote, LinkNote.message(for: store.link))
+        .sheet(isPresented: $showPhone) {
+            if let phone = api as? PhoneAPI { PhoneSheet(api: phone) { showPhone = false } }
+        }
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {

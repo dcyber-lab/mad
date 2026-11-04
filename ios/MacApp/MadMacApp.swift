@@ -27,6 +27,8 @@ struct MadMacApp: App {
                 Text("mad 没有在运行").padding(32)
             }
         }
+        // tall enough for the longest dialog (在你的手机上 with its QR code and the paired phones)
+        .defaultSize(width: 800, height: 820)
         Settings { SettingsView() }
     }
 }
@@ -40,6 +42,11 @@ struct WebPage: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        // The page's dialog has no height of its own: in a window shorter than the dialog it was cut off at the
+        // bottom and could not be scrolled. This is the page's own fix, here so it reaches a server that is older.
+        config.userContentController.addUserScript(WKUserScript(
+            source: "var s=document.createElement('style');s.textContent='.dlg{max-height:calc(100vh - 40px);overflow-y:auto}';document.documentElement.appendChild(s);",
+            injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.uiDelegate = context.coordinator
