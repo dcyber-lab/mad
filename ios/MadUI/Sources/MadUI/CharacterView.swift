@@ -31,18 +31,14 @@ public struct CharacterView: View {
 
     public var body: some View {
         Group {
-            if reduceMotion || state == .stopped {
+            if reduceMotion || state != .working {
                 canvas(at: nil)
-            } else if state == .idle || state == .starting {
-                // idle changes only when it blinks: one redraw at each edge of a blink
-                TimelineView(BlinkSchedule(origin: since, every: look.plan.blinkEvery / 1000)) { canvas(at: $0.date) }
             } else {
-                TimelineView(.animation(paused: !onScreen)) { canvas(at: $0.date) }
+                // only a working one moves: its eyes, at 15 frames a second
+                TimelineView(.animation(minimumInterval: 1 / 15, paused: !onScreen)) { canvas(at: $0.date) }
             }
         }
-        .frame(width: size * (1 + 2 * Self.margin), height: size * (1 + 2 * Self.margin))
         .frame(width: size, height: size)
-        .opacity(state == .stopped ? 0.5 : 1)
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .onChange(of: state) { since = Date() }
@@ -52,14 +48,12 @@ public struct CharacterView: View {
         .cornerDot(dot ?? (state == .needsYou), size: size)
     }
 
-    /// The character at `date`; nil is at rest (Reduce Motion, or stopped).
+    /// The avatar at `date`; nil is at rest.
     private func canvas(at date: Date?) -> some View {
-        let ms = date.map { $0.timeIntervalSince(since) * 1000 } ?? 0
-        let pose = date == nil ? CharacterPlan.resting(state) : look.plan.pose(state, ms: ms)
+        let ms = date.map { $0.timeIntervalSince(since) * 1000 }
         return Canvas { ctx, _ in
             var c = ctx
-            // the canvas is larger than the box: like the page's svg, nothing clips a turn or a leaf's edge
-            CharacterArt.draw(&c, look: look, in: CGRect(x: size * Self.margin, y: size * Self.margin, width: size, height: size), pose: pose)
+            GrokAvatar.draw(&c, look: look, in: CGRect(x: 0, y: 0, width: size, height: size), state: state, at: ms)
         }
     }
 
