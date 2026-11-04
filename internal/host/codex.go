@@ -287,7 +287,7 @@ func (c *codex) notified(method string, params json.RawMessage) {
 		turn := c.turn
 		c.mu.Unlock()
 		if ok && p.Delta != "" {
-			c.h.hub.Block(c.agent, turn, i, func(b *live.Block) { b.Text += p.Delta })
+			c.h.hub.Block(c.agent, turn, i, func(b *live.Block) { b.Append(p.Delta) })
 			c.h.showMessage()
 		}
 	case "turn/completed":

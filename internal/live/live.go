@@ -8,6 +8,7 @@ package live
 
 import (
 	"context"
+	"strings"
 	"sync"
 )
 
@@ -20,6 +21,24 @@ type Block struct {
 	Tool string `json:"tool,omitempty"` // the tool a call is to
 	ID   string `json:"id,omitempty"`   // a call's id
 	Done bool   `json:"done,omitempty"`
+
+	// buf holds Text, with room to grow: a stream comes a few bytes at
+	// a time, and Text recopied for each would cost the square of its
+	// length. Copies of the block share it, and only read their Text.
+	buf *strings.Builder
+}
+
+// Append adds s to the block's text. Only the hub's own block is
+// appended to, under its lock: a look's copy shares the buffer.
+func (b *Block) Append(s string) {
+	// Text set since, or a block made anew: the buffer starts again from
+	// it. Otherwise Text is the buffer's own string, quick to compare.
+	if b.buf == nil || b.buf.String() != b.Text {
+		b.buf = &strings.Builder{}
+		b.buf.WriteString(b.Text)
+	}
+	b.buf.WriteString(s)
+	b.Text = b.buf.String()
 }
 
 // Message is what an agent's model is writing, or wrote last.

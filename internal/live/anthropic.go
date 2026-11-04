@@ -144,7 +144,7 @@ func (a *anthropicEvents) event(data []byte) {
 		if more == "" {
 			return // a signature: nothing to show
 		}
-		a.hub.Block(a.agent, a.msg, ev.Index, func(b *Block) { b.Text += more })
+		a.hub.Block(a.agent, a.msg, ev.Index, func(b *Block) { b.Append(more) })
 	case "content_block_stop":
 		a.hub.Block(a.agent, a.msg, ev.Index, func(b *Block) { b.Done = true })
 	case "message_stop", "error":

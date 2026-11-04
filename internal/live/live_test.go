@@ -44,6 +44,66 @@ func TestHub(t *testing.T) {
 	}
 }
 
+// Append keeps to Text as it is set: a block made anew, or its text set
+// outright, even to as many bytes, starts from that.
+func TestBlockAppend(t *testing.T) {
+	var b Block
+	b.Append("he")
+	b.Append("llo")
+	if b.Text != "hello" {
+		t.Errorf("text = %q", b.Text)
+	}
+	look := b // a copy, as Wait hands out
+	b.Append(", 世界")
+	if b.Text != "hello, 世界" || look.Text != "hello" {
+		t.Errorf("text = %q, the copy's %q", b.Text, look.Text)
+	}
+	b = Block{Kind: "tool", Text: "{"}
+	b.Append(`"a"`)
+	if b.Text != `{"a"` {
+		t.Errorf("made anew: %q", b.Text)
+	}
+	b.Text = `{"b"` // as many bytes
+	b.Append("}")
+	if b.Text != `{"b"}` {
+		t.Errorf("set outright: %q", b.Text)
+	}
+	b.Text = ""
+	b.Append("x")
+	if b.Text != "x" {
+		t.Errorf("emptied: %q", b.Text)
+	}
+}
+
+// Looks read copies of a block while it streams; run with -race.
+func TestHubStreamWhileLooked(t *testing.T) {
+	h := NewHub()
+	h.Begin("a", "m1", "")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var since int64
+		for {
+			m := h.Wait(context.Background(), "a", since)
+			since = m.Version
+			if len(m.Blocks) > 0 && !strings.HasPrefix(strings.Repeat("ab", 1000), m.Blocks[0].Text) {
+				t.Errorf("a look saw %q", m.Blocks[0].Text)
+			}
+			if m.Done {
+				return
+			}
+		}
+	}()
+	for i := 0; i < 1000; i++ {
+		h.Block("a", "m1", 0, func(b *Block) { b.Append("ab") })
+	}
+	h.End("a", "m1")
+	<-done
+	if m := h.Wait(context.Background(), "a", 0); m.Blocks[0].Text != strings.Repeat("ab", 1000) {
+		t.Errorf("text of %d bytes", len(m.Blocks[0].Text))
+	}
+}
+
 const sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\"}}\n\n" +
 	"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\"}}\n\n" +
 	"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"hm\"}}\n\n" +
