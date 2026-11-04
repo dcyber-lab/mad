@@ -21,7 +21,8 @@ struct ChannelDetail: View {
         self.api = api
         self.onBack = onBack
         self.openAgent = openAgent
-        _store = State(initialValue: ChannelStore(id: id, api: api))
+        // no cache read here: this init runs on every refresh of the parent, the store is kept from the first
+        _store = State(initialValue: ChannelStore(id: id, api: api, restore: false))
     }
 
     var body: some View {
@@ -30,6 +31,7 @@ struct ChannelDetail: View {
                     actions: actions, panelOpen: debugPanel)
             // Polls while the app is active; the task restarts when it comes back, so it looks at once.
             .task(id: scenePhase) {
+                store.restore()
                 guard scenePhase == .active else { return }
                 await store.run()
             }
