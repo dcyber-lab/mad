@@ -6,9 +6,9 @@ import SwiftUI
 enum MadType {
     #if os(macOS)
     /// A row's or an agent's name.
-    static let rowName = Font.system(size: 16, weight: .semibold)
+    static let rowName = Font.system(size: 15, weight: .medium)
     /// A row's last line.
-    static let rowLine = Font.system(size: 14)
+    static let rowLine = Font.system(size: 13)
     /// What is said: a message, what the person types.
     static let message = Font.system(size: 15)
     /// The opened text of a folded line, a card's body.
@@ -185,6 +185,8 @@ extension EnvironmentValues {
 /// The second line of a name pill: how the channel or agent stands, or, when the link is bad, that.
 struct PillSubline: View {
     let text: String
+    /// The Mac's pill is one line: it says only what is wrong (the link), not how the channel stands.
+    var onlyProblems = false
     @Environment(\.madLinkNote) private var note
 
     var body: some View {
@@ -195,7 +197,7 @@ struct PillSubline: View {
             }
             .font(MadType.label)
             .foregroundStyle(.orange)
-        } else if !text.isEmpty {
+        } else if !text.isEmpty && !onlyProblems {
             Text(text).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
         }
     }

@@ -18,7 +18,7 @@ struct MacShell<Detail: View>: View {
     let rowOpen: Bool
     @ViewBuilder var detail: Detail
 
-    @AppStorage("mad.sidebarWidth") private var storedWidth = 320.0
+    @AppStorage("mad.sidebarWidth") private var storedWidth = 280.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The resize cursor is pushed while the pointer is on the sidebar's edge; hiding the sidebar under it pops it.
     @State private var onEdge = false
@@ -96,7 +96,7 @@ struct MacShell<Detail: View>: View {
         HStack(spacing: 0) {
             MacSidebar(model: model, selection: $selection, actions: actions, toggle: toggle)
                 .frame(width: width)
-            Rectangle().fill(Color.chatLine.opacity(0.7)).frame(width: 1)
+            Rectangle().fill(Color.chatLine.opacity(0.35)).frame(width: 1)
         }
         .frame(width: open ? width + 1 : 0, alignment: .leading)
         .clipped()
