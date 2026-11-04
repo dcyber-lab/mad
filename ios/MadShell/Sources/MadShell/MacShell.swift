@@ -157,6 +157,20 @@ private struct WindowStyle: NSViewRepresentable {
             apply()
         }
 
+        /// The titlebar's backdrop is a view across the top ~30pt of the window that takes every click on its way: the
+        /// round buttons on the traffic lights' line were under it, and did nothing. The titlebar is transparent
+        /// and has no use for it, so it is hidden (the traffic lights are not under it).
+        private func hideTitlebarBackdrop(_ window: NSWindow) {
+            guard let frame = window.contentView?.superview else { return }
+            func walk(_ v: NSView) {
+                for sub in v.subviews {
+                    if String(describing: type(of: sub)) == "BackdropView", !sub.isHidden { sub.isHidden = true }
+                    walk(sub)
+                }
+            }
+            walk(frame)
+        }
+
         private func apply() {
             guard let window else { return }
             if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
@@ -164,6 +178,7 @@ private struct WindowStyle: NSViewRepresentable {
             if window.titlebarSeparatorStyle != .none { window.titlebarSeparatorStyle = .none }
             if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
             if window.toolbar != nil { window.toolbar = nil }
+            hideTitlebarBackdrop(window)
             if let zoom = window.standardWindowButton(.zoomButton) {
                 let edge = zoom.convert(zoom.bounds, to: nil).maxX
                 if edge > 0, abs(edge - lastEdge) > 0.5 {

@@ -28,7 +28,7 @@ public struct MacSidebar: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            band
+            Color.clear.frame(height: 32)
             if searching {
                 TextField("搜索", text: $query)
                     .textFieldStyle(.plain)
@@ -64,6 +64,7 @@ public struct MacSidebar: View {
             footer
         }
         .background(Color.chatSidebar)
+        .overlay(alignment: .top) { band }
     }
 
     /// The row the window's controls are on: round buttons at the right on the traffic lights' line (their centre is
