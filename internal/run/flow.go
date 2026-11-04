@@ -289,8 +289,8 @@ func Parse(data []byte) (Flow, error) {
 }
 
 var (
-	nameRe        = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-	placeholderRe = regexp.MustCompile(`\{\{\s*([^}]*?)\s*\}\}`)
+	nameRe        = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`) })
+	placeholderRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\{\{\s*([^}]*?)\s*\}\}`) })
 	placeholders  = map[string]bool{"task": true, "run": true, "base": true, "review": true, "round": true}
 )
 
@@ -299,7 +299,7 @@ var (
 func Check(f Flow) error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
-	if !nameRe.MatchString(f.Name) {
+	if !nameRe().MatchString(f.Name) {
 		bad("name %q: lowercase letters, digits and dashes", f.Name)
 	}
 	if len(f.Roles) == 0 {
@@ -311,7 +311,7 @@ func Check(f Flow) error {
 	roles := map[string]bool{}
 	for _, r := range f.Roles {
 		switch {
-		case !nameRe.MatchString(r.Name):
+		case !nameRe().MatchString(r.Name):
 			bad("role %q: name it with lowercase letters, digits and dashes", r.Name)
 		case roles[r.Name]:
 			bad("role %s: twice", r.Name)
@@ -334,7 +334,7 @@ func Check(f Flow) error {
 	for i, s := range f.Steps {
 		at := fmt.Sprintf("step %s", s.Name)
 		switch {
-		case !nameRe.MatchString(s.Name):
+		case !nameRe().MatchString(s.Name):
 			bad("step %q: name it with lowercase letters, digits and dashes", s.Name)
 		case steps[s.Name] > 0:
 			bad("%s: twice", at)
@@ -347,7 +347,7 @@ func Check(f Flow) error {
 			bad("%s: no prompt", at)
 		}
 		for _, text := range []Text{s.Prompt, s.Again} {
-			for _, m := range placeholderRe.FindAllStringSubmatch(string(text), -1) {
+			for _, m := range placeholderRe().FindAllStringSubmatch(string(text), -1) {
 				if !placeholders[m[1]] {
 					bad("%s: unknown placeholder {{%s}} (there are {{task}}, {{run}}, {{base}}, {{review}}, {{round}})", at, m[1])
 				}
@@ -390,8 +390,8 @@ func contains(list []string, s string) bool {
 
 // render fills a step's placeholders.
 func render(tpl string, vars map[string]string) string {
-	return placeholderRe.ReplaceAllStringFunc(tpl, func(m string) string {
-		if v, ok := vars[placeholderRe.FindStringSubmatch(m)[1]]; ok {
+	return placeholderRe().ReplaceAllStringFunc(tpl, func(m string) string {
+		if v, ok := vars[placeholderRe().FindStringSubmatch(m)[1]]; ok {
 			return v
 		}
 		return m

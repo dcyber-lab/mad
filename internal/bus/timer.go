@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -424,13 +425,13 @@ func dropCheckins(id string) error {
 }
 
 // atRe finds the @names in a text.
-var atRe = regexp.MustCompile(`(^|[\s(\[{<"'*,;])@([A-Za-z0-9][A-Za-z0-9_-]*)`)
+var atRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(^|[\s(\[{<"'*,;])@([A-Za-z0-9][A-Za-z0-9_-]*)`) })
 
 // unknownMention is the first @name in text that is no agent, @all or @you,
 // or "".
 func unknownMention(st *state.State, text string) string {
 	mask := codeMask(text)
-	for _, m := range atRe.FindAllStringSubmatchIndex(text, -1) {
+	for _, m := range atRe().FindAllStringSubmatchIndex(text, -1) {
 		at := m[4] - 1 // the @
 		name := text[m[4]:m[5]]
 		if mask[at] || strings.EqualFold(name, "all") || strings.EqualFold(name, You) {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // The claude tap. A claude agent is started with ANTHROPIC_BASE_URL
@@ -19,7 +20,7 @@ import (
 
 const agentPrefix = "/a/"
 
-var agentIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+var agentIDRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`) })
 
 // tapKey keys the tap's agent and session in a call's context.
 type tapKey struct{}
@@ -46,7 +47,7 @@ func (h *Hub) anthropic(upstream *url.URL) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		agent, rest, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, agentPrefix), "/")
-		if !agentIDRe.MatchString(agent) {
+		if !agentIDRe().MatchString(agent) {
 			http.NotFound(w, r)
 			return
 		}

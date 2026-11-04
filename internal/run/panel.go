@@ -692,16 +692,16 @@ func (l loop) label() string {
 	return " CHANGES "
 }
 
-var resultVerdict = regexp.MustCompile(`^(APPROVE|CHANGES):\s*`)
+var resultVerdict = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(APPROVE|CHANGES):\s*`) })
 
 // result is what a step came to, its verdict in colour and the markdown
 // and the repeated verdict taken out.
 func result(s string) string {
 	v := ""
-	if m := resultVerdict.FindStringSubmatch(s); m != nil {
+	if m := resultVerdict().FindStringSubmatch(s); m != nil {
 		v, s = m[1], s[len(m[0]):]
 	}
-	s = strings.TrimLeft(plain(verdictRe.ReplaceAllString(plain(s), "")), " 。.:：,，-—")
+	s = strings.TrimLeft(plain(verdictRe().ReplaceAllString(plain(s), "")), " 。.:：,，-—")
 	switch {
 	case v == Approve:
 		v = pGood.Render(v)

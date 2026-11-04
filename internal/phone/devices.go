@@ -199,7 +199,7 @@ var saveDevices = func(devs []Device) error { return writeJSON(paths.PhoneDevice
 // ErrBadToken is a token that is not 32 lowercase hex digits.
 var ErrBadToken = errors.New("a device's token is 32 lowercase hex digits, made on the device")
 
-var tokenRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
+var tokenRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{32}$`) })
 
 // Pair takes a pairing code, once, for the device whose own token this is
 // (made on the device, so it is the same in a retry); only its hash is
@@ -209,7 +209,7 @@ var tokenRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 // finds the device and gets its id again; the same code with another
 // token is refused.
 func Pair(code, name, token string) (id string, err error) {
-	if !tokenRe.MatchString(token) {
+	if !tokenRe().MatchString(token) {
 		return "", ErrBadToken
 	}
 	name = strings.TrimSpace(name)

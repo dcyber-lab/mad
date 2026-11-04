@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -53,7 +54,7 @@ var (
 	ErrHostnameAlone = errors.New("--hostname goes with --tunnel: a quick tunnel makes its own name")
 )
 
-var hostnameRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$`)
+var hostnameRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$`) })
 
 // LoadChoice is the way in last chosen; Tailscale before any was.
 func LoadChoice() Choice {
@@ -78,7 +79,7 @@ func Choose(c Choice) error {
 		if c.Tunnel == "" && c.Hostname != "" {
 			return ErrHostnameAlone
 		}
-		if c.Hostname != "" && !hostnameRe.MatchString(c.Hostname) {
+		if c.Hostname != "" && !hostnameRe().MatchString(c.Hostname) {
 			return fmt.Errorf("%q is not a host name", c.Hostname)
 		}
 	default:
@@ -145,7 +146,9 @@ func tunnelHost() string {
 	return live
 }
 
-var quickRe = regexp.MustCompile(`https://([a-z0-9-]+(?:\.[a-z0-9-]+)*\.trycloudflare\.com)`)
+var quickRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`https://([a-z0-9-]+(?:\.[a-z0-9-]+)*\.trycloudflare\.com)`)
+})
 
 // quickHostname asks cloudflared for the quick tunnel's name: its metrics
 // server says, else its log does. It waits for the tunnel to come up.
@@ -157,7 +160,7 @@ func quickHostname(ctx context.Context) (string, error) {
 			return h, nil
 		}
 		if b, err := os.ReadFile(paths.PhoneTunnelLog()); err == nil {
-			if all := quickRe.FindAllSubmatch(b, -1); len(all) > 0 {
+			if all := quickRe().FindAllSubmatch(b, -1); len(all) > 0 {
 				return string(all[len(all)-1][1]), nil
 			}
 		}

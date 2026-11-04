@@ -30,7 +30,7 @@ type Session struct {
 const MaxSessions = 40
 
 var (
-	reminderRe   = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
+	reminderRe   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`) })
 	sessionCache sync.Map // path → cachedFile
 )
 
@@ -112,7 +112,7 @@ func UserText(raw json.RawMessage) string {
 	default:
 		return ""
 	}
-	text = strings.TrimSpace(reminderRe.ReplaceAllString(text, ""))
+	text = strings.TrimSpace(reminderRe().ReplaceAllString(text, ""))
 	if text == "" || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") ||
 		strings.HasPrefix(text, "Caveat:") {
 		return ""

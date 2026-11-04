@@ -3,6 +3,7 @@ package run
 import (
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // The last line of a reply says what comes next.
@@ -12,8 +13,8 @@ const (
 )
 
 var (
-	verdictRe  = regexp.MustCompile(`(?i)VERDICT:\s*(APPROVE|CHANGES)`)
-	questionRe = regexp.MustCompile(`(?i)^QUESTION\(@?([\w-]+)\):\s*(.+)$`)
+	verdictRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)VERDICT:\s*(APPROVE|CHANGES)`) })
+	questionRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)^QUESTION\(@?([\w-]+)\):\s*(.+)$`) })
 )
 
 // lastLine is a reply's last line with text, without markdown around it.
@@ -35,15 +36,15 @@ func body(reply string) string {
 }
 
 func control(line string) bool {
-	return strings.EqualFold(line, "DONE") || verdictRe.MatchString(line) || questionRe.MatchString(line)
+	return strings.EqualFold(line, "DONE") || verdictRe().MatchString(line) || questionRe().MatchString(line)
 }
 
 // verdict is APPROVE, CHANGES, or "" when a review gave none.
 func verdict(reply string) string {
-	m := verdictRe.FindStringSubmatch(lastLine(reply))
+	m := verdictRe().FindStringSubmatch(lastLine(reply))
 	if m == nil {
 		// Some put a closing word after it; the last verdict anywhere counts.
-		all := verdictRe.FindAllStringSubmatch(reply, -1)
+		all := verdictRe().FindAllStringSubmatch(reply, -1)
 		if len(all) == 0 {
 			return ""
 		}
@@ -54,7 +55,7 @@ func verdict(reply string) string {
 
 // question is who a reply asks and what, if it ends in a question.
 func question(reply string) (role, text string, ok bool) {
-	m := questionRe.FindStringSubmatch(lastLine(reply))
+	m := questionRe().FindStringSubmatch(lastLine(reply))
 	if m == nil {
 		return "", "", false
 	}
@@ -62,14 +63,14 @@ func question(reply string) (role, text string, ok bool) {
 }
 
 // listMark is what starts a list item, heading or quote in markdown.
-var listMark = regexp.MustCompile(`^([-*+]\s+|\d+[.)]\s+|#+\s*|>\s*)`)
+var listMark = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^([-*+]\s+|\d+[.)]\s+|#+\s*|>\s*)`) })
 
 // summary is one line saying what a reply came to.
 func summary(reply string) string {
 	for _, l := range strings.Split(body(reply), "\n") {
-		l = strings.TrimSpace(listMark.ReplaceAllString(strings.TrimSpace(l), ""))
+		l = strings.TrimSpace(listMark().ReplaceAllString(strings.TrimSpace(l), ""))
 		// Not a verdict said at the top as well: it is shown anyway.
-		if l = strings.TrimLeft(plain(verdictRe.ReplaceAllString(plain(l), "")), " 。.:：,，-—"); l != "" {
+		if l = strings.TrimLeft(plain(verdictRe().ReplaceAllString(plain(l), "")), " 。.:：,，-—"); l != "" {
 			return l
 		}
 	}

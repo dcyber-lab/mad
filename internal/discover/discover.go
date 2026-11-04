@@ -52,11 +52,13 @@ func (e External) Where() string {
 const HistoryDays = 60
 
 var (
-	cwdRe     = regexp.MustCompile(`"cwd":"((?:[^"\\]|\\.)*)"`)
-	uuidTail  = regexp.MustCompile(`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$`)
-	nonAlnum  = regexp.MustCompile(`[^A-Za-z0-9]`)
+	cwdRe    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`"cwd":"((?:[^"\\]|\\.)*)"`) })
+	uuidTail = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$`)
+	})
+	nonAlnum  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`[^A-Za-z0-9]`) })
 	tempRoots = []string{"/private/tmp", "/tmp", "/private/var", "/var/folders"}
-	psLineRe  = regexp.MustCompile(`^\s*(\d+)\s+(\S+)\s+(.*)$`)
+	psLineRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*(\d+)\s+(\S+)\s+(.*)$`) })
 )
 
 // Process inspection, replaceable in tests.
@@ -112,7 +114,7 @@ func readCwd(path string, limit int64, desktopMark string) (cwd string, desktop 
 	defer f.Close()
 	data, _ := io.ReadAll(io.LimitReader(f, limit))
 	desktop = strings.Contains(string(data), desktopMark)
-	m := cwdRe.FindSubmatch(data)
+	m := cwdRe().FindSubmatch(data)
 	if m == nil {
 		return "", desktop
 	}
@@ -204,7 +206,7 @@ func parsePS(out string, want map[string]Provider, deckTTYs map[string]bool) []p
 	sc := bufio.NewScanner(strings.NewReader(out))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
-		m := psLineRe.FindStringSubmatch(sc.Text())
+		m := psLineRe().FindStringSubmatch(sc.Text())
 		if m == nil {
 			continue
 		}

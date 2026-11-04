@@ -242,7 +242,7 @@ func TestAtYouRule(t *testing.T) {
 		t.Fatalf("the table has %d cases", len(table.Cases))
 	}
 	for _, c := range table.Cases {
-		if got := youRe.MatchString(c.Text); got != c.Want {
+		if got := youRe().MatchString(c.Text); got != c.Want {
 			t.Errorf("%q: found=%v, want %v", c.Text, got, c.Want)
 		}
 		if got := mentionsYou(c.Text); got != c.Want {
@@ -263,7 +263,7 @@ func TestMentionsYouIsYouRe(t *testing.T) {
 			for _, a := range after {
 				for _, pad := range []string{"", strings.Repeat("long text ", 50)} {
 					text := pad + b + m + a + pad
-					if got, want := mentionsYou(text), youRe.MatchString(text); got != want {
+					if got, want := mentionsYou(text), youRe().MatchString(text); got != want {
 						t.Errorf("%q: mentionsYou=%v, youRe=%v", text, got, want)
 					}
 					n++

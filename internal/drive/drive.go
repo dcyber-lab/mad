@@ -17,6 +17,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
@@ -460,10 +461,10 @@ func free(k agent.Kind, a *state.Agent, paneID string, window time.Duration) err
 }
 
 var (
-	ansiRe = regexp.MustCompile(`\x1b\[[0-9;:]*[A-Za-z]`)
+	ansiRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\x1b\[[0-9;:]*[A-Za-z]`) })
 	// faintRe is text drawn faint, as agents draw their prompt's
 	// placeholder and suggestions.
-	faintRe = regexp.MustCompile(`\x1b\[(?:[0-9;]*;)?2m[^\x1b]*`)
+	faintRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\x1b\[(?:[0-9;]*;)?2m[^\x1b]*`) })
 )
 
 // promptMarks start the line agents type into: claude's ❯, codex's ›.
@@ -476,14 +477,14 @@ var promptMarks = []string{"❯", "›"}
 func Draft(styled string) string {
 	lines := strings.Split(styled, "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
-		plain := strings.TrimSpace(strings.Trim(ansiRe.ReplaceAllString(lines[i], ""), "│ "))
+		plain := strings.TrimSpace(strings.Trim(ansiRe().ReplaceAllString(lines[i], ""), "│ "))
 		for _, mark := range promptMarks {
 			if !strings.HasPrefix(plain, mark) {
 				continue
 			}
 			line := lines[i][strings.Index(lines[i], mark)+len(mark):]
-			line = faintRe.ReplaceAllString(line, "")
-			return strings.TrimSpace(strings.TrimRight(ansiRe.ReplaceAllString(line, ""), "│ "))
+			line = faintRe().ReplaceAllString(line, "")
+			return strings.TrimSpace(strings.TrimRight(ansiRe().ReplaceAllString(line, ""), "│ "))
 		}
 	}
 	return ""

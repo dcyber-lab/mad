@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/deck"
@@ -40,11 +41,11 @@ type Options struct {
 }
 
 var (
-	nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-	urlRe   = regexp.MustCompile(`https?://\S+`)
+	nonSlug = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`[^a-z0-9]+`) })
+	urlRe   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`https?://\S+`) })
 	// itemRe finds what a link to an issue, merge or pull request names:
 	// gitlab's /-/issues/1, github's /pull/2.
-	itemRe = regexp.MustCompile(`/(?:-/)?(issues|merge_requests|pull|pulls)/(\d+)`)
+	itemRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`/(?:-/)?(issues|merge_requests|pull|pulls)/(\d+)`) })
 )
 
 // BranchFor names a run's branch after its task: run/ and the task's
@@ -52,14 +53,14 @@ var (
 // first, or the time when there is nothing to name it by.
 func BranchFor(task string, now time.Time) string {
 	var words []string
-	for _, u := range urlRe.FindAllString(task, -1) {
-		if m := itemRe.FindStringSubmatch(u); m != nil {
+	for _, u := range urlRe().FindAllString(task, -1) {
+		if m := itemRe().FindStringSubmatch(u); m != nil {
 			kind := map[string]string{"issues": "issue", "merge_requests": "mr", "pull": "pr", "pulls": "pr"}[m[1]]
 			words = append(words, kind, m[2])
 		}
 	}
-	text := urlRe.ReplaceAllString(task, " ")
-	words = append(words, strings.Fields(nonSlug.ReplaceAllString(strings.ToLower(text), " "))...)
+	text := urlRe().ReplaceAllString(task, " ")
+	words = append(words, strings.Fields(nonSlug().ReplaceAllString(strings.ToLower(text), " "))...)
 	slug := ""
 	for _, w := range words {
 		if len(slug)+len(w) > 32 {

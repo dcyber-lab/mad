@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,7 +47,7 @@ var imageTypes = map[string]string{
 	"image/webp": ".webp",
 }
 
-var imageIDRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var imageIDRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{64}$`) })
 
 func imageDir() string { return filepath.Join(dir(), "images") }
 
@@ -115,7 +116,7 @@ func StoreImages(datas [][]byte) ([]Image, error) {
 // that is not a reference or a picture not there. The id is checked, so it
 // can never name another file.
 func ImagePath(id string) (path, mime string, ok bool) {
-	if !imageIDRe.MatchString(id) {
+	if !imageIDRe().MatchString(id) {
 		return "", "", false
 	}
 	for mime, ext := range imageTypes {
@@ -200,7 +201,7 @@ func CollectImages(minAge time.Duration) (int, error) {
 	for _, f := range files {
 		name := f.Name()
 		id := strings.TrimSuffix(name, filepath.Ext(name))
-		if f.IsDir() || named[id] || !imageIDRe.MatchString(id) {
+		if f.IsDir() || named[id] || !imageIDRe().MatchString(id) {
 			continue
 		}
 		path := filepath.Join(root, name)

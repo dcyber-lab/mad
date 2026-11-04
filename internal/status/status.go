@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
@@ -46,12 +47,14 @@ const (
 // kind, and its screen at work does not: a footer that offers a way out,
 // a choice under a cursor, claude's question. A prompt too long to read
 // whole shows them still.
-var promptMarks = regexp.MustCompile(`(?im)\besc to cancel\b|\benter to (?:select|confirm)\b|^\s*[❯›>]\s*[1-9]\.\s|\bdo you want to proceed\?`)
+var promptMarks = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`(?im)\besc to cancel\b|\benter to (?:select|confirm)\b|^\s*[❯›>]\s*[1-9]\.\s|\bdo you want to proceed\?`)
+})
 
 // ShowsPrompt tells whether the last lines of screen look like a TUI's
 // prompt (promptMarks), whether or not it can be read.
 func ShowsPrompt(screen string) bool {
-	return promptMarks.MatchString(tailLines(screen, waitingTail))
+	return promptMarks().MatchString(tailLines(screen, waitingTail))
 }
 
 // Hook is what an agent last reported, stored as StatusDir/<agent id>.json.

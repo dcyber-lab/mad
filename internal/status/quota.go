@@ -18,7 +18,7 @@ import (
 type Quota struct {
 	FiveHour Window    `json:"five_hour"`
 	SevenDay Window    `json:"seven_day"`
-	At       time.Time `json:"at"` // when it was reported
+	At       time.Time `json:"at"` // when it was reported; the same numbers again keep it
 }
 
 // Window is one metered window.
@@ -29,6 +29,13 @@ type Window struct {
 
 // Known reports whether the window was ever reported.
 func (w Window) Known() bool { return w.Used > 0 || !w.ResetAt.IsZero() }
+
+// Same reports whether q and o tell the same usage, whenever reported.
+func (q Quota) Same(o Quota) bool {
+	return q.FiveHour.same(o.FiveHour) && q.SevenDay.same(o.SevenDay)
+}
+
+func (w Window) same(o Window) bool { return w.Used == o.Used && w.ResetAt.Equal(o.ResetAt) }
 
 // Expire zeroes a window whose reset time has passed: nothing of the new
 // window is used yet, and the next report says when it resets.

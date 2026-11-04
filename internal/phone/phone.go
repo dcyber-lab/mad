@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -200,7 +201,7 @@ func Refresh() error {
 	if host == "" {
 		// Started by a mad that kept only its command.
 		cmd, _ := tmux.Out("show-options", "-p", "-v", "-t", p.ID, "@mad_cmd")
-		if m := originRe.FindStringSubmatch(cmd); m != nil {
+		if m := originRe().FindStringSubmatch(cmd); m != nil {
 			host = m[1]
 		}
 	}
@@ -214,7 +215,7 @@ func Refresh() error {
 	return respawn(p.ID, serveCommand(origin), host)
 }
 
-var originRe = regexp.MustCompile(`-origin '?([\w.-]+)(?::\d+)?`)
+var originRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`-origin '?([\w.-]+)(?::\d+)?`) })
 
 // On starts the server, unless it runs, and has the chosen way in (see
 // Choose) serve it: tailscale, or a Cloudflare Tunnel.

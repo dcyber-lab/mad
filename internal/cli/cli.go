@@ -383,7 +383,21 @@ func hook(args []string, in io.Reader, out io.Writer, now time.Time) {
 			r.Tool.Deny(why)
 		}
 	}
-	if r.Quota != nil && status.WriteQuota(p.Kind(), *r.Quota, now) == nil {
+	if r.Quota != nil {
+		noteQuota(p.Kind(), *r.Quota, now)
+	}
+}
+
+// noteQuota records the usage limits a status line reported and pokes
+// the sidebar, whose poll reads them. Claude runs its status line after
+// every message while the percentages move about once a minute, and a
+// poke costs the sidebar a full poll: a report that changes nothing is
+// dropped.
+func noteQuota(kind string, q status.Quota, now time.Time) {
+	if old, ok := status.ReadQuota(kind); ok && old.Same(q) {
+		return
+	}
+	if status.WriteQuota(kind, q, now) == nil {
 		_ = poke.Send(poke.Poll)
 	}
 }

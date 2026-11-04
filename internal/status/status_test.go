@@ -284,6 +284,15 @@ func TestQuota(t *testing.T) {
 	if !ok || !got.At.Equal(now) || got.FiveHour.Used != 62 || !got.SevenDay.ResetAt.Equal(q.SevenDay.ResetAt) {
 		t.Errorf("read back %+v %v", got, ok)
 	}
+	// Read back (its times parsed, At set), it is the same usage.
+	if !got.Same(q) || got.Same(q2) {
+		t.Errorf("Same: %v %v", got.Same(q), got.Same(q2))
+	}
+	moved := q
+	moved.FiveHour.Used++
+	if got.Same(moved) {
+		t.Error("a moved percentage is the same")
+	}
 	// Past its reset the five-hour window is spent from zero; the weekly
 	// one is untouched.
 	e := got.Expire(time.Unix(1738425600, 0))

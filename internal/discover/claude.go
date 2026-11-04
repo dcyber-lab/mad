@@ -255,13 +255,13 @@ func claudeUserStatusLine() string {
 	return ""
 }
 
-var claudeTitleRe = regexp.MustCompile(`"(?:customTitle|aiTitle)":"((?:[^"\\]|\\.)*)"`)
+var claudeTitleRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`"(?:customTitle|aiTitle)":"((?:[^"\\]|\\.)*)"`) })
 
 func claudeProjectsDir() string { return filepath.Join(paths.Home(), ".claude", "projects") }
 
 // claudeProjectDir is where claude keeps transcripts for a cwd.
 func claudeProjectDir(cwd string) string {
-	return filepath.Join(claudeProjectsDir(), nonAlnum.ReplaceAllString(cwd, "-"))
+	return filepath.Join(claudeProjectsDir(), nonAlnum().ReplaceAllString(cwd, "-"))
 }
 
 func (claude) History(cutoff time.Time, add func(cwd string, t time.Time, desktop bool)) {
@@ -289,7 +289,7 @@ func (claude) Sessions(root string) []Session {
 	for _, d := range dirs {
 		entries, _ := os.ReadDir(d)
 		for _, e := range entries {
-			if e.IsDir() || !uuidTail.MatchString(e.Name()) {
+			if e.IsDir() || !uuidTail().MatchString(e.Name()) {
 				continue
 			}
 			if info, err := e.Info(); err == nil {
@@ -316,7 +316,7 @@ func (claude) Sessions(root string) []Session {
 // at least one message a person typed.
 func parseClaudeSession(path string) *Session {
 	head, tail := readHeadTail(path, 256<<10, 128<<10)
-	m := uuidTail.FindStringSubmatch(path)
+	m := uuidTail().FindStringSubmatch(path)
 	if m == nil {
 		return nil
 	}
@@ -365,7 +365,7 @@ func parseClaudeSession(path string) *Session {
 		return nil
 	}
 	s.Title = firstMsg
-	if m := claudeTitleRe.FindAllSubmatch(append(head, tail...), -1); len(m) > 0 {
+	if m := claudeTitleRe().FindAllSubmatch(append(head, tail...), -1); len(m) > 0 {
 		s.Title = unescapeJSON(m[len(m)-1][1])
 	}
 	return s
@@ -540,7 +540,7 @@ func (claude) RecentSessions(cwd string) []string {
 	}
 	var fs []f
 	for _, e := range entries {
-		if m := uuidTail.FindStringSubmatch(e.Name()); m != nil {
+		if m := uuidTail().FindStringSubmatch(e.Name()); m != nil {
 			if info, err := e.Info(); err == nil {
 				fs = append(fs, f{m[1], info.ModTime()})
 			}
