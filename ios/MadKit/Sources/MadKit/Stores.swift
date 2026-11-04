@@ -151,12 +151,19 @@ public final class ChannelStore {
     @ObservationIgnored private var lastReadSent = 0
     @ObservationIgnored private var looking = false
 
-    public init(id: String, api: MadAPI, interval: Duration = .milliseconds(1500)) {
+    /// `restore: false` leaves the device's cache to a later `restore()`: a view that builds its store in an `init`
+    /// runs that `init` on every refresh of its parent, and the decode would run each time and be thrown away.
+    public init(id: String, api: MadAPI, interval: Duration = .milliseconds(1500), restore: Bool = true) {
         self.id = id
         self.api = api
         self.interval = interval
-        // The last messages of the channel as the device kept them: the channel draws at once, and the looks ask
-        // only for what came after `last`.
+        if restore { self.restore() }
+    }
+
+    /// The last messages of the channel as the device kept them: the channel draws at once, and the looks ask
+    /// only for what came after `last`. Only before the first look.
+    public func restore() {
+        guard messages.isEmpty, !loaded else { return }
         if let raw = api.cache?.loadChannel(id), let page = try? JSONDecoder().decode(MessagesPage.self, from: raw) {
             apply(page)
             fromCache = !messages.isEmpty

@@ -267,7 +267,17 @@ public enum ChannelMapping {
         if m.mentions.contains("you") { return true }
         // one rule with the server and the page (internal/bus/testdata/at-you.json): at the start, or after a space of any
         // kind or a ( or （, and not followed by an ASCII letter, digit, _ or - (a CJK character right after still counts)
-        return m.text.range(of: "(^|[\\s\\p{Zs}(（])@you(?![A-Za-z0-9_-])", options: [.regularExpression, .caseInsensitive]) != nil
+        // (a scan, not a regex: this runs for every message on every draw)
+        var from = m.text.startIndex
+        while let r = m.text.range(of: "@you", options: .caseInsensitive, range: from..<m.text.endIndex) {
+            let before = r.lowerBound == m.text.startIndex ? nil : m.text[m.text.index(before: r.lowerBound)].unicodeScalars.last
+            let after = r.upperBound == m.text.endIndex ? nil : m.text[r.upperBound].unicodeScalars.first
+            let startOK = before.map { $0.properties.isWhitespace || $0.properties.generalCategory == .spaceSeparator || $0 == "(" || $0 == "（" } ?? true
+            let endOK = after.map { !($0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains($0) || $0 == "_" || $0 == "-")) } ?? true
+            if startOK && endOK { return true }
+            from = r.upperBound
+        }
+        return false
     }
 
     /// The fold of a long message of an agent, nil when it is shown whole: the person's, mad's own, any that asks
