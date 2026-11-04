@@ -15,6 +15,7 @@ struct ChannelDetail: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var store: ChannelStore
     @State private var pictures = PictureCache()
+    @State private var memo = ScreenMemo()
 
     init(id: String, api: MadAPI, onBack: (() -> Void)?, openAgent: @escaping (String) -> Void) {
         self.id = id
@@ -26,8 +27,7 @@ struct ChannelDetail: View {
     }
 
     var body: some View {
-        ChannelView(screen: ChannelMapping.screen(channel: id, messages: store.messages, deck: deck.deck, paused: store.paused, loaded: store.loaded || store.fromCache,
-                                                   receipts: store.receipts),
+        ChannelView(screen: memo.screen(channel: id, store: store, deck: deck.deck),
                     actions: actions, panelOpen: debugPanel)
             // Polls while the app is active; the task restarts when it comes back, so it looks at once.
             .task(id: scenePhase) {
@@ -105,5 +105,31 @@ actor PictureCache {
             order.removeFirst()
             if let gone = held.removeValue(forKey: oldest) { bytes -= gone.count }
         }
+    }
+}
+
+/// The channel's screen, kept while what it is made of has not changed. The deck is refreshed far more often than
+/// a channel's agents or the channel itself change (usage, git counts ...), and the screen is built from every
+/// message: without this each refresh rebuilds all of it.
+@MainActor
+final class ScreenMemo {
+    private struct Key: Equatable {
+        var count: Int, last: Int, paused: Bool, loaded: Bool, receipts: [BusReceipt]
+        var channel: Channel?, agents: [Agent]
+        /// the minute: the screen reads the clock for its time lines
+        var minute: Int
+    }
+    private var key: Key?
+    private var screen: ChannelScreen?
+
+    func screen(channel id: String, store: ChannelStore, deck: Deck?) -> ChannelScreen {
+        let k = Key(count: store.messages.count, last: store.last, paused: store.paused, loaded: store.loaded || store.fromCache,
+                    receipts: store.receipts, channel: deck?.channel(id: id), agents: deck?.agents ?? [],
+                    minute: Int(Date().timeIntervalSince1970 / 60))
+        if let screen, k == key { return screen }
+        let s = ChannelMapping.screen(channel: id, messages: store.messages, deck: deck, paused: k.paused, loaded: k.loaded, receipts: k.receipts)
+        key = k
+        screen = s
+        return s
     }
 }

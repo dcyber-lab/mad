@@ -267,7 +267,8 @@ public enum ChannelMapping {
         if m.mentions.contains("you") { return true }
         // one rule with the server and the page (internal/bus/testdata/at-you.json): at the start, or after a space of any
         // kind or a ( or （, and not followed by an ASCII letter, digit, _ or - (a CJK character right after still counts)
-        // (a scan, not a regex: this runs for every message on every draw)
+        // (a scan, not a regex: this runs for every message on every draw; most texts have no @ at all)
+        guard m.text.utf8.contains(UInt8(ascii: "@")) else { return false }
         var from = m.text.startIndex
         while let r = m.text.range(of: "@you", options: .caseInsensitive, range: from..<m.text.endIndex) {
             let before = r.lowerBound == m.text.startIndex ? nil : m.text[m.text.index(before: r.lowerBound)].unicodeScalars.last
