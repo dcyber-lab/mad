@@ -30,8 +30,9 @@ public enum LinkState: Equatable, Sendable {
     }
 }
 
-/// The deck: polled about once a second while it runs. `deck` keeps the last good look, so the
-/// screen does not empty when the Mac drops away; `link` says how the last look went.
+/// The deck, by long poll while it runs: each look names the deck held and the Mac answers when the deck changes, or
+/// after a while with nothing new; a Mac that cannot wait (an older mad) is looked at every `interval`. `deck` keeps
+/// the last good look, so the screen does not empty when the Mac drops away; `link` says how the last look went.
 @MainActor @Observable
 public final class DeckStore {
     public private(set) var deck: Deck?
@@ -39,6 +40,13 @@ public final class DeckStore {
 
     @ObservationIgnored public let api: MadAPI
     @ObservationIgnored public let interval: Duration
+    /// The tag of the deck held, to name it by; how long the Mac lets a look wait (0: it answers at once).
+    @ObservationIgnored private var tag: String?
+    @ObservationIgnored private var waits = 0
+    /// Looks are numbered; `took` is the number of the one whose deck is held. A refresh and the long poll can
+    /// cross, and a deck asked for before the one held is older than it.
+    @ObservationIgnored private var asked = 0
+    @ObservationIgnored private var took = 0
 
     public init(api: MadAPI, interval: Duration = .seconds(1)) {
         self.api = api
@@ -47,17 +55,34 @@ public final class DeckStore {
         deck = MadClient.cachedDeck(api.cache)
     }
 
-    /// One look at /api/deck.
+    /// How a look went.
+    enum Look { case failed, same, new }
+
+    /// One look at /api/deck, answered at once: for a pull to refresh or right after an action.
     public func refresh() async {
+        await look(wait: 0)
+    }
+
+    /// One look naming the deck held; with `wait`, the Mac answers when the deck changes or after `wait` seconds.
+    @discardableResult
+    func look(wait: Int) async -> Look {
+        asked += 1
+        let n = asked
         do {
-            let d = try await api.deck()
-            apply(d)
+            let a = try await api.deck(holding: tag, wait: wait)
+            waits = a.wait
             link = .ok
+            guard let d = a.deck, n > took else { return .same }
+            took = n
+            tag = a.tag
+            apply(d)
             // once per launch, after the first good look: what the device kept of channels and agents that are gone goes
             api.cache?.pruneOnce(channels: Set(d.channels.map(\.id)), agents: Set(d.projects.flatMap { $0.agents.map(\.id) }))
+            return .new
         } catch {
-            if Task.isCancelled { return }
+            if Task.isCancelled { return .failed }
             link = LinkState(error)
+            return .failed
         }
     }
 
@@ -69,11 +94,25 @@ public final class DeckStore {
         if held != deck { deck = d }
     }
 
-    /// Looks, waits `interval`, looks again, until the task is cancelled.
+    /// Looks again as soon as a look is answered, until the task is cancelled. A Mac that cannot wait is looked at
+    /// every `interval`, and so is one whose new deck came with no tag or the tag it was asked with: a proxy that
+    /// drops or weakens tags must not make it spin. A failure is tried again after `interval`, twice that, … up to
+    /// 5 seconds.
     public func run() async {
+        var backoff = Duration.zero
         while !Task.isCancelled {
-            await refresh()
-            try? await Task.sleep(for: interval)
+            let sent = tag
+            switch await look(wait: waits) {
+            case .failed:
+                backoff = backoff == .zero ? interval : min(backoff * 2, max(interval, .seconds(5)))
+                try? await Task.sleep(for: backoff)
+            case .same:
+                backoff = .zero
+                if waits == 0 { try? await Task.sleep(for: interval) }
+            case .new:
+                backoff = .zero
+                if waits == 0 || tag == nil || tag == sent { try? await Task.sleep(for: interval) }
+            }
         }
     }
 
