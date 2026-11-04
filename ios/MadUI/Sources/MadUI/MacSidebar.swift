@@ -1,4 +1,6 @@
 #if os(macOS)
+import AppKit
+import Collaboration
 import SwiftUI
 
 /// The Mac's sidebar, as a chat app draws it: the window's controls over a band with round buttons at the right
@@ -47,10 +49,10 @@ public struct MacSidebar: View {
                             .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
                         ForEach(section.rows) { row in
                             Button { selection = row.id; actions.open(row.id) } label: {
-                                HomeRowView(row: row, size: 38)
+                                HomeRowView(row: row, size: 42)
                                     .padding(.horizontal, 10).padding(.vertical, 7)
                                     .background(selection == row.id ? Color.primary.opacity(0.09) : Color.clear,
-                                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                                in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal, 8)
@@ -111,15 +113,21 @@ public struct MacSidebar: View {
         return agents.prefix(3).map { (id: $0.id, kind: $0.agentKind, state: $0.state) }
     }
 
+    /// The person: their picture and name at the left (the usage under the name), the ⋯ menu at the right.
     private var footer: some View {
         HStack(spacing: 10) {
-            if let usage = model.usage {
-                // "Claude 5 小时 42% · 本周 71%": a click opens 用量
-                Button { actions.menu(.usage) } label: {
-                    Text(usage).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+            Self.picture
+                .frame(width: 34, height: 34).clipShape(Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(NSFullUserName()).font(MadType.rowName).lineLimit(1)
+                if let usage = model.usage {
+                    // "Claude 5 小时 42% · 本周 71%": a click opens 用量
+                    Button { actions.menu(.usage) } label: {
+                        Text(usage).font(MadType.tag).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("用量，\(usage)")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("用量，\(usage)")
             }
             Spacer(minLength: 0)
             HomeMenu(groups: menu, action: actions.menu)
@@ -128,9 +136,19 @@ public struct MacSidebar: View {
                 .fixedSize()
                 .padding(8)
                 .background(Color.chatComposer, in: Circle())
-                .overlay(Circle().strokeBorder(Color.chatLine.opacity(0.7)))
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 16)
+    }
+
+    /// The account's picture, else their initial on grey.
+    private static var picture: some View {
+        Group {
+            if let image = CBUserIdentity(posixUID: getuid(), authority: CBIdentityAuthority.default())?.image {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Color.primary.opacity(0.15).overlay(Text(String(NSFullUserName().prefix(1))).font(MadType.rowName))
+            }
+        }
     }
 }
 #endif

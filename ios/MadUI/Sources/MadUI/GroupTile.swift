@@ -51,7 +51,6 @@ public struct GroupTile: View {
                 TimelineView(.animation(minimumInterval: 1 / 30, paused: !onScreen)) { canvas(at: $0.date) }
             }
         }
-        .frame(width: size * (1 + 2 * CharacterView.margin), height: size * (1 + 2 * CharacterView.margin))
         .frame(width: size, height: size)
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
@@ -64,25 +63,25 @@ public struct GroupTile: View {
     /// Something in the tile moves: a member works or asks.
     private var animated: Bool { shown.contains { $0.state == .working || $0.state == .needsYou } }
 
-    /// The tile at `date`; nil is at rest. Each member is as a character of its own state is.
+    /// The tile at `date`; nil is at rest: up to three avatars huddled on no plate, as a chat app draws a group.
     private func canvas(at date: Date?) -> some View {
-        let ms = date.map { $0.timeIntervalSince(since) * 1000 } ?? 0
+        let ms = date.map { $0.timeIntervalSince(since) * 1000 }
         return Canvas { ctx, _ in
             var c = ctx
-            let m = CharacterView.margin
             c.scaleBy(x: size / 48, y: size / 48)
-            c.translateBy(x: 48 * m, y: 48 * m) // room around the tile for a turn
-            c.fill(Path(roundedRect: CGRect(x: 1, y: 1, width: 46, height: 46), cornerRadius: 15), with: .color(.primary.opacity(0.08)))
             if minis.isEmpty {
+                c.fill(Path(ellipseIn: CGRect(x: 1, y: 1, width: 46, height: 46)), with: .color(.primary.opacity(0.1)))
                 c.draw(Text("#").font(.system(size: 20, weight: .bold)).foregroundColor(.secondary), at: CGPoint(x: 24, y: 24))
             }
+            // one alone fills the tile; two and three are huddled
+            let spots: [[CGRect]] = [
+                [CGRect(x: 0, y: 0, width: 48, height: 48)],
+                [CGRect(x: 0, y: 2, width: 30, height: 30), CGRect(x: 18, y: 16, width: 30, height: 30)],
+                [CGRect(x: 0, y: 1, width: 28, height: 28), CGRect(x: 20, y: 0, width: 28, height: 28), CGRect(x: 10, y: 20, width: 28, height: 28)],
+            ]
+            guard !minis.isEmpty else { return }
             for (i, mini) in minis.enumerated() {
-                var m = c
-                if mini.state == .stopped { m.opacity = 0.5 }
-                // a mini that is neither working nor asking does not blink (nor does the page's)
-                let moves = date != nil && (mini.state == .working || mini.state == .needsYou)
-                let pose = moves ? mini.look.plan.pose(mini.state, ms: ms) : CharacterPlan.resting(mini.state)
-                CharacterArt.draw(&m, look: mini.look, in: Self.positions[i], pose: pose)
+                GrokAvatar.draw(&c, look: mini.look, in: spots[minis.count - 1][i], state: mini.state, at: mini.state == .working ? ms : nil)
             }
         }
     }
