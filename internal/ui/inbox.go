@@ -26,7 +26,7 @@ func (m *model) look(now time.Time) {
 			agents = append(agents, ag)
 		}
 	}
-	v := m.desk.Look(attention.Facts{Agents: agents, Cards: m.cards, Skills: m.skills, Spend: m.spend, Now: now})
+	v := m.desk.Look(attention.Facts{Agents: agents, Cards: m.cards, Skills: m.skills, Creates: m.creates, Spend: m.spend, Now: now})
 	same := reflect.DeepEqual(v.Inbox, m.view.Inbox)
 	m.view = v
 	if !same {

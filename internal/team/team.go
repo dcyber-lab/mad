@@ -190,6 +190,9 @@ type Options struct {
 	Goal       string
 	Permission string // run.PermAuto by default
 	Branch     string // all roles work in this branch's worktree; none: the project's directory
+	// Roles, when set, are the team's own roles (exactly one leads) instead of
+	// a template's; its brief is the goal.
+	Roles []Role
 	// Agents choose another agent for a role: role name → "claude:opus@high".
 	Agents map[string]string
 	Kinds  []agent.Kind
@@ -215,8 +218,12 @@ func Start(o Options) (*Started, error) {
 	if goal == "" {
 		return nil, errors.New("the team needs a goal")
 	}
-	tpl, ok := ByName(root, o.Template)
-	if !ok {
+	var tpl Template
+	if len(o.Roles) > 0 {
+		tpl = Template{Name: "custom", Topic: "{{goal}}", Roles: o.Roles}.resolved()
+	} else if t, ok := ByName(root, o.Template); ok {
+		tpl = t
+	} else {
 		return nil, fmt.Errorf("no team template %q (mad team ls)", o.Template)
 	}
 	for role, s := range o.Agents {
@@ -532,4 +539,21 @@ func dropRecord(f *file, name string) bool {
 		}
 	}
 	return false
+}
+
+// CheckName says what a team started now would be called, or why it cannot
+// be started: as many teams run as there can, or the name is taken.
+func CheckName(name, goal string) (string, error) {
+	st, err := state.Load()
+	if err != nil {
+		return "", err
+	}
+	teams, err := Running(st)
+	if err != nil {
+		return "", err
+	}
+	if len(teams) >= MaxTeams {
+		return "", fmt.Errorf("%d teams run already (the most there are at once); the person must remove one first", len(teams))
+	}
+	return teamName(name, goal, teams)
 }

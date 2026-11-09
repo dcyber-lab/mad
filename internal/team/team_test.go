@@ -594,3 +594,36 @@ func TestStartChineseName(t *testing.T) {
 		t.Errorf("Find = %+v %v %v", r, ok, err)
 	}
 }
+
+// A team of its own roles (what an agent asks for) starts like one of a
+// template: its lead leads the channel, its topic is the goal.
+func TestStartOwnRoles(t *testing.T) {
+	root, specs, _ := project(t)
+	roles := []Role{
+		{Role: run.Role{Name: "checker", Agent: "codex", ReadOnly: true}},
+		{Role: run.Role{Name: "fixer", Agent: "claude:opus"}, Lead: true},
+	}
+	s, err := Start(Options{Project: root, Name: "fix-flaky", Goal: "stop the flake", Roles: roles})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*specs) != 2 || (*specs)[0].Name != "checker" || (*specs)[0].Kind != "codex" || (*specs)[1].Name != "fixer" || (*specs)[1].Model != "opus" {
+		t.Fatalf("spawned %+v", *specs)
+	}
+	c, ok, _ := bus.Find(s.Channel)
+	st, _ := state.Load()
+	if _, lead := st.FindAgent(c.Lead); !ok || c.Topic != "stop the flake" || lead == nil || lead.Role != "fixer" {
+		t.Errorf("channel %+v, lead %+v", c, lead)
+	}
+	if list, _ := Running(nil); len(list) != 1 || list[0].Template != "custom" || len(list[0].Roles) != 2 {
+		t.Errorf("records %+v", list)
+	}
+	// Two leads is no team.
+	roles[0].Lead = true
+	if _, err := Start(Options{Project: root, Goal: "g", Roles: roles}); err == nil || !strings.Contains(err.Error(), "2 leads") {
+		t.Errorf("two leads: %v", err)
+	}
+	if name, err := CheckName("fix-flaky", "g"); err == nil {
+		t.Errorf("a taken name is %q", name)
+	}
+}

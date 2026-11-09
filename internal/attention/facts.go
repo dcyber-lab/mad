@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -61,6 +62,9 @@ type Facts struct {
 	Cards []bus.Card
 	// Skills are the skills waiting for approval (skill.PendingList).
 	Skills []skill.Pending
+	// Creates are the agents' requests to start an agent or a team, waiting
+	// for the person (create.List).
+	Creates []create.Request
 	// Spend is the day's budget for mad's own work.
 	Spend bus.SpendState
 	Now   time.Time

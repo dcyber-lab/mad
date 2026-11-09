@@ -13,6 +13,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -356,7 +357,7 @@ func (p *poller) Poll(now time.Time) {
 	snap.Spend = bus.SpendNow(now)
 	snap.Today = p.today
 	snap.Timers = timersOf()
-	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Spend: snap.Spend, Now: now})
+	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Creates: create.List(), Spend: snap.Spend, Now: now})
 	snap.Inbox, snap.Working, snap.Board = view.Inbox, view.Working, view.Board
 	if snap.Board == nil {
 		snap.Board = []bus.Card{}

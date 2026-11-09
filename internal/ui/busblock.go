@@ -12,6 +12,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -80,9 +81,10 @@ type busSnap struct {
 // busMsg is one look at the bus: what the inbox takes from it, and the
 // block's channels.
 type busMsg struct {
-	cards  []bus.Card
-	skills []skill.Pending
-	snap   busSnap
+	cards   []bus.Card
+	skills  []skill.Pending
+	creates []create.Request
+	snap    busSnap
 }
 
 // busSnapOf is what the block shows of look; open is the channel whose
@@ -206,14 +208,14 @@ func (m *model) busCmd(now time.Time) tea.Cmd {
 	return func() tea.Msg {
 		look, _ := src.Look(st, statuses, time.Now())
 		skills, _ := skill.PendingList()
-		return busMsg{cards: look.Cards, skills: skills, snap: busSnapOf(st, look, open)}
+		return busMsg{cards: look.Cards, skills: skills, creates: create.List(), snap: busSnapOf(st, look, open)}
 	}
 }
 
 // applyBus takes a look at the bus in; the rows change only when it did.
 func (m *model) applyBus(msg busMsg) {
 	m.busBusy = false
-	m.cards, m.skills = msg.cards, msg.skills
+	m.cards, m.skills, m.creates = msg.cards, msg.skills, msg.creates
 	m.setBus(msg.snap)
 	m.look(time.Now())
 }

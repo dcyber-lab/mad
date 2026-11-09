@@ -1083,6 +1083,22 @@ mad bus handoffs                    # work agents gave each other, as chains
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
 
+### Agents starting agents and teams
+
+An agent starts an agent with the bus tool `agent_new` (kind, model,
+project, name, first message, optionally a channel to join) and a team
+with `team_start` (name, goal, project, a template or its own roles). It
+is checked against what the deck has (projects, kinds, templates) and
+refused with a message the agent can relay. Then **you are asked**: a
+`create` card in the inbox (phone, window, deck, `mad board`) says what
+would be started: name, project, kind and model, roles and the first
+message, with Allow and Deny. The agent's tool call waits for your answer
+for about 10 minutes: Allow starts it and returns its id (and channel),
+Deny returns "the person declined", and no answer "the person hasn't
+answered yet". `"agents_create_without_asking": true` in `config.json`
+skips the card (off by default). A spent budget refuses both tools, as
+it does `bus_handoff`.
+
 ### Skills
 
 An agent that found a way of working worth keeping saves it with the

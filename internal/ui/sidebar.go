@@ -17,6 +17,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -186,6 +187,7 @@ type model struct {
 	view      attention.View
 	cards     []bus.Card          // bus.Board's, as of the last look at the bus
 	skills    []skill.Pending     // likewise
+	creates   []create.Request    // likewise: agents' requests to start an agent or a team
 	nextKey   attention.Key       // where d last went
 	wt        *state.Project      // project a worktree is being named for
 	wtBranch  string              // branch chosen; the kind menu comes next
