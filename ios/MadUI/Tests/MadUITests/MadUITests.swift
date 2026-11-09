@@ -113,12 +113,19 @@ final class PathTests: XCTestCase {
 }
 
 final class StateTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func testWordsAndStatuses() {
-        XCTAssertEqual(CharacterState.allCases.map(\.word), ["idle", "working", "needs you", "starting", "stopped"])
+        XCTAssertEqual(CharacterState.allCases.map(\.word), ["idle", "working", "needs you", "starting", "stopped", "done"])
         XCTAssertEqual(CharacterState(status: "running"), .working)
         XCTAssertEqual(CharacterState(status: "waiting"), .needsYou)
         XCTAssertEqual(CharacterState(status: "exited"), .stopped)
-        XCTAssertEqual(CharacterState(status: "finished"), .idle)
+        XCTAssertEqual(CharacterState(status: "finished"), .done, "a run the person has not looked at: the blue dot")
+        XCTAssertEqual(CharacterState.done.title, "刚完成")
+        XCTAssertEqual(CharacterState.stopped.title, "已停止")
     }
 
     func testGroupShowsWorkingMembersFirstAndThreeAtMost() {
@@ -131,6 +138,11 @@ final class StateTests: XCTestCase {
 }
 
 final class HomeModelTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     let model = SampleHome.model
 
     func rows(_ m: HomeModel) -> [String] { m.sections.flatMap(\.rows).map(\.id) }
@@ -168,6 +180,11 @@ final class HomeModelTests: XCTestCase {
 }
 
 final class HomeAccessibilityTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func label(_ r: HomeRow) -> String { r.accessibilityLabel }
 
     func testWorkingAgentSaysItsStateOnce() {
@@ -220,6 +237,11 @@ final class HomeAccessibilityTests: XCTestCase {
 
 /// SampleHome must say what the fixture (internal/desktop/fixture/testdata/edge-home.json) says.
 final class HomeSampleTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func fixture() throws -> [String: Any] {
         // Tests/MadUITests/MadUITests.swift → the repo root is five levels up
         var url = URL(fileURLWithPath: #filePath)
@@ -277,6 +299,11 @@ final class HomeSampleTests: XCTestCase {
 }
 
 final class ConversationTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func testToolSummaryAndLabel() {
         XCTAssertEqual(ConvTool(name: "Bash", label: "go test ./...").summary, "Bash · go test ./...")
         XCTAssertEqual(ConvTool(name: "Read").summary, "Read")
@@ -393,6 +420,11 @@ final class FlowLayoutTests: XCTestCase {
 }
 
 final class ChannelTailTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     private func screen(_ items: [ChannelItem]) -> ChannelScreen {
         ChannelScreen(title: "t", members: [], stateLine: "", items: items,
                       panel: ChannelPanel(name: "t", topic: "", members: [], pictureCount: 0, paused: false), placeholder: "")
@@ -421,6 +453,11 @@ final class ColumnTests: XCTestCase {
 }
 
 final class MentionTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     private func member(_ name: String, dim: Bool = false) -> ChannelMember {
         ChannelMember(id: name, kind: "claude", state: .idle, name: name, dim: dim)
     }

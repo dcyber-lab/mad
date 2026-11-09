@@ -117,7 +117,7 @@ struct CharacterPlan: Equatable {
             return Pose(face: .ask, tilt: -4 + 8 * Self.alternate(ms, 900))
         case .stopped:
             return Pose(face: .sleep)
-        case .idle, .starting:
+        case .idle, .starting, .done:
             let blinking = ms >= blinkEvery && ms.truncatingRemainder(dividingBy: blinkEvery) < 140
             return Pose(face: blinking ? .sleep : .calm)
         }
@@ -130,7 +130,7 @@ struct CharacterPlan: Equatable {
         case .working: return Pose(face: .focus)
         case .needsYou: return Pose(face: .ask)
         case .stopped: return Pose(face: .sleep)
-        case .idle, .starting: return Pose(face: .calm)
+        case .idle, .starting, .done: return Pose(face: .calm)
         }
     }
 

@@ -21,8 +21,14 @@ public struct Deck: Equatable, Decodable, Sendable {
     public var working: [String]
     /// When the server made this look.
     public var at: Date?
+    /// The day's budget for mad's own work; nil from a server that does not send it.
+    public var spend: Spend?
+    /// The person's full name (else their login); nil from a server that does not send it.
+    public var user: String?
+    /// What today's responses cost at API prices, over every transcript on the Mac (not only the deck's), in dollars.
+    public var today: Double
 
-    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at }
+    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at, spend, user, today }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -36,12 +42,18 @@ public struct Deck: Equatable, Decodable, Sendable {
         states = try c.decodeIfPresent([Look].self, forKey: .states) ?? []
         working = try c.decodeIfPresent([String].self, forKey: .working) ?? []
         at = MadDate.decode(c, .at)
+        spend = (try? c.decodeIfPresent(Spend.self, forKey: .spend)) ?? nil
+        let u = try c.decodeIfPresent(String.self, forKey: .user)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        user = (u?.isEmpty ?? true) ? nil : u
+        today = try c.decodeIfPresent(Double.self, forKey: .today) ?? 0
     }
 
     public init(machine: String? = nil, projects: [Project] = [], teams: [Team] = [], channels: [Channel] = [],
-                inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil) {
+                inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil,
+                spend: Spend? = nil, user: String? = nil, today: Double = 0) {
         self.machine = machine; self.projects = projects; self.teams = teams; self.channels = channels
         self.inbox = inbox; self.usage = usage; self.states = states; self.working = working; self.at = at
+        self.spend = spend; self.user = user; self.today = today
     }
 
     // MARK: Lookups
@@ -73,6 +85,47 @@ public struct Deck: Equatable, Decodable, Sendable {
     /// The tone of a shown state: working, needs, finished, quiet or error.
     public func tone(for state: String) -> String {
         states.first { $0.state == state }?.tone ?? "quiet"
+    }
+}
+
+/// The day's budget for mad's own work (bus.SpendState): what it has spent, its bound and whether it is lifted or spent.
+public struct Spend: Equatable, Decodable, Sendable {
+    /// The day it is for ("2026-11-09"); empty when the server has none.
+    public var day: String
+    public var usd: Double
+    public var turns: Int
+    /// The bound with what was raised; 0 for none.
+    public var budgetUSD: Double
+    public var budgetTurns: Int
+    /// Lifted for the day.
+    public var openToday: Bool
+    /// Spent: mad's agents wait.
+    public var closed: Bool
+    /// How much of the budget is spent, 0 to 1 (0 with no bound).
+    public var part: Double
+    public var hot: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case day, usd, turns, budgetUSD = "budget_usd", budgetTurns = "budget_turns", openToday = "open_today", closed, part, hot
+    }
+
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        day = try c.decodeIfPresent(String.self, forKey: .day) ?? ""
+        usd = try c.decodeIfPresent(Double.self, forKey: .usd) ?? 0
+        turns = try c.decodeIfPresent(Int.self, forKey: .turns) ?? 0
+        budgetUSD = try c.decodeIfPresent(Double.self, forKey: .budgetUSD) ?? 0
+        budgetTurns = try c.decodeIfPresent(Int.self, forKey: .budgetTurns) ?? 0
+        openToday = try c.decodeIfPresent(Bool.self, forKey: .openToday) ?? false
+        closed = try c.decodeIfPresent(Bool.self, forKey: .closed) ?? false
+        part = try c.decodeIfPresent(Double.self, forKey: .part) ?? 0
+        hot = try c.decodeIfPresent(Bool.self, forKey: .hot) ?? false
+    }
+
+    public init(day: String = "", usd: Double = 0, turns: Int = 0, budgetUSD: Double = 0, budgetTurns: Int = 0,
+                openToday: Bool = false, closed: Bool = false, part: Double = 0, hot: Bool = false) {
+        self.day = day; self.usd = usd; self.turns = turns; self.budgetUSD = budgetUSD; self.budgetTurns = budgetTurns
+        self.openToday = openToday; self.closed = closed; self.part = part; self.hot = hot
     }
 }
 
@@ -165,6 +218,14 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
     public var reply: String?
     /// Its last line, for a list.
     public var last: String
+    /// The directory it works in (its worktree, or the project's), its conversation's session id, the model it was
+    /// started with (empty: the kind's default), the tokens in (with the cache) and out, and when it was made.
+    public var dir: String
+    public var session: String
+    public var model: String
+    public var tokensIn: Int
+    public var tokensOut: Int
+    public var created: Date?
 
     /// What to call it: the person's name, else the conversation's title, else the kind and the
     /// first 8 characters of the id ("claude 6625f15d"), so untitled agents tell apart.
@@ -184,6 +245,7 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, kind, icon, color, name, title, status, shown, done, cost, role, team, chat, headless, mode
         case since, tool, target, reply, last
+        case dir, session, model, tokensIn = "tokens_in", tokensOut = "tokens_out", created
     }
 
     public init(from d: Decoder) throws {
@@ -208,6 +270,12 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
         target = try c.decodeIfPresent(String.self, forKey: .target)
         reply = try c.decodeIfPresent(String.self, forKey: .reply)
         last = try c.decodeIfPresent(String.self, forKey: .last) ?? ""
+        dir = try c.decodeIfPresent(String.self, forKey: .dir) ?? ""
+        session = try c.decodeIfPresent(String.self, forKey: .session) ?? ""
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        tokensIn = try c.decodeIfPresent(Int.self, forKey: .tokensIn) ?? 0
+        tokensOut = try c.decodeIfPresent(Int.self, forKey: .tokensOut) ?? 0
+        created = MadDate.decode(c, .created)
     }
 
     public init(id: String, kind: String = "", name: String? = nil, title: String? = nil, status: String = "",
@@ -217,6 +285,7 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
         self.status = status; self.shown = shown; self.done = false; self.cost = cost; self.role = role
         self.team = team; self.chat = false; self.headless = headless; self.mode = mode; self.since = nil
         self.tool = nil; self.target = nil; self.reply = nil; self.last = last
+        self.dir = ""; self.session = ""; self.model = ""; self.tokensIn = 0; self.tokensOut = 0; self.created = nil
     }
 }
 

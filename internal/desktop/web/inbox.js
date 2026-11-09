@@ -67,10 +67,10 @@ function settleLayout() {
 function short(at) {
   const m = Math.floor((Date.now() - new Date(at)) / 60000);
   if (!at || String(at).startsWith("0001") || isNaN(m)) return ""; // zero: unknown
-  if (m < 1) return "now";
-  if (m < 60) return `${m}m`;
-  if (m < 1440) return `${Math.floor(m / 60)}h`;
-  return `${Math.floor(m / 1440)}d`;
+  if (m < 1) return T("刚刚", "now");
+  if (m < 60) return T(`${m} 分钟`, `${m} min`);
+  if (m < 1440) return T(`${Math.floor(m / 60)} 小时`, `${Math.floor(m / 60)} h`);
+  return T(`${Math.floor(m / 1440)} 天`, `${Math.floor(m / 1440)} d`);
 }
 // tick is an age the page keeps current; suffix goes after it (" ago").
 function tick(at, suffix = "") {
@@ -82,7 +82,8 @@ function tick(at, suffix = "") {
 }
 function tickText(s) {
   const a = short(s.dataset.at);
-  const t = a === "now" ? a : a + s.dataset.suf;
+  const suf = s.dataset.suf === " ago" ? T("前", " ago") : s.dataset.suf;
+  const t = a === T("刚刚", "now") ? a : a + suf;
   if (s.textContent !== t) s.textContent = t; // the same age is left alone: a selection in it stays
 }
 setInterval(() => {
@@ -197,7 +198,7 @@ const letsThrough = new Set(["allow", "always", "approve"]);
 function itemRow(it) {
   const acts = [];
   const p = ib.pending.get(it.key);
-  const review = () => rowButton("查看", "primary review", () => { ib.expanded.add(it.key); redraw(); }, "允许之前先看完全部内容", `${it.key}\nreview`);
+  const review = () => rowButton(T("查看", "Review"), "primary review", () => { ib.expanded.add(it.key); redraw(); }, T("允许之前先看完全部内容", "Read all of it before you allow it"), `${it.key}\nreview`);
   // A full item's body is part of what it allows (a TUI's prompt): what
   // lets it through is on its card alone, never on a row, which offers
   // Review. Sent from the card, the row says so.
@@ -225,11 +226,56 @@ function itemRow(it) {
   return r;
 }
 
+// waitCard is an item in the sidebar's 待处理 (v5): its agent with its ring, its name and how long it has
+// waited; what it asks on one line (a command in mono); the acts a row offers, and its project. An act that
+// lets something through is guarded as on a row: shown only while that line is whole (fitRows), else
+// Review opens the item as a card in place.
+function waitCard(it) {
+  const p = ib.pending.get(it.key);
+  const c = el("div", `pcard${ib.nextKey === it.key ? " sel" : ""}${p ? " pending" : ""}`);
+  c.dataset.key = it.key;
+  const top = el("div", "ptop");
+  const a = it.agent && agents.get(it.agent);
+  const lead = it.icon ? itemLead(it) : avatar(a || { id: it.agent, kind: "?" }, true);
+  top.append(lead, el("span", "pnm", it.title), el("span", "page", ""));
+  top.lastChild.append(tick(it.since));
+  c.append(top);
+  const text = it.text || String(it.body || "").split("\n")[0];
+  if (text) {
+    const line = el("div", `t2 pcmd${it.mono ? " mono" : ""}`);
+    line.append(it.mono ? `$ ${text}` : text);
+    c.append(line);
+  }
+  const acts = el("div", "pacts");
+  const review = () => rowButton(T("查看", "Review"), "primary review", () => { ib.expanded.add(it.key); redraw(); }, T("允许之前先看完全部内容", "Read all of it before you allow it"), `${it.key}\nreview`);
+  if (it.full && it.acts.some((x) => letsThrough.has(x.verb) && !x.row)) {
+    const sent = p && it.acts.find((x) => !x.row && x.verb === p.verb && x.label === p.label && (x.option || "") === p.option);
+    if (sent) acts.append(actButton(it, sent, "side"));
+    else if (!p) acts.append(review());
+  }
+  let rows = it.acts.filter((x) => x.row);
+  if (!rows.length && !it.full) rows = it.acts.filter((x) => x.verb !== "open").slice(0, 2);
+  for (const x of rows) {
+    const b = actButton(it, x, "side");
+    acts.append(b);
+    if (text && letsThrough.has(x.verb) && !p) {
+      b.hidden = true;
+      if (!it.full) b.classList.add("guard");
+      if (!acts.querySelector(".review")) acts.append(review());
+    }
+  }
+  acts.append(el("span", "pproj", a ? a.project.name : it.context || ""));
+  c.append(acts);
+  if (ib.reply?.key === it.key && ib.reply.where === "side") c.append(replyBox(it, ib.reply) || "");
+  c.onclick = () => openItem(it);
+  return c;
+}
+
 // fitRows shows each guarded act whose row shows its whole line, and Review
 // where the line is cut or cannot be measured (a hidden list is 0 wide).
 function fitRows(root) {
-  for (const b of root.querySelectorAll(".row .guard")) {
-    const row = b.closest(".row");
+  for (const b of root.querySelectorAll(".row .guard, .pcard .guard")) {
+    const row = b.closest(".row, .pcard");
     const rv = row.querySelector(".review");
     const t2 = row.querySelector(".t2");
     b.hidden = false;
@@ -270,28 +316,28 @@ function actButton(it, a, where) {
 // An act with no word here, such as an option's own label, keeps the server's.
 function actLabel(a) {
   switch (a.verb) {
-    case "allow": return a.option ? a.label : a.kind === "plan" ? "批准计划" : "允许";
-    case "always": return "总是允许";
-    case "deny": return a.input ? (a.row ? "继续规划" : "改为告诉它…") : a.row ? "拒绝" : "取消";
-    case "answer": return a.input ? "回复" : a.label;
-    case "reply": return "回复";
-    case "approve": return "批准";
-    case "discard": return "丢弃";
-    case "seen": return "标为已读";
-    case "send": return "立即发送";
-    case "drop": return "放弃";
-    case "resume": return "继续";
-    case "raise": return a.option ? `加 $${a.option}` : a.label;
-    case "lift": return "今天不限";
-    case "open": return a.kind === "dm" ? "打开私信" : a.kind === "board" ? "打开看板" : a.kind === "read" ? "去看看" : a.target ? `打开 ${a.target}` : a.label;
+    case "allow": return a.option ? a.label : a.kind === "plan" ? T("批准计划", "Approve plan") : T("允许", "Allow");
+    case "always": return T("总是允许", "Always allow");
+    case "deny": return a.input ? (a.row ? T("继续规划", "Keep planning") : T("改为告诉它…", "Tell it instead…")) : a.row ? T("拒绝", "Deny") : T("取消", "Cancel");
+    case "answer": return a.input ? T("回复", "Reply") : a.label;
+    case "reply": return T("回复", "Reply");
+    case "approve": return T("批准", "Approve");
+    case "discard": return T("丢弃", "Discard");
+    case "seen": return T("标为已读", "Mark read");
+    case "send": return T("立即发送", "Send now");
+    case "drop": return T("放弃", "Drop");
+    case "resume": return T("继续", "Resume");
+    case "raise": return a.option ? T(`加 $${a.option}`, `Add $${a.option}`) : a.label;
+    case "lift": return T("今天不限", "No limit today");
+    case "open": return a.kind === "dm" ? T("打开私信", "Open DM") : a.kind === "board" ? T("打开看板", "Open board") : a.kind === "read" ? T("去看看", "Take a look") : a.target ? T(`打开 ${a.target}`, `Open ${a.target}`) : a.label;
   }
   return a.label;
 }
 
 // pendingWord is what the button of an act in flight says.
 function pendingWord(a) {
-  const w = { allow: "允许中", always: "允许中", deny: "拒绝中", answer: "回答中", reply: "发送中", approve: "批准中",
-    discard: "丢弃中", seen: "标记中", send: "发送中", drop: "放弃中", resume: "继续中", raise: "提高中", lift: "取消中" }[a.verb];
+  const w = { allow: T("允许中", "Allowing"), always: T("允许中", "Allowing"), deny: T("拒绝中", "Denying"), answer: T("回答中", "Answering"), reply: T("发送中", "Sending"), approve: T("批准中", "Approving"),
+    discard: T("丢弃中", "Discarding"), seen: T("标记中", "Marking"), send: T("发送中", "Sending"), drop: T("放弃中", "Dropping"), resume: T("继续中", "Resuming"), raise: T("提高中", "Raising"), lift: T("取消中", "Lifting") }[a.verb];
   return `${w || actLabel(a).replace(/…$/, "")}…`;
 }
 
@@ -333,7 +379,7 @@ function replyBox(it, r) {
   box.append(q);
   const opts = it.acts.filter((x) => x.option && !x.input && x.verb === a.verb);
   if (opts.length) box.append(el("div", "opts", ""));
-  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), "发送这个回答", `${it.key}\nopt\n${o.option}`));
+  for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), T("发送这个回答", "Send this answer"), `${it.key}\nopt\n${o.option}`));
   const ta = el("textarea");
   ta.placeholder = `${actLabel(a).replace(/…$/, "")}…`;
   ta.rows = 2;
@@ -354,7 +400,7 @@ function replyBox(it, r) {
     if (ta.value.trim()) act(it, a, ta.value.trim());
   };
   const ra = el("div", "ra");
-  ra.append(el("span", "muted", "↵ 发送 · Esc"), rowButton("取消", "ghost", closeReply), rowButton("发送", "primary", send, "", `${it.key}\nsend`));
+  ra.append(el("span", "muted", T("↵ 发送 · Esc", "↵ send · Esc")), rowButton(T("取消", "Cancel"), "ghost", closeReply), rowButton(T("发送", "Send"), "primary", send, "", `${it.key}\nsend`));
   box.append(ta, ra);
   return box;
 }
@@ -375,7 +421,7 @@ async function act(it, a, text) {
       body: JSON.stringify({ key: it.key, verb: a.verb, option: a.option || "", text: text || "" }),
     });
     if (r.status === 409) {
-      toast((await r.text()).trim() || "已经处理过了：它不再等你");
+      toast((await r.text()).trim() || T("已经处理过了：它不再等你", "Already handled: it no longer waits on you"));
     } else if (!r.ok) {
       ib.pending.delete(it.key);
       toast((await r.text()).trim() || r.statusText, "err");
@@ -416,7 +462,7 @@ function openItem(it) {
 // what finished): the deck's d walks the same list.
 function nextItem() {
   const list = [...needsYou(), ...finishedItems()];
-  if (!list.length) return toast("没有在等你的");
+  if (!list.length) return toast(T("没有在等你的", "Nothing waits on you"));
   const i = list.findIndex((x) => x.key === ib.nextKey);
   const it = list[(i + 1) % list.length];
   ib.nextKey = it.key;
@@ -472,7 +518,7 @@ function itemCard(it, compact, where = "main") {
     // an answer's options are one tap each; "Reply" and the like follow
     const acts = el("div", "acts");
     for (const x of it.acts) acts.append(actButton(it, x, where));
-    if (where === "side") acts.append(rowButton("收起", "ghost", () => { ib.expanded.delete(it.key); redraw(); }, "回到那一行"));
+    if (where === "side") acts.append(rowButton(T("收起", "Less"), "ghost", () => { ib.expanded.delete(it.key); redraw(); }, T("回到那一行", "Back to the row")));
     c.append(acts);
     if (ib.reply?.key === it.key && ib.reply.where === where) c.append(replyBox(it, ib.reply) || "");
   }

@@ -27,7 +27,7 @@ function fn(name) {
 const lookDecl = src.slice(src.indexOf("let looks = new Map();"), src.indexOf("function look("));
 const refresh = src.split("\n").find((l) => l.includes("looks = new Map((deck.states"));
 const deck = { states: JSON.parse(fs.readFileSync(process.argv[2], "utf8")) };
-const ctx = { deck, opened: new Map() };
+const ctx = { deck, opened: new Map(), T: (zh) => zh }; // T: the page's words (i18n.js), in Chinese here
 vm.createContext(ctx);
 vm.runInContext(lookDecl + fn("look") + fn("shownStatus") + fn("windowed") + refresh +
   "\nglobalThis.shownStatus = shownStatus;", ctx);

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"os/user"
 	"runtime"
 	"strings"
 	"sync"
@@ -46,6 +47,12 @@ type Snapshot struct {
 	At     time.Time     `json:"at"`
 	// Machine is this Mac's friendly name, for the app's list of Macs.
 	Machine string `json:"machine"`
+	// User is the person's full name (else their login), for the
+	// sidebar's foot.
+	User string `json:"user,omitempty"`
+	// Today is what today's responses cost at API prices, over every
+	// transcript on the machine (transcript.Day), in USD.
+	Today float64 `json:"today,omitempty"`
 }
 
 // lookupComputerName asks the system for the Mac's friendly name ("" if it
@@ -141,6 +148,16 @@ type Agent struct {
 	// (package host).
 	Headless bool   `json:"headless,omitempty"`
 	Mode     string `json:"mode,omitempty"`
+	// What the window's details pane shows: where it works, its session,
+	// the model it was started with (empty: the kind's default), the
+	// tokens its session read (input and cache) and wrote, and when it
+	// was made.
+	Dir       string    `json:"dir,omitempty"`
+	Session   string    `json:"session,omitempty"`
+	Model     string    `json:"model,omitempty"`
+	TokensIn  int64     `json:"tokens_in,omitempty"`
+	TokensOut int64     `json:"tokens_out,omitempty"`
+	Created   time.Time `json:"created,omitzero"`
 	// Activity is its activity line, its fields in the entry: since,
 	// tool, target, todo, reply.
 	attention.Activity
@@ -176,7 +193,11 @@ type poller struct {
 	gits     map[string]git.Info
 	bus      bus.Source
 	lastRead time.Time
-	lastGit  time.Time
+	// day sums what today's responses cost over every transcript on the
+	// machine (the Today page and Usage), today is its last sum.
+	day     *transcript.Day
+	today   float64
+	lastGit time.Time
 }
 
 func newPoller(kinds []agent.Kind, l *looks) *poller {
@@ -196,6 +217,7 @@ func (p *poller) Snapshot() Snapshot {
 	defer p.mu.Unlock()
 	// The name may arrive between two looks.
 	p.snap.Machine = machine()
+	p.snap.User = personName()
 	return p.snap
 }
 
@@ -234,6 +256,10 @@ func (p *poller) Poll(now time.Time) {
 
 	if now.Sub(p.lastRead) >= transcriptEvery {
 		p.lastRead = now
+		if p.day == nil {
+			p.day = transcript.NewDay()
+		}
+		p.today = p.day.Read(now)
 		var ts []transcript.Agent
 		for _, pr := range st.Projects {
 			for _, a := range pr.Agents {
@@ -294,6 +320,11 @@ func (p *poller) Poll(now time.Time) {
 				ID: a.ID, Kind: a.Kind, Icon: k.Icon, Color: k.Color,
 				Name: a.Name, Title: info.Title,
 				Status: s, Shown: status.Shown(s, tr.Done()), Done: tr.Done(), Cost: info.Tokens.Cost, Role: a.Role, Team: a.Team,
+				Dir: pr.Dir(a), Session: a.SessionID, Model: argModel(a.Args), Created: a.CreatedAt,
+				TokensIn: info.Tokens.Input + info.Tokens.CacheRead + info.Tokens.CacheWrite, TokensOut: info.Tokens.Output,
+			}
+			if ag.Session == "" {
+				ag.Session = a.ID
 			}
 			if q, ok := queues[a.ID]; ok {
 				ag.Queue = &q
@@ -323,6 +354,7 @@ func (p *poller) Poll(now time.Time) {
 	pending, _ := skill.PendingList()
 	snap.Bus = busChannels(st, look)
 	snap.Spend = bus.SpendNow(now)
+	snap.Today = p.today
 	snap.Timers = timersOf()
 	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Spend: snap.Spend, Now: now})
 	snap.Inbox, snap.Working, snap.Board = view.Inbox, view.Working, view.Board
@@ -366,3 +398,29 @@ func rollUp(projects []Project, view attention.View) []Team {
 	}
 	return teams
 }
+
+// argModel is the model an agent's arguments name (--model X or
+// --model=X, -m X for codex), empty when they name none.
+func argModel(args []string) string {
+	for i, a := range args {
+		if v, ok := strings.CutPrefix(a, "--model="); ok {
+			return v
+		}
+		if (a == "--model" || a == "-m") && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+// personName is the full name of the user mad runs as, else their login.
+var personName = sync.OnceValue(func() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	if n := strings.TrimSpace(strings.SplitN(u.Name, ",", 2)[0]); n != "" {
+		return n
+	}
+	return u.Username
+})

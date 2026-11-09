@@ -54,7 +54,8 @@ public struct ChannelView: View {
     public var body: some View {
         #if os(macOS)
         chat
-            .ignoresSafeArea(.container, edges: .top) // the name floats at the very top, as in the conversation
+            .ignoresSafeArea(.container, edges: .top) // the head bar starts at the window's top, as the conversation's
+            .environment(\.madAvatarBackdrop, Color.madPaper)
             .inspector(isPresented: $panelOpen) { panelView.inspectorColumnWidth(min: 260, ideal: 300, max: 380) }
             .sheet(isPresented: $gallery) { galleryView }
             .sheet(item: Binding(get: { viewing.map(Picked.init) }, set: { viewing = $0?.id })) { p in
@@ -96,38 +97,73 @@ public struct ChannelView: View {
             .background(Color.clear)
         #else
         VStack(spacing: 0) {
+            head
             messages
             composerRow
         }
-        .background(Color.clear)
+        .background(Color.madPaper)
         #endif
     }
 
-    /// The head: back (phone), the tile with the name and how many work, ⓘ. On the Mac it is the window's
-    /// toolbar, the only bar above the channel; on the phone a row of the view.
+    /// The head (the approved design's, v5): back (phone), the tile with the name and "4 位成员 · 2 个在工作" (it opens
+    /// 群信息), and at the right the members' avatars in a stack and the 群信息 toggle. A hairline under it.
     private var head: some View {
         HStack(spacing: 10) {
             if let back = actions.back {
                 Button { back() } label: {
-                    Image(systemName: "chevron.backward").font(.system(size: 19, weight: .semibold)).foregroundStyle(.secondary).frame(width: 26, height: 34)
+                    Image(systemName: "chevron.backward").font(.system(size: 21, weight: .semibold)).foregroundStyle(Color.madAccent).frame(width: 26, height: 34)
                 }
                 .buttonStyle(.plain).accessibilityLabel("返回")
             }
             nameButton
+            Spacer(minLength: 0)
+            memberStack
             infoButton
         }
+        #if os(macOS)
+        .padding(.leading, 20 + headLeading)
+        .padding(.trailing, 20)
+        .padding(.vertical, 12)
+        .frame(minHeight: 60)
+        #else
         .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 10)
+        #endif
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
     }
 
-    /// The tile beside the name: the Mac's pill is one line tall, the phone's has a sub line.
-    private var pillTile: CGFloat {
-        #if os(macOS)
-        24
+    @Environment(\.madHeadLeading) private var headLeading
+
+    /// The tile beside the name.
+    private var pillTile: CGFloat { 34 }
+
+    /// "4 位成员 · 2 个在工作": how many the team has, then how it stands (a quiet channel says only its count).
+    private var subLine: String {
+        let n = screen.members.filter { !$0.dim }.count
+        guard n > 0 else { return screen.stateLine }
+        let count = Lf("%lld 位成员", n)
+        if screen.stateLine.isEmpty || screen.stateLine == L("空闲") { return count }
+        return count + " · " + screen.stateLine
+    }
+
+    /// The members' avatars, overlapping, each ringed with the paper so they read apart: on the phone only the working
+    /// ones (up to three), on the Mac up to five.
+    private var memberStack: some View {
+        #if os(iOS)
+        let shown = Array(screen.members.filter { !$0.dim && $0.state == .working }.prefix(3))
+        let size: CGFloat = 26
         #else
-        32
+        let shown = Array(screen.members.filter { !$0.dim }.prefix(5))
+        let size: CGFloat = 24
         #endif
+        return HStack(spacing: -6) {
+            ForEach(shown) { m in
+                CharacterView(id: m.id, kind: m.kind, state: m.state, size: size)
+                    .background(Circle().fill(Color.madPaper).padding(-2))
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private var nameButton: some View {
@@ -136,42 +172,32 @@ public struct ChannelView: View {
                 GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: pillTile,
                           dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(screen.title).font(MadType.title).lineLimit(1)
-                    #if os(macOS)
-                    PillSubline(text: screen.stateLine, onlyProblems: true)
-                    #else
-                    PillSubline(text: screen.stateLine)
-                    #endif
+                    Text(screen.title).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
+                    PillSubline(text: subLine)
                 }
-                #if os(iOS)
-                Spacer(minLength: 0)
-                #endif
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
-        .accessibilityHint("群信息")
+        .accessibilityHint(L("群信息"))
     }
 
-    #if os(macOS)
-    /// The channel's name, floating at the top of the window as a small pill: its tile, name and how it stands.
-    /// It opens 群信息.
-    private var namePill: some View {
-        // hugs its text, never passes the pane (less the side margins): a long name is cut at the end
-        nameButton
-            .padding(.horizontal, 12)
-            // 32pt tall with its centre 16pt from the top: on the traffic lights' line, as the sidebar's round buttons are
-            .frame(minHeight: 32)
-            .background(Color.chatComposer, in: Capsule())
-            .padding(.horizontal, MadColumn.side)
+    private var titleSize: CGFloat {
+        #if os(iOS)
+        16
+        #else
+        15
+        #endif
     }
-    #endif
 
+    /// The 群信息 toggle: the pane icon, filled while the panel is open.
     private var infoButton: some View {
         Button { panelOpen.toggle() } label: {
-            Image(systemName: "info").font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
-                .frame(width: 34, height: 34).background(Color.chatCard, in: Circle())
+            Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(panelOpen ? Color.madFg : Color.madFg2)
+                .frame(width: 30, height: 30)
+                .background(panelOpen ? Color.madRaise : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain).accessibilityLabel("群信息")
     }
@@ -228,7 +254,7 @@ public struct ChannelView: View {
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
                 #if os(macOS)
-                .padding(.top, 76) // under the floating name
+                .padding(.top, 16)
                 #else
                 .padding(.top, 6)
                 #endif
@@ -251,7 +277,7 @@ public struct ChannelView: View {
                             .overlay(Circle().strokeBorder(Color.chatLine))
                             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
                     }
-                    .buttonStyle(.plain).padding(.bottom, 10).accessibilityLabel("到最新")
+                    .buttonStyle(.plain).padding(.bottom, 10).accessibilityLabel(L("到最新"))
                     .transition(.opacity)
                 }
             }
@@ -286,14 +312,6 @@ public struct ChannelView: View {
                     #endif
                 }
             })
-            #if os(macOS)
-            // the list fades out under the name, which floats over it
-            .overlay(alignment: .top) {
-                LinearGradient(colors: [Color.chatBackdrop, Color.chatBackdrop.opacity(0)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 72).allowsHitTesting(false)
-            }
-            .overlay(alignment: .top) { namePill }
-            #endif
             #if os(iOS)
             .background(GeometryReader { g in
                 Color.clear.onAppear { chatWidth = g.size.width }.onChange(of: g.size.width) { _, w in chatWidth = w }
@@ -380,7 +398,7 @@ public struct ChannelView: View {
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
         switch item {
         case .time(_, let text):
-            Text(text).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            Text(text).font(.system(size: 11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
         case .note(let id, _) where id == "quiet" || id == "empty":
             Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
@@ -390,7 +408,7 @@ public struct ChannelView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 HStack(spacing: 0) {
                     Spacer(minLength: MadColumn.gutter)
-                    bubble(b, mine: true, who: "自己")
+                    bubble(b, mine: true, who: L("自己"))
                 }
                 if b.lastOwn { ReceiptLine(receipt: b.receipt) }
             }
@@ -431,11 +449,21 @@ public struct ChannelView: View {
             bubble: b, mine: mine, maxWidth: columnWidth > 0 ? MadColumn.bubble(in: columnWidth) : 480, expanded: expanded.contains(b.id),
             toggle: { if expanded.contains(b.id) { expanded.remove(b.id) } else { expanded.insert(b.id) } },
             reply: {
-                replying = ChannelQuote(seq: b.id, who: who, text: ChannelQuote.snippet(b.text.isEmpty ? "[图片]" : b.text))
+                replying = ChannelQuote(seq: b.id, who: who, text: ChannelQuote.snippet(b.text.isEmpty ? L("[图片]") : b.text))
                 actions.reply(b.id)
             },
             load: actions.loadPicture,
-            openPicture: { viewing = $0 })
+            openPicture: { viewing = $0 },
+            colors: mentionColors)
+    }
+
+    /// Each member's name to its identity color: an @name takes it.
+    private var mentionColors: [String: Color] {
+        var out: [String: Color] = [:]
+        for m in screen.panel.members + screen.panel.helpers where !m.dim {
+            out[m.name] = Color.madIdentity(id: m.id, kind: m.kind)
+        }
+        return out
     }
 
     // MARK: the panel
@@ -464,13 +492,13 @@ public struct ChannelView: View {
                     }
                 }
                 .padding(12)
-                if ids.isEmpty { Text("这个群里还没有图片。").foregroundStyle(.secondary).padding(40) }
+                if ids.isEmpty { Text(L("这个群里还没有图片。")).foregroundStyle(.secondary).padding(40) }
             }
-            .navigationTitle("图片和文件")
+            .navigationTitle(L("图片和文件"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { gallery = false } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("完成")) { gallery = false } } }
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 360)

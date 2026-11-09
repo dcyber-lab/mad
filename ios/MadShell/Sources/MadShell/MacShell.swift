@@ -50,7 +50,9 @@ struct MacShell<Detail: View>: View {
             sidebar
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.chatBackdrop)
+                .background(Color.madPaper)
+                // with the sidebar hidden, the traffic lights and the show-sidebar button float over the head bars' left
+                .environment(\.madHeadLeading, open ? 0 : lightsEdge + 12 + 30 + 8 - 20)
                 // With no row open: a capsule over the pane only, never the sidebar or the traffic lights' line, 12pt from
                 // the top, and it takes no room (nothing moves when it comes or goes). With a row open the name pill's
                 // second line says it instead, so there is one floating thing.
@@ -73,6 +75,7 @@ struct MacShell<Detail: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("显示侧栏")
+                .help(madLocalized("显示侧栏"))
                 // on the traffic lights' line (their centre is 16pt below the top), 12pt after the green one
                 .padding(.leading, lightsEdge + 12).padding(.top, 1)
                 .transition(.opacity)
@@ -80,8 +83,10 @@ struct MacShell<Detail: View>: View {
         }
         .background(WindowStyle { lightsEdge = $0 })
         .background {
-            // ⌘\ hides and shows the sidebar
+            // ⌘\ hides and shows the sidebar; ⌥N opens the next agent that waits on the person
             Button("") { toggle() }.keyboardShortcut("\\", modifiers: .command).opacity(0).frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+            Button("") { nextWaiting() }.keyboardShortcut("n", modifiers: .option).opacity(0).frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
         .ignoresSafeArea()
@@ -96,7 +101,7 @@ struct MacShell<Detail: View>: View {
         HStack(spacing: 0) {
             MacSidebar(model: model, selection: $selection, actions: actions, toggle: toggle)
                 .frame(width: width)
-            Rectangle().fill(Color.chatLine.opacity(0.35)).frame(width: 1)
+            Rectangle().fill(Color.madLine).frame(width: 1)
         }
         .frame(width: open ? width + 1 : 0, alignment: .leading)
         .clipped()
@@ -121,6 +126,15 @@ struct MacShell<Detail: View>: View {
     }
 
     private func toggle() { open.toggle() }
+
+    /// The next agent that waits on the person, after the one open (round to the first).
+    private func nextWaiting() {
+        let ids = model.waiting.map(\.agentID).filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return }
+        let next = selection.flatMap { ids.firstIndex(of: $0) }.map { ids[($0 + 1) % ids.count] } ?? ids[0]
+        selection = next
+        actions.open(next)
+    }
 }
 
 /// The window without a title bar: its content goes to the top, under the traffic lights. It holds structurally:

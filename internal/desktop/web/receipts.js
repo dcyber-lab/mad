@@ -14,27 +14,30 @@
 //               several, none replied  全部已读                  grey
 // No glyphs, no names in the line, no box.
 
+// RT is T (i18n.js) where the page has it; the checks that run this file under node have only Chinese.
+const RT = (zh, en) => (typeof T === "function" ? T(zh, en) : zh);
+
 const RECEIPT_WORDS = {
-  none: "没有叫醒谁",
-  held: "群已暂停，恢复后送达",
-  waiting: "待送达",
-  unread: "未读",
-  unreadN: (n) => `${n} 个未读`,
-  replied: "已回复",
-  read: "已读",
-  allRead: "全部已读",
+  none: RT("没有叫醒谁", "Woke no one"),
+  held: RT("群已暂停，恢复后送达", "Group paused: delivered when resumed"),
+  waiting: RT("待送达", "Not delivered yet"),
+  unread: RT("未读", "Unread"),
+  unreadN: (n) => RT(`${n} 个未读`, `${n} unread`),
+  replied: RT("已回复", "Replied"),
+  read: RT("已读", "Read"),
+  allRead: RT("全部已读", "All read"),
 };
 // The state of each target in the card (right of its name), and in the line's title and aria-label.
 const RECEIPT_ROW_STATE = {
-  replied: "已回复",
-  read: "已读",
-  delivered: "已送达，还没看",
-  waiting: "待送达 · 忙完这一轮就会收到",
+  replied: RT("已回复", "Replied"),
+  read: RT("已读", "Read"),
+  delivered: RT("已送达，还没看", "Delivered, not read yet"),
+  waiting: RT("待送达 · 忙完这一轮就会收到", "Not delivered yet · gets it once its turn ends"),
 };
-const RECEIPT_TITLE_STATE = { replied: "已回复", read: "已读", delivered: "已送达", waiting: "待送达" };
-const RECEIPT_LABEL_STATE = { replied: "已回复", read: "已读", delivered: "未读", waiting: "待送达" };
-const RECEIPT_FOOTER = "只显示被 @ 到的 agent";
-const RECEIPT_NONE_CARD = "没有 @ 任何 agent，所以没有叫醒谁。@ 一个 agent 才会叫醒它。";
+const RECEIPT_TITLE_STATE = { replied: RT("已回复", "Replied"), read: RT("已读", "Read"), delivered: RT("已送达", "Delivered"), waiting: RT("待送达", "Not delivered yet") };
+const RECEIPT_LABEL_STATE = { replied: RT("已回复", "Replied"), read: RT("已读", "Read"), delivered: RT("未读", "Unread"), waiting: RT("待送达", "Not delivered yet") };
+const RECEIPT_FOOTER = RT("只显示被 @ 到的 agent", "Only the agents @-ed are shown");
+const RECEIPT_NONE_CARD = RT("没有 @ 任何 agent，所以没有叫醒谁。@ 一个 agent 才会叫醒它。", "No agent was @-ed, so no one was woken. @ an agent to wake it.");
 const RECEIPT_ORDER = ["replied", "read", "delivered", "waiting"]; // the card's rows, furthest first
 
 // receiptSummary is everything the line and the card need for a message's targets ([{id, label, state}]):

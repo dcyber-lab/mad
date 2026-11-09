@@ -103,30 +103,30 @@ public struct ChannelReceipt: Equatable, Sendable {
     /// The word, by precedence: nobody woken, held, all still waiting, some unseen (a count when several were woken),
     /// everyone seen (replied, read, or all read).
     public var word: String {
-        if wokeNobody { return "没有叫醒谁" }
-        if held { return "群已暂停，恢复后送达" }
-        if targets.allSatisfy({ $0.step == .waiting }) { return "待送达" }
-        if unseen > 0 { return targets.count == 1 ? "未读" : "\(unseen) 个未读" }
-        if targets.contains(where: { $0.step == .replied }) { return "已回复" }
-        return targets.count == 1 ? "已读" : "全部已读"
+        if wokeNobody { return L("没有叫醒谁") }
+        if held { return L("群已暂停，恢复后送达") }
+        if targets.allSatisfy({ $0.step == .waiting }) { return L("待送达") }
+        if unseen > 0 { return targets.count == 1 ? L("未读") : Lf("%lld 个未读", unseen) }
+        if targets.contains(where: { $0.step == .replied }) { return L("已回复") }
+        return targets.count == 1 ? L("已读") : L("全部已读")
     }
 
     /// What VoiceOver says: each one's standing in words.
     public var spoken: String {
         if wokeNobody { return word }
-        let each = targets.map { "\($0.name) \($0.seen ? Self.state($0.step) : "未读")" }.joined(separator: "，")
-        return held ? each + "，" + word : each
+        let each = targets.map { "\($0.name) \($0.seen ? Self.state($0.step) : L("未读"))" }.joined(separator: L("，"))
+        return held ? each + L("，") + word : each
     }
 
     /// One row of the card: where this agent stands.
     public static func state(_ s: Step) -> String {
-        switch s { case .replied: "已回复"; case .read: "已读"; case .delivered: "已送达，还没看"; case .waiting: "待送达 · 忙完这一轮就会收到" }
+        switch s { case .replied: L("已回复"); case .read: L("已读"); case .delivered: L("已送达，还没看"); case .waiting: L("待送达 · 忙完这一轮就会收到") }
     }
 
     /// The card's footer, and what it says when nobody was woken.
     public var footer: String {
-        if wokeNobody { return "没有 @ 任何 agent，所以没有叫醒谁。@ 一个 agent 才会叫醒它。" }
-        return held ? "只显示被 @ 到的 agent\n群已暂停，恢复后送达" : "只显示被 @ 到的 agent"
+        if wokeNobody { return L("没有 @ 任何 agent，所以没有叫醒谁。@ 一个 agent 才会叫醒它。") }
+        return held ? L("只显示被 @ 到的 agent") + "\n" + L("群已暂停，恢复后送达") : L("只显示被 @ 到的 agent")
     }
 }
 

@@ -184,7 +184,7 @@ func startChrome(t *testing.T, bin string) *cdp {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { removeProfile(dir) })
-	cmd := exec.Command(bin, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+	cmd := exec.Command(bin, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--lang=zh-CN", "--accept-lang=zh-CN",
 		"--user-data-dir="+dir, "--remote-debugging-port=0", "--remote-allow-origins=*", "about:blank")
 	if err := cmd.Start(); err != nil {
 		skipOrFail(t, "chrome did not start: %v", err)

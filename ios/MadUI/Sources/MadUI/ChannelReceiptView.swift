@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The one word under the person's latest message (option C): "未读", "3 个未读", "已读", "已回复"… It is as high as a
+/// The line under the person's latest message: the small avatars of those who read it, and one word ("未读", "3 个未读",
+/// "已读", "已回复"…). It is as high as a
 /// line from the moment the message shows (empty until a receipt comes), so nothing below it moves when the word
 /// changes, and the word crossfades. A tap opens a small card of who and how far each got.
 struct ReceiptLine: View {
@@ -17,6 +18,9 @@ struct ReceiptLine: View {
         #endif
     }
 
+    /// Those who read it or replied, at most five.
+    private var seen: [ChannelReceipt.Target] { Array((receipt?.targets ?? []).filter(\.seen).prefix(5)) }
+
     var body: some View {
         let word = receipt?.word ?? ""
         // The word is its own view at its own width, right-aligned by the row around it: the card hangs on the word, and
@@ -24,12 +28,16 @@ struct ReceiptLine: View {
         // its 20pt and nothing moves.
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            Text(word)
-                .font(MadType.small)
-                .foregroundStyle(receipt?.isUnread == true ? Color.chatBlue : Color.secondary)
-                .lineLimit(1)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.15), value: word)
+            // who has seen it, as their small avatars, then the word (the design's receipt: "(a)(b) 已读")
+            HStack(spacing: 4) {
+                ForEach(seen) { t in CharacterView(id: t.id, kind: t.kind, state: .idle, size: 14) }
+                Text(word)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.madFg3)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.15), value: word)
+            }
                 .popover(isPresented: $card, arrowEdge: Self.arrowEdge) {
                     if let receipt { ReceiptCard(receipt: receipt).presentationCompactAdaptation(.popover) }
                 }
@@ -51,7 +59,7 @@ struct ReceiptLine: View {
             .accessibilityLabel(receipt?.spoken ?? "")
             .accessibilityAddTraits(receipt == nil ? [] : .isButton)
             .accessibilityAction { if receipt != nil { card = true } } // the default action: double-tap
-            .accessibilityAction(named: "谁看了") { if receipt != nil { card = true } }
+            .accessibilityAction(named: L("谁看了")) { if receipt != nil { card = true } }
             .accessibilityHidden(receipt == nil)
     }
 }

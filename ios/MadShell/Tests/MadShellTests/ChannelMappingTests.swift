@@ -39,6 +39,11 @@ private func bubbles(_ s: ChannelScreen) -> [ChannelBubble] {
 }
 
 final class ChannelMappingTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     // MARK: receipts
 
     private func target(_ label: String, _ state: String) -> BusReceipt.Target { .init(id: "id-\(label)", label: label, state: state) }

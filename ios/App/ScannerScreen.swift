@@ -1,4 +1,5 @@
 import AVFoundation
+import MadShell
 import SwiftUI
 
 /// A full-screen camera that reports the first QR code it reads, or nil on cancel.
@@ -8,7 +9,7 @@ struct ScannerScreen: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             ScannerView(found: { done($0) }).ignoresSafeArea()
-            Button("取消") { done(nil) }
+            Button(madLocalized("取消")) { done(nil) }
                 .padding().background(.thinMaterial, in: Capsule()).padding()
         }
     }

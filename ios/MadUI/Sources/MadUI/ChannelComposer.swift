@@ -37,7 +37,7 @@ struct ChannelComposer: View {
 
     var body: some View {
         if readOnly {
-            Text("这是两个 agent 之间的对话，只能看。")
+            Text(L("这是两个 agent 之间的对话，只能看。"))
                 .font(MadType.small).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity).padding(12)
         } else {
@@ -50,7 +50,7 @@ struct ChannelComposer: View {
             if let q = replying { replyBar(q) }
             if !images.isEmpty { thumbnails }
             field
-            if let note { Text(note).font(MadType.small).foregroundStyle(.red) }
+            if let note { Text(note).font(MadType.small).foregroundStyle(Color.madDanger) }
         }
         // no side padding of its own: the column the messages are in gives the edges
         .padding(.top, 8)
@@ -176,9 +176,9 @@ struct ChannelComposer: View {
 
     private var plus: some View {
         Menu {
-            Button { picking = true } label: { Label("照片", systemImage: "photo") }
+            Button { picking = true } label: { Label(L("照片"), systemImage: "photo") }
             #if os(iOS)
-            Button { pasteFromPasteboard() } label: { Label("粘贴图片", systemImage: "doc.on.clipboard") }
+            Button { pasteFromPasteboard() } label: { Label(L("粘贴图片"), systemImage: "doc.on.clipboard") }
             #endif
         } label: {
             Image(systemName: "plus")
@@ -199,7 +199,7 @@ struct ChannelComposer: View {
     private func replyBar(_ q: ChannelQuote) -> some View {
         HStack(spacing: 8) {
             Rectangle().fill(Color.chatBlue).frame(width: 2, height: 16)
-            Text("回复 \(q.who)：\(q.text)").font(MadType.small).foregroundStyle(.secondary).lineLimit(1)
+            Text(Lf("回复 %@：%@", q.who, q.text)).font(MadType.small).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 0)
             Button { replying = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                 .buttonStyle(.plain).accessibilityLabel("不回复")
@@ -242,15 +242,15 @@ struct ChannelComposer: View {
                 picked = []
                 replying = nil
             } else {
-                note = "没有发出去：再试一次。"
+                note = L("没有发出去：再试一次。")
             }
         }
     }
 
     /// Takes a picture's bytes: made a type the server keeps, and refused past six or too large.
     private func add(_ data: Data) {
-        guard images.count < ChannelLimits.images else { note = "一条消息最多 \(ChannelLimits.images) 张图片。"; return }
-        guard let d = ChannelImage.draft(from: data) else { note = "这张图片放不进去（不是图片，或太大）。"; return }
+        guard images.count < ChannelLimits.images else { note = Lf("一条消息最多 %lld 张图片。", ChannelLimits.images); return }
+        guard let d = ChannelImage.draft(from: data) else { note = L("这张图片放不进去（不是图片，或太大）。"); return }
         images.append(d)
     }
 
@@ -276,7 +276,7 @@ struct ChannelComposer: View {
 
     #if os(iOS)
     private func pasteFromPasteboard() {
-        guard let image = UIPasteboard.general.image, let data = image.pngData() else { note = "剪贴板里没有图片。"; return }
+        guard let image = UIPasteboard.general.image, let data = image.pngData() else { note = L("剪贴板里没有图片。"); return }
         add(data)
     }
     #endif

@@ -1,0 +1,991 @@
+<title>mad 界面 v5</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a review column, then the Mac window at full size (scaled to fit), then three phones, then the rules.
+   Tokens follow the app's own (internal/desktop/web/style.css); what changes is marked in the review. */
+:root {
+  --bg: #f4f4f6;
+  --paper: #ffffff;
+  --side: #f7f7f8;
+  --raise: #efeff2;
+  --raise-2: #e6e6ea;
+  --line: rgba(15, 15, 22, .08);
+  --line-2: rgba(15, 15, 22, .14);
+  --fg: #111114;
+  --fg-2: #50505a;
+  --fg-3: #6b6b76;          /* was #8e8e98: 3.1:1 on the sidebar, now 5.0:1 */
+  --accent: #2563eb;
+  --mine: #e9f0fe;
+  --mine-fg: #0f2a66;
+  --wait: #c26a04;
+  --wait-bg: #fff4e5;
+  --work: #15803d;
+  --work-bg: #e9f7ee;
+  --done: #2563eb;
+  --done-bg: #ebf1fe;
+  --idle: #a1a1aa;
+  --danger: #c62828;
+  --code: #f6f6f8;
+  --term: #15151a;
+  --term-fg: #d6d6de;
+  --add: #e6f6ea; --add-fg: #166534;
+  --del: #fdecec; --del-fg: #9f1239;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 40px rgba(0,0,0,.10);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b0b0d; --paper: #151517; --side: #101012; --raise: #1f1f23; --raise-2: #2a2a2f;
+  --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.13);
+  --fg: #ececf1; --fg-2: #b0b0ba; --fg-3: #8a8a95; --accent: #7cacf8;
+  --mine: #1c2a44; --mine-fg: #dbe6ff;
+  --wait: #fbbf24; --wait-bg: #2e2410; --work: #4ade80; --work-bg: #10291a; --done: #60a5fa; --done-bg: #14223a;
+  --idle: #5f5f68; --danger: #f87171; --code: #0f0f11; --term: #08080a; --term-fg: #d6d6de;
+  --add: #0f2a18; --add-fg: #86efac; --del: #2e1216; --del-fg: #fda4af;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.5); color-scheme: dark; } }
+:root[data-theme="dark"], .force-dark {
+  --bg: #0b0b0d; --paper: #151517; --side: #101012; --raise: #1f1f23; --raise-2: #2a2a2f;
+  --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.13);
+  --fg: #ececf1; --fg-2: #b0b0ba; --fg-3: #8a8a95; --accent: #7cacf8;
+  --mine: #1c2a44; --mine-fg: #dbe6ff;
+  --wait: #fbbf24; --wait-bg: #2e2410; --work: #4ade80; --work-bg: #10291a; --done: #60a5fa; --done-bg: #14223a;
+  --idle: #5f5f68; --danger: #f87171; --code: #0f0f11; --term: #08080a; --term-fg: #d6d6de;
+  --add: #0f2a18; --add-fg: #86efac; --del: #2e1216; --del-fg: #fda4af;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.5); color-scheme: dark;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font: 14px/1.55 var(--sans); }
+.page { max-width: 1240px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; margin: 0 }
+h1 { font-size: 30px; letter-spacing: -.02em; line-height: 1.2 }
+h2 { font-size: 21px; letter-spacing: -.01em }
+h3 { font-size: 15px }
+p { margin: 0; max-width: 68ch }
+.eyebrow { font-size: 12px; letter-spacing: .06em; color: var(--fg-3); font-weight: 600 }
+.lede { color: var(--fg-2); font-size: 15px }
+.top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: end; justify-content: space-between }
+.top > div { display: grid; gap: 8px; min-width: 0 }
+.seg { display: inline-flex; background: var(--raise); border-radius: 9px; padding: 2px; gap: 2px }
+.seg button { border: 0; background: none; font: inherit; font-size: 13px; color: var(--fg-2); padding: 4px 12px; border-radius: 7px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--paper); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+section { display: grid; gap: 20px; min-width: 0 }
+.sec-head { display: grid; gap: 6px }
+
+/* ---------- review ---------- */
+.verdict { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; gap: 10px }
+.verdict b { font-weight: 600 }
+.findings { display: grid; gap: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+.f { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 14px 18px; border-top: 1px solid var(--line) }
+.f:first-child { border-top: 0 }
+.f.head { background: var(--raise); font-size: 12px; color: var(--fg-3); font-weight: 600; padding-block: 8px }
+.sev { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 1px 8px; justify-self: start; height: fit-content }
+.sev.h { background: var(--del); color: var(--del-fg) } .sev.m { background: var(--wait-bg); color: var(--wait) } .sev.l { background: var(--raise); color: var(--fg-2) }
+.f h3 { font-size: 14px; margin-bottom: 2px }
+.f p { color: var(--fg-2); font-size: 13px }
+.f .fix { font-size: 13px; color: var(--fg) }
+.now { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px }
+.now figure { margin: 0; display: grid; gap: 6px }
+.now img { border-radius: 10px; border: 1px solid var(--line); display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; object-position: top left; background: var(--paper) }
+.now figcaption { font-size: 12px; color: var(--fg-3) }
+
+/* ---------- mockup shared ---------- */
+.stage { width: 100%; overflow: hidden; position: relative }
+.scaler { transform-origin: top left; width: 1200px }
+.mono { font-family: var(--mono) }
+.av { flex: none; display: block; position: relative }
+.av svg { display: block; overflow: visible }
+.ring-spin { animation: spin 1.4s linear infinite; transform-origin: center; transform-box: fill-box }
+@keyframes spin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .ring-spin { animation: none } }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; border-radius: 6px; padding: 0 6px; height: 19px; white-space: nowrap; font-weight: 500 }
+.pill.wait { background: var(--wait-bg); color: var(--wait) } .pill.work { background: var(--work-bg); color: var(--work) }
+.pill.done { background: var(--done-bg); color: var(--done) } .pill.idle { background: var(--raise); color: var(--fg-3) }
+.btn { border: 1px solid var(--line-2); background: var(--paper); color: var(--fg); font: inherit; font-size: 12.5px; border-radius: 8px; padding: 3px 10px; cursor: pointer; white-space: nowrap }
+.btn.pri { background: var(--fg); color: var(--paper); border-color: transparent }
+.btn.ghost { border-color: transparent; background: var(--raise) }
+.btn.sm { font-size: 11.5px; padding: 1px 8px; border-radius: 6px }
+kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--fg-3); background: var(--paper) }
+
+/* ---------- Mac window ---------- */
+.win { width: 1200px; height: 760px; background: var(--paper); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line-2);
+  display: grid; grid-template-columns: 284px minmax(0, 1fr) auto; overflow: hidden; position: relative; font-size: 13.5px }
+.sb { background: var(--side); border-right: 1px solid var(--line); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-height: 0 }
+.sb-top { display: flex; align-items: center; gap: 8px; padding: 14px 14px 6px }
+.lights { display: flex; gap: 8px } .lights i { width: 12px; height: 12px; border-radius: 50%; display: block }
+.lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+.mach { margin-left: auto; font-size: 12px; color: var(--fg-2); background: var(--raise); border-radius: 999px; padding: 2px 10px; white-space: nowrap; border: 0; font-family: inherit; cursor: pointer }
+.search { margin: 8px 12px 6px; display: flex; align-items: center; gap: 8px; background: var(--raise); border-radius: 9px; padding: 6px 10px; color: var(--fg-3); cursor: pointer; border: 0; font: inherit; font-size: 13px; text-align: left }
+.search span { flex: 1 }
+.sb-list { overflow: auto; padding: 4px 8px 12px; display: grid; align-content: start; gap: 1px }
+.grp { display: flex; align-items: center; gap: 6px; padding: 14px 8px 4px; font-size: 11.5px; color: var(--fg-3); font-weight: 600 }
+.grp .n { font-weight: 500 }
+.grp .meta { margin-left: auto; font-weight: 500; display: flex; gap: 8px; font-variant-numeric: tabular-nums }
+.grp.att { color: var(--wait) }
+.row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; cursor: pointer; border: 0; background: none; font: inherit; color: inherit; text-align: left; width: 100% }
+.row:hover { background: var(--raise) }
+.row[aria-current="true"] { background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 0 0 1px var(--line) }
+.row .txt { min-width: 0; flex: 1; display: grid }
+.row .nm { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px }
+.row .sub { font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row .sub b { color: var(--fg-2); font-weight: 550 }
+.row .end { display: grid; justify-items: end; gap: 2px; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums }
+.row.dim .nm, .row.dim .sub { opacity: .55 }
+.att-card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; cursor: pointer }
+.att-card .cmd { font: 11.5px var(--mono); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--code); border-radius: 6px; padding: 3px 7px }
+.att-card .acts { display: flex; gap: 6px; align-items: center }
+.att-card .acts kbd { margin-left: auto }
+.sb-foot { border-top: 1px solid var(--line); padding: 6px 8px 8px; display: grid; gap: 8px }
+.me-pic { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; flex: none }
+.quota { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.q { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px }
+.q .top2 { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--fg-2) }
+.q .top2 span:last-child { color: var(--fg-3); font-variant-numeric: tabular-nums }
+.q .big { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1 }
+.qbar { height: 6px; background: var(--raise-2); border-radius: 6px; overflow: hidden }
+.qbar i { display: block; height: 100%; background: var(--fg-2); border-radius: 6px }
+.qbar i.hot { background: var(--wait) }
+.me { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 550 }
+.me .pic { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; display: grid; place-items: center; font-size: 12px }
+.me .spend { margin-left: auto; font-weight: 500; color: var(--fg-2); font-variant-numeric: tabular-nums; font-size: 12px }
+.meter { display: grid; grid-template-columns: 58px minmax(0, 1fr) 64px; gap: 8px; align-items: center; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums }
+.meter .bar { height: 4px; background: var(--raise-2); border-radius: 4px; overflow: hidden }
+.meter .bar i { display: block; height: 100%; background: var(--fg-2); border-radius: 4px }
+.meter .bar i.hot { background: var(--wait) }
+.meter span:last-child { text-align: right }
+
+.main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; background: var(--paper) }
+.mh { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-height: 60px }
+.mh .t { min-width: 0; display: grid }
+.mh .t b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mh .t span { font-size: 12px; color: var(--fg-3); white-space: nowrap; display: flex; gap: 6px; align-items: center }
+.mh .right { margin-left: auto; display: flex; gap: 8px; align-items: center }
+.icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--fg-2); display: grid; place-items: center; cursor: pointer }
+.icon-btn:hover, .icon-btn[aria-pressed="true"] { background: var(--raise); color: var(--fg) }
+.body { overflow: auto; min-height: 0 }
+.col { max-width: 760px; margin: 0 auto; padding: 22px 28px 28px; display: grid; gap: 16px; align-content: start }
+
+/* today */
+.today-h { display: grid; gap: 4px }
+.today-h h2 { font-size: 22px }
+.today-h p { color: var(--fg-2); font-size: 13.5px }
+.today-h p b { font-weight: 600 }
+.block { display: grid; gap: 8px }
+.block-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--fg-2) }
+.block-h .k { margin-left: auto; font-weight: 400; color: var(--fg-3); display: flex; gap: 4px; align-items: center; font-size: 11.5px }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none }
+.dot.wait { background: var(--wait) } .dot.work { background: var(--work) } .dot.done { background: var(--done) } .dot.idle { background: var(--idle) }
+.task { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper) }
+.task.wait { border-color: color-mix(in srgb, var(--wait) 35%, var(--line)); background: color-mix(in srgb, var(--wait-bg) 45%, var(--paper)) }
+.task .tt { display: grid; gap: 3px; min-width: 0 }
+.task .tt b { font-weight: 600; font-size: 13.5px }
+.task .tt .where { font-size: 12px; color: var(--fg-3) }
+.task .cmd { font: 12px var(--mono); background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; margin-top: 4px; overflow-x: auto; white-space: nowrap }
+.task .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap }
+.task .side { font-size: 11.5px; color: var(--fg-3); text-align: right; font-variant-numeric: tabular-nums; display: grid; gap: 4px; justify-items: end }
+.lines { border: 1px solid var(--line); border-radius: 12px; overflow: hidden }
+.line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--line); cursor: pointer }
+.line:first-child { border-top: 0 }
+.line:hover { background: var(--raise) }
+.line .tt { min-width: 0; display: grid }
+.line .tt b { font-weight: 550; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.line .tt span { font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.line .tt span code { font: 11.5px var(--mono); color: var(--fg-2) }
+.line .num { font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums }
+.quiet { font-size: 12.5px; color: var(--fg-3); padding: 2px 2px }
+.keys { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; font-size: 11.5px; color: var(--fg-3); padding-top: 6px }
+.keys span { display: flex; gap: 3px; align-items: center }
+
+/* agent */
+.tabs { display: inline-flex; background: var(--raise); border-radius: 9px; padding: 2px; gap: 2px }
+.tabs button { border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--fg-2); padding: 3px 12px; border-radius: 7px; cursor: pointer; display: flex; gap: 5px; align-items: center }
+.tabs button[aria-selected="true"] { background: var(--paper); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+.tabs .c { font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums }
+.msg-me { justify-self: end; background: var(--mine); color: var(--mine-fg); padding: 8px 14px; border-radius: 16px 16px 4px 16px; max-width: 72% }
+.msg-ai { display: grid; gap: 8px; max-width: 100% }
+.msg-ai ul { margin: 0; padding-left: 20px }
+.msg-ai code { font: 12px var(--mono); background: var(--code); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line) }
+.tools { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 12.5px }
+.tool { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--line); min-width: 0 }
+.tool:first-child { border-top: 0 }
+.tool b { font-weight: 600; flex: none }
+.tool .arg { font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0 }
+.tool .r { flex: none; font-size: 11.5px; font-variant-numeric: tabular-nums }
+.tool .ok { color: var(--work) } .tool .bad { color: var(--danger) }
+.tool-sum { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-3); cursor: pointer; padding: 2px 0 }
+.ask { border: 1px solid color-mix(in srgb, var(--wait) 45%, var(--line)); border-radius: 12px; overflow: hidden; background: var(--paper) }
+.ask-h { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--wait-bg); color: var(--wait); font-size: 12.5px; font-weight: 600 }
+.ask-h span { margin-left: auto; font-weight: 400; color: var(--fg-3); font-size: 11.5px }
+.ask pre { margin: 0; padding: 10px 12px; font: 12.5px/1.5 var(--mono); overflow-x: auto; background: var(--code); border-bottom: 1px solid var(--line) }
+.ask .acts { display: flex; gap: 8px; padding: 9px 12px; align-items: center; flex-wrap: wrap }
+.ask .acts .hint { margin-left: auto; font-size: 11.5px; color: var(--fg-3); display: flex; gap: 4px; align-items: center }
+.done-note { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--work); background: var(--work-bg); border-radius: 10px; padding: 8px 12px }
+.comp { padding: 10px 24px 16px }
+.comp-box { max-width: 760px; margin: 0 auto; border: 1px solid var(--line-2); border-radius: 16px; background: var(--paper); box-shadow: 0 2px 10px rgba(0,0,0,.04); padding: 10px 12px 8px; display: grid; gap: 8px }
+.comp-box .ph { color: var(--fg-3); font-size: 13.5px; padding: 2px 4px }
+.comp-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-3) }
+.comp-row .send { margin-left: auto; width: 28px; height: 28px; border-radius: 50%; background: var(--raise-2); color: var(--fg-3); display: grid; place-items: center; border: 0 }
+.chip { display: inline-flex; align-items: center; gap: 5px; background: var(--raise); border-radius: 999px; padding: 1px 8px 1px 3px; font-size: 12px; color: var(--fg-2) }
+.term { background: var(--term); color: var(--term-fg); font: 12.5px/1.6 var(--mono); border-radius: 12px; padding: 14px 16px; white-space: pre; overflow: auto; min-height: 420px }
+.term .g { color: #4ade80 } .term .y { color: #fbbf24 } .term .d { color: #7d7d88 } .term .r { color: #f87171 }
+.diff-files { display: grid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden }
+.df { display: flex; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12.5px; align-items: center; cursor: pointer }
+.df:first-child { border-top: 0 }
+.df[aria-current="true"] { background: var(--raise) }
+.df .p { font-family: var(--mono); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.df .a { color: var(--add-fg) } .df .x { color: var(--del-fg) }
+.hunk { border: 1px solid var(--line); border-radius: 12px; overflow: auto; font: 12px/1.65 var(--mono) }
+.hunk div { padding: 0 12px; white-space: pre }
+.hunk .hh { background: var(--raise); color: var(--fg-3); padding-block: 4px }
+.hunk .add { background: var(--add); color: var(--add-fg) } .hunk .del { background: var(--del); color: var(--del-fg) }
+.git-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--fg-2) }
+.git-bar .sp { margin-left: auto }
+
+/* inspector */
+.insp { width: 0; overflow: hidden; border-left: 1px solid transparent; background: var(--side); transition: width .2s ease }
+.insp.open { width: 272px; border-left-color: var(--line) }
+.insp-in { width: 272px; padding: 16px; display: grid; gap: 18px; align-content: start; height: 100%; overflow: auto }
+.kv { display: grid; gap: 8px; font-size: 12.5px }
+.kv h4 { margin: 0; font-size: 11.5px; color: var(--fg-3); font-weight: 600 }
+.kv .r { display: flex; justify-content: space-between; gap: 8px }
+.kv .r span:first-child { color: var(--fg-3) }
+.kv .r span:last-child { font-variant-numeric: tabular-nums; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.stack { display: grid; gap: 6px }
+
+/* channel */
+.members { display: flex; align-items: center }
+.members .av { margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--paper) }
+.members .av:first-child { margin-left: 0 }
+.cmsg { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start }
+.cmsg .who { font-size: 12px; color: var(--fg-3); display: flex; gap: 8px; align-items: center }
+.cmsg .who b { color: var(--fg); font-weight: 600; font-size: 12.5px }
+.cmsg .txt { font-size: 13.5px }
+.at { font-weight: 600; border-radius: 4px; padding: 0 3px }
+.mine-wrap { display: grid; justify-items: end; gap: 3px }
+.rcpt { font-size: 11px; color: var(--fg-3); display: flex; gap: 4px; align-items: center }
+.fold { border: 1px dashed var(--line-2); border-radius: 10px; padding: 6px 12px; font-size: 12px; color: var(--fg-3); display: flex; gap: 8px; align-items: center; cursor: pointer }
+.handoff { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; background: var(--paper); max-width: 520px }
+.handoff .h { font-size: 12px; color: var(--fg-3); display: flex; gap: 6px; align-items: center }
+.daysep { justify-self: center; font-size: 11.5px; color: var(--fg-3) }
+.mention-pop { position: absolute; left: 0; bottom: calc(100% + 6px); background: var(--paper); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; width: 280px; display: grid; gap: 1px }
+.mention-pop .row { padding: 5px 8px }
+
+/* palette */
+.pal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.18); display: grid; justify-items: center; align-items: start; padding-top: 96px; z-index: 5 }
+.pal { width: 560px; background: var(--paper); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line-2); overflow: hidden }
+.pal input { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; font-size: 15px; padding: 14px 16px; color: var(--fg); outline: none }
+.pal .sect { font-size: 11px; color: var(--fg-3); font-weight: 600; padding: 8px 14px 2px }
+.pal .row { border-radius: 8px; margin: 0 6px; width: calc(100% - 12px) }
+.pal .row .end kbd { margin: 0 }
+
+/* ---------- phones ---------- */
+.phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; justify-items: center }
+.phone-cell { display: grid; gap: 10px; justify-items: center; width: 100%; min-width: 0 }
+.phone-cell figcaption { font-size: 12.5px; color: var(--fg-2); text-align: center; max-width: 34ch }
+.phone-stage { width: 100%; max-width: 330px; position: relative; overflow: hidden; border-radius: 13% / 6% }
+.phone { width: 390px; height: 844px; border-radius: 52px; background: var(--paper); color: var(--fg); border: 10px solid #1b1b1f; box-shadow: var(--shadow);
+  overflow: hidden; display: grid; grid-template-rows: 50px auto minmax(0, 1fr) auto; transform-origin: top left; font-size: 15px; position: absolute; top: 0; left: 0 }
+.status-bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 30px 0; font-size: 15px; font-weight: 600 }
+.island { width: 120px; height: 34px; background: #000; border-radius: 20px; position: absolute; top: 10px; left: 50%; transform: translateX(-50%) }
+.ph-head { padding: 6px 18px 10px; display: grid; gap: 10px }
+.ph-head .ttl { display: flex; align-items: center; gap: 10px }
+.ph-head h3 { font-size: 30px; letter-spacing: -.02em }
+.ph-head .mach { margin-left: 0; font-size: 12.5px }
+.ph-head .ic { margin-left: auto; display: flex; gap: 6px }
+.ph-body { overflow: hidden; padding: 0 12px; display: grid; align-content: start; gap: 2px }
+.ph-body .row { padding: 8px 6px }
+.ph-body .row .nm { font-size: 16px }
+.ph-body .row .sub { font-size: 13px }
+.ph-body .grp { font-size: 12.5px }
+.ph-att { display: grid; gap: 8px; padding: 2px 6px 6px }
+.ph-att .att-card { padding: 10px 12px; border-radius: 14px }
+.ph-att .att-card .cmd { font-size: 12.5px }
+.ph-att .btn { font-size: 14px; padding: 5px 14px; border-radius: 10px }
+.ph-foot { padding: 8px 14px 30px; border-top: 1px solid var(--line); display: grid; gap: 6px }
+.ph-nav { display: flex; align-items: center; gap: 10px; padding: 6px 14px 10px; border-bottom: 1px solid var(--line) }
+.ph-nav .t { display: grid; min-width: 0 }
+.ph-nav .t b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ph-nav .t span { font-size: 12px; color: var(--fg-3) }
+.ph-nav .back { color: var(--accent); font-size: 24px; line-height: 1; padding-right: 2px }
+.ph-conv { padding: 14px 16px; display: grid; gap: 12px; align-content: start; overflow: hidden }
+.ph-comp { padding: 8px 12px 30px; display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--line) }
+.ph-comp .in { flex: 1; background: var(--raise); border-radius: 20px; padding: 9px 14px; color: var(--fg-3); font-size: 15px }
+.ph-comp .send { width: 36px; height: 36px; border-radius: 50%; background: var(--raise-2); display: grid; place-items: center; color: var(--fg-3) }
+.ph-tabs { display: flex; justify-content: center; padding: 8px 0 0 }
+.sheet { border-top: 1px solid var(--line); background: var(--paper); padding: 12px 14px 30px; display: grid; gap: 10px; box-shadow: 0 -8px 24px rgba(0,0,0,.06) }
+.sheet .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--raise-2); justify-self: center }
+.sheet pre { margin: 0; font: 13px var(--mono); background: var(--code); border-radius: 10px; padding: 10px 12px; overflow: hidden; white-space: pre-wrap }
+.sheet .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.sheet .acts .btn { padding: 10px; font-size: 15px; border-radius: 12px; text-align: center }
+
+/* ---------- rules ---------- */
+.rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px }
+.rule { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.rule p, .rule li { font-size: 13px; color: var(--fg-2) }
+.rule ul { margin: 0; padding-left: 18px; display: grid; gap: 4px }
+.states { display: grid; gap: 8px }
+.st { display: grid; grid-template-columns: 40px 56px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 12.5px }
+.st span:last-child { color: var(--fg-3) }
+.type-row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 6px }
+.type-row:first-of-type { border-top: 0 }
+.type-row small { color: var(--fg-3); font-variant-numeric: tabular-nums; font-size: 11.5px; white-space: nowrap }
+.plan { display: grid; gap: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+.pr { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 220px); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; align-items: baseline }
+.pr:first-child { border-top: 0 }
+.pr .no { font-weight: 600; color: var(--fg-3); font-variant-numeric: tabular-nums }
+.pr p { color: var(--fg-2) }
+.pr .where { font: 11.5px var(--mono); color: var(--fg-3); overflow-wrap: anywhere }
+
+@media (max-width: 900px) {
+  .now { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .phones, .rules { grid-template-columns: minmax(0, 1fr) }
+  .f { grid-template-columns: 44px minmax(0, 1fr) } .f .fix { grid-column: 2 } .f.head { display: none }
+  .pr { grid-template-columns: 44px minmax(0, 1fr) } .pr .where { grid-column: 2 }
+}
+</style>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <span class="eyebrow" data-i18n="eyebrow"></span>
+      <h1 data-i18n="h1"></h1>
+      <p class="lede" data-i18n="lede"></p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="seg" role="group" aria-label="Language" id="langSeg">
+        <button type="button" data-lang="zh" aria-pressed="false">中文</button>
+        <button type="button" data-lang="en" aria-pressed="false">English</button>
+      </div>
+      <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+        <button type="button" data-th="" aria-pressed="true" data-i18n="thSys"></button>
+        <button type="button" data-th="light" aria-pressed="false" data-i18n="thLight"></button>
+        <button type="button" data-th="dark" aria-pressed="false" data-i18n="thDark"></button>
+      </div>
+    </div>
+  </header>
+
+  <section id="review">
+    <div class="sec-head"><span class="eyebrow" data-i18n="revEyebrow"></span><h2 data-i18n="revH2"></h2></div>
+    <div class="verdict"><p data-i18n="verdict"></p></div>
+    <div class="now">
+      <figure><img src="now-home-desk.jpg" alt=""><figcaption data-i18n="cap1"></figcaption></figure>
+      <figure><img src="now-agent-table.jpg" alt=""><figcaption data-i18n="cap2"></figcaption></figure>
+      <figure><img src="now-ch-ios.jpg" alt=""><figcaption data-i18n="cap3"></figcaption></figure>
+      <figure><img src="now-mac.jpg" alt=""><figcaption data-i18n="cap4"></figcaption></figure>
+    </div>
+    <div class="findings" role="table" id="findings"></div>
+  </section>
+
+  <section id="mac">
+    <div class="sec-head"><span class="eyebrow" data-i18n="macEyebrow"></span><h2 data-i18n="macH2"></h2><p class="lede" data-i18n="macLede"></p></div>
+    <div class="stage" id="macStage"><div class="scaler" id="macScaler">
+      <div class="win" id="win">
+        <aside class="sb">
+          <div class="sb-top">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <button class="mach" type="button" data-i18n="machine"></button>
+          </div>
+          <button class="search" type="button" id="openPal"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg><span data-i18n="search"></span><kbd>⌘K</kbd></button>
+          <nav class="sb-list" id="sbList"></nav>
+          <div class="sb-foot">
+            <button class="row" type="button" data-go="usage" id="meRow" aria-current="false"><span class="me-pic">H</span><span class="txt"><span class="nm">Heng Du</span></span><span class="end"><span data-i18n="usageEntry"></span></span></button>
+          </div>
+        </aside>
+        <main class="main" id="main"></main>
+        <aside class="insp" id="insp"><div class="insp-in" id="inspIn"></div></aside>
+        <div class="pal-bg" id="pal" hidden>
+          <div class="pal" role="dialog">
+            <input id="palIn">
+            <div class="sect" data-i18n="palAgents"></div>
+            <div id="palRows"></div>
+            <div class="sect" data-i18n="palCmds"></div>
+            <button class="row" type="button"><span class="txt"><span class="nm" data-i18n="palCmd1"></span></span><span class="end"><kbd>⌘⇧N</kbd></span></button>
+            <button class="row" type="button" data-pal-usage><span class="txt"><span class="nm" data-i18n="palCmd3"></span></span><span class="end"></span></button>
+            <button class="row" type="button"><span class="txt"><span class="nm" data-i18n="palCmd2"></span></span><span class="end"><kbd>⌥N</kbd></span></button>
+            <div style="height:6px"></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section id="phone">
+    <div class="sec-head"><span class="eyebrow" data-i18n="phEyebrow"></span><h2 data-i18n="phH2"></h2><p class="lede" data-i18n="phLede"></p></div>
+    <div class="phones">
+      <figure class="phone-cell"><div class="phone-stage"><div class="phone" id="ph1"></div></div><figcaption data-i18n="phCap1"></figcaption></figure>
+      <figure class="phone-cell"><div class="phone-stage"><div class="phone" id="ph2"></div></div><figcaption data-i18n="phCap2"></figcaption></figure>
+      <figure class="phone-cell"><div class="phone-stage"><div class="phone force-dark" id="ph3"></div></div><figcaption data-i18n="phCap3"></figcaption></figure>
+    </div>
+  </section>
+
+  <section id="rules">
+    <div class="sec-head"><span class="eyebrow" data-i18n="rulesEyebrow"></span><h2 data-i18n="rulesH2"></h2></div>
+    <div class="rules">
+      <div class="rule"><h3 data-i18n="rule1H"></h3><div class="states" id="states"></div><p data-i18n="rule1P"></p></div>
+      <div class="rule"><h3 data-i18n="rule2H"></h3><div id="typeRows"></div></div>
+      <div class="rule"><h3 data-i18n="rule3H"></h3><ul id="keepList"></ul></div>
+    </div>
+    <div class="sec-head" style="margin-top:12px"><h3 data-i18n="planH"></h3></div>
+    <div class="plan" id="plan"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ================= strings =================
+  // Every word the mockup shows comes from here; sample data (titles, messages) has both languages too.
+  const T = {
+    zh: {
+      // page
+      eyebrow: 'mad · 界面重设计 v5 · 待评审',
+      h1: '一个窗口，先看“谁在等你”',
+      lede: 'Mac、iPhone 和网页共用一套结构：侧栏顶部固定“待处理”，项目分组带上分支和花费，状态只用一套颜色，审批在对话里就能完成，界面跟随系统语言（中文 / English）。下面先是对现有界面的评审，然后是可点的 Mac 窗口和三个 iPhone 画面。',
+      thSys: '跟随系统', thLight: '浅色', thDark: '深色',
+      revEyebrow: '一 · 现有界面评审', revH2: '基于 main（de02426）的网页窗口与 Mac 原生窗口',
+      verdict: '<b>结论：</b>视觉已经干净统一，但结构还是“聊天软件”，而 mad 的核心是“管一群在干活的 agent”。最需要你的东西（审批、等你回复）藏在“概览”页或一个红点里；终端版有的分支、改动、花费，窗口里几乎看不到；状态靠灰色小字表达，Grok 头像换上饱和色之后，颜色只代表身份，不再代表状态；界面文字写死成中文，没有英文。v5 不换风格，主要调结构、状态表达和语言。',
+      cap1: '网页 · 概览', cap2: '网页 · agent 对话（等审批中）', cap3: '网页 · 群聊空状态', cap4: 'Mac 原生 · 群聊',
+      fHead: ['级别', '问题', 'v5 怎么改'], sev: { h: '高', m: '中', l: '低' },
+      findings: [
+        ['h', '审批不在对话里', 'agent 页最后一条 <code class="mono">Run python3 make_table.py</code> 只显示一个 ○，“允许 / 拒绝”只在概览卡片上。用户点进 agent 后反而没法批准。', '对话末尾出现审批卡（允许 / 本次会话都允许 / 拒绝，<kbd>⏎</kbd> <kbd>esc</kbd>），侧栏“待处理”里也能直接批。'],
+        ['h', '“在等你”没有固定位置', '要么切到概览页，要么在长列表里找红点。手机上列表一长，等你的 agent 会滚出屏幕。', '侧栏顶部固定“待处理”分组，按等待时间排序，数量在 Dock 角标和窗口标题同步。'],
+        ['h', '状态色不统一', '概览用橙/绿/蓝，侧栏只有红点和灰字；“已停止”用红色 <code class="mono">--stopped: #dc2626</code>，和“等你”的红点撞色。Grok 头像的颜色是身份色，看不出状态。', '头像外加一圈状态环：等你=琥珀实环，工作=绿色转动弧，刚完成=蓝点，空闲无环，停止=头像变淡。红色只留给错误。'],
+        ['m', '界面只有中文', '#125 把所有界面文字写成中文，字符串直接写在 Swift 和 JS 里，英文用户和英文系统没法用。', '中文和英文先行：跟随系统语言，设置里可改；Swift 用 String Catalog，网页用一张字符串表；工具名、命令原文和 agent 的话不翻译。'],
+        ['m', '项目信息丢了', '侧栏的项目标题只有 “mad” 两个字。分支、未提交改动、未推送提交、花费都只在终端版里有。', '项目标题一行带 <span class="mono">main · 3 改动 · ↑2 · $4.17</span>；agent 页加可开合的“详情”栏，放分支、文件、花费和推送 / PR / 合并。'],
+        ['m', '概览浪费空间，又和侧栏重复', '三个分组即使是 0 也各占一整行的空盒子；顶部的数字和分组标题又重复了一遍。', '改名“今日”：一句话总结 + 等你的大卡片 + 在工作和刚完成用紧凑列表；空分组只剩一行灰字。'],
+        ['m', '机器名占了标题位', '“Heng Du’s Ma…” 被截断，却占着侧栏最显眼的位置；Mac 原生版还把一大块头像和机器名放在侧栏顶部。', '机器名缩成交通灯右边的小胶囊（点开切换），省出来的位置放 <kbd>⌘K</kbd> 搜索框。'],
+        ['m', '群聊里自己的消息太重', '满宽饱和蓝胶囊 + 粗体，一长串 @ 消息时整屏都是蓝色，agent 的回复反而显得次要。', '自己的消息用浅蓝底深色字；@ 名字用对方的身份色标出；回执“2 个未读”改成头像小点。'],
+        ['m', '网页和原生的头像不一致', 'Mac 已换成 Grok 风格饱和色头像（#153），网页还是粉彩小角色。', '三端统一用 <span class="mono">GrokAvatar</span>，共享 <span class="mono">character-vectors.json</span> 的测试向量。'],
+        ['l', '次要文字对比度不够', '<code class="mono">--text-3 #8e8e98</code> 在侧栏底色上约 3.1:1，低于 4.5:1；快捷键提示只有 10px。', '次要灰改为 #6b6b76（约 5:1），快捷键提示 11px 起。'],
+        ['l', '用量挤在侧栏底部', '5 小时和每周窗口的额度、今天的花费，挤在侧栏底部一行小字里，看不清也没地方展开。', '单独做一个“用量”页：四个额度窗口、今天按项目和 agent 的花费、mad 自己的预算。侧栏底部只留名字和“用量 ›”入口。'],
+        ['l', '空状态没有下一步', '群聊空状态只有一行“还没人说话。@ 一个 agent 可以叫醒它。”，居中在一大片空白里。', '空群聊直接列出成员和“@ 叫醒”按钮；新对话空状态给最近用过的项目。'],
+      ],
+      macEyebrow: '二 · Mac 窗口（网页窗口同结构）',
+      macH2: '可以点：侧栏切换、标签页、详情栏、审批、⌘K、语言',
+      macLede: '示例数据，不是真实会话。点“给我绘制一个表格”看审批卡，点 <kbd>⌘K</kbd> 搜索框看命令面板，点右上角的栏图标开合详情，点左下角的名字看用量页。右上角可切换中文 / English。',
+      phEyebrow: '三 · iPhone', phH2: '同一套结构，按手指重排',
+      phLede: '首页把“待处理”做成能直接批的卡片；agent 页的审批从底部升起，按钮占满宽度；第三张固定为深色，看深色下的状态色和自己的消息。',
+      phCap1: '首页：待处理 → 群聊 → 项目', phCap2: 'agent：审批从底部升起', phCap3: '群聊（深色）：@ 用身份色，回执是头像小点',
+      rulesEyebrow: '四 · 规则', rulesH2: '三端都按这几条做',
+      rule1H: '状态：一套颜色，一个位置', rule1P: '头像颜色 = 身份（来自 id 的哈希，不变）；外圈 = 状态。红色只用于失败的工具调用和错误。',
+      rule2H: '字号（Mac / iPhone）',
+      typeRows: [['今日', '22 / 30 · 标题'], ['给我绘制一个表格', '15 / 17 · 页头'], ['Sidebar token 统计', '13.5 / 16 · 行名、正文'], ['Bash · go test ./...', '12 / 13 · 副行'], ['42% · 2:10', '11 · 最小，仅数字']],
+      rule3H: '保留、语言和不做',
+      keep: [
+        '保留：Grok 头像、无标题栏、单列消息、⌘\\ 开合侧栏、260–420pt 侧栏宽度。',
+        '标签只留对话 / 改动两个，去掉终端；claude 自己的交互菜单（如 /config）这类少见情况，从 ⋯ 里“在终端打开”兜底。新增“详情”栏，默认收起。',
+        '语言：中文和英文，跟随系统，设置里可改。中文不是英文的直译，按各自习惯写（“在等你”/“Waiting”）。',
+        '不翻译：工具名（Read、Bash）、claude / codex、命令原文、agent 写的内容。服务器给的标签仍按动作的 verb 和 kind 翻译，不按英文原文。',
+        '不做：新配色或新字体；Tab Bar；把概览做成仪表盘。',
+      ],
+      planH: '实施顺序（每步一个 PR，先过设计验收）',
+      plan: [
+        ['状态环和颜色', '头像加状态环，停止改为变淡，次要灰提到 4.5:1。三端一起改，影响最大、风险最小。', 'GrokAvatar.swift · characters.js · style.css'],
+        ['字符串表和英文', '把现在写死的中文抽成字符串表（Swift 用 Localizable.xcstrings，网页用 i18n.js），补上英文，跟随系统语言。之后每个 PR 只往表里加字符串。', 'MadUI · MadShell · web/i18n.js'],
+        ['对话内审批卡', 'agent 页末尾的审批卡和 iPhone 底部面板，复用概览的允许 / 拒绝接口。', 'ConversationView.swift · app.js · actions.js'],
+        ['侧栏重排', '“待处理”置顶、项目标题带 git 和花费、机器胶囊、⌘K 搜索框，底部只留个人入口。', 'MacSidebar.swift · HomeSidebar.swift · app.js'],
+        ['概览 → 今日，加用量页', '一句话总结，等你的卡片，在工作 / 刚完成的紧凑列表，空分组一行；用量单独一页（原生替换现在网页上的用量页）。', 'HomeView.swift · inbox.js · usage.js'],
+        ['详情栏和群聊细节', '分支 / 文件 / 花费 / 推送；自己消息浅底、@ 身份色、头像回执；网页换 Grok 头像。', 'MacShell.swift · ChannelBubbleView.swift · bus.js'],
+      ],
+      // app
+      st: { wait: '在等你', work: '在工作', done: '刚完成', idle: '空闲', stop: '已停止' },
+      stDesc: { wait: '琥珀实环；侧栏“待处理”置顶', work: '绿色弧转动（减弱动态时停住）', done: '蓝点，看过即消失', idle: '无环', stop: '头像变淡、闭眼；不用红色' },
+      machine: 'Heng 的 MacBook Pro ▾', search: '搜索或跳转', usageEntry: '用量 ›',
+      min: n => `${n} 分钟`, minAgo: n => `${n} 分钟前`,
+      today: '今日', todaySub: w => `${w} 等你 · 2 在工作 · 1 刚完成`, pending: '待处理', allClear: '都处理完了',
+      allow: '允许', deny: '拒绝', reply: '回复', replyDots: '回复…', groups: '群聊', changed: n => `${n} 改动`,
+      date: '11 月 9 日 周一', newChat: '新对话', board: '看板',
+      summary: w => `<b style="color:var(--wait)">${w} 个在等你</b>，<b style="color:var(--work)">2 个在工作</b>，<b style="color:var(--done)">1 个刚完成</b>。今天花了 $6.82。`,
+      blkWait: '在等你', blkWaitK: '按等待时间 · <kbd>⌥N</kbd> 下一个', blkWork: '在工作', blkDone: '刚完成',
+      whereTable: 'mad · claude · 想运行一条命令', whereKim: 'blog · pi · 问了一个问题',
+      allowSession: '本次会话都允许', openChat: '打开对话', interrupt: '打断', seeDiff: '看改动',
+      ideasLine: '写完了 docs/ideas.md，改了 3 个文件',
+      keys: ['下一个等你的', '跳转', '侧栏', '详情'],
+      tabChat: '对话', tabDiff: '改动', details: '详情 ⌘I', more: '更多 · 在终端打开',
+      files: n => `${n} 个文件`, unpushed: '↑2 未推送', lazygit: '在 lazygit 打开', push: '推送', openPR: '开 PR',
+      meTable: '给我绘制一个表格，把本周的任务汇总一下', ai1: '好的，我先读一下任务板，再生成表格。',
+      lines142: '✓ 142 行', failed1: '✕ 1 个失败',
+      ai2: '测试没过，少了一条任务：循环从第二条开始，所以第一条任务被漏掉了。',
+      ai3: '修好了，测试通过。现在生成 <code>report.xlsx</code>。', toolSum: '▸ 2 次工具调用 · Edit, Run · 全部成功',
+      askH: '想运行一条命令', waited: '等了 4 分钟', allowPy: '本次会话都允许 python3', denyWhy: '拒绝并说明…',
+      askHint: '<kbd>⏎</kbd> 允许 <kbd>esc</kbd> 拒绝', running: '运行中…', running38: '运行中 · 38s', allowedNote: '已允许 · 你在 11:42 批准',
+      meKim: '帮我给新文章起个标题', aiKim: '我想了两个，你选一个：<br>A：“多 agent 终端”<br>B：“一屏管十个 agent”',
+      kimQ: '标题用哪个？A：“多 agent 终端” 还是 B：“一屏管十个 agent”？', kimShort: '标题用哪个？A 还是 B？',
+      kimCard: '“A：多 agent 终端” 还是 “B：一屏管十个 agent”？',
+      meGo: '继续', aiGo: '在跑测试，完成后告诉你结果。',
+      compose: n => `发消息给 ${n}，输入 / 用命令`, send: '发送', newline: '换行', composeCh: n => `发消息给 ${n}`, sendTo: n => `发给 ${n}`,
+      todayAt: '今天 14:05', read: '已读', delivered: '送达 · 未读', groupInfo: '群信息', members: '成员',
+      ch1: '把 v5 侧栏拆成三个 PR，先做状态环', ch2a: '收到。顺序：① 状态环 ② 对话内审批 ③ 侧栏重排。', ch2b: '你先拿 ①。',
+      chFold: '▸ builder 和 reviewer 之间 6 条交接 · 已折叠', chFoldShort: '▸ 6 条交接 · 已折叠',
+      handTo: '交给', handTitle: 'GrokAvatar：状态环和停止变淡',
+      ch3: '通过。一处：工作中的弧在“减弱动态效果”下应该停住。', ch4: '过一下 1512×945 的深色截图', ch4Short: '过一下深色截图',
+      idleOpus: '空闲 · Opus',
+      usage: '用量', usageSub: '订阅额度和今天的花费（按 API 价格估算）', noLimit: '今天不限', quota: '订阅额度', hot80: '超过 80% 变琥珀色',
+      w5: '5 小时', wk: '每周', resets: x => `${x}重置`, r1: '2:10 后', r2: '周四 09:00 ', r3: '3:40 后', r4: '周六 ',
+      spent: '今天的花费', spentK: '共 $6.82 · 昨天 $9.10', agentsN: n => `${n} 个 agent`,
+      outside: 'deck 外的会话', outsideSub: 'Claude 桌面版和其他终端', top: '花得最多的 agent', input182: '182k 输入',
+      budget: 'mad 自己的 agent 预算', budgetK: '每天 $20 · 已用 $6.82',
+      iStatus: '状态', iNow: '现在', iUp: '已运行', iBranch: '分支', iChanges: '改动', iChangesV: '3 个文件 +41 −6', iUnpushed: '未推送', iUnpushedV: '2 个提交',
+      iRebase: '变基到 main', iCost: '花费', iSession: '本会话', iIO: '输入 / 输出', iModel: '模型', iSess: '会话', iDir: '目录', iRename: '改名', iSleep: '休眠', iStop: '停止',
+      palPh: '搜索 agent、群聊、命令…', palQ: '表格', palAgents: 'agent', palCmds: '命令', palCmd1: '新建 worktree 和 agent…', palCmd2: '跳到下一个等你的', palCmd3: '打开用量',
+    },
+    en: {
+      eyebrow: 'mad · UI redesign v5 · for review',
+      h1: 'One window that starts with who is waiting',
+      lede: 'The Mac, iPhone and web windows share one structure: a Waiting section pinned at the top of the sidebar, projects that show their branch and spend, one set of status colors, approvals inside the conversation, and a UI that follows the system language (中文 / English). First a review of today’s UI, then a clickable Mac window and three iPhone screens.',
+      thSys: 'System', thLight: 'Light', thDark: 'Dark',
+      revEyebrow: '1 · Review of the current UI', revH2: 'The web window and the native Mac window on main (de02426)',
+      verdict: '<b>Verdict:</b> the visuals are clean and consistent, but the structure is a chat app, while mad is about managing a group of working agents. What needs you most (approvals, questions) hides on the Overview page or behind a red dot. Branch, changes and spend, which the terminal deck shows, are nearly invisible. Status is told by small grey text, and since the Grok avatars got saturated colors, color means identity, not state. All UI text is hard-coded Chinese. v5 keeps the style and changes the structure, the status signals and the language support.',
+      cap1: 'Web · Overview', cap2: 'Web · agent chat (waiting for approval)', cap3: 'Web · empty group chat', cap4: 'Mac native · group chat',
+      fHead: ['Level', 'Issue', 'What v5 does'], sev: { h: 'High', m: 'Med', l: 'Low' },
+      findings: [
+        ['h', 'Approval is not in the conversation', 'The last line of the agent page, <code class="mono">Run python3 make_table.py</code>, shows only a ○. Allow / Deny exist only on the Overview card, so opening the agent is the one place you cannot approve it.', 'An approval card at the end of the conversation (Allow / Allow for this session / Deny, <kbd>⏎</kbd> <kbd>esc</kbd>); the sidebar’s Waiting section can approve too.'],
+        ['h', 'Waiting has no fixed place', 'You either switch to Overview or look for a red dot in a long list. On the phone a waiting agent scrolls off screen.', 'A Waiting section pinned at the top of the sidebar, oldest first, with its count on the Dock badge and the window title.'],
+        ['h', 'Status colors disagree', 'Overview uses orange/green/blue; the sidebar has only a red dot and grey text. Stopped is red (<code class="mono">--stopped: #dc2626</code>), the same as the waiting dot. A Grok avatar’s color is its identity, not its state.', 'A status ring around the avatar: waiting = amber ring, working = spinning green arc, just finished = blue dot, idle = none, stopped = faded. Red is kept for errors.'],
+        ['m', 'Chinese only', '#125 wrote every UI word in Chinese, with strings inline in Swift and JS. English users and English systems are left out.', 'Chinese and English first: follow the system language, changeable in settings; a String Catalog in Swift and one string table on the web. Tool names, commands and agent text are not translated.'],
+        ['m', 'Project context is lost', 'A project header in the sidebar says only “mad”. Branch, uncommitted changes, unpushed commits and spend exist only in the terminal deck.', 'The header carries <span class="mono">main · 3 changed · ↑2 · $4.17</span>; the agent page gets a Details pane with branch, files, cost and push / PR / merge.'],
+        ['m', 'Overview wastes space and repeats the sidebar', 'Each of the three sections takes a full-width empty box even at 0, and the counts on top repeat the section headers.', 'Renamed Today: one summary sentence, large cards for what waits, compact lists for working and just finished, and an empty section is one grey line.'],
+        ['m', 'The machine name takes the title spot', '“Heng Du’s Ma…” is cut off yet holds the sidebar’s most prominent place; the Mac app also puts a large avatar and the machine name on top.', 'The machine name shrinks to a small pill next to the traffic lights (click to switch); the space goes to a <kbd>⌘K</kbd> search field.'],
+        ['m', 'Your own messages are too heavy', 'Full saturated blue capsules in bold: a run of @ messages turns the screen blue and the agents’ replies look secondary.', 'Your messages get a light blue fill with dark text; @names take that agent’s identity color; “2 unread” becomes small avatar dots.'],
+        ['m', 'Web and native avatars differ', 'The Mac app moved to saturated Grok avatars (#153); the web page still draws the pastel characters.', 'All three use <span class="mono">GrokAvatar</span> and share the test vectors in <span class="mono">character-vectors.json</span>.'],
+        ['l', 'Secondary text contrast is low', '<code class="mono">--text-3 #8e8e98</code> is about 3.1:1 on the sidebar, under 4.5:1; shortcut hints are 10px.', 'Secondary grey becomes #6b6b76 (about 5:1); shortcut hints start at 11px.'],
+        ['l', 'Usage is squeezed into the sidebar', 'The 5-hour and weekly limits and today’s spend share one small line at the foot of the sidebar, hard to read and with nowhere to expand.', 'A separate Usage page: four limit windows, today’s spend by project and agent, and mad’s own budget. The sidebar keeps only your name and a “Usage ›” entry.'],
+        ['l', 'Empty states lead nowhere', 'An empty group chat shows one line, “No one has spoken. @ an agent to wake it.”, centered in a blank pane.', 'An empty group lists its members with “@ wake” buttons; an empty new chat offers recent projects.'],
+      ],
+      macEyebrow: '2 · Mac window (the web window has the same layout)',
+      macH2: 'Clickable: sidebar, tabs, Details, approval, ⌘K, language',
+      macLede: 'Sample data, not real sessions. Click “Make me a table” for the approval card, the <kbd>⌘K</kbd> field for the command palette, the pane icon at top right for Details, and your name at bottom left for Usage. Switch 中文 / English at the top of the page.',
+      phEyebrow: '3 · iPhone', phH2: 'The same structure, rearranged for fingers',
+      phLede: 'Home turns Waiting into cards you can approve on the spot; on the agent page the approval rises from the bottom with full-width buttons; the third screen is fixed to dark to check status colors and your own messages.',
+      phCap1: 'Home: Waiting → Groups → Projects', phCap2: 'Agent: approval rises from the bottom', phCap3: 'Group (dark): @ in identity colors, receipts as avatar dots',
+      rulesEyebrow: '4 · Rules', rulesH2: 'All three apps follow these',
+      rule1H: 'Status: one set of colors, one place', rule1P: 'Avatar color = identity (a hash of the id, never changes); the ring = state. Red only marks failed tool calls and errors.',
+      rule2H: 'Type sizes (Mac / iPhone)',
+      typeRows: [['Today', '22 / 30 · title'], ['Make me a table', '15 / 17 · page header'], ['Sidebar token stats', '13.5 / 16 · row name, body'], ['Bash · go test ./...', '12 / 13 · second line'], ['42% · 2:10', '11 · smallest, digits only']],
+      rule3H: 'Keep, language, and not doing',
+      keep: [
+        'Keep: Grok avatars, no title bar, one message column, ⌘\\ to toggle the sidebar, a 260–420pt sidebar.',
+        'Only two tabs, Chat and Changes; the terminal goes. For the rare case of claude’s own menus (such as /config), ⋯ → Open in terminal. A new Details pane, closed by default.',
+        'Language: Chinese and English, following the system, changeable in settings. Each is written for its readers, not translated word by word (“在等你” / “Waiting”).',
+        'Not translated: tool names (Read, Bash), claude / codex, commands, anything an agent wrote. Server labels are still translated by an act’s verb and kind, never by their English text.',
+        'Not doing: a new palette or typeface; a tab bar; turning Overview into a dashboard.',
+      ],
+      planH: 'Order of work (one PR per step, each through design acceptance)',
+      plan: [
+        ['Status ring and colors', 'Add the ring, fade stopped agents, raise secondary grey to 4.5:1. All three apps at once: the largest effect for the least risk.', 'GrokAvatar.swift · characters.js · style.css'],
+        ['String tables and English', 'Move the hard-coded Chinese into string tables (Localizable.xcstrings in Swift, i18n.js on the web), add English, follow the system language. Every later PR only adds strings to the tables.', 'MadUI · MadShell · web/i18n.js'],
+        ['Approval in the conversation', 'The card at the end of the agent page and the iPhone’s bottom sheet, on the Overview’s allow / deny calls.', 'ConversationView.swift · app.js · actions.js'],
+        ['Sidebar layout', 'Waiting on top, projects with git and spend, the machine pill, the ⌘K field, only your name at the foot.', 'MacSidebar.swift · HomeSidebar.swift · app.js'],
+        ['Overview → Today, plus Usage', 'One summary sentence, cards for what waits, compact working / finished lists, one line for an empty section; Usage as its own page (native, replacing the web one).', 'HomeView.swift · inbox.js · usage.js'],
+        ['Details pane and group chat', 'Branch / files / cost / push; light own messages, @ identity colors, avatar receipts; Grok avatars on the web.', 'MacShell.swift · ChannelBubbleView.swift · bus.js'],
+      ],
+      st: { wait: 'Waiting', work: 'Working', done: 'Done', idle: 'Idle', stop: 'Stopped' },
+      stDesc: { wait: 'Amber ring; pinned under Waiting', work: 'Spinning green arc (still under Reduce Motion)', done: 'Blue dot, cleared once seen', idle: 'No ring', stop: 'Faded, eyes shut; never red' },
+      machine: 'Heng’s MacBook Pro ▾', search: 'Search or jump', usageEntry: 'Usage ›',
+      min: n => `${n} min`, minAgo: n => `${n} min ago`,
+      today: 'Today', todaySub: w => `${w} waiting · 2 working · 1 done`, pending: 'Waiting', allClear: 'All clear',
+      allow: 'Allow', deny: 'Deny', reply: 'Reply', replyDots: 'Reply…', groups: 'Groups', changed: n => `${n} changed`,
+      date: 'Mon, Nov 9', newChat: 'New chat', board: 'Board',
+      summary: w => `<b style="color:var(--wait)">${w} waiting for you</b>, <b style="color:var(--work)">2 working</b>, <b style="color:var(--done)">1 just finished</b>. $6.82 spent today.`,
+      blkWait: 'Waiting for you', blkWaitK: 'Oldest first · <kbd>⌥N</kbd> next', blkWork: 'Working', blkDone: 'Just finished',
+      whereTable: 'mad · claude · wants to run a command', whereKim: 'blog · pi · asked a question',
+      allowSession: 'Allow for this session', openChat: 'Open chat', interrupt: 'Interrupt', seeDiff: 'View changes',
+      ideasLine: 'Wrote docs/ideas.md, 3 files changed',
+      keys: ['Next waiting', 'Jump', 'Sidebar', 'Details'],
+      tabChat: 'Chat', tabDiff: 'Changes', details: 'Details ⌘I', more: 'More · Open in terminal',
+      files: n => `${n} files`, unpushed: '↑2 unpushed', lazygit: 'Open in lazygit', push: 'Push', openPR: 'Open PR',
+      meTable: 'Make me a table summarizing this week’s tasks', ai1: 'Sure. I’ll read the task board first, then build the table.',
+      lines142: '✓ 142 lines', failed1: '✕ 1 failed',
+      ai2: 'A test failed and one task is missing: the loop starts at the second task, so the first one is skipped.',
+      ai3: 'Fixed, the tests pass. Now generating <code>report.xlsx</code>.', toolSum: '▸ 2 tool calls · Edit, Run · all succeeded',
+      askH: 'Wants to run a command', waited: 'Waiting 4 min', allowPy: 'Allow python3 for this session', denyWhy: 'Deny and explain…',
+      askHint: '<kbd>⏎</kbd> allow <kbd>esc</kbd> deny', running: 'Running…', running38: 'Running · 38s', allowedNote: 'Allowed · you approved at 11:42',
+      meKim: 'Suggest a title for the new post', aiKim: 'Two ideas, pick one:<br>A: “A terminal for many agents”<br>B: “Ten agents on one screen”',
+      kimQ: 'Which title? A: “A terminal for many agents” or B: “Ten agents on one screen”?', kimShort: 'Which title, A or B?',
+      kimCard: '“A: A terminal for many agents” or “B: Ten agents on one screen”?',
+      meGo: 'Go on', aiGo: 'Running the tests; I’ll report when they finish.',
+      compose: n => `Message ${n}, type / for commands`, send: 'send', newline: 'newline', composeCh: n => `Message ${n}`, sendTo: n => `To ${n}`,
+      todayAt: 'Today 14:05', read: 'Read', delivered: 'Delivered · unread', groupInfo: 'Group info', members: 'Members',
+      ch1: 'split the v5 sidebar into three PRs, status ring first', ch2a: 'Got it. Order: ① status ring ② approval in chat ③ sidebar.', ch2b: 'take ① first.',
+      chFold: '▸ 6 handoffs between builder and reviewer · folded', chFoldShort: '▸ 6 handoffs · folded',
+      handTo: 'Handed to', handTitle: 'GrokAvatar: status ring, stopped fades',
+      ch3: 'Approved. One note: the working arc should stop under Reduce Motion.', ch4: 'check the 1512×945 dark screenshots', ch4Short: 'check the dark screenshots',
+      idleOpus: 'Idle · Opus',
+      usage: 'Usage', usageSub: 'Subscription limits and today’s spend (at API prices)', noLimit: 'No limit today', quota: 'Subscription limits', hot80: 'Amber above 80%',
+      w5: '5-hour', wk: 'Weekly', resets: x => `Resets ${x}`, r1: 'in 2:10', r2: 'Thu 09:00', r3: 'in 3:40', r4: 'Sat',
+      spent: 'Spent today', spentK: '$6.82 total · yesterday $9.10', agentsN: n => `${n} agent${n === 1 ? '' : 's'}`,
+      outside: 'Sessions outside the deck', outsideSub: 'Claude desktop and other terminals', top: 'Top spenders', input182: '182k input',
+      budget: 'mad’s own agent budget', budgetK: '$20 a day · $6.82 used',
+      iStatus: 'Status', iNow: 'Now', iUp: 'Running for', iBranch: 'Branch', iChanges: 'Changes', iChangesV: '3 files +41 −6', iUnpushed: 'Unpushed', iUnpushedV: '2 commits',
+      iRebase: 'Rebase on main', iCost: 'Cost', iSession: 'This session', iIO: 'In / out', iModel: 'Model', iSess: 'Session', iDir: 'Directory', iRename: 'Rename', iSleep: 'Sleep', iStop: 'Stop',
+      palPh: 'Search agents, groups, commands…', palQ: 'table', palAgents: 'Agents', palCmds: 'Commands', palCmd1: 'New worktree and agent…', palCmd2: 'Jump to next waiting', palCmd3: 'Open Usage',
+    },
+  };
+  let lang = 'zh', S = T.zh;
+  const L = x => (x && typeof x === 'object') ? x[lang] : x;
+
+  // ================= theme & language =================
+  const root = document.documentElement;
+  const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
+  const setTheme = (t) => {
+    if (t) root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.th === t)));
+    store('mad-v5-theme', t);
+  };
+  document.querySelectorAll('#themeSeg button').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.th)));
+  const setLang = (l) => {
+    lang = l === 'en' ? 'en' : 'zh'; S = T[lang]; root.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    document.querySelectorAll('#langSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+    store('mad-v5-lang', lang);
+    renderAll();
+  };
+  document.querySelectorAll('#langSeg button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+
+  // ================= avatars =================
+  const COLORS = ['#8a3ffc', '#ff5a1f', '#1f66ff', '#ff4d8d', '#1fbf75', '#12b5d6', '#f5b324', '#6a5cff'];
+  function av(c, shape, state, size) {
+    size = size || 32;
+    const col = COLORS[c % 8], stop = state === 'stop';
+    const body = shape % 2 === 0 ? `<circle cx="50" cy="50" r="40" fill="${col}"/>` : `<rect x="12" y="12" width="76" height="76" rx="26" fill="${col}" transform="rotate(-12 50 50)"/>`;
+    const eyes = [36, 60].map(x => stop
+      ? `<rect x="${x - 7}" y="44" width="14" height="5" rx="2.5" fill="#000" fill-opacity=".75"/>`
+      : `<rect x="${x - 3.5}" y="34" width="7" height="18" rx="3.5" fill="#000" fill-opacity=".78" transform="rotate(-16 ${x} 43)"/>`).join('');
+    let ring = '';
+    if (state === 'wait') ring = `<circle cx="50" cy="50" r="48" fill="none" stroke="var(--wait)" stroke-width="5"/>`;
+    if (state === 'work') ring = `<circle cx="50" cy="50" r="48" fill="none" stroke="var(--line-2)" stroke-width="4"/><circle class="ring-spin" cx="50" cy="50" r="48" fill="none" stroke="var(--work)" stroke-width="5" stroke-linecap="round" stroke-dasharray="80 222"/>`;
+    const badge = state === 'done' ? `<circle cx="86" cy="86" r="13" fill="var(--done)" stroke="var(--paper)" stroke-width="5"/>` : '';
+    const inner = state === 'wait' || state === 'work' ? `<g transform="translate(9 9) scale(.82)">${body}${eyes}</g>` : body + eyes;
+    return `<span class="av" role="img" aria-label="${S.st[state] || ''}" style="width:${size}px;height:${size}px;opacity:${stop ? .45 : 1}"><svg width="${size}" height="${size}" viewBox="0 0 100 100">${ring}${inner}${badge}</svg></span>`;
+  }
+  function tile(members, size) {
+    size = size || 32;
+    const pos = [[0, 0], [.48, 0], [.24, .46]];
+    return `<span class="av" style="width:${size}px;height:${size}px;border-radius:${size * .3}px;background:var(--raise)">` +
+      members.slice(0, 3).map((x, i) => `<span style="position:absolute;left:${pos[i][0] * size + size * .04}px;top:${pos[i][1] * size + size * .04}px">${av(x.c, x.s, x.st === 'work' ? 'idle' : x.st, size * .48)}</span>`).join('') + `</span>`;
+  }
+
+  // ================= sample data (examples, not real sessions) =================
+  const A = {
+    table:   { name: { zh: '给我绘制一个表格', en: 'Make me a table' }, kind: 'claude', proj: 'mad', st: 'wait', c: 2, s: 1, sub: { zh: '想运行 <b>python3 make_table.py</b>', en: 'Wants to run <b>python3 make_table.py</b>' }, since: 4, cost: '$0.84' },
+    tok:     { name: { zh: 'Sidebar token 统计', en: 'Sidebar token stats' }, kind: 'claude', proj: 'mad', st: 'work', c: 5, s: 0, sub: '<b>Bash</b> go test ./internal/ui/...', since: 6, cost: '$2.31' },
+    builder: { name: 'builder', kind: 'claude', proj: 'mad', st: 'work', c: 3, s: 1, sub: '<b>Edit</b> MacSidebar.swift', since: 11, cost: '$1.02' },
+    ideas:   { name: 'Mad ideas', kind: 'claude', proj: 'mad', st: 'done', c: 4, s: 0, sub: { zh: '完成 · 改了 3 个文件', en: 'Done · 3 files changed' }, since: 2, cost: '$0.66' },
+    codex:   { name: { zh: 'codex 评审', en: 'codex review' }, kind: 'codex', proj: 'mad', st: 'idle', c: 7, s: 0, sub: { zh: '空闲 · 12k tokens', en: 'Idle · 12k tokens' }, cost: '' },
+    release: { name: { zh: '发布助手', en: 'Release helper' }, kind: 'claude', proj: 'mad', st: 'stop', c: 0, s: 1, sub: { zh: '已停止 · 昨天', en: 'Stopped · yesterday' }, cost: '$0.12' },
+    notes:   { name: 'notes', kind: 'claude', proj: 'blog', st: 'idle', c: 6, s: 1, sub: { zh: '空闲', en: 'Idle' }, cost: '$0.20' },
+    kim:     { name: 'kim', kind: 'pi', proj: 'blog', st: 'wait', c: 1, s: 0, sub: { zh: '问你：标题用哪个？', en: 'Asks: which title?' }, since: 1, cost: '' },
+  };
+  const M = { architect: { c: 1, s: 0, st: 'work' }, builder: { c: 3, s: 1, st: 'work' }, reviewer: { c: 4, s: 0, st: 'idle' }, designer: { c: 5, s: 1, st: 'idle' } };
+  const CH = {
+    ios:   { name: 'ios', sub: { zh: 'architect：第 3 条也上线了', en: 'architect: #3 is live too' }, members: [M.architect, M.builder, M.reviewer, M.designer], unread: 3, n: { zh: '4 位成员 · 2 个在工作', en: '4 members · 2 working' } },
+    five:  { name: 'five', sub: { zh: 'kim：五个成员的群', en: 'kim: a group of five' }, members: [{ c: 1, s: 0 }, { c: 6, s: 1 }, { c: 2, s: 0 }], unread: 0, n: { zh: '5 位成员', en: '5 members' } },
+    shots: { name: 'shots', sub: { zh: '发布助手：[图片]', en: 'Release helper: [image]' }, members: [{ c: 0, s: 1 }], unread: 0, n: { zh: '2 位成员', en: '2 members' } },
+  };
+  const PROJ = [
+    { name: 'mad', branch: 'main', changed: 3, ahead: '↑2', cost: '$4.17', ids: ['tok', 'builder', 'ideas', 'codex', 'release'] },
+    { name: 'blog', branch: 'draft', changed: 1, ahead: '', cost: '$0.20', ids: ['notes'] },
+  ];
+
+  let cur = { type: 'today' }, tab = 'chat', inspOpen = false, approved = false;
+
+  // ================= sidebar =================
+  const sbList = document.getElementById('sbList');
+  const ICON_SIDE = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg>`;
+  const ICON_MORE = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>`;
+  const ICON_RUN = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m2 4 4 4-4 4M8 12h6"/></svg>`;
+  const ICON_EYE = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></svg>`;
+  const projMeta = p => [`<span style="font-family:var(--mono)">${p.branch}</span>`, S.changed(p.changed), p.ahead, p.cost].filter(Boolean).map(m => m.startsWith('<') ? m : `<span>${m}</span>`).join('');
+
+  function sbRow(id) {
+    const a = A[id], on = cur.type === 'agent' && cur.id === id;
+    const end = a.st === 'work' ? `<span>${S.min(a.since)}</span>` : a.st === 'done' ? `<span class="pill done">${S.st.done}</span>` : '';
+    return `<button class="row ${a.st === 'stop' ? 'dim' : ''}" type="button" data-go="agent:${id}" aria-current="${on}">${av(a.c, a.s, a.st, 32)}<span class="txt"><span class="nm">${L(a.name)}</span><span class="sub">${L(a.sub)}</span></span><span class="end">${end}</span></button>`;
+  }
+  function renderSide() {
+    const waits = Object.entries(A).filter(([, a]) => a.st === 'wait');
+    const shown = waits.filter(([id]) => !(id === 'table' && approved));
+    let h = `<button class="row" type="button" data-go="today" aria-current="${cur.type === 'today'}" style="margin-top:2px"><span class="av" style="width:32px;height:32px;border-radius:10px;background:var(--raise);display:grid;place-items:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></span><span class="txt"><span class="nm">${S.today}</span><span class="sub">${S.todaySub(shown.length)}</span></span></button>`;
+    h += `<div class="grp att"><span class="dot wait"></span>${S.pending} <span class="n">${shown.length}</span><span class="meta"><kbd>⌥N</kbd></span></div><div class="stack">`;
+    for (const [id, a] of shown) {
+      const cmd = id === 'table' ? '$ python3 make_table.py --out report.xlsx' : S.kimCard;
+      const acts = id === 'table' ? `<button class="btn sm pri" type="button" data-approve>${S.allow}</button><button class="btn sm" type="button">${S.deny}</button>` : `<button class="btn sm" type="button" data-go="agent:${id}">${S.reply}</button>`;
+      h += `<div class="att-card" data-go="agent:${id}"><div style="display:flex;gap:8px;align-items:center">${av(a.c, a.s, 'wait', 24)}<span style="min-width:0;flex:1;font-weight:550;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${L(a.name)}</span><span style="font-size:11px;color:var(--fg-3)">${S.min(a.since)}</span></div><div class="cmd">${cmd}</div><div class="acts">${acts}<span style="margin-left:auto;font-size:11px;color:var(--fg-3)">${a.proj}</span></div></div>`;
+    }
+    if (!shown.length) h += `<div class="quiet">${S.allClear}</div>`;
+    h += `</div><div class="grp">${S.groups}<span class="meta">＋</span></div>`;
+    for (const [id, c] of Object.entries(CH)) {
+      h += `<button class="row" type="button" data-go="ch:${id}" aria-current="${cur.type === 'ch' && cur.id === id}">${tile(c.members, 32)}<span class="txt"><span class="nm">${c.name}</span><span class="sub">${L(c.sub)}</span></span><span class="end">${c.unread ? `<span class="pill" style="background:var(--accent);color:var(--paper)">${c.unread}</span>` : ''}</span></button>`;
+    }
+    for (const p of PROJ) h += `<div class="grp">${p.name}<span class="meta">${projMeta(p)}</span></div>` + p.ids.map(sbRow).join('');
+    sbList.innerHTML = h;
+  }
+
+  // ================= main views =================
+  const main = document.getElementById('main');
+  const composer = (ph, a) => `<div class="comp"><div class="comp-box"><div class="ph">${ph}</div><div class="comp-row"><span>＋</span>${a ? `<span class="chip">${av(a.c, a.s, a.st, 18)}${a.kind} · ${a.proj} / main</span>` : ''}<span style="margin-left:auto;display:flex;gap:4px;align-items:center"><kbd>⏎</kbd> ${S.send} <kbd>⇧⏎</kbd> ${S.newline}</span><span class="send" style="margin-left:8px">↑</span></div></div></div>`;
+
+  function viewToday() {
+    const w = approved ? 1 : 2;
+    const waitTable = approved ? '' : `
+      <div class="task wait">${av(2, 1, 'wait', 36)}<div class="tt"><b>${L(A.table.name)}</b><span class="where">${S.whereTable}</span>
+        <div class="cmd">$ python3 make_table.py --out report.xlsx</div>
+        <div class="acts"><button class="btn pri" type="button" data-approve>${S.allow}</button><button class="btn" type="button">${S.allowSession}</button><button class="btn" type="button">${S.deny}</button><button class="btn ghost" type="button" data-go="agent:table">${S.openChat}</button></div></div>
+        <div class="side">${S.min(4)}<span>$0.84</span></div></div>`;
+    return `<div class="mh"><div class="t"><b>${S.today}</b><span>${S.date}</span></div><div class="right"><button class="btn" type="button">${S.newChat} <kbd>⌘N</kbd></button><button class="btn" type="button">${S.board} <kbd>⌥B</kbd></button></div></div>
+    <div class="body"><div class="col">
+      <div class="today-h"><p>${S.summary(w)}</p></div>
+      <div class="block"><div class="block-h"><span class="dot wait"></span>${S.blkWait}<span class="k">${S.blkWaitK}</span></div>
+        ${waitTable}
+        <div class="task wait">${av(1, 0, 'wait', 36)}<div class="tt"><b>kim</b><span class="where">${S.whereKim}</span>
+          <div style="font-size:13px;margin-top:4px">${S.kimQ}</div>
+          <div class="acts"><button class="btn" type="button">A</button><button class="btn" type="button">B</button><button class="btn ghost" type="button" data-go="agent:kim">${S.replyDots}</button></div></div>
+          <div class="side">${S.min(1)}</div></div>
+      </div>
+      <div class="block"><div class="block-h"><span class="dot work"></span>${S.blkWork}</div>
+        <div class="lines">
+          <div class="line" data-go="agent:tok">${av(5, 0, 'work', 28)}<span class="tt"><b>${L(A.tok.name)}</b><span>Bash · <code>go test ./internal/ui/...</code></span></span><span class="num">${S.min(6)} · $2.31</span><button class="btn sm" type="button">${S.interrupt}</button></div>
+          <div class="line" data-go="agent:builder">${av(3, 1, 'work', 28)}<span class="tt"><b>builder</b><span>#ios · Edit · <code>MacSidebar.swift</code></span></span><span class="num">${S.min(11)} · $1.02</span><button class="btn sm" type="button">${S.interrupt}</button></div>
+        </div></div>
+      <div class="block"><div class="block-h"><span class="dot done"></span>${S.blkDone}</div>
+        <div class="lines">
+          <div class="line" data-go="agent:ideas">${av(4, 0, 'done', 28)}<span class="tt"><b>Mad ideas</b><span>${S.ideasLine} <span style="color:var(--add-fg)">+84</span> <span style="color:var(--del-fg)">−12</span></span></span><span class="num">${S.minAgo(2)}</span><button class="btn sm" type="button">${S.seeDiff}</button></div>
+        </div></div>
+      <div class="keys"><span><kbd>⌥N</kbd> ${S.keys[0]}</span><span><kbd>⌘K</kbd> ${S.keys[1]}</span><span><kbd>⌘\\</kbd> ${S.keys[2]}</span><span><kbd>⌘I</kbd> ${S.keys[3]}</span></div>
+    </div></div>`;
+  }
+
+  function viewAgent(id) {
+    const a = A[id], nm = L(a.name);
+    const head = `<div class="mh">${av(a.c, a.s, approved && id === 'table' ? 'work' : a.st, 34)}<div class="t"><b>${nm}</b><span>${a.kind} · <span class="mono">${a.proj} / main</span>${a.cost ? ' · ' + a.cost : ''}</span></div>
+      <div class="right"><div class="tabs" role="tablist">
+        <button role="tab" type="button" data-tab="chat" aria-selected="${tab === 'chat'}">${S.tabChat}</button>
+        <button role="tab" type="button" data-tab="diff" aria-selected="${tab === 'diff'}">${S.tabDiff} <span class="c">3</span></button></div>
+        <button class="icon-btn" type="button" data-insp aria-pressed="${inspOpen}" aria-label="${S.details}" title="${S.details}">${ICON_SIDE}</button><button class="icon-btn" type="button" aria-label="${S.more}" title="${S.more}">${ICON_MORE}</button></div></div>`;
+    let body;
+    if (tab === 'diff') {
+      body = `<div class="col" style="max-width:900px">
+        <div class="git-bar"><span class="mono">main</span><span>${S.files(3)}</span><span style="color:var(--add-fg)">+41</span><span style="color:var(--del-fg)">−6</span><span>·</span><span>${S.unpushed}</span><span class="sp"></span><button class="btn" type="button">${S.lazygit}</button><button class="btn" type="button">${S.push}</button><button class="btn pri" type="button">${S.openPR}</button></div>
+        <div class="diff-files">
+          <div class="df" aria-current="true"><span class="p">internal/board/summary.go</span><span class="a">+2</span><span class="x">−1</span></div>
+          <div class="df"><span class="p">internal/board/summary_test.go</span><span class="a">+18</span><span class="x">−0</span></div>
+          <div class="df"><span class="p">make_table.py</span><span class="a">+21</span><span class="x">−5</span></div>
+        </div>
+        <div class="hunk">
+          <div class="hh">@@ -40,7 +40,8 @@ func Summary(tasks []Task) map[string][]Task {</div>
+          <div>  	out := map[string][]Task{}</div>
+          <div class="del">- 	for _, t := range tasks[1:] { // skips the first task</div>
+          <div class="add">+ 	for _, t := range tasks {</div>
+          <div>  		out[t.Owner] = append(out[t.Owner], t)</div>
+          <div>  	}</div>
+          <div class="add">+ 	// every task counts, the first one too</div>
+          <div>  	return out</div>
+        </div></div>`;
+    } else if (id === 'table') {
+      const ask = approved
+        ? `<div class="tools"><div class="tool">${ICON_RUN}<b>Run</b><span class="arg">python3 make_table.py --out report.xlsx</span><span class="r" style="color:var(--work)">${S.running}</span></div></div><div class="done-note">${S.allowedNote}</div>`
+        : `<div class="ask"><div class="ask-h">${av(2, 1, 'wait', 18)}${S.askH}<span>${S.waited}</span></div>
+            <pre>$ python3 make_table.py --out report.xlsx</pre>
+            <div class="acts"><button class="btn pri" type="button" data-approve>${S.allow}</button><button class="btn" type="button">${S.allowPy}</button><button class="btn" type="button">${S.denyWhy}</button><span class="hint">${S.askHint}</span></div></div>`;
+      body = `<div class="col">
+        <div class="msg-me">${S.meTable}</div>
+        <div class="msg-ai"><p>${S.ai1}</p></div>
+        <div class="tools">
+          <div class="tool">${ICON_EYE}<b>Read</b><span class="arg">board.json</span><span class="r ok">${S.lines142}</span></div>
+          <div class="tool">${ICON_RUN}<b>Run</b><span class="arg">go test ./internal/board/...</span><span class="r bad">${S.failed1}</span></div>
+        </div>
+        <div class="msg-ai"><p>${S.ai2}</p>
+          <div class="hunk"><div class="del">- for _, t := range tasks[1:] {</div><div class="add">+ for _, t := range tasks {</div></div>
+          <p>${S.ai3}</p></div>
+        <div class="tool-sum">${S.toolSum}</div>
+        ${ask}
+      </div>`;
+    } else {
+      body = `<div class="col"><div class="msg-me">${id === 'kim' ? S.meKim : S.meGo}</div><div class="msg-ai"><p>${id === 'kim' ? S.aiKim : S.aiGo}</p></div>
+      ${a.st === 'work' ? `<div class="tools"><div class="tool">${ICON_RUN}<b>Bash</b><span class="arg">go test ./internal/ui/...</span><span class="r" style="color:var(--work)">${S.running38}</span></div></div>` : ''}</div>`;
+    }
+    return head + `<div class="body">${body}</div>` + (tab === 'chat' ? composer(S.compose(nm), a) : '<div></div>');
+  }
+
+  const atTag = (n, i, k) => `<span class="at" style="color:${COLORS[i]};background:color-mix(in srgb, ${COLORS[i]} ${k || 12}%, transparent)">@${n}</span>`;
+  function viewChannel(id) {
+    const c = CH[id];
+    const rc = ms => `<span class="rcpt">${ms.map(m => av(m.c, m.s, 'idle', 14)).join('')}<span>${S.read}</span></span>`;
+    return `<div class="mh">${tile(c.members, 34)}<div class="t"><b>${c.name}</b><span>${L(c.n)}</span></div>
+      <div class="right"><span class="members">${c.members.map(m => av(m.c, m.s, m.st || 'idle', 24)).join('')}</span><button class="icon-btn" type="button" aria-label="${S.groupInfo}" title="${S.groupInfo}">${ICON_SIDE}</button></div></div>
+      <div class="body"><div class="col">
+        <div class="daysep">${S.todayAt}</div>
+        <div class="mine-wrap"><div class="msg-me">${atTag('architect', 1)} ${atTag('builder', 3)} ${S.ch1}</div>${rc([M.architect, M.builder])}</div>
+        <div class="cmsg">${av(1, 0, 'idle', 30)}<div><div class="who"><b>architect</b>14:06</div><div class="txt">${S.ch2a} ${atTag('builder', 3)} ${S.ch2b}</div></div></div>
+        <div class="fold">${S.chFold}</div>
+        <div class="cmsg">${av(3, 1, 'work', 30)}<div style="display:grid;gap:6px"><div class="who"><b>builder</b>14:31</div>
+          <div class="handoff"><div class="h">${S.handTo} ${av(4, 0, 'idle', 14)} reviewer · PR</div><div style="font-weight:550">${S.handTitle}</div><div style="font-size:12px;color:var(--fg-3)" class="mono">ios/MadUI/Sources/MadUI/GrokAvatar.swift · +64 −12</div></div></div></div>
+        <div class="cmsg">${av(4, 0, 'idle', 30)}<div><div class="who"><b>reviewer</b>14:40</div><div class="txt">${S.ch3}</div></div></div>
+        <div class="daysep">14:50</div>
+        <div class="mine-wrap"><div class="msg-me">${atTag('designer', 5)} ${S.ch4}</div><span class="rcpt">${S.delivered}</span></div>
+      </div></div>
+      <div class="comp"><div class="comp-box" style="position:relative">
+        <div class="mention-pop"><div class="grp" style="padding:4px 8px">${S.members}</div>
+          <div class="row">${av(5, 1, 'idle', 24)}<span class="txt"><span class="nm">designer</span><span class="sub">${S.idleOpus}</span></span></div>
+          <div class="row" style="background:var(--raise)">${av(1, 0, 'work', 24)}<span class="txt"><span class="nm">architect</span><span class="sub">${S.st.work}</span></span></div></div>
+        <div class="ph" style="color:var(--fg)">@a<span style="border-left:1.5px solid var(--accent);margin-left:1px"></span></div>
+        <div class="comp-row"><span>＋</span><span class="chip" style="padding-left:8px">${S.sendTo(c.name)}</span><span class="send" style="margin-left:auto;background:var(--accent);color:#fff">↑</span></div></div></div>`;
+  }
+
+  function viewUsage() {
+    const q = (name, win, pct, reset, hot) => `<div class="q"><div class="top2"><span>${name} · ${win}</span><span>${S.resets(reset)}</span></div><div class="big">${pct}%</div><div class="qbar"><i class="${hot ? 'hot' : ''}" style="width:${pct}%"></i></div></div>`;
+    const ln = (lead, name, sub, num) => `<div class="line">${lead}<span class="tt"><b>${name}</b><span>${sub}</span></span><span class="num">${num}</span><span></span></div>`;
+    const box = `<span class="av" style="width:28px;height:28px;border-radius:8px;background:var(--raise)"></span>`;
+    return `<div class="mh"><div class="t"><b>${S.usage}</b><span>${S.usageSub}</span></div><div class="right"><button class="btn" type="button">${S.noLimit}</button></div></div>
+    <div class="body"><div class="col">
+      <div class="block"><div class="block-h">${S.quota}<span class="k">${S.hot80}</span></div>
+        <div class="quota">${q('Claude', S.w5, 42, S.r1, false)}${q('Claude', S.wk, 83, S.r2, true)}${q('Codex', S.w5, 17, S.r3, false)}${q('Codex', S.wk, 36, S.r4, false)}</div></div>
+      <div class="block"><div class="block-h">${S.spent}<span class="k">${S.spentK}</span></div>
+        <div class="lines">${ln(box, 'mad', `<code>main</code> · ${S.agentsN(5)}`, '$4.17')}${ln(box, S.outside, S.outsideSub, '$2.45')}${ln(box, 'blog', `<code>draft</code> · ${S.agentsN(1)}`, '$0.20')}</div></div>
+      <div class="block"><div class="block-h">${S.top}</div>
+        <div class="lines">${ln(av(5, 0, 'work', 28), L(A.tok.name), `mad · Opus · ${S.input182}`, '$2.31')}${ln(av(3, 1, 'work', 28), 'builder', 'mad · Sonnet', '$1.02')}${ln(av(2, 1, 'wait', 28), L(A.table.name), 'mad · Opus', '$0.84')}</div></div>
+      <div class="block"><div class="block-h">${S.budget}<span class="k">${S.budgetK}</span></div>
+        <div class="qbar"><i style="width:34%"></i></div></div>
+    </div></div>`;
+  }
+
+  function renderInsp() {
+    const a = cur.type === 'agent' ? A[cur.id] : null;
+    document.getElementById('insp').classList.toggle('open', !!(a && inspOpen));
+    if (!a) return;
+    const r = (k, v, cls) => `<div class="r"><span>${k}</span><span${cls ? ` class="${cls}"` : ''}>${v}</span></div>`;
+    document.getElementById('inspIn').innerHTML = `
+      <div class="kv"><h4>${S.iStatus}</h4>${r(S.iNow, S.st[a.st])}${r(S.iUp, S.min(23))}</div>
+      <div class="kv"><h4>git</h4>${r(S.iBranch, 'main', 'mono')}${r(S.iChanges, S.iChangesV)}${r(S.iUnpushed, S.iUnpushedV)}
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button">${S.push}</button><button class="btn sm" type="button">${S.openPR}</button><button class="btn sm" type="button">${S.iRebase}</button></div></div>
+      <div class="kv"><h4>${S.iCost}</h4>${r(S.iSession, a.cost || '—')}${r(S.iIO, '182k / 9.4k')}${r(S.iModel, 'Opus')}</div>
+      <div class="kv"><h4>${S.iSess}</h4>${r('id', '6625f15d', 'mono')}${r(S.iDir, '~/src/mad', 'mono')}
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button">${S.iRename}</button><button class="btn sm" type="button">${S.iSleep}</button><button class="btn sm" type="button" style="color:var(--danger)">${S.iStop}</button></div></div>`;
+  }
+
+  function render() {
+    renderSide();
+    document.getElementById('meRow').setAttribute('aria-current', String(cur.type === 'usage'));
+    main.innerHTML = cur.type === 'today' ? viewToday() : cur.type === 'usage' ? viewUsage() : cur.type === 'agent' ? viewAgent(cur.id) : viewChannel(cur.id);
+    renderInsp();
+  }
+
+  // ================= phones =================
+  function renderPhones() {
+    const sb = `<div class="island"></div><div class="status-bar"><span>11:42</span><span style="font-size:13px">●●● ▮</span></div>`;
+    const round = `background:var(--raise);border-radius:50%`;
+    document.getElementById('ph1').innerHTML = sb + `
+      <div class="ph-head"><div class="ttl"><h3>mad</h3><span class="ic"><span class="icon-btn" style="${round}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg></span><span class="icon-btn" style="${round}">＋</span></span></div>
+        <span class="mach" style="justify-self:start">${S.machine}</span></div>
+      <div class="ph-body">
+        <div class="grp att"><span class="dot wait"></span>${S.pending} 2</div>
+        <div class="ph-att">
+          <div class="att-card"><div style="display:flex;gap:8px;align-items:center">${av(2, 1, 'wait', 28)}<b style="flex:1;font-weight:600;font-size:15px">${L(A.table.name)}</b><span style="font-size:12px;color:var(--fg-3)">${S.min(4)}</span></div>
+            <div class="cmd">$ python3 make_table.py --out report.xlsx</div>
+            <div class="acts"><button class="btn pri" type="button">${S.allow}</button><button class="btn" type="button">${S.deny}</button><span style="margin-left:auto;font-size:12px;color:var(--fg-3)">mad</span></div></div>
+          <div class="att-card"><div style="display:flex;gap:8px;align-items:center">${av(1, 0, 'wait', 28)}<b style="flex:1;font-weight:600;font-size:15px">kim</b><span style="font-size:12px;color:var(--fg-3)">${S.min(1)}</span></div>
+            <div style="font-size:14px">${S.kimShort}</div></div>
+        </div>
+        <div class="grp">${S.groups}</div>
+        <div class="row">${tile(CH.ios.members, 44)}<span class="txt"><span class="nm">ios</span><span class="sub">${L(CH.ios.sub)}</span></span><span class="end"><span class="pill" style="background:var(--accent);color:var(--paper)">3</span></span></div>
+        <div class="row">${tile(CH.five.members, 44)}<span class="txt"><span class="nm">five</span><span class="sub">${L(CH.five.sub)}</span></span></div>
+        <div class="grp">mad<span class="meta">${projMeta(PROJ[0])}</span></div>
+        <div class="row">${av(5, 0, 'work', 44)}<span class="txt"><span class="nm">${L(A.tok.name)}</span><span class="sub"><b>Bash</b> go test ./internal/ui/...</span></span><span class="end">${S.min(6)}</span></div>
+        <div class="row">${av(4, 0, 'done', 44)}<span class="txt"><span class="nm">Mad ideas</span><span class="sub">${L(A.ideas.sub)}</span></span></div>
+      </div>
+      <div class="ph-foot"><div class="row" style="padding:4px 2px"><span class="me-pic">H</span><span class="txt"><span class="nm" style="font-size:15px">Heng Du</span></span><span class="end" style="font-size:13px"><span>${S.usageEntry}</span></span></div></div>`;
+
+    document.getElementById('ph2').innerHTML = sb + `
+      <div class="ph-nav"><span class="back">‹</span>${av(2, 1, 'wait', 34)}<span class="t"><b>${L(A.table.name)}</b><span>claude · mad / main · $0.84</span></span><span class="icon-btn" style="margin-left:auto">${ICON_MORE}</span></div>
+      <div class="ph-conv">
+        <div class="ph-tabs" style="padding:0"><div class="tabs"><button type="button" aria-selected="true">${S.tabChat}</button><button type="button" aria-selected="false">${S.tabDiff} <span class="c">3</span></button></div></div>
+        <div class="msg-me" style="max-width:82%">${S.meTable}</div>
+        <div class="msg-ai"><p>${S.ai1}</p></div>
+        <div class="tools"><div class="tool"><b>Read</b><span class="arg">board.json</span><span class="r ok">✓</span></div><div class="tool"><b>Run</b><span class="arg">go test ./internal/board/...</span><span class="r bad">✕</span></div></div>
+        <div class="msg-ai"><p>${S.ai2} ${S.ai3}</p></div>
+      </div>
+      <div class="sheet"><div class="grab"></div><div style="display:flex;gap:8px;align-items:center;color:var(--wait);font-weight:600;font-size:14px">${S.askH}<span style="margin-left:auto;color:var(--fg-3);font-weight:400;font-size:12px">${S.waited}</span></div>
+        <pre>$ python3 make_table.py --out report.xlsx</pre>
+        <div class="acts"><button class="btn" type="button">${S.deny}</button><button class="btn pri" type="button">${S.allow}</button></div>
+        <button class="btn ghost" type="button" style="padding:8px;font-size:14px;border-radius:12px">${S.allowPy}</button></div>`;
+
+    document.getElementById('ph3').innerHTML = sb + `
+      <div class="ph-nav"><span class="back">‹</span>${tile(CH.ios.members, 34)}<span class="t"><b>ios</b><span>${L(CH.ios.n)}</span></span><span class="members" style="margin-left:auto">${[M.architect, M.builder].map(m => av(m.c, m.s, 'work', 26)).join('')}</span></div>
+      <div class="ph-conv">
+        <div class="daysep">${S.todayAt}</div>
+        <div class="mine-wrap"><div class="msg-me" style="max-width:85%">${atTag('architect', 1, 16)} ${atTag('builder', 3, 16)} ${S.ch1}</div><span class="rcpt">${av(1, 0, 'idle', 14)}${av(3, 1, 'idle', 14)}<span>${S.read}</span></span></div>
+        <div class="cmsg">${av(1, 0, 'work', 30)}<div><div class="who"><b>architect</b>14:06</div><div class="txt" style="font-size:15px">${S.ch2a} ${atTag('builder', 3, 16)} ${S.ch2b}</div></div></div>
+        <div class="fold">${S.chFoldShort}</div>
+        <div class="cmsg">${av(4, 0, 'idle', 30)}<div><div class="who"><b>reviewer</b>14:40</div><div class="txt" style="font-size:15px">${S.ch3}</div></div></div>
+        <div class="mine-wrap"><div class="msg-me" style="max-width:85%">${atTag('designer', 5, 16)} ${S.ch4Short}</div><span class="rcpt">${S.delivered}</span></div>
+      </div>
+      <div class="ph-comp"><span style="font-size:22px;color:var(--fg-3)">＋</span><span class="in">${S.composeCh('ios')}</span><span class="send">↑</span></div>`;
+  }
+
+  // ================= page chrome =================
+  function renderChrome() {
+    document.querySelectorAll('[data-i18n]').forEach(el => { const v = S[el.dataset.i18n]; if (typeof v === 'string') el.innerHTML = v; });
+    document.getElementById('findings').innerHTML =
+      `<div class="f head" role="row"><span>${S.fHead[0]}</span><span>${S.fHead[1]}</span><span>${S.fHead[2]}</span></div>` +
+      S.findings.map(([s, h, p, fix]) => `<div class="f" role="row"><span class="sev ${s}">${S.sev[s]}</span><div><h3>${h}</h3><p>${p}</p></div><p class="fix">${fix}</p></div>`).join('');
+    document.getElementById('states').innerHTML = ['wait', 'work', 'done', 'idle', 'stop']
+      .map((s, i) => `<div class="st">${av([2, 5, 4, 6, 0][i], i % 2, s, 32)}<span class="pill ${s === 'stop' ? 'idle' : s}">${S.st[s]}</span><span>${S.stDesc[s]}</span></div>`).join('');
+    const sizes = [['font-size:22px;font-weight:700'], ['font-size:15px;font-weight:700'], ['font-size:13.5px;font-weight:550'], ['font-size:12px;color:var(--fg-3)'], ['font-size:11px;color:var(--fg-3)']];
+    document.getElementById('typeRows').innerHTML = S.typeRows.map(([t, k], i) => `<div class="type-row"><span style="${sizes[i]}">${t}</span><small>${k}</small></div>`).join('');
+    document.getElementById('keepList').innerHTML = S.keep.map(x => `<li>${x}</li>`).join('');
+    document.getElementById('plan').innerHTML = S.plan.map(([t, p, w], i) => `<div class="pr"><span class="no">${i + 1}</span><p><b>${t}</b>${lang === 'zh' ? '：' : ': '}${p}</p><span class="where">${w}</span></div>`).join('');
+    const pin = document.getElementById('palIn'); pin.placeholder = S.palPh; pin.value = S.palQ;
+    document.querySelector('#pal .pal').setAttribute('aria-label', S.search);
+  }
+
+  function renderAll() { renderChrome(); render(); renderPhones(); }
+
+  // ================= events =================
+  const win = document.getElementById('win');
+  win.addEventListener('click', (e) => {
+    if (e.target.closest('[data-approve]')) { approved = true; e.stopPropagation(); render(); return; }
+    const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; render(); return; }
+    if (e.target.closest('[data-insp]')) { inspOpen = !inspOpen; render(); return; }
+    const g = e.target.closest('[data-go]');
+    if (g && !e.target.closest('.pal')) {
+      const [type, id] = g.dataset.go.split(':');
+      cur = type === 'today' || type === 'usage' ? { type } : { type, id };
+      if (type === 'agent') tab = 'chat';
+      render();
+    }
+  });
+  const pal = document.getElementById('pal');
+  document.getElementById('openPal').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('palRows').innerHTML = [['table', '⏎'], ['tok', ''], ['ideas', '']]
+      .map(([id, k]) => { const a = A[id]; return `<button class="row" type="button" data-pal="${id}">${av(a.c, a.s, a.st, 24)}<span class="txt"><span class="nm">${L(a.name)}</span><span class="sub">${a.proj} · ${a.kind}</span></span><span class="end">${k ? `<kbd>${k}</kbd>` : ''}</span></button>`; }).join('');
+    pal.hidden = false; document.getElementById('palIn').focus();
+  });
+  pal.addEventListener('click', (e) => {
+    const r = e.target.closest('[data-pal]');
+    if (r) { cur = { type: 'agent', id: r.dataset.pal }; tab = 'chat'; pal.hidden = true; render(); return; }
+    if (e.target.closest('[data-pal-usage]')) { cur = { type: 'usage' }; pal.hidden = true; render(); return; }
+    if (e.target === pal) pal.hidden = true;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') pal.hidden = true; });
+
+  // ================= scaling =================
+  const stage = document.getElementById('macStage'), scaler = document.getElementById('macScaler');
+  function fit() {
+    const k = Math.min(1, stage.clientWidth / 1200);
+    scaler.style.transform = `scale(${k})`; stage.style.height = (762 * k) + 'px';
+    document.querySelectorAll('.phone-stage').forEach(ps => {
+      const p = ps.querySelector('.phone'), kk = ps.clientWidth / 390;
+      p.style.transform = `scale(${kk})`; ps.style.height = (844 * kk) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit);
+
+  // ================= start =================
+  const savedTheme = store('mad-v5-theme'); if (savedTheme) setTheme(savedTheme);
+  const savedLang = store('mad-v5-lang');
+  setLang(savedLang || ((navigator.language || 'zh').toLowerCase().startsWith('zh') ? 'zh' : 'en'));
+  fit();
+})();
+</script>

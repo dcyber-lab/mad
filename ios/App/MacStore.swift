@@ -1,5 +1,6 @@
 import Foundation
 import MadKit
+import MadShell
 import Security
 import Combine
 import UIKit
@@ -11,8 +12,8 @@ enum StoreError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .keychain(let s): return "令牌没能存进钥匙串（错误 \(s)）：这台 Mac 没有添加成功，请再试一次。"
-        case .noRandom: return "手机生成不了随机令牌：请重启这个应用再试。"
+        case .keychain(let s): return madLocalized("令牌没能存进钥匙串（错误 %lld）：这台 Mac 没有添加成功，请再试一次。", Int(s))
+        case .noRandom: return madLocalized("手机生成不了随机令牌：请重启这个应用再试。")
         }
     }
 }

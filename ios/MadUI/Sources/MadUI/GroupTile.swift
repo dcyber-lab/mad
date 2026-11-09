@@ -14,7 +14,7 @@ public struct GroupTile: View {
     @State private var since = Date()
     @State private var onScreen = false
 
-    /// dot: whether the red dot shows; by default, when a member needs the person.
+    /// dot: whether the waiting dot shows; by default, when a member needs the person.
     public init(members: [Member], size: CGFloat, dot: Bool? = nil) {
         self.dot = dot
         self.members = members
@@ -81,7 +81,10 @@ public struct GroupTile: View {
             ]
             guard !minis.isEmpty else { return }
             for (i, mini) in minis.enumerated() {
-                GrokAvatar.draw(&c, look: mini.look, in: spots[minis.count - 1][i], state: mini.state, at: mini.state == .working ? ms : nil)
+                // a stopped member is faded, as a lone avatar is
+                var m = c
+                if mini.state == .stopped { m.opacity = 0.45 }
+                GrokAvatar.draw(&m, look: mini.look, in: spots[minis.count - 1][i], state: mini.state, at: mini.state == .working ? ms : nil)
             }
         }
     }

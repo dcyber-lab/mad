@@ -44,24 +44,24 @@ public enum ChannelMapping {
         // as the page's head says it: paused, else who waits and who works, else quiet
         let line: String
         if channel == nil { line = "" }
-        else if isPaused { line = "已暂停" }
-        else if channel?.dm == true { line = needing > 0 ? "在等你" : working > 0 ? "在工作" : "空闲" }
+        else if isPaused { line = L("已暂停") }
+        else if channel?.dm == true { line = needing > 0 ? L("在等你") : working > 0 ? L("在工作") : L("空闲") }
         else {
-            let parts = [needing > 0 ? "\(needing) 个在等你" : "", working > 0 ? "\(working) 个在工作" : ""].filter { !$0.isEmpty }
-            line = parts.isEmpty ? "空闲" : parts.joined(separator: " · ")
+            let parts = [needing > 0 ? Lf("%lld 个在等你", needing) : "", working > 0 ? Lf("%lld 个在工作", working) : ""].filter { !$0.isEmpty }
+            line = parts.isEmpty ? L("空闲") : parts.joined(separator: " · ")
         }
         return ChannelScreen(
             title: title, members: members, helpers: split.helpers, stateLine: line, items: items,
             panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
                                 pictureCount: pictures, paused: isPaused),
-            placeholder: "发消息给 \(title)", readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
+            placeholder: Lf("发消息给 %@", title), readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
     }
 
     /// What an empty-looking channel says when everything in it is hidden, and when nobody has said anything.
-    public static let quietNote = "agent 们在后台协作，有事会在这里 @ 你。"
+    public static var quietNote: String { L("agent 们在后台协作，有事会在这里 @ 你。") }
     /// As the page says them: a channel nobody has spoken in, and a DM.
-    public static let noneNote = "还没人说话。@ 一个 agent 可以叫醒它。"
-    public static let noneNoteDM = "说点什么：它忙完之后会看到。"
+    public static var noneNote: String { L("还没人说话。@ 一个 agent 可以叫醒它。") }
+    public static var noneNoteDM: String { L("说点什么：它忙完之后会看到。") }
     /// The ids of those two lines (`ChannelItem.note`): the view draws them as one quiet line a third of the way down.
     public static let emptyID = (quiet: "quiet", none: "empty")
 
@@ -108,8 +108,8 @@ public enum ChannelMapping {
             func dim(_ id: String, _ status: String) -> ChannelMember {
                 ChannelMember(id: id, kind: "", state: .stopped, name: r.role, status: status, isLead: r.lead, role: r.role, dim: true)
             }
-            guard let id = r.agent, !id.isEmpty else { team.append(dim("role:\(r.role)", "未启动")); continue }
-            if deck != nil, deck?.agent(id: id) == nil { team.append(dim(id, "已离开")); continue }
+            guard let id = r.agent, !id.isEmpty else { team.append(dim("role:\(r.role)", L("未启动"))); continue }
+            if deck != nil, deck?.agent(id: id) == nil { team.append(dim(id, L("已离开"))); continue }
             var m: ChannelMember
             if let member = all.first(where: { $0.id == id }) {
                 m = member
@@ -117,7 +117,7 @@ public enum ChannelMapping {
                 let state = CharacterState(status: agent.state)
                 m = ChannelMember(id: id, kind: agent.kind, state: state, name: agent.label, status: statusText(agent, state), isLead: r.lead)
             } else {
-                team.append(dim(id, "已离开")); continue
+                team.append(dim(id, L("已离开"))); continue
             }
             m.role = r.role
             team.append(m)
@@ -145,11 +145,12 @@ public enum ChannelMapping {
         switch state {
         case .working:
             let doing = [a?.tool, a?.target].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
-            return doing.isEmpty ? "在工作" : "在工作 · \(doing)"
-        case .needsYou: return "在等你"
-        case .starting: return "在启动"
-        case .stopped: return "已停止"
-        case .idle: return "空闲"
+            return doing.isEmpty ? L("在工作") : L("在工作") + " · " + doing
+        case .needsYou: return L("在等你")
+        case .starting: return L("在启动")
+        case .stopped: return L("已停止")
+        case .idle: return L("空闲")
+        case .done: return L("刚完成")
         }
     }
 
@@ -210,9 +211,9 @@ public enum ChannelMapping {
     /// What mad's own note says, in Chinese where it is known what happened (the server's English otherwise).
     static func noteText(_ m: BusMessage) -> String {
         switch effectiveEvent(m) {
-        case "paused": "群已暂停"
-        case "resumed": "群已恢复"
-        case "trimmed": "更早的消息已清理"
+        case "paused": L("群已暂停")
+        case "resumed": L("群已恢复")
+        case "trimmed": L("更早的消息已清理")
         default: m.text
         }
     }
@@ -232,9 +233,9 @@ public enum ChannelMapping {
         guard newDay || at.timeIntervalSince(before ?? at) >= quiet else { return nil }
         let hm = String(format: "%02d:%02d", calendar.component(.hour, from: at), calendar.component(.minute, from: at))
         if !newDay { return hm }
-        if calendar.isDate(at, inSameDayAs: now) { return "今天 \(hm)" }
-        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(at, inSameDayAs: y) { return "昨天 \(hm)" }
-        return "\(calendar.component(.month, from: at))月\(calendar.component(.day, from: at))日 \(hm)"
+        if calendar.isDate(at, inSameDayAs: now) { return Lf("今天 %@", hm) }
+        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(at, inSameDayAs: y) { return Lf("昨天 %@", hm) }
+        return Lf("%lld月%lld日 %@", calendar.component(.month, from: at), calendar.component(.day, from: at), hm)
     }
 
     // MARK: a bubble
@@ -258,8 +259,8 @@ public enum ChannelMapping {
         guard let parent = bySeq[m.replyTo] else {
             return ChannelQuote(seq: m.replyTo, who: "#\(m.replyTo)", text: "")
         }
-        let text = parent.text.isEmpty && !parent.images.isEmpty ? "[图片]" : ChannelQuote.snippet(plain(parent.text))
-        return ChannelQuote(seq: parent.seq, who: parent.from.isYou ? "你" : parent.from.label, text: text)
+        let text = parent.text.isEmpty && !parent.images.isEmpty ? L("[图片]") : ChannelQuote.snippet(plain(parent.text))
+        return ChannelQuote(seq: parent.seq, who: parent.from.isYou ? L("你") : parent.from.label, text: text)
     }
 
     /// The person is asked: `@you` in the text (the bus does not list the person among the mentions).

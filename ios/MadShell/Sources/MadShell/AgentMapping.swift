@@ -15,6 +15,9 @@ public enum AgentMapping {
                                     now: Date = Date()) -> AgentConversation {
         let agent = deck.agent(id: id)
         let (canSend, hint) = sending(agent)
+        let project = deck.projects.first { $0.agents.contains { $0.id == id } }
+        let place = project.map { p in [p.name, p.branch ?? ""].filter { !$0.isEmpty }.joined(separator: " / ") } ?? ""
+        let cost = (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : ""
         return AgentConversation(
             title: agent?.label ?? id,
             agentID: id,
@@ -22,9 +25,68 @@ public enum AgentMapping {
             state: agent.map { CharacterState(status: $0.state) } ?? .stopped,
             entries: entries(transcript),
             live: liveBubble(live, transcript: transcript, now: now),
-            ask: ask(for: id, deck: deck),
+            ask: ask(for: id, deck: deck, now: now),
             canSend: canSend,
-            sendHint: hint)
+            sendHint: hint,
+            place: place,
+            cost: cost,
+            details: agent.map { a in
+                AgentDetails(since: a.created.map { MadWords.age(now.timeIntervalSince($0)) } ?? "", branch: project?.branch ?? "",
+                             changed: project?.changed ?? 0, ahead: project?.ahead ?? 0, cost: cost, tokens: tokens(a),
+                             model: a.model, session: a.session.isEmpty ? a.id : a.session,
+                             directory: shortPath(a.dir.isEmpty ? (project?.path ?? "") : a.dir))
+            })
+    }
+
+    /// Tokens in and out as the Details pane says them: "182k / 9.4k"; empty when there are none.
+    static func tokens(_ a: Agent) -> String {
+        guard a.tokensIn > 0 || a.tokensOut > 0 else { return "" }
+        return "\(count(a.tokensIn)) / \(count(a.tokensOut))"
+    }
+
+    /// A count of tokens, short: 950, 9.4k, 182k, 1.2M.
+    static func count(_ n: Int) -> String {
+        if n < 1000 { return "\(n)" }
+        if n < 10_000 { return String(format: "%.1fk", Double(n) / 1000) }
+        if n < 1_000_000 { return "\(Int((Double(n) / 1000).rounded()))k" }
+        return String(format: "%.1fM", Double(n) / 1_000_000)
+    }
+
+    // MARK: finishing a branch
+
+    /// The finish menu as buttons, in the page's words: push 推送, pr 推送并开 PR (the primary), rebase 变基到 base,
+    /// merge 合并到 base; the person's own keep their names.
+    public static func finishButtons(_ menu: FinishMenu) -> [FinishButton] {
+        let base = menu.base.isEmpty ? "main" : menu.base
+        return menu.actions.enumerated().map { i, a in
+            FinishButton(index: i, name: a.name, label: finishLabel(a, base: base), primary: a.kind == "pr")
+        }
+    }
+
+    static func finishLabel(_ a: FinishAction, base: String) -> String {
+        switch a.kind {
+        case "push": return L("推送")
+        case "pr": return L("推送并开 PR")
+        case "rebase": return Lf("变基到 %@", base)
+        case "merge": return Lf("合并到 %@", base)
+        default: return a.name
+        }
+    }
+
+    /// What a finish run says afterwards: "推送 · <its last line>", or "推送: <what went wrong>".
+    public static func finishNote(_ b: FinishButton, _ r: FinishResult) -> String {
+        let last = r.lastLine
+        return r.ok ? b.label + " · " + (last.isEmpty ? L("完成") : last) : b.label + ": " + (last.isEmpty ? L("没有成功") : last)
+    }
+
+    /// A path with the home folder as ~ ("~/src/mad").
+    static func shortPath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        if !home.isEmpty, path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
+        // a Mac's home seen from the phone: /Users/<name>/...
+        let parts = path.split(separator: "/", omittingEmptySubsequences: true)
+        if parts.count > 2, parts[0] == "Users" { return "~/" + parts.dropFirst(2).joined(separator: "/") }
+        return path
     }
 
     // MARK: entries
@@ -34,7 +96,7 @@ public enum AgentMapping {
     /// positions among the rows, which only grow while the transcript does not reset.
     static func entries(_ transcript: ChatTranscript) -> [ConvEntry] {
         var out: [ConvEntry] = []
-        if transcript.earlier { out.append(.earlier("earlier", "更早的消息不在这里显示")) }
+        if transcript.earlier { out.append(.earlier("earlier", L("更早的消息不在这里显示"))) }
         for (i, row) in transcript.rows.enumerated() {
             switch row {
             case let .user(e):
@@ -70,9 +132,9 @@ public enum AgentMapping {
     /// An agent can take a message from the phone only in window mode (the server marks ordinary terminal
     /// agents headless too); one in a terminal is answered in the terminal.
     static func sending(_ agent: Agent?) -> (Bool, String) {
-        guard let agent else { return (false, "这个 agent 已经不在了") }
+        guard let agent else { return (false, L("这个 agent 已经不在了")) }
         if agent.inWindowMode { return (true, "") }
-        return (false, "这个 agent 在终端里运行，回复请到 Deck 里的终端")
+        return (false, L("这个 agent 在终端里运行，回复请到 Deck 里的终端"))
     }
 
     // MARK: the ask
@@ -83,17 +145,20 @@ public enum AgentMapping {
         return mine.first { $0.blocks } ?? mine.first
     }
 
-    static func ask(for id: String, deck: Deck) -> AskCard? {
+    static func ask(for id: String, deck: Deck, now: Date = Date()) -> AskCard? {
         guard let item = item(for: id, deck: deck) else { return nil }
-        let acts = item.acts.filter { !$0.isOpen }.map {
-            AskAct(id: $0.id, label: $0.shownLabel, primary: $0.primary, input: $0.input)
-        }
+        let acts = ActWords.acts(of: item)
         guard !acts.isEmpty else { return nil }
         let title = item.context.flatMap { $0.isEmpty ? nil : $0 } ?? item.title
         var detail = item.text ?? ""
         if item.full, let body = item.body, !body.isEmpty { detail += (detail.isEmpty ? "" : "\n") + body }
-        return AskCard(id: item.key, title: item.kind == "permission" ? "想用 \(title)" : title,
-                       detail: detail, mono: item.mono, acts: acts)
+        let permission = item.kind == "permission"
+        // a command is "想运行一条命令" (the card's head), any other tool "想用 Edit"
+        let head = permission ? (title == "Bash" || item.mono ? L("想运行一条命令") : Lf("想用 %@", title)) : title
+        if permission && item.mono && !detail.isEmpty && !detail.hasPrefix("$ ") { detail = "$ " + detail }
+        return AskCard(id: item.key, title: head, detail: detail, mono: item.mono, acts: acts,
+                       waited: item.since.map { Lf("等了 %@", MadWords.age(now.timeIntervalSince($0))) } ?? "",
+                       permission: permission)
     }
 
     /// What an act of the card sends back: the item's key and the act it was made from. Nil when the

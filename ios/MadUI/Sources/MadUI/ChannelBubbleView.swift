@@ -5,8 +5,9 @@ import UIKit
 import AppKit
 #endif
 
-/// One bubble of a channel: grey for an agent, blue for the person; folded into a bordered line when
-/// the message is long or an agent's report, opened in place by a tap. A long press offers 回复 and 复制.
+/// One bubble of a channel: grey for an agent, light blue with dark text for the person (its bottom right corner
+/// 4pt), @names in their member's color; folded into a dashed capsule when the message is long or an agent's report,
+/// opened in place by a tap. A long press offers 回复 and 复制.
 struct ChannelBubbleView: View {
     let bubble: ChannelBubble
     let mine: Bool
@@ -17,15 +18,17 @@ struct ChannelBubbleView: View {
     let reply: () -> Void
     let load: @Sendable (String) async -> Data?
     let openPicture: (String) -> Void
+    /// A member's name to its identity color, for the @names.
+    var colors: [String: Color] = [:]
 
     var body: some View {
         Group {
             if let fold = bubble.fold { folded(fold) } else { whole }
         }
         .contextMenu {
-            Button { reply() } label: { Label("回复", systemImage: "arrowshape.turn.up.left") }
+            Button { reply() } label: { Label(L("回复"), systemImage: "arrowshape.turn.up.left") }
             if !bubble.text.isEmpty {
-                Button { copy(bubble.text) } label: { Label("复制", systemImage: "doc.on.doc") }
+                Button { copy(bubble.text) } label: { Label(L("复制"), systemImage: "doc.on.doc") }
             }
         }
     }
@@ -36,7 +39,7 @@ struct ChannelBubbleView: View {
         VStack(alignment: mine ? .trailing : .leading, spacing: 6) {
             if let q = bubble.quote { quote(q) }
             if !bubble.text.isEmpty {
-                Text(chatText(bubble.text, mine: mine))
+                Text(chatText(bubble.text, mine: mine, colors: colors))
                     .font(MadType.message)
                     .lineSpacing(MadType.messageLineSpacing)
                     .multilineTextAlignment(.leading)
@@ -44,18 +47,22 @@ struct ChannelBubbleView: View {
             }
             if !bubble.images.isEmpty { pictures }
         }
-        .foregroundStyle(mine ? Color.white : Color.primary)
-        .padding(.horizontal, picturesOnly ? 0 : 13)
+        .foregroundStyle(mine ? Color.madMineFg : Color.primary)
+        .padding(.horizontal, picturesOnly ? 0 : (mine ? 14 : 13))
         .padding(.vertical, picturesOnly ? 0 : 8)
         .hugging(maxWidth: maxWidth)
-        .background(picturesOnly ? Color.clear : (mine ? Color.chatBlue : Color.chatBubble), in: RoundedRectangle(cornerRadius: 18))
+        .background {
+            if !picturesOnly {
+                if mine { MineShape().fill(Color.madMine) } else { RoundedRectangle(cornerRadius: 18).fill(Color.chatBubble) }
+            }
+        }
         // as wide as its text, and no wider than its share of the column
         .fixedSize(horizontal: false, vertical: true)
     }
 
     private func quote(_ q: ChannelQuote) -> some View {
         HStack(spacing: 6) {
-            Rectangle().fill(mine ? Color.white.opacity(0.7) : Color.secondary.opacity(0.5)).frame(width: 2)
+            Rectangle().fill(mine ? Color.madMineFg.opacity(0.5) : Color.secondary.opacity(0.5)).frame(width: 2)
             Text("\(q.who) \(q.text)")
                 .font(MadType.small)
                 .lineLimit(1)
@@ -89,7 +96,7 @@ struct ChannelBubbleView: View {
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
             if expanded {
-                Text(chatText(bubble.text, mine: false))
+                Text(chatText(bubble.text, mine: false, colors: colors))
                     .font(MadType.detail)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
@@ -97,16 +104,17 @@ struct ChannelBubbleView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 11)
+        .foregroundStyle(Color.madFg3)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .hugging(maxWidth: maxWidth)
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.chatLine, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 14))
+        // the design's folded run: a dashed outline
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.madLine2, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { toggle() } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(fold.summary)
-        .accessibilityHint(expanded ? "收起" : "展开")
+        .accessibilityHint(expanded ? L("收起") : L("展开"))
         .accessibilityAddTraits(.isButton)
     }
 

@@ -145,6 +145,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/terminal", s.auth(http.HandlerFunc(s.terminal)))
 	mux.Handle("GET /api/history", s.auth(http.HandlerFunc(s.history)))
 	mux.Handle("GET /api/diff", s.auth(http.HandlerFunc(s.diff)))
+	mux.Handle("GET /api/finish", s.auth(http.HandlerFunc(s.finish)))
+	mux.Handle("POST /api/finish", s.auth(http.HandlerFunc(s.finish)))
 	mux.Handle("GET /api/files", s.auth(http.HandlerFunc(s.files)))
 	mux.Handle("GET /api/models", s.auth(http.HandlerFunc(s.models)))
 	mux.Handle("GET /api/image", s.auth(http.HandlerFunc(s.image)))

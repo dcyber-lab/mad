@@ -19,26 +19,27 @@ struct PhoneSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("在你的手机上").font(.system(size: 20, weight: .semibold))
+            Text(L("在你的手机上")).font(.system(size: 20, weight: .semibold))
             content
             if let failure { Text(failure).font(Font.system(size: 13)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 if status?.on == true {
-                    Button("关闭入口") { Task { await set(on: false) } }.disabled(busy)
+                    Button(L("关闭入口")) { Task { await set(on: false) } }.disabled(busy)
                 }
                 Spacer()
                 if status?.on == false && status?.problem == nil {
-                    Button("取消", action: close)
-                    Button("打开") { Task { await set(on: true) } }.keyboardShortcut(.defaultAction).disabled(busy)
+                    Button(L("取消"), action: close)
+                    Button(L("打开")) { Task { await set(on: true) } }.keyboardShortcut(.defaultAction).disabled(busy)
                 } else {
-                    Button("完成", action: close).keyboardShortcut(.defaultAction)
+                    Button(L("完成"), action: close).keyboardShortcut(.defaultAction)
                 }
             }
         }
         .padding(24)
         .frame(width: 460)
         .background(Color.chatComposer)
-        .environment(\.locale, Locale(identifier: "zh_CN")) // "4 天前", not "4 days ago"
+        // "4 天前" in Chinese, "4 days ago" in English: the relative times follow the words
+        .environment(\.locale, Locale(identifier: MadLocale.isEnglish(bundle: .module) ? "en_US" : "zh_CN"))
         .task { await load() }
     }
 
@@ -48,8 +49,9 @@ struct PhoneSheet: View {
                 Text(problem).font(Font.system(size: 15)).fixedSize(horizontal: false, vertical: true)
             } else if !status.on {
                 Text(status.via == "cloudflare"
-                     ? "通过 Cloudflare Tunnel 把这个窗口送到你的手机上，在哪里都能用：知道地址的人都能连上，但进去要输入它显示的验证码。"
-                     : "通过 Tailscale 把这个窗口送到你的手机上\(status.host.map { "，地址是 \($0)" } ?? "")：只有你自己的设备连得上，进去要输入它显示的验证码。")
+                     ? L("通过 Cloudflare Tunnel 把这个窗口送到你的手机上，在哪里都能用：知道地址的人都能连上，但进去要输入它显示的验证码。")
+                     : status.host.map { Lf("通过 Tailscale 把这个窗口送到你的手机上，地址是 %@：只有你自己的设备连得上，进去要输入它显示的验证码。", $0) }
+                        ?? L("通过 Tailscale 把这个窗口送到你的手机上：只有你自己的设备连得上，进去要输入它显示的验证码。"))
                     .font(Font.system(size: 15)).fixedSize(horizontal: false, vertical: true)
             } else {
                 on(status)
@@ -66,12 +68,14 @@ struct PhoneSheet: View {
             }
             .frame(width: 220, height: 220).padding(10).background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .frame(maxWidth: .infinity)
-            Text("用手机相机扫它\(status.via == "cloudflare" ? "" : "（手机要在你的 tailnet 里）")：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。")
+            Text(status.via == "cloudflare"
+                 ? L("用手机相机扫它：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。")
+                 : L("用手机相机扫它（手机要在你的 tailnet 里）：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。"))
                 .font(Font.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Text(status.url ?? "").font(Font.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 0)
-                Button(copied ? "已复制" : "复制") {
+                Button(copied ? L("已复制") : L("复制")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(status.url ?? "", forType: .string)
                     copied = true
@@ -81,7 +85,7 @@ struct PhoneSheet: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             if !devices.isEmpty {
-                Text("已配对的手机").font(Font.system(size: 13)).foregroundStyle(.secondary)
+                Text(L("已配对的手机")).font(Font.system(size: 13)).foregroundStyle(.secondary)
                 ForEach(devices) { d in
                     HStack {
                         Text(d.name).font(Font.system(size: 15))
@@ -89,7 +93,7 @@ struct PhoneSheet: View {
                             Text(seen, format: .relative(presentation: .named)).font(Font.system(size: 13)).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
-                        Button("移除") { Task { await remove(d) } }.buttonStyle(.borderless).foregroundStyle(.red)
+                        Button(L("移除")) { Task { await remove(d) } }.buttonStyle(.borderless).foregroundStyle(Color.madDanger)
                     }
                 }
             }

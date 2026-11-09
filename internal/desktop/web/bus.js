@@ -20,16 +20,16 @@ function busChannel(id) {
 function channelsGroup(q) {
   const g = el("div", "busgroup");
   const head = el("div", "chead");
-  head.append(icon("chat"), el("b", "", "群聊"));
+  head.append(icon("chat"), el("b", "", T("群聊", "Groups")));
   const plus = el("button", "icon-btn");
   plus.type = "button";
-  plus.title = "新群聊或新小组";
+  plus.title = T("新群聊或新小组", "New group or team");
   plus.append(icon("plus"));
   plus.onclick = (e) => {
     e.stopPropagation();
     popup(plus, [
-      { label: "新群聊", desc: "你和 agent 在里面聊", icon: "chat", onclick: () => createChannel() },
-      { label: "新小组", desc: "按角色分工的 agent 一起开工，有一个组长", icon: "agent", onclick: () => newTeam() },
+      { label: T("新群聊", "New group"), desc: T("你和 agent 在里面聊", "You and agents talk in it"), icon: "chat", onclick: () => createChannel() },
+      { label: T("新小组", "New team"), desc: T("按角色分工的 agent 一起开工，有一个组长", "Agents in roles start together, with a lead"), icon: "agent", onclick: () => newTeam() },
     ], { right: true });
   };
   const all = deck.bus || [];
@@ -43,7 +43,7 @@ function channelsGroup(q) {
   const at = (c) => Date.parse(c.last_at) || 0;
   list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
   if (!all.length) {
-    const hint = el("div", "chan none", "和 agent 聊天：点 + 新建群聊或小组。");
+    const hint = el("div", "chan none", T("和 agent 聊天：点 + 新建群聊或小组。", "Talk with agents: + makes a group or a team."));
     hint.onclick = () => createChannel();
     g.append(hint);
   }
@@ -176,11 +176,11 @@ function replyTo(m) {
   if (!m) return bar.replaceChildren();
   const x = el("button", "icon-btn");
   x.type = "button";
-  x.title = "不是回复 (Esc)";
+  x.title = T("不是回复 (Esc)", "Not a reply (Esc)");
   x.append(icon("x"));
   x.onclick = () => replyTo(null);
   const what = el("span", "rq");
-  what.append(el("b", "", "回复 " + (m.from.id === "you" ? "你自己" : m.from.label)), " ", snippet(m.text));
+  what.append(el("b", "", T("回复 ", "Reply to ") + (m.from.id === "you" ? T("你自己", "yourself") : m.from.label)), " ", snippet(m.text));
   bar.replaceChildren(icon("chat"), what, x);
   if (!phone.matches) $("#qinput").focus();
 }
@@ -193,7 +193,7 @@ function snippet(text) {
 // jumpTo scrolls to message seq in the channel shown, and marks it a moment.
 function jumpTo(seq) {
   const t = $(`#chanlog [data-seq="${seq}"]`);
-  if (!t) return toast(`#${seq} 在更早的消息里`);
+  if (!t) return toast(T(`#${seq} 在更早的消息里`, `#${seq} is in earlier messages`));
   t.scrollIntoView({ block: "center", behavior: "smooth" });
   t.classList.remove("flash");
   void t.offsetWidth;
@@ -232,12 +232,13 @@ function chanName(id) {
 // chanSub is the head's one small line: how many wait on the person and how many work (every agent in
 // the channel, helpers too), or that it is quiet.
 function chanSub(c) {
-  if (c && c.paused) return "已暂停";
+  if (c && c.paused) return T("已暂停", "Paused");
   const live = c ? chanLive(c) : [];
   const n = live.filter((a) => shownStatus(a) === "running").length;
   const w = live.filter((a) => shownStatus(a) === "waiting").length;
-  if (c && c.dm) return w ? "在等你" : n ? "在工作" : "空闲";
-  return [w ? `${w} 个在等你` : "", n ? `${n} 个在工作` : ""].filter(Boolean).join(" · ") || "空闲";
+  if (c && c.dm) return w ? T("在等你", "Waiting") : n ? T("在工作", "Working") : T("空闲", "Idle");
+  const m = c && c.members ? c.members.length : 0;
+  return [m ? T(`${m} 位成员`, `${m} member${m === 1 ? "" : "s"}`) : "", w ? T(`${w} 个在等你`, `${w} waiting`) : "", n ? T(`${n} 个在工作`, `${n} working`) : ""].filter(Boolean).join(" · ") || T("空闲", "Idle");
 }
 
 // tileSig says how the channel's tile stands (its members' states), so a tile is
@@ -259,7 +260,7 @@ function chanHeadWho(id, reuse) {
     who.type = "button";
     who.dataset.id = id;
     who.setAttribute("aria-haspopup", "dialog");
-    who.title = "群信息";
+    who.title = T("群信息", "Group info");
     const what = el("span", "chwhat");
     what.append(el("b"), el("small"));
     who.append(chanTile(id), what);
@@ -282,8 +283,8 @@ function chanHeadWho(id, reuse) {
 function chanInfoButton() {
   const b = el("button", "icon-btn cinfo");
   b.type = "button";
-  b.title = "群信息";
-  b.setAttribute("aria-label", "群信息");
+  b.title = T("群信息", "Group info");
+  b.setAttribute("aria-label", T("群信息", "Group info"));
   b.setAttribute("aria-haspopup", "dialog");
   b.append(icon("info"));
   b.onclick = () => openChanPanel(b);
@@ -298,7 +299,18 @@ function drawChanHead() {
   const head = $("#chanhead");
   const old = head.querySelector(".chwho");
   const who = chanHeadWho(id, old);
-  if (who !== old) head.replaceChildren(who, el("span", "grow"), chanInfoButton()); // another channel
+  if (who !== old) head.replaceChildren(who, el("span", "grow"), el("span", "chmembers"), chanInfoButton()); // another channel
+  // v5: its members' faces, each with its ring, the busiest first
+  const strip = head.querySelector(".chmembers");
+  const c = busChannel(id);
+  const live = c ? chanLive(c) : [];
+  const rank = (a) => ({ waiting: 0, running: 1 }[shownStatus(a)] ?? 2);
+  const faces = [...live].sort((x, y) => rank(x) - rank(y)).slice(0, 4);
+  const sig = faces.map((a) => `${a.id}:${shownStatus(a)}`).join();
+  if (strip && strip.dataset.sig !== sig) {
+    strip.dataset.sig = sig;
+    charPut(strip, () => faces.map((a) => avatar(a, true)));
+  }
   drawActs();
   if (cp.open) drawChanPanel();
 }
@@ -388,13 +400,13 @@ function panelMember(row, c) {
   r.dataset.st = a ? shownStatus(a) : "";
   const t = el("span", "t");
   const n = el("span", "n");
-  if (!a && row.team) r.dataset.gone = m.id ? "已离开" : "未启动";
+  if (!a && row.team) r.dataset.gone = m.id ? T("已离开", "Left") : T("未启动", "Not started");
   n.append(el("span", "nm", row.team ? row.role : m.label));
-  if (row.team ? row.lead : m.id === c.lead) n.append(" ", el("span", "tag", "负责人"));
+  if (row.team ? row.lead : m.id === c.lead) n.append(" ", el("span", "tag", T("负责人", "Owner")));
   if (row.team && (a?.kind || m.kind)) n.append(el("span", "k", a?.kind || m.kind));
   // A team's role with no agent yet is "未启动", one whose agent is gone from the deck "已离开"; either is a
   // still, faded character.
-  const gone = row.team ? (m.id ? "已离开" : "未启动") : "不在列表里";
+  const gone = row.team ? (m.id ? T("已离开", "Left") : T("未启动", "Not started")) : T("不在列表里", "Not in the list");
   t.append(n, el("span", "s", a ? lastLine(a, shownStatus(a)) : gone));
   r.append(avatar(a || { kind: m.kind, id: m.id }, false, !a), t);
   r.onclick = () => { closeChanPanel(true); show(m.id); };
@@ -424,8 +436,8 @@ function panelClose() {
   const close = el("button", "icon-btn cpclose");
   close.type = "button";
   close.dataset.key = "close";
-  close.title = "关闭";
-  close.setAttribute("aria-label", "关闭");
+  close.title = T("关闭", "Close");
+  close.setAttribute("aria-label", T("关闭", "Close"));
   close.append(icon("x"));
   close.onclick = () => closeChanPanel();
   return close;
@@ -436,7 +448,7 @@ function boardLine(id) {
   const cards = (deck.board || []).filter((x) => x.channel === id);
   const doing = cards.filter((x) => x.column === "doing" || x.column === "review").length;
   const done = cards.filter((x) => x.column === "done").length;
-  return cards.length ? `${doing} 进行中 · ${done} 完成` : "没有任务";
+  return cards.length ? T(`${doing} 进行中 · ${done} 完成`, `${doing} in progress · ${done} done`) : T("没有任务", "No tasks");
 }
 
 function drawPanelMain(side, c) {
@@ -455,18 +467,18 @@ function drawPanelMain(side, c) {
     parts.push(list);
   };
   if (g.split) {
-    section(`小组 ${g.team.length}`, g.team);
-    if (g.helpers.length) section(`帮手 ${g.helpers.length}`, g.helpers);
+    section(T(`小组 ${g.team.length}`, `Team ${g.team.length}`), g.team);
+    if (g.helpers.length) section(T(`帮手 ${g.helpers.length}`, `Helpers ${g.helpers.length}`), g.helpers);
   } else {
-    section(`成员 · ${g.rows.length}`, g.rows);
+    section(T(`成员 · ${g.rows.length}`, `Members · ${g.rows.length}`), g.rows);
   }
   // the group
-  parts.push(el("h3", "cpsec", "这个群"));
+  parts.push(el("h3", "cpsec", T("这个群", "This group")));
   const acts = el("div", "cplist");
-  acts.append(panelRow("board", "任务板", boardLine(id), () => { closeChanPanel(true); openBoard(id); }));
-  acts.append(panelRow("pics", "图片和文件", String(cv.pics.length), () => { cp.page = "pics"; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); }));
+  acts.append(panelRow("board", T("任务板", "Task board"), boardLine(id), () => { closeChanPanel(true); openBoard(id); }));
+  acts.append(panelRow("pics", T("图片和文件", "Pictures and files"), String(cv.pics.length), () => { cp.page = "pics"; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); }));
   if (c.paused) {
-    acts.append(panelRow("resume", "继续", "这个群在等你", async () => {
+    acts.append(panelRow("resume", T("继续", "Resume"), T("这个群在等你", "This group waits on you"), async () => {
       try {
         await api("POST", "/api/bus/resume", {}, { channel: id });
         loadChannel(false);
@@ -475,7 +487,7 @@ function drawPanelMain(side, c) {
       }
     }));
   }
-  if (!c.dm) acts.append(panelRow("more", "更多…", "", (e) => chanMenu(c, e.currentTarget)));
+  if (!c.dm) acts.append(panelRow("more", T("更多…", "More…"), "", (e) => chanMenu(c, e.currentTarget)));
   parts.push(acts);
   side.replaceChildren(...parts);
 }
@@ -499,7 +511,7 @@ function patchChanPanel(side, c) {
       r.firstChild.replaceWith(avatar(a || { kind: m.kind, id: m.id }, false, !a));
       r.dataset.st = st;
     }
-    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : r.dataset.gone || "不在列表里";
+    const line = r.querySelector(".s"), text = a ? lastLine(a, st) : r.dataset.gone || T("不在列表里", "Not in the list");
     if (line.textContent !== text) line.textContent = text;
   });
   const set = (key, text) => {
@@ -515,11 +527,11 @@ function drawPanelPics(side) {
   const back = el("button", "cpback");
   back.type = "button";
   back.dataset.key = "back";
-  back.append(el("span", "", "‹"), "图片和文件");
+  back.append(el("span", "", "‹"), T("图片和文件", "Pictures and files"));
   back.onclick = () => { cp.page = ""; drawChanPanel(); $("#chpanel .cpclose")?.focus({ preventScroll: true }); };
   const grid = el("div", "cpgrid");
-  for (const p of cv.pics) grid.append(imageButton(p.url, `图片，来自 ${p.who}`));
-  if (!cv.pics.length) grid.append(el("p", "muted", "这个群里还没有图片。"));
+  for (const p of cv.pics) grid.append(imageButton(p.url, T(`图片，来自 ${p.who}`, `Picture, from ${p.who}`)));
+  if (!cv.pics.length) grid.append(el("p", "muted", T("这个群里还没有图片。", "No pictures in this group yet.")));
   side.replaceChildren(panelClose(), back, grid);
 }
 
@@ -571,11 +583,11 @@ window.addEventListener("keydown", (e) => {
 function chanMenu(c, anchor) {
   const lead = c.lead && agents.get(c.lead);
   const items = [{
-    label: "发进度报告", desc: "看板上它的那一行，由 mad 发出：不会叫醒任何人", icon: "todo",
+    label: T("发进度报告", "Post a progress report"), desc: T("看板上它的那一行，由 mad 发出：不会叫醒任何人", "Its row of the board, posted by mad: wakes no one"), icon: "todo",
     onclick: async () => {
       try {
         const r = await api("POST", "/api/bus/report", {}, { channel: c.id });
-        if (!r.line) toast(`#${c.id} 里没有未完成的事`);
+        if (!r.line) toast(T(`#${c.id} 里没有未完成的事`, `Nothing open in #${c.id}`));
         loadChannel(false);
       } catch (e) {
         toast(e.message, "err");
@@ -584,7 +596,7 @@ function chanMenu(c, anchor) {
   }];
   if (lead) {
     items.push({
-      label: `请 ${label(lead)} 做个总结`, desc: "做完了什么、在做什么、卡在哪、什么在等你", icon: "question",
+      label: T(`请 ${label(lead)} 做个总结`, `Ask ${label(lead)} for a summary`), desc: T("做完了什么、在做什么、卡在哪、什么在等你", "What is done, what is on, what is stuck, what waits on you"), icon: "question",
       onclick: async () => {
         try {
           await api("POST", "/api/bus/post", {}, { channel: c.id, text: `@${label(lead)} please post a short progress summary of #${c.id}: what is done, what is in progress and who has it, what is blocked, and what waits for me. Keep the board current with task_set.` });
@@ -595,13 +607,13 @@ function chanMenu(c, anchor) {
       },
     });
   }
-  items.push({ label: "在这里设例行任务…", desc: "按时间表在群里发消息", icon: "play", onclick: () => routineDialog(c.id) });
+  items.push({ label: T("在这里设例行任务…", "Set a routine here…"), desc: T("按时间表在群里发消息", "Posts in the group on a schedule"), icon: "play", onclick: () => routineDialog(c.id) });
   const others = (c.members || []).filter((m) => m.id !== c.lead && agents.has(m.id));
   if (others.length) {
     items.push({
-      label: lead ? "换个组长…" : "选一个组长…", desc: "为这件事的进展负责的 agent", icon: "agent",
+      label: lead ? T("换个组长…", "Change the lead…") : T("选一个组长…", "Pick a lead…"), desc: T("为这件事的进展负责的 agent", "The agent answerable for how this goes"), icon: "agent",
       onclick: () => setTimeout(() => popup(anchor, others.map((m) => ({
-        label: m.label, desc: "组长",
+        label: m.label, desc: T("组长", "Lead"),
         onclick: async () => {
           try {
             await api("POST", "/api/bus/lead", {}, { channel: c.id, agent: m.id });
@@ -648,8 +660,8 @@ async function loadChannel(first) {
   if (!log.querySelector(":scope > :not(.note)")) {
     let note = log.querySelector(".note");
     if (!note) log.append((note = el("div", "note")));
-    note.textContent = cv.quiet.size ? "agent 们在后台协作，有事会在这里 @ 你。"
-      : id.startsWith("dm.") ? "说点什么：它忙完之后会看到。" : "还没人说话。@ 一个 agent 可以叫醒它。";
+    note.textContent = cv.quiet.size ? T("agent 们在后台协作，有事会在这里 @ 你。", "The agents work together in the background and @ you here when they need you.")
+      : id.startsWith("dm.") ? T("说点什么：它忙完之后会看到。", "Say something: it reads it when it is done.") : T("还没人说话。@ 一个 agent 可以叫醒它。", "No one has spoken yet. @ an agent to wake it.");
   }
   if (cv.paused !== r.paused) {
     cv.paused = r.paused;
@@ -692,13 +704,22 @@ function drawReceipts(list, paused) {
   if (!rc) return;
   const sum = receiptSummary(rc.targets, paused);
   fillReceipt(line, sum);
+  // v5: the faces of those who saw it, small, before the word
+  const seen = (rc.targets || []).filter((t) => t.state === "read" || t.state === "replied").map((t) => t.id);
+  const sig = seen.join();
+  let faces = line.querySelector(".crav");
+  if (!faces) { faces = el("span", "crav"); line.prepend(faces); }
+  if (faces.dataset.sig !== sig) {
+    faces.dataset.sig = sig;
+    faces.replaceChildren(...seen.slice(0, 5).map((id) => avatar(agents.get(id) || { id, kind: "?" }, true, false)));
+  }
   if (row.querySelector(".rcard")) drawReceiptCard(row, sum);
 }
 
 // fillReceipt writes the summary into the line: its word (a change fades in over 150ms), its colour, its
 // title and its label for a screen reader. The one place the line's look is made.
 function fillReceipt(line, sum) {
-  const w = line.firstChild;
+  const w = line.querySelector(".crw");
   if (w.textContent !== sum.word) {
     const fresh = !!w.textContent;
     w.textContent = sum.word;
@@ -729,7 +750,7 @@ function drawReceiptCard(row, sum) {
   if (!card) {
     card = el("div", "rcard");
     card.setAttribute("role", "dialog");
-    card.setAttribute("aria-label", "谁收到了");
+    card.setAttribute("aria-label", T("谁收到了", "Who got it"));
     row.append(card);
   }
   const kids = sum.rows.map((r) => {
@@ -768,7 +789,7 @@ function timeLine(at) {
   const hm = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(new Date()) - day(d)) / 864e5);
-  const when = days === 0 ? "今天" : days === 1 ? "昨天" : `${d.getMonth() + 1}月${d.getDate()}日`;
+  const when = days === 0 ? T("今天", "Today") : days === 1 ? T("昨天", "Yesterday") : T(`${d.getMonth() + 1}月${d.getDate()}日`, d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
   const t = el("div", "ctime", `${when} ${hm}`);
   t.dataset.at = String(at);
   return t;
@@ -816,7 +837,7 @@ function drawMessage(m) {
   if (m.kind === "system") {
     // mad's pause, resume and trim notes are drawn in Chinese by what they mean
     const event = noteEvent(m);
-    const s = el("div", "csys", { paused: "群已暂停", resumed: "群已恢复", trimmed: "更早的消息已清理" }[event] || m.text);
+    const s = el("div", "csys", { paused: T("群已暂停", "Group paused"), resumed: T("群已恢复", "Group resumed"), trimmed: T("更早的消息已清理", "Earlier messages were cleared") }[event] || m.text);
     s.dataset.seq = m.seq;
     if (event === "trimmed") {
       // It is about the start of the channel, not the moment it was written: the first item, above the oldest
@@ -849,7 +870,7 @@ function drawMessage(m) {
     const a = agents.get(m.from.id) || { kind: m.from.kind || "?", id: m.from.id, icon: m.from.id === "mad" ? "m" : "" };
     const v = avatar(a, true);
     if (agents.has(m.from.id)) {
-      v.title = "打开";
+      v.title = T("打开", "Open");
       v.onclick = () => show(m.from.id);
     }
     const stack = el("div", "cstack");
@@ -869,14 +890,15 @@ function messageNode(m) {
   const mine = m.from.id === "you";
   const row = el("div", `cmsg${mine ? " mine" : ""}`);
   row.dataset.seq = m.seq;
-  row.dataset.who = mine ? "你" : m.from.label;
+  row.dataset.who = mine ? T("你", "You") : m.from.label;
   const text = el("div", "ctext");
   text.append(md(mentionsBold(m.text || "")));
+  tintMentions(text);
   const quote = m.reply_to ? quoteOf(m.reply_to) : null;
   if (m.reply_to) row.dataset.reply = m.reply_to;
   let imgs = null;
   if (m.images && m.images.length) {
-    const who = mine ? "你" : m.from.label;
+    const who = mine ? T("你", "You") : m.from.label;
     const urls = m.images.map((im) => `/api/bus/image?${new URLSearchParams({ id: im.id })}`);
     urls.forEach((url) => cv.pics.push({ url, who, seq: m.seq }));
     imgs = imageRow(urls, who);
@@ -909,8 +931,8 @@ function messageNode(m) {
   }
   const re = el("button", "creply");
   re.type = "button";
-  re.title = "回复";
-  re.setAttribute("aria-label", "回复");
+  re.title = T("回复", "Reply");
+  re.setAttribute("aria-label", T("回复", "Reply"));
   re.append(icon("chat"));
   re.onclick = () => replyTo(m);
   row.append(re);
@@ -922,8 +944,8 @@ function messageNode(m) {
 // click: reply, or copy what it says.
 function pressMenu(row, m) {
   const open = (x, y) => popup({ x, y }, [
-    { label: "回复", icon: "chat", onclick: () => replyTo(m) },
-    { label: "复制", icon: "copy", disabled: !m.text, onclick: () => copyText(m.text) },
+    { label: T("回复", "Reply"), icon: "chat", onclick: () => replyTo(m) },
+    { label: T("复制", "Copy"), icon: "copy", disabled: !m.text, onclick: () => copyText(m.text) },
   ], {});
   let timer = 0, sx = 0, sy = 0;
   const cancel = () => { clearTimeout(timer); timer = 0; };
@@ -949,9 +971,9 @@ function pressMenu(row, m) {
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
-    toast("已复制");
+    toast(T("已复制", "Copied"));
   } catch (_) {
-    toast("不能复制", "err");
+    toast(T("不能复制", "Can't copy"), "err");
   }
 }
 
@@ -1000,8 +1022,8 @@ function drawNoWake() {
   let h = who.querySelector(".nowake");
   if (!noWake($("#qinput").value)) return h && h.remove();
   if (!h) {
-    h = el("span", "nowake", "不会叫醒任何人");
-    h.title = "没有 @ 任何人：agent 只有读群聊时才会看到。";
+    h = el("span", "nowake", T("不会叫醒任何人", "Wakes no one"));
+    h.title = T("没有 @ 任何人：agent 只有读群聊时才会看到。", "No one @-ed: agents see it only when they read the group.");
     who.append(h);
   }
 }
@@ -1022,9 +1044,9 @@ function quoteOf(seq) {
     q.tabIndex = -1; // nothing on the page to show: it is not drawn
     return q;
   } else {
-    q.append("↩ 更早的消息");
+    q.append(T("↩ 更早的消息", "↩ Earlier messages"));
   }
-  q.title = "看它回复的是哪条";
+  q.title = T("看它回复的是哪条", "See what it replies to");
   q.onclick = () => jumpTo(seq);
   return q;
 }
@@ -1041,6 +1063,22 @@ function clock(at) {
 
 // mentionsBold marks @label in markdown text, the agents' labels first
 // (some have a space in them).
+// tintMentions colours each @name in node with that agent's own colour (its character's), on a light tint
+// of it (v5); @you and @all stay as they are.
+function tintMentions(node) {
+  const byName = new Map([...agents.values()].map((a) => [label(a).toLowerCase(), a]));
+  for (const b of node.querySelectorAll("strong")) {
+    const t = b.textContent;
+    if (!t.startsWith("@")) continue;
+    const a = byName.get(t.slice(1).toLowerCase());
+    if (!a) continue;
+    const col = GROK[charLook(a.id).colour];
+    b.classList.add("at");
+    b.style.color = col;
+    b.style.background = `color-mix(in srgb, ${col} 14%, transparent)`;
+  }
+}
+
 function mentionsBold(text) {
   const names = [...agents.values()].map((a) => label(a)).concat(["all", "you"]).sort((x, y) => y.length - x.length);
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1081,8 +1119,8 @@ function drawChanWho() {
   const g = c ? chanGroups(c) : null;
   // how many can be @-woken: the agents that are there (a role not started, or gone, is not)
   const n = g ? g.rows.filter((r) => agents.has(r.m.id) && (!g.split || r.team)).length : 0;
-  const helpers = g && g.helpers.length ? ` · ${g.helpers.length} 帮手` : "";
-  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? ` · ${n} 个 agent${helpers} · @ 可以叫醒一个` : " · 它忙完之后会看到");
+  const helpers = g && g.helpers.length ? T(` · ${g.helpers.length} 帮手`, ` · ${g.helpers.length} helpers`) : "";
+  what.append(el("b", "", chanTitle(cv.open)), c && !c.dm ? T(` · ${n} 个 agent${helpers} · @ 可以叫醒一个`, ` · ${n} agent${n === 1 ? "" : "s"}${helpers} · @ wakes one`) : T(" · 它忙完之后会看到", " · it reads it when done"));
   who.replaceChildren(what);
   who.className = "";
   drawNoWake();
@@ -1106,7 +1144,7 @@ function drawAgentMenu(w) {
   const box = $("#qmenu");
   box.replaceChildren(...all.map((a, i) => {
     const li = el("li", "file");
-    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", members.has(a.id) ? "已在群里" : `${a.kind} · ${a.project.name}`));
+    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", members.has(a.id) ? T("已在群里", "Already in the group") : `${a.kind} · ${a.project.name}`));
     li.onmousedown = (e) => {
       e.preventDefault();
       menu.sel = i;
@@ -1122,9 +1160,9 @@ function drawAgentMenu(w) {
 async function createChannel() {
   const body = el("div", "");
   const name = el("input", "say wide");
-  name.placeholder = "名字，比如 api-redesign";
+  name.placeholder = T("名字，比如 api-redesign", "A name, such as api-redesign");
   const topic = el("input", "say wide");
-  topic.placeholder = "用来做什么（可不填）";
+  topic.placeholder = T("用来做什么（可不填）", "What it is for (optional)");
   const pick = el("div", "suggest");
   const chosen = new Set();
   for (const a of [...agents.values()].filter((x) => x.chat && (!x.role || x.team))) {
@@ -1135,8 +1173,8 @@ async function createChannel() {
     row.append(box, avatar(a, true), el("span", "t", label(a)), el("span", "muted", a.project.name));
     pick.append(row);
   }
-  body.append(name, topic, el("p", "dtext muted", "群里的 agent 想看的时候会看；@ 某个 agent 会叫醒它。"), pick);
-  const v = await dialog({ title: "新群聊", body, actions: [{ label: "取消", value: null }, { label: "创建", cls: "primary", value: "ok" }], ready: () => name.focus() });
+  body.append(name, topic, el("p", "dtext muted", T("群里的 agent 想看的时候会看；@ 某个 agent 会叫醒它。", "Agents in it read it when they choose; @ an agent to wake it.")), pick);
+  const v = await dialog({ title: T("新群聊", "New group"), body, actions: [{ label: T("取消", "Cancel"), value: null }, { label: T("创建", "Create"), cls: "primary", value: "ok" }], ready: () => name.focus() });
   if (v !== "ok" || !name.value.trim()) return;
   try {
     const c = await api("POST", "/api/bus/channel", {}, { name: name.value.trim(), topic: topic.value.trim(), members: [...chosen] });

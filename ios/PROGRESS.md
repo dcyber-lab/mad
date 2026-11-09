@@ -2,7 +2,7 @@
 
 The record of team ios's work on mad's phone and Mac apps, so it can be picked up after the agents are
 cleared. How to build, pair and test is in [README.md](README.md); this file says what is done, what was
-decided and what is left. Last updated 2026-11-01.
+decided and what is left. Last updated 2026-11-09.
 
 The goal, from the person: an iOS version of mad, modelled on Grok Bot, that controls the deck remotely
 (Tailscale or a Cloudflare tunnel). They later asked for native apps on both the iPhone and the Mac.
@@ -19,6 +19,7 @@ The goal, from the person: an iOS version of mad, modelled on Grok Bot, that con
 | #116–#118 | A desktop-width bounds check for channel bubbles; a team's members as 小组 and 帮手 (page and native) |
 | #121 | The Mac window laid out as a chat app, after the Grok Bot desktop app (includes #120's type scale and message column) |
 | #122, #123 | The UI in Chinese: act labels, status words, the overview, the composer, pairing, open acts, 批准计划 |
+| v5 (this branch) | The approved redesign v5 (`docs/design/v5.html`) in both apps: the status ring on every avatar; Chinese and English after the system's language (String Catalogs); the ask card at the end of the conversation (a bottom sheet on the iPhone); the sidebar with 待处理 pinned on top, the machine capsule, ⌘K search, project heads with git and cost and only the person at its foot; 今日 on the Mac; a native Usage screen; the agent page with 对话 / 改动 and a Details pane (⌘I); the group chat's light own messages, @ in identity colors and avatar receipts |
 
 Installed on the person's devices on 2026-11-01: `/Applications/madmac.app` (`make mac-install`) and the
 iPhone (`make ios-device`, over the network when `xcrun devicectl list devices` says "available (paired)").
@@ -35,14 +36,38 @@ A free Apple ID's iPhone build stops opening after 7 days; run `make ios-device`
 - **Members:** 小组 is the team's roles (lead first; a role with no agent or a gone agent stays as a faded
   row, 未启动 or 已离开); 帮手 is the rest (busy first, gone ones left out). Counts of members are the team's;
   counts of activity (在工作, 在等你, the red dot) cover everyone, so a waiting helper is always seen.
-- **Mac layout:** no title bar; the name floats as a pill with a fade under it; one centred column; bubbles,
+- **Mac layout:** no title bar; (v5) a head bar of 60pt with a hairline replaces the floating name pill in the
+  conversation and the channel, and with no row open the detail is 今日; one centred column; bubbles,
   folded lines, tool lines and the ask card as wide as their content, at most 58% of it; 15pt messages at a
   line pitch of about 23pt; our own sidebar, 260–420pt, 320 at first, hidden and shown with ⌘\ (animated
   unless Reduce Motion); the usage line at its foot; @ offers a channel's members in a list that floats over
   the messages.
-- **Language:** every word mad itself shows is Chinese; tool names (Read, Bash), claude and codex,
-  accessibility labels, slash commands and agent text stay as they are. The server's labels stay English (the
-  TUI draws them); the clients translate by an act's verb, kind and target, never by its English text.
+- **Language (changed in v5):** Chinese and English, following the system's language (iOS's per-app language
+  too). The words are written in Chinese in the code and looked up in each package's `Localizable.xcstrings`
+  (source language zh-Hans, `defaultLocalization: "zh-Hans"`): MadUI's with `L`/`Lf`, MadShell's with its own `L`/`Lf`,
+  and the apps' own words through MadShell's `madLocalized` (an app target has no catalog). Tool names (Read,
+  Bash), claude and codex, commands, agent text and the accessibility labels the UI tests look up (切换 Mac, 更多,
+  搜索, 新建, 群信息, 返回, needs you, working ...) stay as they are in both languages. The server's labels stay
+  English; the clients translate by an act's verb, kind and target (`ActWords` in MadShell). Unit tests pin
+  `MadLocale.language = "zh-Hans"`; the UI tests launch with `-AppleLanguages (zh-Hans)`. MadKit's own few
+  Chinese words (connection errors, the expiry note) are not in a catalog yet.
+- **Status (v5):** one set of colors, one place: the ring around the avatar. Waiting is an amber ring (#c26a04,
+  dark #fbbf24) with the body at 82% inside; working a faint track and a turning green arc (#15803d / #4ade80),
+  still under Reduce Motion; just finished (`CharacterState.done`, the server's "finished") a blue dot
+  (#2563eb / #60a5fa); idle nothing; stopped the whole avatar at 45% with shut eyes, never red. Red is for
+  errors only; the group tile's dot is amber. Secondary text is #6b6b76 / #8a8a95.
+- **Usage (v5):** its own native screen (the person's row at the sidebar's foot, ⋯ → 用量): the four windows,
+  what the agents cost by project, the top spenders, mad's own budget and 今天不限 (`POST /api/budget`). No quota
+  bars in the sidebar or the iPhone's home. 会话花费's note and Today's sentence are the deck's `today` (what
+  today cost over every transcript on the Mac); the per-project and per-agent lines are the agents' session costs.
+- **Agent page (v5):** two tabs, 对话 and 改动; the terminal tab and button are gone, 在终端打开 is in ⋯ (it asks
+  the Mac to open the deck, `POST /api/terminal`). The 改动 tab shows the branch and counts; the diff itself is
+  still the page's. The 改动 tab and the Mac's Details pane (⌘I) carry the finish actions of `GET /api/finish`
+  (推送, 推送并开 PR as the primary, 变基到 / 合并到 the base, the person's own by name), run with
+  `POST /api/finish` (the index and the name, so a changed list is refused); the output's last line shows as a note
+  and the deck and the menu are looked at again. Details shows 已运行 from the agent's `created`, the session's
+  cost, 输入 / 输出 tokens and the model (默认 when none), the session id and directory. Rename and Sleep are native
+  (`PATCH /api/agents`, `POST /api/agents/stop`); Stop interrupts. The foot of the list shows the deck's `user`.
 
 ## How the team works
 
@@ -66,12 +91,18 @@ A free Apple ID's iPhone build stops opening after 7 days; run `make ios-device`
 
 ## Left to do
 
-- **Native screens still on the page:** terminal (SwiftTerm), diff, board, usage, skills, devices,
-  settings. Today the ⋯ menu and the conversation's terminal button open the page on that view.
+- **v5, not compiled yet:** the v5 change was written without a Swift toolchain; build both apps and run
+  `swift test` before anything else, then the designer's acceptance against the mockup.
+- **v5 gaps:** the handoff card and folded handoff runs (the channel still hides the agents' bookkeeping, as v4
+  decided; only long messages fold, now as a dashed capsule); the ⌘K command palette (the field filters the list);
+  the empty group's members with @ wake; the 改动 tab's own diff.
+
+- **Native screens still on the page:** diff, board, skills, devices (the iPhone's), settings. The ⋯ menu and the
+  agent page's ⋯ open the page on that view.
 - **Checks by hand on the iPhone:** a channel scrolls (iOS 18's simultaneousGesture can block a ScrollView);
   the 群信息 panel slides in and out, including the edge swipe.
-- **More Chinese:** "Nothing in its transcript yet.", the new-chat hint, the page's other hints and menus,
-  the iPhone's pairing errors.
+- **More words in the catalogs:** MadKit's connection errors and expiry note, and the page's (the web page has
+  its own string table).
 - **Polish:** a fade where a long sidebar list meets its footer; the collapsed sidebar is not remembered;
   @ works only at the end of the text (SwiftUI's TextField has no cursor API).
 - **Flaky UI test:** EdgeHomeTests.testSearchFindsTheTeamRow passes and fails in turn, on main too.

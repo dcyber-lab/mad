@@ -36,23 +36,23 @@ struct ChannelPanelView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 16)
 
-                sectionTitle(panel.sectioned ? "小组 \(panel.members.count)" : "成员 · \(panel.members.count)")
+                sectionTitle(panel.sectioned ? Lf("小组 %lld", panel.members.count) : Lf("成员 · %lld", panel.members.count))
                 memberList(panel.members)
                 if !panel.helpers.isEmpty {
-                    sectionTitle("帮手 \(panel.helpers.count)")
+                    sectionTitle(Lf("帮手 %lld", panel.helpers.count))
                     memberList(panel.helpers)
                 }
 
-                sectionTitle("这个群")
+                sectionTitle(L("这个群"))
                 list {
                     if let board = actions.openBoard {
-                        actionRow("任务板", detail: "") { close(); board() }
+                        actionRow(L("任务板"), detail: "") { close(); board() }
                         Divider().padding(.leading, 12)
                     }
-                    actionRow("图片和文件", detail: "\(panel.pictureCount)") { openPictures() }
+                    actionRow(L("图片和文件"), detail: "\(panel.pictureCount)") { openPictures() }
                     if panel.paused, let resume = actions.resume {
                         Divider().padding(.leading, 12)
-                        actionRow("继续", detail: "已暂停", tint: .orange) { resume() }
+                        actionRow(L("继续"), detail: L("已暂停"), tint: .madWait) { resume() }
                     }
                 }
             }
@@ -94,7 +94,7 @@ struct ChannelPanelView: View {
                 HStack(spacing: 6) {
                     Text(m.role.isEmpty ? m.name : m.role).font(MadType.rowName).lineLimit(1)
                     if m.isLead {
-                        Text("负责人").font(MadType.tag).padding(.horizontal, 7).padding(.vertical, 1)
+                        Text(L("负责人")).font(MadType.tag).padding(.horizontal, 7).padding(.vertical, 1)
                             .background(Color.chatLine.opacity(0.7), in: Capsule()).foregroundStyle(.secondary)
                     }
                 }

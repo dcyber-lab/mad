@@ -200,8 +200,9 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 			}
 			// What is done and what waits counts everyone, helpers too: kim, a helper, needs the person and ops, another,
 			// works. The head says so, and the channel's row has the red dot.
-			if rep.Head != "1 个在等你 · 1 个在工作" {
-				t.Errorf("the head says %q, want 1 个在等你 · 1 个在工作", rep.Head)
+			// v5: the head starts with how many members it has
+			if rep.Head != "8 位成员 · 1 个在等你 · 1 个在工作" {
+				t.Errorf("the head says %q, want 8 位成员 · 1 个在等你 · 1 个在工作", rep.Head)
 			}
 			if !rep.Dot {
 				t.Error("the channel's row has no \"needs you\" dot, though a helper waits on the person")
