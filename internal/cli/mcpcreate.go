@@ -263,7 +263,8 @@ func mcpCreateRun(_ context.Context, id, from string, spec create.Spec) (string,
 	}
 	_ = poke.Send(poke.Poll) // the window and the deck show it now
 	return mcpJSON(map[string]any{
-		"outcome": "asked",
+		"status":  "asked",
+		"item":    "create:" + r.ID,
 		"request": r.ID,
 		"say":     "asked the person (request " + r.ID + "); you'll be told by a message from mad when they answer, within about 10 minutes. End your turn now; do not ask again.",
 	})

@@ -1097,7 +1097,7 @@ exactly those roles), with Allow, Deny and Ask for changes. The card is
 answered on the phone or in the window; the deck's sidebar and `mad
 board` cannot answer it.
 
-The tool call does not wait: it returns at once with `"outcome":
+The tool call does not wait: it returns at once with `"status":
 "asked"` and a request id, and the agent ends its turn. When you answer,
 mad starts what you allowed (a team's channel and kickoff are the asking
 agent's, so the day's budget counts them) and tells the agent in a DM:

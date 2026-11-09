@@ -64,8 +64,8 @@ func createDeck(t *testing.T) (specs *[]drive.Spec, teams *[]team.Options) {
 func asked(t *testing.T, tool, args string) create.Request {
 	t.Helper()
 	got := mcpCall(t, createArch, tool, args)
-	var out struct{ Outcome, Request, Say string }
-	if err := json.Unmarshal([]byte(got), &out); err != nil || out.Outcome != "asked" || out.Say == "" {
+	var out struct{ Status, Request, Item, Say string }
+	if err := json.Unmarshal([]byte(got), &out); err != nil || out.Status != "asked" || out.Item != "create:"+out.Request || out.Say == "" {
 		t.Fatalf("%s: %q %v", tool, got, err)
 	}
 	r, err := create.Get(out.Request)
@@ -163,7 +163,7 @@ func TestMCPAgentNewAllowed(t *testing.T) {
 	}
 	// The agent is told, in a DM, with the outcome as JSON.
 	told := toldAsker(t)
-	if len(told) != 1 || !strings.Contains(told[0], `"outcome":"created"`) || !strings.Contains(told[0], got.Result.Agent) || !strings.Contains(told[0], r.ID) {
+	if len(told) != 1 || !strings.Contains(told[0], `"status":"created"`) || !strings.Contains(told[0], got.Result.Agent) || !strings.Contains(told[0], r.ID) {
 		t.Errorf("told %q", told)
 	}
 	if err := creator.Answer(r.ID, true, ""); err == nil { // once
@@ -210,8 +210,8 @@ func TestMCPCreateDeclined(t *testing.T) {
 		t.Errorf("changes: %+v", got)
 	}
 	told := toldAsker(t)
-	if len(told) != 2 || !strings.Contains(told[0], "the person declined") || !strings.Contains(told[0], `"outcome":"declined"`) ||
-		!strings.Contains(told[1], "the person wants changes: use sonnet, not opus") || !strings.Contains(told[1], `"outcome":"changes"`) {
+	if len(told) != 2 || !strings.Contains(told[0], "the person declined") || !strings.Contains(told[0], `"status":"declined"`) ||
+		!strings.Contains(told[1], "the person wants changes: use sonnet, not opus") || !strings.Contains(told[1], `"status":"changes"`) {
 		t.Errorf("told %q", told)
 	}
 	if len(*specs)+len(*teams) != 0 || len(create.List()) != 0 {
@@ -239,7 +239,7 @@ func TestMCPCreateExpires(t *testing.T) {
 	if got.Status != create.Expired || got.DoneAt.IsZero() {
 		t.Fatalf("after the wait: %+v", got)
 	}
-	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"outcome":"expired"`) {
+	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"status":"expired"`) {
 		t.Errorf("told %q", told)
 	}
 	if ev := eventsOf(t, "api"); len(ev) != 1 || !strings.HasPrefix(ev[0], "create_expired create:"+r.ID) {
@@ -281,7 +281,7 @@ func TestMCPCreateInterrupted(t *testing.T) {
 	if got, _ := create.Get(r.ID); got.Status != create.Failed || got.Result.Reason == "" {
 		t.Errorf("%+v", got)
 	}
-	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"outcome":"failed"`) {
+	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"status":"failed"`) {
 		t.Errorf("told %q", told)
 	}
 }
@@ -362,7 +362,7 @@ func TestMCPCreateBudgetSpentWhileWaiting(t *testing.T) {
 	if got.Status != create.Failed || !strings.Contains(got.Result.Reason, "budget") || len(*specs) != 0 {
 		t.Errorf("%+v, started %v", got, *specs)
 	}
-	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"outcome":"failed"`) {
+	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], `"status":"failed"`) {
 		t.Errorf("told %q", told)
 	}
 }
@@ -411,10 +411,10 @@ func TestMCPCreateWithoutAsking(t *testing.T) {
 	for i := 0; i < autoPerHour; i++ {
 		got := mcpCall(t, createArch, "agent_new", fmt.Sprintf(`{"kind":"claude","name":"scout%d","message":"hi"}`, i))
 		var out struct {
-			Outcome string
-			Agent   struct{ Label string }
+			Status string
+			Agent  struct{ Label string }
 		}
-		if err := json.Unmarshal([]byte(got), &out); err != nil || out.Outcome != "created" || out.Agent.Label != fmt.Sprintf("scout%d", i) {
+		if err := json.Unmarshal([]byte(got), &out); err != nil || out.Status != "created" || out.Agent.Label != fmt.Sprintf("scout%d", i) {
 			t.Fatalf("%d: %q %v", i, got, err)
 		}
 	}
@@ -463,7 +463,7 @@ func TestMCPCreateFailsWithReason(t *testing.T) {
 	if got, _ := create.Get(r.ID); got.Status != create.Failed || !strings.Contains(got.Result.Reason, "boom") {
 		t.Errorf("failed request: %+v", got)
 	}
-	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], "boom") || !strings.Contains(told[0], `"outcome":"failed"`) {
+	if told := toldAsker(t); len(told) != 1 || !strings.Contains(told[0], "boom") || !strings.Contains(told[0], `"status":"failed"`) {
 		t.Errorf("told %q", told)
 	}
 	if ev := eventsOf(t, "api"); len(ev) != 1 || !strings.HasPrefix(ev[0], "create_failed ") {

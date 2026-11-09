@@ -120,7 +120,7 @@ func Run(r create.Request) (create.Result, string, error) {
 		return create.Result{}, "", err
 	}
 	end(r, create.Created, res)
-	out["outcome"] = create.Created
+	out["status"] = create.Created
 	out["say"] = created(r.Spec, res)
 	b, _ := json.MarshalIndent(out, "", "  ")
 	return res, string(b), nil
@@ -232,7 +232,7 @@ func conclude(r create.Request) {
 		_ = bus.Event(r.From, event, ref, line, data)
 	}
 	if !r.Auto {
-		out, _ := json.Marshal(map[string]any{"outcome": r.Status, "request": r.ID, "say": say, "data": data})
+		out, _ := json.Marshal(map[string]any{"status": r.Status, "request": r.ID, "say": say, "data": data})
 		_, _ = bus.TellAgent(r.ByID, fmt.Sprintf("[mad] your request %s to create %s: %s\n%s", r.ID, what(r.Spec), say, out))
 	}
 	_ = poke.Send(poke.Poll)
