@@ -2,11 +2,11 @@
 import AppKit
 import SwiftUI
 
-/// The Mac's sidebar, as the approved design (v5) draws it: the window's traffic lights with the machine's name as a
-/// small capsule beside them (it switches Mac); a search field (⌘K); the 今日 row; what waits on the person pinned
-/// on top as compact cards with Allow and Deny (Reply for a question); the group chats; then each project with its
-/// branch, changes, unpushed commits and cost on its head line, and its agents. At the foot only the person: their
-/// picture, their name and 用量 ›, which opens the Usage screen (a right click offers the rest of the old ⋯ menu).
+/// The Mac's sidebar, as design v6 draws it (docs/design/mac-v6.html): on the traffic lights' line two round floating
+/// buttons (search, +), under them the Mac's name (it switches Mac); the 今日 row; what waits on the person as roomy
+/// amber cards with Allow and Deny (Reply for a question); the group chats; then each project with its branch and
+/// cost on its head line, and its agents. At the foot the person (a click opens Usage) and a round grid button
+/// whose popover holds the menu (a right click on the person offers it too).
 public struct MacSidebar: View {
     let model: HomeModel
     let actions: HomeActions
@@ -14,6 +14,8 @@ public struct MacSidebar: View {
     let toggle: () -> Void
     @Binding var selection: HomeRow.ID?
     @State private var query = ""
+    /// The search field is under the top while it is used (the round button or ⌘K opens it).
+    @State private var searching = false
     @FocusState private var searchFocused: Bool
 
     public init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions = HomeActions(),
@@ -28,25 +30,27 @@ public struct MacSidebar: View {
     public var body: some View {
         VStack(spacing: 0) {
             top
-            search
+            machine
+            if searching { search }
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     if query.isEmpty { todayRow; waitingSection }
                     ForEach(model.filtered(by: query).sections) { section in
                         head(section)
                         ForEach(section.rows) { row in
                             Button { selection = row.id; actions.open(row.id) } label: {
                                 HomeRowView(row: row, metrics: .mac)
-                                    .padding(.horizontal, 8).padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: Mac.rowHeight)
                                     .modifier(SelectedRowBackground(selected: selection == row.id))
                             }
                             .buttonStyle(.plain)
                         }
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.top, 4)
-                .padding(.bottom, 12)
+                .padding(.bottom, 14)
             }
             footer
         }
@@ -54,76 +58,98 @@ public struct MacSidebar: View {
         .environment(\.madAvatarBackdrop, Color.madSide)
         .background {
             // ⌘K goes to the search field
-            Button("") { searchFocused = true }.keyboardShortcut("k", modifiers: .command).opacity(0).frame(width: 0, height: 0)
+            Button("") { openSearch() }.keyboardShortcut("k", modifiers: .command).opacity(0).frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
     }
 
-    /// The traffic lights' row: their room at the left (the window draws them), the machine's capsule at the right.
+    private func openSearch() {
+        searching = true
+        searchFocused = true
+    }
+
+    private func closeSearch() {
+        query = ""
+        searchFocused = false
+        searching = false
+    }
+
+    /// The traffic lights' row: their room at the left (the window draws them), two round floating buttons at the right.
     private var top: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 76)
-            Button(action: actions.switchMac) {
-                Text(model.machine + " ▾")
-                    .font(.mad(12))
-                    .foregroundStyle(Color.madFg2)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 2)
-                    .background(Color.madRaise, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("切换 Mac")
-            .help(model.machine)
+            MacRoundButton { searching ? closeSearch() : openSearch() } label: { Image(systemName: "magnifyingglass") }
+                .accessibilityLabel("搜索")
+                .help(L("搜索或跳转"))
+            MacNewMenu(action: actions.create)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .padding(.bottom, 6)
-        .frame(height: 40)
+        .padding(.leading, 20)
+        .padding(.trailing, 14)
+        .frame(height: 52)
     }
 
-    /// 搜索或跳转, with ⌘K at its end; it filters the list as it is typed, and Esc clears it.
+    /// The Mac's name under the top: quiet, with a chevron; it switches Mac.
+    private var machine: some View {
+        Button(action: actions.switchMac) {
+            HStack(spacing: 6) {
+                Text(model.machine).lineLimit(1).truncationMode(.middle)
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+            }
+            .font(.system(size: 14.5, weight: .medium))
+            .foregroundStyle(Color.madFg2)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        .accessibilityLabel("切换 Mac")
+        .help(model.machine)
+    }
+
+    /// 搜索或跳转, with ⌘K at its end; it filters the list as it is typed, and Esc clears it and closes it.
     private var search: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium))
+            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .medium))
             TextField(L("搜索或跳转"), text: $query)
                 .textFieldStyle(.plain)
-                .font(.mad(13))
+                .font(.system(size: 15))
                 .foregroundStyle(Color.madFg)
                 .focused($searchFocused)
                 .onChange(of: query) { _, q in actions.search(q) }
-                .onExitCommand { query = ""; searchFocused = false }
+                .onExitCommand { closeSearch() }
                 .accessibilityLabel("搜索")
             if query.isEmpty { Kbd("⌘K") }
         }
         .foregroundStyle(Color.madFg3)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.madRaise, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .frame(height: 36)
+        .background(Color.macFloatFill, in: Capsule())
+        .macFloat()
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
     private var todayRow: some View {
         Button { selection = nil; actions.open(HomeRow.todayID) } label: {
             TodayRowView(today: model.today, waiting: model.waiting.count)
-                .padding(.horizontal, 8).padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .frame(height: Mac.rowHeight)
                 .modifier(SelectedRowBackground(selected: selection == nil || selection == HomeRow.todayID))
         }
         .buttonStyle(.plain)
-        .padding(.top, 2)
     }
 
     /// 待处理: what waits, oldest first, as cards; "都处理完了" when nothing does.
     @ViewBuilder private var waitingSection: some View {
         ListHead(title: L("待处理"), count: model.waiting.count, attention: true) { Kbd("⌥N") }
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             ForEach(model.waiting) { WaitingCard(item: $0, actions: actions) }
             if model.waiting.isEmpty {
-                Text(L("都处理完了")).font(.mad(12.5)).foregroundStyle(Color.madFg3)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 2).padding(.vertical, 2)
+                Text(L("都处理完了")).font(.system(size: 14)).foregroundStyle(Color.madFg3)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(.vertical, 2)
             }
         }
     }
@@ -132,28 +158,25 @@ public struct MacSidebar: View {
         switch section.kind {
         case .chats:
             ListHead(title: section.title) {
-                HomeNewMenu(action: actions.create, style: .plain)
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
+                MacSmallNewMenu(action: actions.create)
             }
         case .project:
             ListHead(title: section.title) { if let meta = section.meta { ProjectMetaLine(meta: meta) } }
         }
     }
 
-    /// The person: their picture and name, 用量 › at the right. A click opens Usage; a right click offers the menu.
+    /// The person: their picture and name (a click opens Usage, a right click offers the menu), and the round grid
+    /// button at the right, whose popover is the menu.
     private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Color.madLine).frame(height: 1)
+        HStack(spacing: 8) {
             Button { selection = HomeRow.usageID; actions.open(HomeRow.usageID) } label: {
-                HStack(spacing: 10) {
-                    PersonPicture(name: model.person ?? NSFullUserName(), size: 28)
-                    Text(model.person ?? NSFullUserName()).font(.mad(13.5, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
+                HStack(spacing: 12) {
+                    PersonPicture(name: model.person ?? NSFullUserName(), size: Mac.rowAvatar)
+                    Text(model.person ?? NSFullUserName()).font(MadType.rowName).foregroundStyle(Color.madFg).lineLimit(1)
                     Spacer(minLength: 0)
-                    Text(L("用量 ›")).font(.mad(11)).foregroundStyle(Color.madFg3)
                 }
-                .padding(.horizontal, 8).padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .frame(height: Mac.rowHeight)
                 .modifier(SelectedRowBackground(selected: selection == HomeRow.usageID))
                 .contentShape(Rectangle())
             }
@@ -164,10 +187,12 @@ public struct MacSidebar: View {
                     ForEach(group, id: \.self) { item in Button(item.title) { actions.menu(item) } }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+            MacFooterMenu(groups: menu, action: actions.menu)
         }
+        .padding(.leading, 10)
+        .padding(.trailing, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
     }
 }
 #endif
