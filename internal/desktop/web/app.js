@@ -623,7 +623,9 @@ function waitAsk(it, a) {
   const card = el("div", `ask ask-inbox${ib.pending.has(it.key) ? " sent" : ""}`);
   card.dataset.key = it.key;
   const head = el("div", "ah");
-  const what = it.mono || it.context === "Bash" ? T("想运行一条命令", "Wants to run a command") : it.kind === "question" ? T("想问你", "Asks you") : it.context || T("在等你", "Waiting for you");
+  // the server's context is the tool's code name (or "needs you"): the card says it in words
+  const what = it.mono || it.context === "Bash" ? T("想运行一条命令", "Wants to run a command") : it.kind === "question" ? T("想问你", "Asks you")
+    : it.context && it.context !== "needs you" ? T(`想用 ${it.context}`, `Wants to use ${it.context}`) : T("在等你", "Waiting for you");
   head.append(avatar(a, true), el("span", "t", what));
   const age = el("span", "al");
   age.append(T("等了 ", "Waiting "), tick(it.since));

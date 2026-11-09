@@ -29,9 +29,10 @@ final class EdgeHomeTests: MadUITestCase {
         // ios and five: one image, the dot (their tiles say "working", since a member works); the
         // needs-you agent: two (the character says so, and the dot); the others: none.
         for (name, want) in [("ios", 1), ("five", 1), ("给我绘制一个表格", 2), ("shots", 0), ("pair", 0), ("solo", 0)] {
-            let row = element(name).firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 10), "no row named \(name)")
-            XCTAssertEqual(needsYouImages(in: row), want, "the \(name) row has \(needsYouImages(in: row)) “needs you” image(s), expected \(want)")
+            XCTAssertTrue(element(name).firstMatch.waitForExistence(timeout: 10), "no row named \(name)")
+            // an agent that needs you is also named in the 待处理 cards above its row: its row is the one with the images
+            let got = element(name).allElementsBoundByIndex.map { needsYouImages(in: $0) }.max() ?? 0
+            XCTAssertEqual(got, want, "the \(name) row has \(got) “needs you” image(s), expected \(want)")
         }
         shot("the rows with the red dot")
     }
