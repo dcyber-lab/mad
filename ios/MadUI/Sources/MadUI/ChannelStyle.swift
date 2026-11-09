@@ -112,7 +112,7 @@ func chatText(_ text: String, mine: Bool, colors: [String: Color] = [:]) -> Attr
         #if os(iOS)
         a[from..<to].font = .system(size: 19, weight: .semibold)
         #else
-        a[from..<to].font = .body.weight(.semibold)
+        a[from..<to].font = .system(size: 17, weight: .semibold)
         #endif
         let name = String(plain[r].dropFirst())
         if let c = colors[name] {

@@ -31,13 +31,13 @@ struct NewChatDetail: View {
             VStack(spacing: 0) {
                 if let p = project {
                     Text(L("想做点什么？")).font(.system(size: 30, weight: .bold)).tracking(-0.4).foregroundStyle(Color.madFg)
-                    Text(Lf("在 %@ 里", where_(p))).font(.system(size: 15)).foregroundStyle(Color.madFg3).padding(.top, 8)
+                    Text(Lf("在 %@ 里", where_(p))).font(.system(size: 16.5)).foregroundStyle(Color.madFg3).padding(.top, 8)
                     composer(p).padding(.top, 28)
-                    if let error { Text(error).font(.system(size: 13)).foregroundStyle(Color.madDanger).padding(.top, 10) }
+                    if let error { Text(error).font(.system(size: 14.5)).foregroundStyle(Color.madDanger).padding(.top, 10) }
                     if !past.isEmpty { earlier(p).padding(.top, 36) }
                 } else {
                     Text(L("先添加一个项目")).font(.system(size: 30, weight: .bold)).foregroundStyle(Color.madFg)
-                    Text(L("项目就是 agent 工作所在的目录。")).font(.system(size: 15)).foregroundStyle(Color.madFg3).padding(.top, 8)
+                    Text(L("项目就是 agent 工作所在的目录。")).font(.system(size: 16.5)).foregroundStyle(Color.madFg3).padding(.top, 8)
                 }
             }
             .padding(.top, 72)
@@ -65,11 +65,11 @@ struct NewChatDetail: View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text(L("问点什么，或者交代一件事")).font(.system(size: 16)).foregroundStyle(Color.madFg3)
+                    Text(L("问点什么，或者交代一件事")).font(Mac.composerText).foregroundStyle(Color.madFg3)
                         .padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
                 }
                 TextEditor(text: $text)
-                    .font(.system(size: 16))
+                    .font(Mac.composerText)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 48, maxHeight: 220)
                     .fixedSize(horizontal: false, vertical: true)
@@ -124,9 +124,9 @@ struct NewChatDetail: View {
         HStack(spacing: 2) {
             ForEach(Self.kinds, id: \.id) { k in
                 Button { kind = k.id } label: {
-                    Text(k.name).font(.system(size: 13, weight: kind == k.id ? .semibold : .regular))
+                    Text(k.name).font(.system(size: 14.5, weight: kind == k.id ? .semibold : .regular))
                         .foregroundStyle(kind == k.id ? Color.madFg : Color.madFg3)
-                        .padding(.horizontal, 10).frame(height: 26)
+                        .padding(.horizontal, 11).frame(height: 30)
                         .background(kind == k.id ? Color.madPaper : Color.clear, in: Capsule())
                         .shadow(color: .black.opacity(kind == k.id ? 0.08 : 0), radius: 1.5, y: 1)
                         .contentShape(Capsule())
@@ -166,10 +166,10 @@ struct NewChatDetail: View {
             content()
             Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.madFg3)
         }
-        .font(.system(size: 13))
+        .font(.system(size: 14.5))
         .foregroundStyle(Color.madFg)
         .padding(.horizontal, 10)
-        .frame(height: 32)
+        .frame(height: 34)
         .overlay(Capsule().strokeBorder(Color.madLine, lineWidth: 1))
         .contentShape(Capsule())
     }
@@ -179,17 +179,17 @@ struct NewChatDetail: View {
     private func earlier(_ p: Project) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(L("接着以前的对话"), systemImage: "clock")
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.madFg2)
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.madFg2)
                 .padding(.horizontal, 10).padding(.bottom, 6)
             ForEach(past.prefix(12)) { s in
                 Button { resume(s, in: p) } label: {
                     HStack(spacing: 12) {
                         CharacterView(id: s.id, kind: s.kind, state: .idle, size: 26)
-                        Text(s.title.isEmpty ? s.id : s.title).font(.system(size: 14)).foregroundStyle(Color.madFg)
+                        Text(s.title.isEmpty ? s.id : s.title).font(.system(size: 16)).foregroundStyle(Color.madFg)
                             .lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 12)
                         if let u = s.updated {
-                            Text(MadWords.ago(Date().timeIntervalSince(u))).font(.system(size: 12)).foregroundStyle(Color.madFg3)
+                            Text(MadWords.ago(Date().timeIntervalSince(u))).font(.system(size: 13.5)).foregroundStyle(Color.madFg3)
                         }
                     }
                     .padding(.horizontal, 10).frame(height: 40)
