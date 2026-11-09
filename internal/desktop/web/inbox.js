@@ -307,9 +307,10 @@ function actButton(it, a, where, chip) {
     // sent: it stays here, saying so, until the snapshot settles it
     b.disabled = true;
     if (p.verb === a.verb && p.label === a.label && p.option === (a.option || "")) {
-      // a question's chip keeps its words and shows it was the one tapped; any other act says what it is doing
+      // an option (a question's, a TUI prompt's) keeps its words, which a long label would not fit in a shorter
+      // chip, and shows it was the one tapped; an act with none says what it is doing
       if (chip) b.classList.add("tapped");
-      if (!chip || it.kind !== "question") b.textContent = pendingWord(a);
+      if (!chip || !a.option) b.textContent = pendingWord(a);
     }
   }
   return b;

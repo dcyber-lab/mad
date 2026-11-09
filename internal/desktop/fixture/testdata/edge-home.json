@@ -47,6 +47,17 @@
             "mode": "window"
           },
           {
+            "id": "keys0001-eeee",
+            "kind": "claude",
+            "status": "waiting",
+            "shown": "waiting",
+            "chat": true,
+            "color": "#d97757",
+            "title": "清理构建目录",
+            "last": "想运行一条命令，等你确认",
+            "headless": false
+          },
+          {
             "id": "stop0001-cccc",
             "kind": "claude",
             "status": "exited",
@@ -278,6 +289,23 @@
     "inbox": {
       "items": [
         {
+          "key": "k-keys",
+          "kind": "permission",
+          "agent": "keys0001-eeee",
+          "title": "清理构建目录",
+          "context": "Bash",
+          "text": "Do you want to proceed?",
+          "body": "rm -rf build/ dist/",
+          "full": true,
+          "since": "-1m",
+          "acts": [
+            {"verb": "allow", "label": "Yes", "option": "Yes", "primary": true, "row": true},
+            {"verb": "allow", "label": "Yes, and don't ask again for rm commands in /fixture/mad", "option": "Yes, and don't ask again for rm commands in /fixture/mad"},
+            {"verb": "answer", "label": "No, and tell Claude what to do differently (esc)", "option": "No, and tell Claude what to do differently (esc)"},
+            {"verb": "deny", "label": "Cancel (Esc)"}
+          ]
+        },
+        {
           "key": "k-ask",
           "kind": "question",
           "agent": "ask0001-dddd",
@@ -318,6 +346,14 @@
     }
   },
   "chat": {
+    "keys0001-eeee": {
+      "file": "fixture",
+      "offset": 600,
+      "reset": true,
+      "entries": [
+        {"kind": "user", "text": "清理构建目录"}
+      ]
+    },
     "ask0001-dddd": {
       "file": "fixture",
       "offset": 800,
