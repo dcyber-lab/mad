@@ -52,7 +52,7 @@ private struct PhoneWaitingTask: View {
                 if item.isPermission {
                     if !item.detail.isEmpty { PhoneCommandBox(text: item.detail, mono: item.mono, cut: $cut).padding(.top, 8) }
                 } else if !item.detail.isEmpty {
-                    Text(item.detail).font(.system(size: 15)).foregroundStyle(Color.madFg).lineLimit(2).padding(.top, 6)
+                    Text(item.detail).font(.system(size: 15)).foregroundStyle(Color.madFg).lineLimit(item.mustOpen ? 1 : 2).padding(.top, 6)
                 }
                 buttons.padding(.top, 10)
             }
@@ -65,7 +65,9 @@ private struct PhoneWaitingTask: View {
     private var buttons: some View {
         HStack(spacing: 8) {
             if item.mustOpen {
-                pill(L("查看"), primary: true) { actions.open(item.agentID) }
+                // a request that is longer than this card: 查看 opens where all of it shows; 拒绝 is safe to offer here
+                pill(L("查看"), primary: true) { actions.open(item.viewID) }
+                if let deny = item.deny { pill(deny.label, primary: false) { actions.act(item.id, deny.id, nil) } }
             } else if item.isPermission {
                 if cut && !item.detail.isEmpty {
                     // the whole command is read before it is allowed

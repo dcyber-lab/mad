@@ -13,6 +13,9 @@ public struct Deck: Equatable, Decodable, Sendable {
     /// The channels and DMs (`bus`), in the order the server lists them.
     public var channels: [Channel]
     public var inbox: Inbox
+    /// Create requests that were answered (and the ones still creating), newest first, for a day: the outcome of each is
+    /// what the result lines draw from. The key is the item's (`create:c-1`).
+    public var creates: [InboxItem]
     /// How much of each kind's subscription is used, claude first.
     public var usage: [Usage]
     /// How each shown state is worded, most urgent first.
@@ -28,7 +31,7 @@ public struct Deck: Equatable, Decodable, Sendable {
     /// What today's responses cost at API prices, over every transcript on the Mac (not only the deck's), in dollars.
     public var today: Double
 
-    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at, spend, user, today }
+    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, creates, quota, states, working, at, spend, user, today }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -38,6 +41,7 @@ public struct Deck: Equatable, Decodable, Sendable {
         teams = try c.decodeIfPresent([Team].self, forKey: .teams) ?? []
         channels = try c.decodeIfPresent([Channel].self, forKey: .bus) ?? []
         inbox = try c.decodeIfPresent(Inbox.self, forKey: .inbox) ?? Inbox()
+        creates = (try? c.decodeIfPresent([InboxItem].self, forKey: .creates)) ?? []
         usage = (try? c.decodeIfPresent(UsageList.self, forKey: .quota))??.items ?? []
         states = try c.decodeIfPresent([Look].self, forKey: .states) ?? []
         working = try c.decodeIfPresent([String].self, forKey: .working) ?? []
@@ -50,7 +54,8 @@ public struct Deck: Equatable, Decodable, Sendable {
 
     public init(machine: String? = nil, projects: [Project] = [], teams: [Team] = [], channels: [Channel] = [],
                 inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil,
-                spend: Spend? = nil, user: String? = nil, today: Double = 0) {
+                spend: Spend? = nil, user: String? = nil, today: Double = 0, creates: [InboxItem] = []) {
+        self.creates = creates
         self.machine = machine; self.projects = projects; self.teams = teams; self.channels = channels
         self.inbox = inbox; self.usage = usage; self.states = states; self.working = working; self.at = at
         self.spend = spend; self.user = user; self.today = today
@@ -457,7 +462,9 @@ public struct InboxAct: Equatable, Decodable, Identifiable, Sendable {
         switch verb {
         case "allow": return option != nil ? label : kind == "plan" ? "批准计划" : "允许"
         case "always": return "总是允许"
-        case "deny": return input ? (row ? "继续规划" : "改为告诉它…") : row ? "拒绝" : "取消"
+        case "deny":
+            if input && kind == "create" { return "改一下…" }
+            return input ? (row ? "继续规划" : "改为告诉它…") : row ? "拒绝" : "取消"
         case "answer": return input ? "回复" : label
         case "reply": return "回复"
         case "approve": return "批准"
@@ -526,10 +533,14 @@ public struct InboxItem: Equatable, Decodable, Identifiable, Sendable {
     public var blocks: Bool
     public var acts: [InboxAct]
     public var open: InboxOpen
+    /// A create request: what it would start (kind "create"), the channel the bot was answering in, and how it ended.
+    public var create: CreateSpec?
+    public var from: String?
+    public var outcome: CreateOutcome?
     public var id: String { key }
 
     enum CodingKeys: String, CodingKey {
-        case key, kind, agent, icon, title, context, text, mono, body, full, since, blocks, acts, open
+        case key, kind, agent, icon, title, context, text, mono, body, full, since, blocks, acts, open, create, from, outcome
     }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -549,11 +560,16 @@ public struct InboxItem: Equatable, Decodable, Identifiable, Sendable {
         blocks = try c.decodeIfPresent(Bool.self, forKey: .blocks) ?? false
         acts = try c.decodeIfPresent([InboxAct].self, forKey: .acts) ?? []
         open = try c.decodeIfPresent(InboxOpen.self, forKey: .open) ?? InboxOpen()
+        create = try? c.decodeIfPresent(CreateSpec.self, forKey: .create)
+        from = try c.decodeIfPresent(String.self, forKey: .from)
+        outcome = try? c.decodeIfPresent(CreateOutcome.self, forKey: .outcome)
     }
     public init(key: String, kind: String = "", agent: String? = nil, title: String,
                 context: String? = nil, text: String? = nil, mono: Bool = false,
                 body: String? = nil, full: Bool = false, since: Date? = nil,
-                blocks: Bool = false, acts: [InboxAct] = [], open: InboxOpen = InboxOpen()) {
+                blocks: Bool = false, acts: [InboxAct] = [], open: InboxOpen = InboxOpen(),
+                create: CreateSpec? = nil, from: String? = nil, outcome: CreateOutcome? = nil) {
+        self.create = create; self.from = from; self.outcome = outcome
         self.key = key; self.kind = kind; self.agent = agent; self.icon = nil
         self.title = title; self.context = context; self.text = text; self.mono = mono
         self.body = body; self.full = full; self.since = since; self.blocks = blocks
@@ -561,6 +577,86 @@ public struct InboxItem: Equatable, Decodable, Identifiable, Sendable {
     }
 
     static func date(_ s: String) -> Date? { InboxDates.parse(s) }
+}
+
+/// What a create request would start: a team (its roles and goal) or an agent (its kind, model, channel and first message).
+public struct CreateSpec: Equatable, Decodable, Sendable {
+    public struct Role: Equatable, Decodable, Sendable {
+        public var role: String
+        public var kind: String
+        public var model: String
+        public var lead: Bool
+        enum CodingKeys: String, CodingKey { case role, kind, model, lead }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            role = try c.decodeIfPresent(String.self, forKey: .role) ?? ""
+            kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
+            model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+            lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
+        }
+        public init(role: String, kind: String, model: String = "", lead: Bool = false) {
+            self.role = role; self.kind = kind; self.model = model; self.lead = lead
+        }
+    }
+
+    /// "team" or "agent": the apps word the card by this, never by the item's English `context`.
+    public var type: String
+    public var name: String
+    public var projectName: String
+    public var roles: [Role]
+    public var goal: String
+    public var kind: String
+    public var model: String
+    public var channel: String
+    public var message: String
+    public var isTeam: Bool { type == "team" }
+
+    enum CodingKeys: String, CodingKey { case type, name, projectName = "project_name", roles, goal, kind, model, channel, message }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        type = try c.decodeIfPresent(String.self, forKey: .type) ?? "agent"
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        projectName = try c.decodeIfPresent(String.self, forKey: .projectName) ?? ""
+        roles = try c.decodeIfPresent([Role].self, forKey: .roles) ?? []
+        goal = try c.decodeIfPresent(String.self, forKey: .goal) ?? ""
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        channel = try c.decodeIfPresent(String.self, forKey: .channel) ?? ""
+        message = try c.decodeIfPresent(String.self, forKey: .message) ?? ""
+    }
+    public init(type: String, name: String, projectName: String = "", roles: [Role] = [], goal: String = "", kind: String = "",
+                model: String = "", channel: String = "", message: String = "") {
+        self.type = type; self.name = name; self.projectName = projectName; self.roles = roles; self.goal = goal
+        self.kind = kind; self.model = model; self.channel = channel; self.message = message
+    }
+}
+
+/// How a create request ended: `creating` (mad is starting it), `created`, `declined`, `changes` (the person's words in
+/// `reply`), `expired` or `failed` (`reason`). `agent` / `team` / `channel` name what was made.
+public struct CreateOutcome: Equatable, Decodable, Sendable {
+    public var status: String
+    public var agent: String
+    public var team: String
+    public var channel: String
+    public var reason: String
+    public var reply: String
+    /// When it ended (or began, while creating); nil when the server did not say.
+    public var at: Date?
+    enum CodingKeys: String, CodingKey { case status, agent, team, channel, reason, reply, at }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
+        agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? ""
+        team = try c.decodeIfPresent(String.self, forKey: .team) ?? ""
+        channel = try c.decodeIfPresent(String.self, forKey: .channel) ?? ""
+        reason = try c.decodeIfPresent(String.self, forKey: .reason) ?? ""
+        reply = try c.decodeIfPresent(String.self, forKey: .reply) ?? ""
+        at = MadDate.decode(c, .at)
+    }
+    public init(status: String, agent: String = "", team: String = "", channel: String = "", reason: String = "", reply: String = "", at: Date? = nil) {
+        self.at = at
+        self.status = status; self.agent = agent; self.team = team; self.channel = channel; self.reason = reason; self.reply = reply
+    }
 }
 
 /// Dates: Go writes RFC 3339, with or without fractional seconds, and a zero time where it has none.

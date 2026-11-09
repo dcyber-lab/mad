@@ -228,7 +228,7 @@ struct Detail: View {
             } else if let agent = store.agent(id: id) {
                 AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb, draft: handovers.drafts[agent.id] ?? "",
                             startNote: handovers.failures[agent.id], pending: handovers.firsts[agent.id],
-                            tookHandover: { tookHandover(agent.id) }).id(agent.id)
+                            tookHandover: { tookHandover(agent.id) }, openRow: open).id(agent.id)
             } else {
                 placeholder(id, L("已经不在了"))
             }
@@ -316,9 +316,13 @@ struct AgentDetail: View {
     private let draft: String
     private let pending: PendingFirst?
     private let tookHandover: () -> Void
+    /// Opens a row of the home (a channel or an agent): 打开 on a create result line.
+    private let openRow: (String) -> Void
 
     init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil, draft: String = "",
-         startNote: String? = nil, pending: PendingFirst? = nil, tookHandover: @escaping () -> Void = {}) {
+         startNote: String? = nil, pending: PendingFirst? = nil, tookHandover: @escaping () -> Void = {},
+         openRow: @escaping (String) -> Void = { _ in }) {
+        self.openRow = openRow
         self.draft = draft
         self.tookHandover = tookHandover
         _failure = State(initialValue: startNote)
@@ -404,7 +408,13 @@ struct AgentDetail: View {
             openTerminal: { Task { await run { try await api.openTerminal(agent: id) } } },
             finish: { b in Task { await runFinish(b) } },
             rename: { name in Task { await run { try await api.renameAgent(id: id, name: name) } } },
-            sleep: { Task { await run { try await api.sleepAgent(id: id) } } })
+            sleep: { Task { await run { try await api.sleepAgent(id: id) } } },
+            openCreated: { target in
+                switch target {
+                case .channel(let c): openRow(c)
+                case .agent(let a): openRow(a)
+                }
+            })
     }
 
     /// Runs a call to the Mac for this agent: what it refuses shows in the notice; the deck is looked at again after.

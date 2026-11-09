@@ -36,7 +36,10 @@ enum ActWords {
         case "always":
             if let program = command.flatMap(program(of:)) { return Lf("本次会话都允许 %@", program) }
             return L("本次会话都允许")
-        case "deny": return act.input ? (act.row ? L("继续规划") : L("拒绝并说明…")) : act.row ? L("拒绝") : L("取消")
+        case "deny":
+            // a create request's deny with words is 改一下… (before the plan rule: deny + input + row is 继续规划)
+            if act.input && act.kind == "create" { return L("改一下…") }
+            return act.input ? (act.row ? L("继续规划") : L("拒绝并说明…")) : act.row ? L("拒绝") : L("取消")
         case "answer": return act.input ? L("回复") : act.label
         case "reply": return L("回复")
         case "approve": return L("批准")

@@ -169,6 +169,7 @@ func newHandler(name, web string) (http.Handler, error) {
 	mux.HandleFunc("POST /api/pair", f.pair)
 	mux.HandleFunc("POST /api/budget", f.budget)
 	mux.HandleFunc("POST /api/agents", f.start)
+	mux.HandleFunc("POST /api/inbox", f.inbox)
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
 		mux.HandleFunc("GET /api/"+p, func(w http.ResponseWriter, r *http.Request) { reply(w, []any{}) })
 	}
@@ -193,6 +194,8 @@ type fixture struct {
 	posted map[string][]json.RawMessage
 	// postedAt: when each posted message came, by channel and number: its receipt moves on as time passes.
 	postedAt map[string]map[int]time.Time
+	// answered: the create requests the person answered through POST /api/inbox, by item key.
+	answered map[string]answeredCreate
 	// started: the agents the person started through POST /api/agents, with the project's path; the deck lists them.
 	started []startedAgent
 }
@@ -238,6 +241,7 @@ func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
 	f.spendMu.Unlock()
 	relative(d, now)
 	f.addStarted(d)
+	f.applyAnswers(d, now)
 	if _, ok := f.scn.Deck["working"]; !ok {
 		d["working"] = running(d)
 	}
@@ -611,4 +615,202 @@ func (f *fixture) startedChat(w http.ResponseWriter, r *http.Request, s startedA
 	}
 	entries = append(entries, map[string]any{"kind": "text", "text": "Fixture reply: on it."})
 	reply(w, map[string]any{"file": "started", "offset": offset, "reset": true, "entries": entries})
+}
+
+// answeredCreate is a create request the person answered: with what, and when.
+type answeredCreate struct {
+	verb string // allow, deny, or change (deny with words)
+	text string
+	at   time.Time
+}
+
+// createAnswerAfter is how long the fixture takes to take an act on a create request.
+const createAnswerAfter = 1500 * time.Millisecond
+
+// createCreatingFor is how long an allowed request is "creating" before it is created, as a team takes a moment to start.
+const createCreatingFor = 2 * time.Second
+
+// inbox answers an act on an inbox item. Only a create request reacts (the rest answers nothing, as before): allow makes
+// it (creating, then created), deny declines it, deny with words asks for changes; its card leaves the inbox for the
+// deck's creates, and a request that came from a channel leaves an event line there.
+func (f *fixture) inbox(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Key  string `json:"key"`
+		Verb string `json:"verb"`
+		Text string `json:"text"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil || !strings.HasPrefix(in.Key, "create:") {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// a Mac takes a moment to answer, and the card shows its sending state until it has
+	time.Sleep(createAnswerAfter)
+	verb := in.Verb
+	if verb == "deny" && in.Text != "" {
+		verb = "change"
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, done := f.answered[in.Key]; !done {
+		if f.answered == nil {
+			f.answered = map[string]answeredCreate{}
+		}
+		f.answered[in.Key] = answeredCreate{verb: verb, text: in.Text, at: time.Now()}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// applyAnswers moves the answered create items from the inbox to the deck's creates, with their outcome, makes what an
+// allowed one asked for once it is created, and adds the event line to the channel it came from.
+func (f *fixture) applyAnswers(d map[string]any, now time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.answered) == 0 {
+		return
+	}
+	// the scenario's own maps are shared by every request: the inbox is copied before it changes
+	old, _ := d["inbox"].(map[string]any)
+	in := make(map[string]any, len(old))
+	for k, v := range old {
+		in[k] = v
+	}
+	d["inbox"] = in
+	items, _ := in["items"].([]any)
+	keep, ended := []any{}, []any{}
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		a, ok := f.answered[fmt.Sprint(m["key"])]
+		if m == nil || !ok {
+			keep = append(keep, it)
+			continue
+		}
+		cp := make(map[string]any, len(m)+1)
+		for k, v := range m {
+			cp[k] = v
+		}
+		cp["acts"] = []any{}
+		spec, _ := m["create"].(map[string]any)
+		name := fmt.Sprint(spec["name"])
+		out := map[string]any{"at": a.at.Format(time.RFC3339)}
+		switch {
+		case a.verb == "allow" && now.Sub(a.at) < createCreatingFor:
+			out["status"] = "creating"
+		case a.verb == "allow":
+			out["status"] = "created"
+			if spec["type"] == "team" {
+				out["team"], out["channel"] = name, name
+				addTeamChannel(d, name, spec)
+			} else {
+				id := "made-" + name
+				out["agent"], out["channel"] = id, "dm."+fmt.Sprint(m["agent"])+"."+id
+				addMadeAgent(d, id, name, spec, a.at)
+			}
+		case a.verb == "change":
+			out["status"], out["reply"] = "changes", a.text
+		default:
+			out["status"] = "declined"
+		}
+		cp["outcome"] = out
+		ended = append(ended, cp)
+		if from, _ := m["from"].(string); from != "" && out["status"] != "creating" {
+			f.addEvent(from, fmt.Sprint(m["key"]), out, spec, a.at)
+		}
+	}
+	in["items"] = keep
+	in["needs"] = len(keep)
+	cs, _ := d["creates"].([]any)
+	d["creates"] = append(ended, cs...)
+}
+
+// eventNames are the channel event lines of the outcomes.
+var eventNames = map[string]string{"created": "created", "declined": "create_declined", "changes": "create_changes", "expired": "create_expired", "failed": "create_failed"}
+
+// addEvent posts mad's event line for an outcome to the channel the request came from, once.
+func (f *fixture) addEvent(channel, key string, out, spec map[string]any, at time.Time) {
+	if f.posted == nil {
+		f.posted = map[string][]json.RawMessage{}
+	}
+	for _, raw := range f.posted[channel] {
+		if strings.Contains(string(raw), `"ref":"`+key+`"`) {
+			return
+		}
+	}
+	seq := 0
+	for _, raw := range append(append([]json.RawMessage{}, f.scn.Messages[channel]...), f.posted[channel]...) {
+		var m struct {
+			Seq int `json:"seq"`
+		}
+		if json.Unmarshal(raw, &m) == nil && m.Seq > seq {
+			seq = m.Seq
+		}
+	}
+	data := map[string]any{"type": spec["type"], "name": spec["name"]}
+	for _, k := range []string{"team", "agent", "channel", "reason"} {
+		if v, ok := out[k]; ok {
+			data[k] = v
+		}
+	}
+	if v, ok := out["reply"]; ok {
+		data["words"] = v
+	}
+	raw, _ := json.Marshal(map[string]any{
+		"seq": seq + 1, "at": "-0s", "from": map[string]any{"id": "mad", "label": "mad", "kind": "system"}, "kind": "system",
+		"event": eventNames[fmt.Sprint(out["status"])], "ref": key, "text": "Create request answered.", "data": data})
+	f.posted[channel] = append(f.posted[channel], raw)
+}
+
+// addTeamChannel gives the deck the channel of a team that was made: its roles, the first three agents of the deck in them.
+func addTeamChannel(d map[string]any, name string, spec map[string]any) {
+	var ids []map[string]any
+	ps, _ := d["projects"].([]any)
+	for _, p := range ps {
+		as, _ := p.(map[string]any)["agents"].([]any)
+		for _, a := range as {
+			if m, ok := a.(map[string]any); ok && len(ids) < 3 {
+				ids = append(ids, map[string]any{"id": m["id"], "label": m["name"], "kind": m["kind"]})
+			}
+		}
+	}
+	roles := []any{}
+	roleSpecs, _ := spec["roles"].([]any)
+	for i, r := range roleSpecs {
+		rm, _ := r.(map[string]any)
+		role := map[string]any{"role": rm["role"], "kind": rm["kind"], "lead": rm["lead"] == true}
+		if i < len(ids) {
+			role["agent"] = ids[i]["id"]
+		}
+		roles = append(roles, role)
+	}
+	members := make([]any, len(ids))
+	for i, m := range ids {
+		members[i] = m
+	}
+	ch := map[string]any{"id": name, "title": "#" + name, "members": members, "last": 0, "last_text": "", "last_at": "-0s",
+		"listed": true, "unread": 1, "team": map[string]any{"name": name, "roles": roles}}
+	bus, _ := d["bus"].([]any)
+	d["bus"] = append([]any{ch}, bus...)
+}
+
+// addMadeAgent gives the deck the agent that was made, in the project of the request.
+func addMadeAgent(d map[string]any, id, name string, spec map[string]any, at time.Time) {
+	ps, _ := d["projects"].([]any)
+	out := make([]any, len(ps))
+	for i, p := range ps {
+		out[i] = p
+		m, _ := p.(map[string]any)
+		if m == nil || m["path"] != spec["project"] {
+			continue
+		}
+		cp := make(map[string]any, len(m))
+		for k, v := range m {
+			cp[k] = v
+		}
+		as, _ := m["agents"].([]any)
+		as = as[:len(as):len(as)]
+		agent := map[string]any{"id": id, "kind": spec["kind"], "status": "running", "shown": "working", "chat": true, "name": name,
+			"model": spec["model"], "created": at.Format(time.RFC3339)}
+		cp["agents"] = append([]any{agent}, as...)
+		out[i] = cp
+	}
+	d["projects"] = out
 }

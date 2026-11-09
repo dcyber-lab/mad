@@ -50,10 +50,12 @@ public struct HomeWaiting: Identifiable, Equatable, Sendable {
     /// Its whole request is longer than the card's line (an agent asking to start an agent or a team): the card offers
     /// no Allow and no Deny, only 查看, which opens where all of it is shown, so nothing is allowed blind.
     public var mustOpen: Bool
+    /// What 查看 opens when it is not the agent: the channel a bot's request came from.
+    public var openID: String
 
     public init(id: String, agentID: String, agentKind: String = "", name: String, project: String = "", whereLine: String = "",
-                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false) {
-        self.mustOpen = mustOpen
+                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false, openID: String = "") {
+        self.mustOpen = mustOpen; self.openID = openID
         self.id = id; self.agentID = agentID; self.agentKind = agentKind; self.name = name; self.project = project
         self.whereLine = whereLine; self.age = age; self.cost = cost; self.detail = detail; self.mono = mono; self.acts = acts
     }
@@ -66,6 +68,8 @@ public struct HomeWaiting: Identifiable, Equatable, Sendable {
     public var options: [AskAct] { acts.filter { $0.kind == .other && !$0.input } }
     /// A command to allow, rather than a question.
     public var isPermission: Bool { allow != nil }
+    /// Where 查看 goes.
+    public var viewID: String { openID.isEmpty ? agentID : openID }
 }
 
 /// The Mac's first screen: one sentence of how things stand and what was spent, what waits (as `HomeModel.waiting`),
@@ -242,10 +246,13 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public var age: String
     /// A channel's unread messages: a count at the right.
     public var unread: Int
+    /// A bot's request just made this row (a team's channel, an agent): it first shows with a soft highlight, once.
+    public var fresh: Bool
 
     public init(id: String, kind: Kind = .agent, agentKind: String = "", name: String, preview: String = "",
                 state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = [], helpers: [HomeMember] = [],
-                tool: String = "", age: String = "", unread: Int = 0) {
+                tool: String = "", age: String = "", unread: Int = 0, fresh: Bool = false) {
+        self.fresh = fresh
         self.tool = tool
         self.age = age
         self.unread = unread
@@ -387,5 +394,22 @@ extension HomeModel {
             return s.rows.isEmpty ? nil : s
         }
         return out
+    }
+}
+
+/// Which rows have shown their soft highlight on this device (so a row that a bot's request made lights once, not on every look).
+public enum HomeFresh {
+    private static let key = "mad.home.freshShown"
+    nonisolated(unsafe) private static var shown: Set<String> = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    private static let lock = NSLock()
+
+    public static func isShown(_ id: String) -> Bool { lock.lock(); defer { lock.unlock() }; return shown.contains(id) }
+
+    public static func markShown(_ id: String) {
+        lock.lock(); defer { lock.unlock() }
+        guard shown.insert(id).inserted else { return }
+        // old keys are not worth keeping: the list stays short
+        if shown.count > 200 { shown = Set(shown.suffix(100)) }
+        UserDefaults.standard.set(Array(shown), forKey: key)
     }
 }

@@ -19,11 +19,15 @@ public enum HomeMapping {
         let pinned = Set(waiting.map(\.agentID))
 
         var sections: [HomeSection] = []
-        let chats = chatRows(deck, needs: needs)
+        let made = madeRecently(deck, now: now)
+        let chats = chatRows(deck, needs: needs, made: made)
         if !chats.isEmpty { sections.append(HomeSection(id: "chats", title: L("群聊"), kind: .chats, rows: chats)) }
         for p in deck.projects {
-            let rows = p.agents.filter { !teamed.contains($0.id) && !pinned.contains($0.id) }
-                .map { agentRow($0, deck: deck, needs: needs, now: now) }
+            let shown = p.agents.filter { !teamed.contains($0.id) && !pinned.contains($0.id) }
+            // agents started in the last half hour first, newest first; the rest keep the server's order
+            let fresh = shown.filter { isNewAgent($0, now: now) }.sorted { ($0.created ?? .distantPast) > ($1.created ?? .distantPast) }
+            let rows = (fresh + shown.filter { a in !fresh.contains { $0.id == a.id } })
+                .map { var r = agentRow($0, deck: deck, needs: needs, now: now); r.fresh = made.contains($0.id); return r }
             if !rows.isEmpty {
                 sections.append(HomeSection(id: p.id, title: p.name, kind: .project(name: p.name), rows: rows, meta: meta(p)))
             }
@@ -37,17 +41,38 @@ public enum HomeMapping {
         HomeProjectMeta(branch: p.branch ?? "", changed: p.changed, ahead: p.ahead, cost: p.agents.reduce(0.0) { $0 + $1.cost })
     }
 
-    static func chatRows(_ deck: Deck, needs: Set<String>) -> [HomeRow] {
+    /// How long a team or an agent a bot's request made is "new": first in its list, and lit once.
+    static let newWindow: TimeInterval = 30 * 60
+
+    /// The ids (a team's channel, an agent) that a request the person allowed made within the new window.
+    static func madeRecently(_ deck: Deck, now: Date) -> Set<String> {
+        var out = Set<String>()
+        for item in deck.creates {
+            guard let o = item.outcome, o.status == "created", let at = o.at, now.timeIntervalSince(at) < newWindow else { continue }
+            if !o.channel.isEmpty, item.create?.isTeam == true { out.insert(o.channel) }
+            if !o.agent.isEmpty { out.insert(o.agent) }
+        }
+        return out
+    }
+
+    static func isNewAgent(_ a: Agent, now: Date) -> Bool {
+        guard let created = a.created else { return false }
+        return now.timeIntervalSince(created) < newWindow
+    }
+
+    static func chatRows(_ deck: Deck, needs: Set<String>, made: Set<String> = []) -> [HomeRow] {
         let shown = deck.channels.filter { !$0.dm || $0.yours }
         let ranked = shown.enumerated().map { (index: $0.offset, channel: $0.element, dot: hasDot($0.element, needs: needs)) }
-        // Stable: a dot first, then the newest; what ties keeps the server's order.
+        // Stable: a team a request just made first, a dot next, then the newest; what ties keeps the server's order.
         let sorted = ranked.sorted { a, b in
+            let (ma, mb) = (made.contains(a.channel.id), made.contains(b.channel.id))
+            if ma != mb { return ma }
             if a.dot != b.dot { return a.dot }
             let (x, y) = (a.channel.lastAt ?? .distantPast, b.channel.lastAt ?? .distantPast)
             if x != y { return x > y }
             return a.index < b.index
         }
-        return sorted.map { chatRow($0.channel, dot: $0.dot, deck: deck) }
+        return sorted.map { var r = chatRow($0.channel, dot: $0.dot, deck: deck); r.fresh = made.contains($0.channel.id); return r }
     }
 
     /// Something waits on the person in the channel: it asks them, an unread DM, or a member has an
@@ -136,12 +161,19 @@ public enum HomeMapping {
         switch item.kind {
         case "permission": what = item.title == "Bash" || item.mono ? L("想运行一条命令") : Lf("想用 %@", item.title)
         case "question": what = L("问了一个问题")
+        case "create": what = item.create.map { $0.isTeam ? L("想创建一个团队") : L("想创建一个 agent") } ?? item.title
         default: what = item.context.flatMap { $0.isEmpty ? nil : $0 } ?? item.title
         }
         let whereLine = [project, agent?.kind ?? "", what].filter { !$0.isEmpty }.joined(separator: " · ")
         var detail = item.text ?? ""
         if detail.isEmpty { detail = item.body ?? item.title }
         if item.mono, !detail.hasPrefix("$ ") { detail = "$ " + detail }
+        // a create request: one line of what it would start, in words (not the server's English)
+        if item.kind == "create", let spec = item.create {
+            detail = spec.isTeam
+                ? [spec.name, Lf("%lld 个角色", spec.roles.count), spec.projectName].filter { !$0.isEmpty }.joined(separator: " · ")
+                : [spec.name, CreateMapping.modelWords(kind: spec.kind, model: spec.model), spec.projectName].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
         // An agent's request to start an agent or a team is `full`: its whole spec is in the body, which this card does
         // not show. No Allow here (an installed app meets this item before it has a card of its own): 查看 opens it.
         let blind = item.kind == "create" && item.full
@@ -149,7 +181,8 @@ public enum HomeMapping {
                            agentKind: agent?.kind ?? "", name: agent?.label ?? item.title, project: project,
                            whereLine: whereLine, age: item.since.map { MadWords.age(now.timeIntervalSince($0)) } ?? "",
                            cost: (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : "",
-                           detail: detail, mono: item.mono, acts: blind ? [] : ActWords.acts(of: item), mustOpen: blind)
+                           detail: detail, mono: item.mono, acts: blind ? ActWords.acts(of: item).filter { $0.kind == .deny } : ActWords.acts(of: item), mustOpen: blind,
+                           openID: blind ? (item.from ?? "") : "")
     }
 
     // MARK: Today

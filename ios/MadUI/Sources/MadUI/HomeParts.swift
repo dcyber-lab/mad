@@ -22,11 +22,16 @@ struct WaitingCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(item.age).font(.system(size: 13.5)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
-            if !item.detail.isEmpty {
+            if item.mustOpen, !item.detail.isEmpty {
+                Text(item.detail).font(.system(size: 14)).foregroundStyle(Color.madFg2).lineLimit(1)
+            } else if !item.detail.isEmpty {
                 MacCommandLine(text: item.detail, mono: item.mono, cut: $cut)
             }
             HStack(spacing: 6) {
-                if item.isPermission {
+                if item.mustOpen {
+                    Button(L("查看")) { actions.open(item.viewID) }.buttonStyle(MacPillStyle(primary: true))
+                    if let deny = item.deny { Button(deny.label) { actions.act(item.id, deny.id, nil) }.buttonStyle(MacPillStyle(primary: false)) }
+                } else if item.isPermission {
                     if cut && !item.detail.isEmpty {
                         Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(MacPillStyle(primary: true))
                             .help(L("允许之前先看完全部内容"))

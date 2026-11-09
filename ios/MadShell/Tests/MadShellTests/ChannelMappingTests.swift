@@ -295,7 +295,7 @@ final class ChannelMappingTests: XCTestCase {
     func testThePersonsMessageEndsARunAndIsNeverInOne() {
         let s = screen([msg(1, "architect", "one"), msg(2, "you", "mine"), msg(3, "architect", "again"), msg(4, "you", "a"), msg(5, "you", "b")])
         let kinds = s.items.map { item -> String in
-            switch item { case .run: "run"; case .mine: "mine"; case .time: "time"; case .note: "note" }
+            switch item { case .run: "run"; case .mine: "mine"; case .time: "time"; case .note: "note"; case .create: "create" }
         }
         XCTAssertEqual(kinds, ["time", "run", "mine", "run", "mine", "mine"])
     }
