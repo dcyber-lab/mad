@@ -3,10 +3,21 @@ import MadKit
 import MadUI
 
 /// An agent's store and the deck onto MadUI's `AgentConversation`: what the conversation screen draws.
+/// The first message the person sent when they started an agent, and when.
+public struct PendingFirst: Equatable, Sendable {
+    public var text: String
+    public var since: Date
+    public init(text: String, since: Date) { self.text = text; self.since = since }
+}
+
 public enum AgentMapping {
+    /// How long after the start an agent with no transcript at all is shown as working on the first message: past it,
+    /// one that wrote nothing (it exited) shows as what it is.
+    static let startingWindow: TimeInterval = 30
+
     /// The screen for the agent `store` follows, as `deck` last said it stands.
     @MainActor
-    public static func conversation(store: AgentStore, deck: Deck, pending: String = "") -> AgentConversation {
+    public static func conversation(store: AgentStore, deck: Deck, pending: PendingFirst? = nil) -> AgentConversation {
         conversation(id: store.id, transcript: store.transcript, live: store.live, deck: deck, pending: pending)
     }
 
@@ -14,7 +25,7 @@ public enum AgentMapping {
     /// `pending` is the first message the person sent when they started the agent: until the transcript has a message of
     /// theirs it is shown as their bubble, and the agent as working, so the page never opens empty.
     public static func conversation(id: String, transcript: ChatTranscript, live: LiveState, deck: Deck,
-                                    pending: String = "", now: Date = Date()) -> AgentConversation {
+                                    pending: PendingFirst? = nil, now: Date = Date()) -> AgentConversation {
         let agent = deck.agent(id: id)
         let (canSend, hint) = sending(agent)
         let project = deck.projects.first { $0.agents.contains { $0.id == id } }
@@ -24,7 +35,12 @@ public enum AgentMapping {
         var shown = entries(transcript)
         if let first = pendingEntry(pending, transcript: transcript) {
             shown.insert(first, at: 0)
-            if [.idle, .starting, .stopped].contains(state) { state = .working }
+        }
+        // working while it has not written anything yet, for a short while: one that exited before its first line
+        // is not shown as working for ever
+        if let pending, transcript.entries.isEmpty, now.timeIntervalSince(pending.since) < startingWindow,
+           [.idle, .starting, .stopped].contains(state) {
+            state = .working
         }
         return AgentConversation(
             title: agent?.label ?? id,
@@ -48,9 +64,11 @@ public enum AgentMapping {
 
     /// The person's first message as a bubble, while the transcript has none of theirs yet (it is theirs from then on, so
     /// the bubble is never twice).
-    static func pendingEntry(_ text: String, transcript: ChatTranscript) -> ConvEntry? {
-        guard !text.isEmpty, !transcript.entries.contains(where: { $0.kind == "user" }) else { return nil }
-        return .user("pending", text, images: [])
+    /// A slash command is written as a "command" entry, not a "user" one: it ends the bubble too.
+    static func pendingEntry(_ pending: PendingFirst?, transcript: ChatTranscript) -> ConvEntry? {
+        guard let pending, !pending.text.isEmpty,
+              !transcript.entries.contains(where: { $0.kind == "user" || $0.kind == "command" }) else { return nil }
+        return .user("pending", pending.text, images: [])
     }
 
     /// Tokens in and out as the Details pane says them: "182k / 9.4k"; empty when there are none.

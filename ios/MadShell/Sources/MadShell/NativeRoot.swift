@@ -227,7 +227,7 @@ struct Detail: View {
                     .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
                 AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb, draft: handovers.drafts[agent.id] ?? "",
-                            startNote: handovers.failures[agent.id], pending: handovers.firsts[agent.id] ?? "",
+                            startNote: handovers.failures[agent.id], pending: handovers.firsts[agent.id],
                             tookHandover: { tookHandover(agent.id) }).id(agent.id)
             } else {
                 placeholder(id, L("已经不在了"))
@@ -314,11 +314,11 @@ struct AgentDetail: View {
     private let onBack: (() -> Void)?
     private let openWeb: ((WebTarget) -> Void)?
     private let draft: String
-    private let pending: String
+    private let pending: PendingFirst?
     private let tookHandover: () -> Void
 
     init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil, draft: String = "",
-         startNote: String? = nil, pending: String = "", tookHandover: @escaping () -> Void = {}) {
+         startNote: String? = nil, pending: PendingFirst? = nil, tookHandover: @escaping () -> Void = {}) {
         self.draft = draft
         self.tookHandover = tookHandover
         _failure = State(initialValue: startNote)

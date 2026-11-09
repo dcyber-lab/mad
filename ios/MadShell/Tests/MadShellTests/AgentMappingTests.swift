@@ -232,14 +232,14 @@ final class AgentMappingTests: XCTestCase {
         let deck = try fixture("deck-edge-home", as: Deck.self)
         let none = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck)
         XCTAssertTrue(none.entries.isEmpty, "a transcript with nothing shows nothing")
-        let shown = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: "画个表")
+        let shown = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: PendingFirst(text: "画个表", since: Date()))
         XCTAssertEqual(shown.entries.count, 1)
         guard case let .user(text, _) = shown.entries[0].content else { return XCTFail("not the person's bubble: \(shown.entries[0])") }
         XCTAssertEqual(text, "画个表")
         // once the transcript has the person's message the pending one goes: one bubble of it
         var t = ChatTranscript()
         t.apply(try JSONDecoder().decode(ChatPage.self, from: Data(#"{"file":"f","offset":10,"reset":true,"entries":[{"kind":"user","text":"画个表"},{"kind":"text","text":"好"}]}"#.utf8)))
-        let later = AgentMapping.conversation(id: needs, transcript: t, live: LiveState(), deck: deck, pending: "画个表")
+        let later = AgentMapping.conversation(id: needs, transcript: t, live: LiveState(), deck: deck, pending: PendingFirst(text: "画个表", since: Date()))
         XCTAssertEqual(later.entries.count, 2)
         XCTAssertEqual(later.entries.filter { if case .user = $0.content { true } else { false } }.count, 1)
     }
@@ -250,8 +250,45 @@ final class AgentMappingTests: XCTestCase {
             for i in deck.projects.indices { for j in deck.projects[i].agents.indices where deck.projects[i].agents[j].id == needs {
                 deck.projects[i].agents[j].shown = state
             } }
-            let c = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: "hi")
+            let c = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: PendingFirst(text: "hi", since: Date()))
             XCTAssertEqual(c.state, .working, state)
         }
+    }
+
+    private func page(_ json: String) throws -> ChatTranscript {
+        var t = ChatTranscript()
+        t.apply(try JSONDecoder().decode(ChatPage.self, from: Data(json.utf8)))
+        return t
+    }
+
+    /// A slash command is written as a "command" entry, not a "user" one: the first message's bubble ends on it too, and
+    /// the agent is not forced to working (it has a transcript).
+    func testASlashCommandEndsTheBubbleAndTheForcedWorking() throws {
+        var deck = try fixture("deck-edge-home", as: Deck.self)
+        for i in deck.projects.indices { for j in deck.projects[i].agents.indices where deck.projects[i].agents[j].id == needs {
+            deck.projects[i].agents[j].shown = "stopped"
+        } }
+        let t = try page(#"{"file":"f","offset":5,"reset":true,"entries":[{"kind":"command","text":"/init"}]}"#)
+        let c = AgentMapping.conversation(id: needs, transcript: t, live: LiveState(), deck: deck,
+                                          pending: PendingFirst(text: "/init", since: Date()))
+        XCTAssertTrue(c.entries.isEmpty, "the bubble stayed after the command: \(c.entries)")
+        XCTAssertEqual(c.state, .stopped, "a stopped agent with a transcript is shown working")
+    }
+
+    /// An agent that exits before it writes anything is working for a short while after the start only.
+    func testAStoppedAgentWithNoTranscriptIsWorkingOnlyForAShortWhile() throws {
+        var deck = try fixture("deck-edge-home", as: Deck.self)
+        for i in deck.projects.indices { for j in deck.projects[i].agents.indices where deck.projects[i].agents[j].id == needs {
+            deck.projects[i].agents[j].shown = "stopped"
+        } }
+        let start = Date()
+        let first = PendingFirst(text: "hi", since: start)
+        let soon = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: first,
+                                             now: start.addingTimeInterval(5))
+        XCTAssertEqual(soon.state, .working)
+        let late = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: first,
+                                             now: start.addingTimeInterval(AgentMapping.startingWindow + 1))
+        XCTAssertEqual(late.state, .stopped, "still working long after the start")
+        XCTAssertEqual(late.entries.count, 1, "the person's message stays")
     }
 }

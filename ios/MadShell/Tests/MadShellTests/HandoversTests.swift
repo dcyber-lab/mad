@@ -18,12 +18,13 @@ final class HandoversTests: XCTestCase {
     /// bubble would go before the transcript came.
     func testAFirstMessageThatWentStaysAsTheBubble() {
         var h = Handovers()
-        h.add(StartedChat(id: "a2", text: "画个表", failure: nil))
-        XCTAssertEqual(h.firsts["a2"], "画个表")
+        let at = Date()
+        h.add(StartedChat(id: "a2", text: "画个表", failure: nil, at: at))
+        XCTAssertEqual(h.firsts["a2"], PendingFirst(text: "画个表", since: at))
         XCTAssertNil(h.drafts["a2"])
         XCTAssertNil(h.failures["a2"])
         h.took("a2")
-        XCTAssertEqual(h.firsts["a2"], "画个表")
+        XCTAssertEqual(h.firsts["a2"], PendingFirst(text: "画个表", since: at))
     }
 
     func testResumingAPastSessionHandsNothing() {

@@ -10,6 +10,8 @@ struct StartedChat: Equatable {
     var id: String
     var text: String
     var failure: String?
+    /// When it was started.
+    var at = Date()
 }
 
 /// What a started agent's page is handed when it opens, by agent id: a first message that did not go (the composer's
@@ -18,13 +20,13 @@ struct StartedChat: Equatable {
 struct Handovers: Equatable {
     var drafts: [String: String] = [:]
     var failures: [String: String] = [:]
-    var firsts: [String: String] = [:]
+    var firsts: [String: PendingFirst] = [:]
 
     mutating func add(_ chat: StartedChat) {
         let wrote = !chat.text.isEmpty
         drafts[chat.id] = chat.failure != nil && wrote ? chat.text : nil
         failures[chat.id] = chat.failure
-        firsts[chat.id] = chat.failure == nil && wrote ? chat.text : nil
+        firsts[chat.id] = chat.failure == nil && wrote ? PendingFirst(text: chat.text, since: chat.at) : nil
     }
 
     /// The page took its draft and note: reopening it does not bring them back (the bubble stays, it gives way by itself).
