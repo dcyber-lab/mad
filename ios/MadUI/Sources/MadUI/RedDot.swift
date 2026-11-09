@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The red dot that marks something waiting on the person. It sits at a
-/// character's corner as a separate element, so it is read on its own.
+/// The dot that marks something waiting on the person in a group (a mention, an unread DM). It sits at a group
+/// tile's corner as a separate element, so it is read on its own. It is amber, the color of waiting: red is kept
+/// for errors (the name is older than that rule).
 public struct RedDot: View {
     public var diameter: CGFloat
     public var ring: Color
@@ -22,7 +23,7 @@ public struct RedDot: View {
 
     public var body: some View {
         Circle()
-            .fill(Color(hex: 0xff3b30))
+            .fill(Color.madWait)
             .overlay(Circle().strokeBorder(ring, lineWidth: diameter * 2.5 / 11))
             .frame(width: diameter, height: diameter)
             .accessibilityElement()

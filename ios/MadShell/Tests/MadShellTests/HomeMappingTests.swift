@@ -14,6 +14,11 @@ private func section(_ m: HomeModel, _ id: String) throws -> HomeSection {
 }
 
 final class HomeMappingTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func testEdgeHomeSectionsAndTheMachineName() throws {
         let m = HomeMapping.model(from: try deck("deck-edge-home"))
         XCTAssertEqual(m.machine.count, 60)
@@ -50,7 +55,7 @@ final class HomeMappingTests: XCTestCase {
 
     func testTeamMembersAreNotListedAgainUnderTheirProject() throws {
         let mad = try section(HomeMapping.model(from: try deck("deck-edge-home")), try deckProjectID())
-        XCTAssertEqual(mad.rows.count, 7, "the team ios is one row of the chats, not three under the project")
+        XCTAssertEqual(mad.rows.count, 6, "the team ios is one row of the chats, not three under the project; the waiting agent is pinned on top")
         XCTAssertFalse(mad.rows.contains { ["team0001-arch", "team0001-bld0", "team0001-rev0"].contains($0.id) })
     }
 
@@ -62,13 +67,11 @@ final class HomeMappingTests: XCTestCase {
 
         let working = try XCTUnwrap(byID["work0001-aaaa"])
         XCTAssertEqual(working.state, .working)
-        XCTAssertEqual(working.preview, "正在跑测试…")
+        XCTAssertEqual(working.tool, "Bash", "a working agent's line starts with its tool, in bold")
+        XCTAssertEqual(working.preview, "go test ./...", "then what the tool is pointed at")
         XCTAssertFalse(working.dimmed)
 
-        let need = try XCTUnwrap(byID["need0001-bbbb"])
-        XCTAssertEqual(need.state, .needsYou)
-        XCTAssertTrue(need.needsYou, "it has an item in the inbox")
-        XCTAssertEqual(need.name, "给我绘制一个表格", "a title when there is no name")
+        XCTAssertNil(byID["need0001-bbbb"], "a waiting agent is in 待处理, not in its project")
 
         let stopped = try XCTUnwrap(byID["stop0001-cccc"])
         XCTAssertEqual(stopped.state, .stopped)
@@ -86,10 +89,40 @@ final class HomeMappingTests: XCTestCase {
     func testAgentRowsMatchMadUIsSampleOfTheSameScenario() throws {
         let mad = try section(HomeMapping.model(from: try deck("deck-edge-home")), try deckProjectID())
         let sample = try XCTUnwrap(SampleHome.model.sections.first { $0.title == "mad" })
-        let shared = ["work0001-aaaa", "need0001-bbbb", "stop0001-cccc", "idle0001-dddd", "unti0001-eeee", "cjk00001-ffff", "emoji001-gggg"]
+        // the working agent's line is its tool now, and the waiting one is pinned on top: the rest are as the sample says
+        let shared = ["stop0001-cccc", "idle0001-dddd", "unti0001-eeee", "cjk00001-ffff", "emoji001-gggg"]
         for id in shared {
             XCTAssertEqual(mad.rows.first { $0.id == id }, sample.rows.first { $0.id == id }, "row \(id) differs from MadUI's sample")
         }
+    }
+
+    func testWhatWaitsIsPinnedOnTopAsACard() throws {
+        let d = try deck("deck-edge-home")
+        let since = try XCTUnwrap(d.inbox.items.first?.since)
+        let m = HomeMapping.model(from: d, now: since.addingTimeInterval(4 * 60 + 5))
+        XCTAssertEqual(m.waiting.count, 1)
+        let card = try XCTUnwrap(m.waiting.first)
+        XCTAssertEqual(card.id, "k-need")
+        XCTAssertEqual(card.agentID, "need0001-bbbb")
+        XCTAssertEqual(card.name, "给我绘制一个表格", "a title when there is no name")
+        XCTAssertEqual(card.whereLine, "mad · claude · 想运行一条命令")
+        XCTAssertEqual(card.detail, "$ python3 make_table.py --out report.xlsx")
+        XCTAssertTrue(card.mono)
+        XCTAssertEqual(card.age, "4 分钟")
+        XCTAssertEqual(card.acts.map(\.label), ["允许", "拒绝"])
+        XCTAssertEqual(card.acts.map(\.kind), [.allow, .deny])
+        XCTAssertTrue(card.isPermission)
+        XCTAssertEqual(m.today?.waiting, 1)
+    }
+
+    func testAProjectHeadCarriesItsGitAndCost() {
+        var p = Project(name: "mad", branch: "main", changed: 3, ahead: 2,
+                        agents: [Agent(id: "a", status: "idle", cost: 4), Agent(id: "b", status: "idle", cost: 0.17)])
+        p.path = "/src/mad"
+        let m = HomeMapping.model(from: Deck(projects: [p]))
+        let meta = m.sections.first?.meta
+        XCTAssertEqual(meta?.branch, "main")
+        XCTAssertEqual(meta?.parts, ["3 改动", "↑2", "$4.17"])
     }
 
     func testUsageLine() throws {
@@ -149,6 +182,11 @@ final class HomeMappingTests: XCTestCase {
 
 /// Every ⋯ item that is not native yet opens the page on its view; switching Mac is the app's own.
 final class WebMenuTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans"
+    }
+
     func testEveryMenuItemButSwitchMacOpensAPageView() {
         for item in HomeMenuItem.allCases {
             if item == .switchMac {
@@ -165,13 +203,16 @@ final class WebMenuTests: XCTestCase {
     /// The + items and the ⋯ items are carried out through `openWeb`: none of the home's controls is a silent no-op.
     func testEveryPlusItemAndEveryMenuItemCallsOpenWeb() {
         var asked: [WebTarget] = []
+        var opened: [String] = []
         var switched = 0
-        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: { switched += 1 }, openWeb: { asked.append($0) })
+        let actions = NativeRoot.homeActions(open: { opened.append($0) }, switchMac: { switched += 1 }, openWeb: { asked.append($0) })
         for item in HomeNewItem.allCases { actions.create(item) }
         XCTAssertEqual(asked, [.view(.newchat), .view(.newchannel), .view(.newteam)])
         asked = []
         for item in HomeMenuItem.allCases where item != .switchMac { actions.menu(item) }
-        XCTAssertEqual(asked.count, HomeMenuItem.allCases.count - 1)
+        // 用量 is native now: it opens the Usage screen, not the page
+        XCTAssertEqual(asked.count, HomeMenuItem.allCases.count - 2)
+        XCTAssertEqual(opened, [HomeRow.usageID])
         actions.menu(.switchMac)
         actions.switchMac()
         XCTAssertEqual(switched, 2)

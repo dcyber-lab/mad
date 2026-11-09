@@ -16,10 +16,18 @@ public struct AgentConversation: Equatable, Sendable {
     /// False when the agent can't take messages now (stopped, not on this Mac); `sendHint` says why.
     public var canSend: Bool
     public var sendHint: String
+    /// The head's second line after the kind: "mad / main", and what it has cost ("$0.84"; empty for nothing).
+    public var place: String
+    public var cost: String
+    /// The Details pane and the 改动 tab; nil before the deck says.
+    public var details: AgentDetails?
 
     public init(title: String, agentID: String, kind: String = "", state: CharacterState = .idle,
                 entries: [ConvEntry] = [], live: LiveBubble? = nil, ask: AskCard? = nil,
-                canSend: Bool = true, sendHint: String = "") {
+                canSend: Bool = true, sendHint: String = "", place: String = "", cost: String = "", details: AgentDetails? = nil) {
+        self.place = place
+        self.cost = cost
+        self.details = details
         self.title = title
         self.agentID = agentID
         self.kind = kind
@@ -31,25 +39,24 @@ public struct AgentConversation: Equatable, Sendable {
         self.sendHint = sendHint
     }
 
-    /// The small line under the name.
+    /// How it stands, in words: for VoiceOver, and the Details pane.
     public var stateLine: String {
-        if ask != nil { return "在等你处理" }
-        switch state {
-        case .idle: return "空闲"
-        case .working: return "在工作"
-        case .needsYou: return "在等你"
-        case .starting: return "启动中"
-        case .stopped: return "已停止"
-        }
+        if ask != nil { return L("在等你处理") }
+        return state.title
     }
 
-    /// The red dot shows while something waits on the person.
+    /// The head's second line: "claude · mad / main · $0.84" (the parts it has).
+    public var headLine: String {
+        [kind, place, cost].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The waiting ring shows while something waits on the person.
     public var needsYou: Bool { ask != nil || state == .needsYou }
 
     /// What the empty composer says. A long title is cut: the hint stays one line, as the bar is.
     public var composerPrompt: String {
         let name = title.count > 28 ? String(title.prefix(28)) + "…" : title
-        return "发消息给 \(name)"
+        return Lf("发消息给 %@", name)
     }
 
     /// The interrupt button shows while the agent works, and only when nothing is typed (typing turns it into send).
@@ -84,8 +91,8 @@ public struct ConvEntry: Identifiable, Equatable, Sendable {
     }
     public static func text(_ id: String, _ markdown: String) -> ConvEntry { ConvEntry(id: id, .text(markdown: markdown)) }
     public static func tool(_ id: String, _ tool: ConvTool) -> ConvEntry { ConvEntry(id: id, .tool(tool)) }
-    public static func earlier(_ id: String = "earlier", _ note: String = "更早的消息") -> ConvEntry {
-        ConvEntry(id: id, .earlier(note))
+    public static func earlier(_ id: String = "earlier", _ note: String? = nil) -> ConvEntry {
+        ConvEntry(id: id, .earlier(note ?? L("更早的消息")))
     }
 
     /// One label for the whole entry; `agent` is the agent's name.
@@ -162,8 +169,14 @@ public struct AskCard: Equatable, Sendable {
     /// The detail is code (a command): set in a monospaced box.
     public var mono: Bool
     public var acts: [AskAct]
+    /// How long it has waited: "等了 4 分钟"; empty when not known.
+    public var waited: String
+    /// A command to allow (the card's head says "想运行一条命令"), rather than a question.
+    public var permission: Bool
 
-    public init(id: String, title: String, detail: String = "", mono: Bool = false, acts: [AskAct]) {
+    public init(id: String, title: String, detail: String = "", mono: Bool = false, acts: [AskAct], waited: String = "", permission: Bool = false) {
+        self.waited = waited
+        self.permission = permission
         self.id = id
         self.title = title
         self.detail = detail
@@ -177,20 +190,48 @@ public struct AskCard: Equatable, Sendable {
 }
 
 public struct AskAct: Identifiable, Equatable, Sendable {
+    /// What an act does, where a screen draws some of them apart: Allow and Deny on a compact card, Return and Esc.
+    public enum Kind: Equatable, Sendable { case allow, allowSession, deny, denyWhy, other }
+
     public var id: String
     public var label: String
     /// The one Return does; drawn filled.
     public var primary: Bool
     /// It takes words first (a reason, an answer of one's own): the card asks for text before it acts.
     public var input: Bool
+    public var kind: Kind
 
-    public init(id: String, label: String, primary: Bool = false, input: Bool = false) {
+    public init(id: String, label: String, primary: Bool = false, input: Bool = false, kind: Kind = .other) {
+        self.kind = kind
         self.id = id
         self.label = label
         self.primary = primary
         self.input = input
     }
 }
+
+/// What the agent page's Details pane and 改动 tab show: how it stands, its project's git, its cost, its session.
+public struct AgentDetails: Equatable, Sendable {
+    /// How long it has been in its state: "23 分钟"; empty when not known.
+    public var since: String
+    public var branch: String
+    /// Files changed in its project, and commits not pushed.
+    public var changed: Int
+    public var ahead: Int
+    public var cost: String
+    /// The session's id (its first 8 characters show) and its directory ("~/src/mad").
+    public var session: String
+    public var directory: String
+
+    public init(since: String = "", branch: String = "", changed: Int = 0, ahead: Int = 0, cost: String = "", session: String = "",
+                directory: String = "") {
+        self.since = since; self.branch = branch; self.changed = changed; self.ahead = ahead; self.cost = cost
+        self.session = session; self.directory = directory
+    }
+}
+
+/// The git buttons of the Details pane and the 改动 tab.
+public enum AgentGitAct: Sendable { case push, openPR, rebase, changes }
 
 /// What the screen does; each is a closure the app fills in.
 public struct ConversationActions {
@@ -205,15 +246,25 @@ public struct ConversationActions {
     public var back: () -> Void
     /// The ＋ beside the composer (attach).
     public var attach: () -> Void
-    /// The agent's terminal and changes, which have no native view yet: a button in the header that opens them
-    /// in the web page. Nil draws no button.
+    /// The agent's changes in the web page (they have no native view yet): the 改动 tab's button. Nil draws none.
     public var openWeb: (() -> Void)?
+    /// The ⋯ menu's 在终端打开: the agent in mad's terminal deck. Nil leaves it out.
+    public var openTerminal: (() -> Void)?
+    /// The Details pane's buttons; nil leaves a button out.
+    public var git: ((AgentGitAct) -> Void)?
+    public var rename: ((String) -> Void)?
+    public var sleep: (() -> Void)?
 
     public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {},
-                openWeb: (() -> Void)? = nil) {
+                openWeb: (() -> Void)? = nil, openTerminal: (() -> Void)? = nil, git: ((AgentGitAct) -> Void)? = nil,
+                rename: ((String) -> Void)? = nil, sleep: (() -> Void)? = nil) {
+        self.openTerminal = openTerminal
+        self.git = git
+        self.rename = rename
+        self.sleep = sleep
         self.openWeb = openWeb
         self.send = send
         self.act = act

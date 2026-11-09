@@ -21,8 +21,10 @@ public struct Deck: Equatable, Decodable, Sendable {
     public var working: [String]
     /// When the server made this look.
     public var at: Date?
+    /// The day's budget for mad's own work; nil from a server that does not send it.
+    public var spend: Spend?
 
-    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at }
+    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at, spend }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -36,12 +38,15 @@ public struct Deck: Equatable, Decodable, Sendable {
         states = try c.decodeIfPresent([Look].self, forKey: .states) ?? []
         working = try c.decodeIfPresent([String].self, forKey: .working) ?? []
         at = MadDate.decode(c, .at)
+        spend = (try? c.decodeIfPresent(Spend.self, forKey: .spend)) ?? nil
     }
 
     public init(machine: String? = nil, projects: [Project] = [], teams: [Team] = [], channels: [Channel] = [],
-                inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil) {
+                inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil,
+                spend: Spend? = nil) {
         self.machine = machine; self.projects = projects; self.teams = teams; self.channels = channels
         self.inbox = inbox; self.usage = usage; self.states = states; self.working = working; self.at = at
+        self.spend = spend
     }
 
     // MARK: Lookups
@@ -73,6 +78,47 @@ public struct Deck: Equatable, Decodable, Sendable {
     /// The tone of a shown state: working, needs, finished, quiet or error.
     public func tone(for state: String) -> String {
         states.first { $0.state == state }?.tone ?? "quiet"
+    }
+}
+
+/// The day's budget for mad's own work (bus.SpendState): what it has spent, its bound and whether it is lifted or spent.
+public struct Spend: Equatable, Decodable, Sendable {
+    /// The day it is for ("2026-11-09"); empty when the server has none.
+    public var day: String
+    public var usd: Double
+    public var turns: Int
+    /// The bound with what was raised; 0 for none.
+    public var budgetUSD: Double
+    public var budgetTurns: Int
+    /// Lifted for the day.
+    public var openToday: Bool
+    /// Spent: mad's agents wait.
+    public var closed: Bool
+    /// How much of the budget is spent, 0 to 1 (0 with no bound).
+    public var part: Double
+    public var hot: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case day, usd, turns, budgetUSD = "budget_usd", budgetTurns = "budget_turns", openToday = "open_today", closed, part, hot
+    }
+
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        day = try c.decodeIfPresent(String.self, forKey: .day) ?? ""
+        usd = try c.decodeIfPresent(Double.self, forKey: .usd) ?? 0
+        turns = try c.decodeIfPresent(Int.self, forKey: .turns) ?? 0
+        budgetUSD = try c.decodeIfPresent(Double.self, forKey: .budgetUSD) ?? 0
+        budgetTurns = try c.decodeIfPresent(Int.self, forKey: .budgetTurns) ?? 0
+        openToday = try c.decodeIfPresent(Bool.self, forKey: .openToday) ?? false
+        closed = try c.decodeIfPresent(Bool.self, forKey: .closed) ?? false
+        part = try c.decodeIfPresent(Double.self, forKey: .part) ?? 0
+        hot = try c.decodeIfPresent(Bool.self, forKey: .hot) ?? false
+    }
+
+    public init(day: String = "", usd: Double = 0, turns: Int = 0, budgetUSD: Double = 0, budgetTurns: Int = 0,
+                openToday: Bool = false, closed: Bool = false, part: Double = 0, hot: Bool = false) {
+        self.day = day; self.usd = usd; self.turns = turns; self.budgetUSD = budgetUSD; self.budgetTurns = budgetTurns
+        self.openToday = openToday; self.closed = closed; self.part = part; self.hot = hot
     }
 }
 

@@ -26,6 +26,9 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: mad
+        # The UI follows the system's language: Chinese or English (the packages' Localizable.xcstrings).
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans, en]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -58,6 +61,8 @@ targets:
       path: MacApp/Info.plist
       properties:
         CFBundleDisplayName: mad
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans, en]
         LSMinimumSystemVersion: "14.0"
         NSPrincipalClass: NSApplication
         LSApplicationCategoryType: public.app-category.developer-tools

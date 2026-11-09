@@ -22,6 +22,11 @@ private func conversation(deck: Deck? = nil, transcript t: ChatTranscript? = nil
 }
 
 final class AgentMappingTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     func testHeaderFromTheAgent() throws {
         let c = try conversation()
         XCTAssertEqual(c.title, "给我绘制一个表格")
@@ -94,10 +99,12 @@ final class AgentMappingTests: XCTestCase {
     func testTheAskIsTheAgentsBashPermission() throws {
         let ask = try XCTUnwrap(conversation().ask)
         XCTAssertEqual(ask.id, "k-need")
-        XCTAssertEqual(ask.title, "想用 Bash")
-        XCTAssertEqual(ask.detail, "python3 make_table.py --out report.xlsx")
+        XCTAssertEqual(ask.title, "想运行一条命令", "a command's card says so in its head")
+        XCTAssertEqual(ask.detail, "$ python3 make_table.py --out report.xlsx")
         XCTAssertTrue(ask.mono)
+        XCTAssertTrue(ask.permission)
         XCTAssertEqual(ask.acts.map(\.label), ["允许", "拒绝"])
+        XCTAssertEqual(ask.acts.map(\.kind), [.allow, .deny])
         XCTAssertEqual(ask.acts.map(\.primary), [true, false])
         XCTAssertEqual(ask.acts.map(\.input), [false, false])
     }

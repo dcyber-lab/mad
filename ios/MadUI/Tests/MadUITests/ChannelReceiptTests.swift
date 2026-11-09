@@ -2,6 +2,11 @@ import XCTest
 @testable import MadUI
 
 final class ChannelReceiptTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
+    }
+
     private func receipt(_ steps: [ChannelReceipt.Step], paused: Bool = false) -> ChannelReceipt {
         ChannelReceipt(targets: steps.enumerated().map { .init(id: "a\($0.offset)", kind: "claude", name: "agent\($0.offset)", step: $0.element) }, paused: paused)
     }

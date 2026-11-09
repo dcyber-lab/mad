@@ -17,6 +17,8 @@ struct MadMacApp: App {
                 .frame(minWidth: 800, minHeight: 520)
         }
         .defaultSize(width: 1200, height: 800)
+        // ⌘N is the Today page's 新对话, not a second main window
+        .commands { CommandGroup(replacing: .newItem) {} }
         // The page, in a window of its own, for what has no native screen yet (usage, the board, an
         // agent's terminal ...). The server is the one the main window found.
         WindowGroup("mad", for: WebTarget.self) { $target in
@@ -24,7 +26,7 @@ struct MadMacApp: App {
                 WebPage(url: endpoint.mac().webURL(target, embedded: false))
                     .frame(minWidth: 720, minHeight: 480)
             } else {
-                Text("mad 没有在运行").padding(32)
+                Text(madLocalized("mad 没有在运行")).padding(32)
             }
         }
         // tall enough for the longest dialog (在你的手机上 with its QR code and the paired phones)
@@ -139,14 +141,14 @@ struct RootView: View {
         Group {
             switch server.state {
             case .locating:
-                ProgressView("正在找 mad…")
+                ProgressView(madLocalized("正在找 mad…"))
             case .failed(let why):
                 VStack(spacing: 12) {
-                    Text("mad 没有在运行").font(.title2.weight(.semibold))
+                    Text(madLocalized("mad 没有在运行")).font(.title2.weight(.semibold))
                     Text(why).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     HStack {
-                        Button("再试一次") { Task { await server.start() } }
-                        SettingsLink { Text("设置…") }
+                        Button(madLocalized("再试一次")) { Task { await server.start() } }
+                        SettingsLink { Text(madLocalized("设置…")) }
                     }
                 }
                 .padding(32)
@@ -191,11 +193,11 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Toggle("使用网页版", isOn: $webDeck)
-            Text("窗口里显示完整的网页，不用原生界面；原生界面有问题时可以用。")
+            Toggle(madLocalized("使用网页版"), isOn: $webDeck)
+            Text(madLocalized("窗口里显示完整的网页，不用原生界面；原生界面有问题时可以用。"))
                 .font(.footnote).foregroundStyle(.secondary)
-            TextField("mad 的路径", text: $madPath, prompt: Text("PATH 里的第一个 mad"))
-            Text("手机服务开着时，应用用它；没开时，应用自己启动 mad。")
+            TextField(madLocalized("mad 的路径"), text: $madPath, prompt: Text(madLocalized("PATH 里的第一个 mad")))
+            Text(madLocalized("手机服务开着时，应用用它；没开时，应用自己启动 mad。"))
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .padding(20)

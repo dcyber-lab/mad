@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The same list as a sidebar, for a NavigationSplitView: the same model, 40pt characters, a selection,
-/// keyboard navigation from List, and a one-line usage footer.
+/// The same list as a sidebar, for a NavigationSplitView: the same model and rows as the Mac's own sidebar, a
+/// selection and keyboard navigation from List. No usage footer: usage is its own screen.
 public struct HomeSidebar: View {
     let model: HomeModel
     let actions: HomeActions
@@ -23,7 +23,7 @@ public struct HomeSidebar: View {
         VStack(spacing: 0) {
             header
             if searching {
-                TextField("搜索", text: $query)
+                TextField(L("搜索"), text: $query)
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
                     .padding(.horizontal, 12)
@@ -37,7 +37,7 @@ public struct HomeSidebar: View {
                 ForEach(model.filtered(by: query).sections) { section in
                     Section {
                         ForEach(section.rows) { row in
-                            HomeRowView(row: row, size: 40)
+                            HomeRowView(row: row, metrics: .mac)
                                 .tag(row.id)
                                 .listRowSeparator(.hidden)
                         }
@@ -48,15 +48,6 @@ public struct HomeSidebar: View {
             }
             .listStyle(.sidebar)
             .onChange(of: selection) { _, id in if let id { actions.open(id) } }
-            if let usage = model.usage {
-                Text(usage)
-                    .font(MadType.label)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-            }
         }
         #if os(macOS)
         .ignoresSafeArea(.container, edges: .top) // the header takes the title bar's band

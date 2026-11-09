@@ -170,6 +170,62 @@ public struct MadClient: Sendable {
         try Self.check(data, response, [204, 200])
     }
 
+    // MARK: Agents and the budget
+
+    /// POST /api/budget {op, usd}.
+    public func budgetRequest(op: String, usd: Double) -> URLRequest {
+        var r = request("/api/budget")
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["op": op]
+        if usd > 0 { body["usd"] = usd }
+        r.httpBody = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return r
+    }
+
+    public func budget(op: String, usd: Double = 0) async throws {
+        let (data, response) = try await runRequest(budgetRequest(op: op, usd: usd))
+        try Self.check(data, response, [200, 204])
+    }
+
+    /// POST /api/agents/stop?id=<id>: the agent sleeps (the server refuses while a command runs under it).
+    public func sleepRequest(id: String) -> URLRequest {
+        var r = request("/api/agents/stop", query: [URLQueryItem(name: "id", value: id)])
+        r.httpMethod = "POST"
+        return r
+    }
+
+    public func sleepAgent(id: String) async throws {
+        let (data, response) = try await runRequest(sleepRequest(id: id))
+        try Self.check(data, response, [200, 204])
+    }
+
+    /// PATCH /api/agents?id=<id> {"Name"}.
+    public func renameRequest(id: String, name: String) -> URLRequest {
+        var r = request("/api/agents", query: [URLQueryItem(name: "id", value: id)])
+        r.httpMethod = "PATCH"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try? JSONSerialization.data(withJSONObject: ["Name": name], options: [.sortedKeys])
+        return r
+    }
+
+    public func renameAgent(id: String, name: String) async throws {
+        let (data, response) = try await runRequest(renameRequest(id: id, name: name))
+        try Self.check(data, response, [200, 204])
+    }
+
+    /// POST /api/terminal?id=<id>: the Mac opens its terminal on mad's deck with the agent.
+    public func terminalRequest(agent id: String) -> URLRequest {
+        var r = request("/api/terminal", query: [URLQueryItem(name: "id", value: id)])
+        r.httpMethod = "POST"
+        return r
+    }
+
+    public func openTerminal(agent id: String) async throws {
+        let (data, response) = try await runRequest(terminalRequest(agent: id))
+        try Self.check(data, response, [200, 204])
+    }
+
     /// Sends a request; any failure to get an answer is .offline.
     func runRequest(_ r: URLRequest) async throws -> (Data, URLResponse) {
         do { return try await session.data(for: r) } catch { throw ConnectionError.offline }

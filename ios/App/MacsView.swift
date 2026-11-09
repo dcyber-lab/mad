@@ -1,4 +1,5 @@
 import MadKit
+import MadShell
 import SwiftUI
 
 struct MacsView: View {
@@ -33,13 +34,13 @@ struct MacsView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(p.title).font(.body)
-                            Text("还没配对完").font(.subheadline).foregroundStyle(.orange)
+                            Text(madLocalized("还没配对完")).font(.subheadline).foregroundStyle(.orange)
                         }
                         Spacer()
                         if retrying.contains(p.id) {
                             ProgressView()
                         } else {
-                            Button("重试") { Task { await finish(p) } }.buttonStyle(.bordered)
+                            Button(madLocalized("重试")) { Task { await finish(p) } }.buttonStyle(.bordered)
                         }
                     }
                 }
@@ -59,8 +60,8 @@ struct MacsView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("改名") { newName = mac.name; renaming = mac }
-                        Button((webChoice[mac.id] ?? WebDeckChoice.uses(for: mac)) ? "使用原生版" : "使用网页版") {
+                        Button(madLocalized("改名")) { newName = mac.name; renaming = mac }
+                        Button((webChoice[mac.id] ?? WebDeckChoice.uses(for: mac)) ? madLocalized("使用原生版") : madLocalized("使用网页版")) {
                             let on = !(webChoice[mac.id] ?? WebDeckChoice.uses(for: mac))
                             WebDeckChoice.set(on, for: mac)
                             webChoice[mac.id] = on
@@ -71,8 +72,8 @@ struct MacsView: View {
             }
             .overlay {
                 if store.macs.isEmpty && store.pending.isEmpty {
-                    ContentUnavailableView("还没有 Mac", systemImage: "qrcode.viewfinder",
-                        description: Text("在 Mac 上运行 mad phone，\n然后扫描它的二维码。"))
+                    ContentUnavailableView(madLocalized("还没有 Mac"), systemImage: "qrcode.viewfinder",
+                        description: Text(madLocalized("在 Mac 上运行 mad phone，\n然后扫描它的二维码。")))
                 }
             }
             .navigationTitle("mad")
@@ -100,8 +101,8 @@ struct MacsView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("扫描二维码", systemImage: "qrcode.viewfinder") { scanning = true }
-                        Button("粘贴链接", systemImage: "doc.on.clipboard") { pasted = ""; pasting = true }
+                        Button(madLocalized("扫描二维码"), systemImage: "qrcode.viewfinder") { scanning = true }
+                        Button(madLocalized("粘贴链接"), systemImage: "doc.on.clipboard") { pasted = ""; pasting = true }
                     } label: { Image(systemName: "plus") }
                 }
             }
@@ -111,19 +112,19 @@ struct MacsView: View {
                     if let text { pair(text) }
                 }
             }
-            .alert("粘贴链接", isPresented: $pasting) {
+            .alert(madLocalized("粘贴链接"), isPresented: $pasting) {
                 TextField("https://…/#token=…", text: $pasted)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("配对") { pair(pasted) }
-                Button("取消", role: .cancel) {}
+                Button(madLocalized("配对")) { pair(pasted) }
+                Button(madLocalized("取消"), role: .cancel) {}
             }
-            .alert("改名", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-                TextField("名字", text: $newName)
-                Button("保存") { if let m = renaming { store.rename(m, to: newName) } }
-                Button("取消", role: .cancel) {}
+            .alert(madLocalized("改名"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField(madLocalized("名字"), text: $newName)
+                Button(madLocalized("保存")) { if let m = renaming { store.rename(m, to: newName) } }
+                Button(madLocalized("取消"), role: .cancel) {}
             }
-            .alert("配对失败", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
-                Button("好", role: .cancel) {}
+            .alert(madLocalized("配对失败"), isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+                Button(madLocalized("好"), role: .cancel) {}
             } message: { Text(problem ?? "") }
         }
     }
@@ -176,7 +177,7 @@ struct MacsView: View {
     /// pairing is kept and can be retried.
     private func report(_ error: Error) {
         if let e = error as? ConnectionError, e == .offline {
-            problem = "连不上这台 Mac。配对已保留：等它在线后点“重试”。"
+            problem = madLocalized("连不上这台 Mac。配对已保留：等它在线后点“重试”。")
         } else {
             problem = error.localizedDescription
         }

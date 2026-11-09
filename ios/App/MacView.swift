@@ -128,7 +128,7 @@ struct WebSheetView: View {
             }
                 .onAppear { if host == nil { host = DeckWebHost(url: sheet.mac.webURL(sheet.target)) } }
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(madLocalized("完成")) { dismiss() } } }
         }
     }
 }

@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// An agent's character: one of eight shapes in one of eight pastels, picked by a stable hash of
-/// its id, with a face that changes with what it does. Working, it looks around, bobs and changes
-/// faces in its own way and time; needing the person, it asks, swaying (and shows a red dot); idle,
-/// it is calm and blinks now and then; stopped, it sleeps, dimmed. With Reduce Motion on, or when
-/// off screen, it keeps still.
+/// An agent's character: one of eight shapes in one of eight colors, picked by a stable hash of its id, with the
+/// ring of the approved design (v5) around it for its state: waiting, an amber ring; working, a turning green arc;
+/// just finished, a blue dot; stopped, the whole of it at 45% with its eyes shut; idle, nothing. A working one's
+/// eyes look about. With Reduce Motion on, or when off screen, it keeps still (the arc too).
 public struct CharacterView: View {
     let look: CharacterLook
     let state: CharacterState
@@ -16,8 +15,8 @@ public struct CharacterView: View {
     @State private var since = Date()
     @State private var onScreen = false
 
-    /// dot: whether the red dot shows; by default, when the state is needs-you.
-    /// A row says it itself when something waits on the person without the agent's state saying so.
+    /// dot: whether something waits on the person here; it draws the waiting ring even when the agent's own state
+    /// does not say so (a row says it itself).
     public init(id: String, kind: String, state: CharacterState, size: CGFloat, dot: Bool? = nil) {
         self.init(look: CharacterLook(id: id, kind: kind), state: state, size: size, dot: dot)
     }
@@ -29,23 +28,34 @@ public struct CharacterView: View {
         self.size = size
     }
 
+    /// The state the ring shows: waiting when something waits on the person (and the agent is not stopped).
+    var ringState: CharacterState {
+        if dot == true && state != .stopped { return .needsYou }
+        return state
+    }
+
     public var body: some View {
-        Group {
-            if reduceMotion || state != .working {
-                canvas(at: nil)
-            } else {
-                // only a working one moves: its eyes, at 15 frames a second
-                TimelineView(.animation(minimumInterval: 1 / 15, paused: !onScreen)) { canvas(at: $0.date) }
+        let ring = ringState
+        ZStack {
+            Group {
+                if reduceMotion || state != .working {
+                    canvas(at: nil)
+                } else {
+                    // only a working one's eyes move, at 15 frames a second
+                    TimelineView(.animation(minimumInterval: 1 / 15, paused: !onScreen)) { canvas(at: $0.date) }
+                }
             }
+            .scaleEffect(StatusRing.ringed(ring) ? 0.82 : 1)
+            StatusRing(state: ring, size: size)
         }
         .frame(width: size, height: size)
+        .opacity(state == .stopped ? 0.45 : 1)
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .onChange(of: state) { since = Date() }
         .accessibilityElement()
-        .accessibilityLabel(state.word)
+        .accessibilityLabel(ring.word)
         .accessibilityAddTraits(.isImage)
-        .cornerDot(dot ?? (state == .needsYou), size: size)
     }
 
     /// The avatar at `date`; nil is at rest.

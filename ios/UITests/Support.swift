@@ -11,6 +11,10 @@ class MadUITestCase: XCTestCase {
     static let goodCode = String(repeating: "a", count: 32)
     static let badCode = String(repeating: "b", count: 32)
 
+    /// The app and the page inside it follow the system language; the cases look things up by their Chinese words, so
+    /// every run is in Chinese whatever the simulator's language is.
+    static let chinese = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+
     /// The fixture server's address, from the harness (TEST_RUNNER_MAD_FIXTURE_URL).
     var fixtureURL: String {
         ProcessInfo.processInfo.environment["MAD_FIXTURE_URL"] ?? "http://127.0.0.1:1"
@@ -43,7 +47,7 @@ class MadUITestCase: XCTestCase {
         args += ["-pairLink", link ?? "\(fixtureURL)/#token=\(Self.token)"]
         if open { args += ["-openMac", "YES"] }
         if !native { args += ["-webDeck", "YES"] }
-        app.launchArguments = args + extra
+        app.launchArguments = args + Self.chinese + extra
         app.launch()
     }
 
@@ -51,7 +55,7 @@ class MadUITestCase: XCTestCase {
     func relaunch(native: Bool = false, extra: [String] = []) {
         app?.terminate()
         app = XCUIApplication()
-        app.launchArguments = (native ? [] : ["-webDeck", "YES"]) + extra
+        app.launchArguments = (native ? [] : ["-webDeck", "YES"]) + Self.chinese + extra
         app.launch()
     }
 

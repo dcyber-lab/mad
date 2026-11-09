@@ -3,17 +3,165 @@ import Foundation
 // The home list's input: plain values, so MadUI does not depend on MadKit. The
 // app's store maps the deck's snapshot onto these.
 
-/// The whole list: which Mac, its sections in order, and an optional usage line for a footer.
+/// The whole list: which Mac, what waits on the person (pinned on top), its sections in order, and what the
+/// Today page says.
 public struct HomeModel: Equatable, Sendable {
     public var machine: String
     public var sections: [HomeSection]
-    /// One line for the sidebar's footer, e.g. "Claude 5 小时 42% · 本周 71%".
+    /// One line of usage, e.g. "Claude 5 小时 42% · 本周 71%". The sidebar no longer shows it (usage is its own
+    /// screen); it is kept for a footer that wants it.
     public var usage: String?
+    /// What waits on the person, oldest first: the 待处理 section on top of the list, and Today's cards.
+    public var waiting: [HomeWaiting]
+    /// The Today page (the Mac's first screen); nil before the deck is there.
+    public var today: TodayModel?
 
-    public init(machine: String, sections: [HomeSection], usage: String? = nil) {
+    public init(machine: String, sections: [HomeSection], usage: String? = nil, waiting: [HomeWaiting] = [], today: TodayModel? = nil) {
         self.machine = machine
         self.sections = sections
         self.usage = usage
+        self.waiting = waiting
+        self.today = today
+    }
+}
+
+/// One thing that waits on the person: a command to allow, a question to answer. Its acts are the person's answers.
+public struct HomeWaiting: Identifiable, Equatable, Sendable {
+    /// The inbox item's key: what an act is sent for.
+    public var id: String
+    public var agentID: String
+    public var agentKind: String
+    public var name: String
+    public var project: String
+    /// "mad · claude · 想运行一条命令".
+    public var whereLine: String
+    /// How long it has waited: "4 分钟".
+    public var age: String
+    /// What the agent has cost: "$0.84"; empty when nothing.
+    public var cost: String
+    /// The command (with `mono`) or the question.
+    public var detail: String
+    public var mono: Bool
+    public var acts: [AskAct]
+
+    public init(id: String, agentID: String, agentKind: String = "", name: String, project: String = "", whereLine: String = "",
+                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = []) {
+        self.id = id; self.agentID = agentID; self.agentKind = agentKind; self.name = name; self.project = project
+        self.whereLine = whereLine; self.age = age; self.cost = cost; self.detail = detail; self.mono = mono; self.acts = acts
+    }
+
+    /// The act that allows, the one for the whole session, and the one that denies (without words), when it has them.
+    public var allow: AskAct? { acts.first { $0.kind == .allow } }
+    public var allowSession: AskAct? { acts.first { $0.kind == .allowSession } }
+    public var deny: AskAct? { acts.first { $0.kind == .deny } }
+    /// A question's own answers (its options), when it has some that take no words.
+    public var options: [AskAct] { acts.filter { $0.kind == .other && !$0.input } }
+    /// A command to allow, rather than a question.
+    public var isPermission: Bool { allow != nil }
+}
+
+/// The Mac's first screen: one sentence of how things stand and what was spent, what waits (as `HomeModel.waiting`),
+/// what works and what just finished.
+public struct TodayModel: Equatable, Sendable {
+    /// "11 月 9 日 周一".
+    public var date: String
+    public var waiting: Int
+    public var working: Int
+    public var done: Int
+    /// What the agents have cost: "$6.82".
+    public var spend: String
+    public var workingLines: [TodayLine]
+    public var doneLines: [TodayLine]
+
+    public init(date: String, waiting: Int = 0, working: Int = 0, done: Int = 0, spend: String = "",
+                workingLines: [TodayLine] = [], doneLines: [TodayLine] = []) {
+        self.date = date; self.waiting = waiting; self.working = working; self.done = done; self.spend = spend
+        self.workingLines = workingLines; self.doneLines = doneLines
+    }
+}
+
+/// An agent on the Today page: its picture, name, what it does ("Bash · go test ./..."), how long and what it cost.
+public struct TodayLine: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var kind: String
+    public var state: CharacterState
+    public var name: String
+    /// Before the tool: "#ios", or empty.
+    public var place: String
+    /// The tool ("Bash"), or empty.
+    public var tool: String
+    /// What it is pointed at, set in mono after the tool; or the last line when there is no tool.
+    public var detail: String
+    /// "6 分钟 · $2.31", "2 分钟前".
+    public var number: String
+
+    public init(id: String, kind: String = "", state: CharacterState, name: String, place: String = "", tool: String = "",
+                detail: String = "", number: String = "") {
+        self.id = id; self.kind = kind; self.state = state; self.name = name; self.place = place; self.tool = tool
+        self.detail = detail; self.number = number
+    }
+}
+
+/// What a project's header line says beside its name: `main · 3 改动 · ↑2 · $4.17`.
+public struct HomeProjectMeta: Equatable, Sendable {
+    public var branch: String
+    public var changed: Int
+    public var ahead: Int
+    /// What its agents have cost, in dollars.
+    public var cost: Double
+
+    public init(branch: String = "", changed: Int = 0, ahead: Int = 0, cost: Double = 0) {
+        self.branch = branch; self.changed = changed; self.ahead = ahead; self.cost = cost
+    }
+
+    /// The parts after the branch: "3 改动", "↑2", "$4.17"; a zero is left out.
+    public var parts: [String] {
+        var out: [String] = []
+        if changed > 0 { out.append(Lf("%lld 改动", changed)) }
+        if ahead > 0 { out.append("↑\(ahead)") }
+        if cost > 0 { out.append(MadWords.money(cost)) }
+        return out
+    }
+}
+
+/// Words put together from numbers, in the language in use.
+public enum MadWords {
+    /// "$4.17"; "$123" from 100 up.
+    public static func money(_ usd: Double) -> String {
+        usd < 100 ? String(format: "$%.2f", usd) : "$\(Int(usd.rounded()))"
+    }
+
+    /// How long, short: "刚刚", "4 分钟", "3 小时", "2 天".
+    public static func age(_ seconds: TimeInterval) -> String {
+        let m = Int(max(0, seconds) / 60)
+        if m < 1 { return L("刚刚") }
+        if m < 60 { return Lf("%lld 分钟", m) }
+        if m < 24 * 60 { return Lf("%lld 小时", m / 60) }
+        return Lf("%lld 天", m / (24 * 60))
+    }
+
+    /// How long ago, short: "刚刚", "2 分钟前", "3 小时前", "2 天前".
+    public static func ago(_ seconds: TimeInterval) -> String {
+        let m = Int(max(0, seconds) / 60)
+        if m < 1 { return L("刚刚") }
+        if m < 60 { return Lf("%lld 分钟前", m) }
+        if m < 24 * 60 { return Lf("%lld 小时前", m / 60) }
+        return Lf("%lld 天前", m / (24 * 60))
+    }
+
+    /// Today's date as the Today page's head says it: "11 月 9 日 周一", "Mon, Nov 9".
+    public static func today(_ date: Date, calendar: Calendar = .current) -> String {
+        let f = DateFormatter()
+        f.calendar = calendar
+        f.timeZone = calendar.timeZone
+        if madEnglish {
+            f.locale = Locale(identifier: "en_US")
+            f.dateFormat = "EEE, MMM d"
+        } else {
+            f.locale = Locale(identifier: "zh_CN")
+            f.dateFormat = "M 月 d 日 EEE"
+        }
+        return f.string(from: date)
     }
 }
 
@@ -28,12 +176,15 @@ public struct HomeSection: Identifiable, Equatable, Sendable {
     public var title: String
     public var kind: Kind
     public var rows: [HomeRow]
+    /// A project's branch, changes, unpushed commits and cost, for its header line.
+    public var meta: HomeProjectMeta?
 
-    public init(id: String, title: String, kind: Kind, rows: [HomeRow]) {
+    public init(id: String, title: String, kind: Kind, rows: [HomeRow], meta: HomeProjectMeta? = nil) {
         self.id = id
         self.title = title
         self.kind = kind
         self.rows = rows
+        self.meta = meta
     }
 }
 
@@ -77,9 +228,19 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public var members: [HomeMember]
     /// A team channel's other live members: they are not in its tile, but what they do counts (its state and dot).
     public var helpers: [HomeMember]
+    /// The tool an agent is using, drawn in bold before the preview ("**Bash** go test ./..."); empty for none.
+    public var tool: String
+    /// The small line at the right: how long a working agent has been at it ("6 分钟"); empty for none.
+    public var age: String
+    /// A channel's unread messages: a count at the right.
+    public var unread: Int
 
     public init(id: String, kind: Kind = .agent, agentKind: String = "", name: String, preview: String = "",
-                state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = [], helpers: [HomeMember] = []) {
+                state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = [], helpers: [HomeMember] = [],
+                tool: String = "", age: String = "", unread: Int = 0) {
+        self.tool = tool
+        self.age = age
+        self.unread = unread
         self.id = id
         self.kind = kind
         self.agentKind = agentKind
@@ -91,6 +252,11 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
         self.members = members
         self.helpers = helpers
     }
+
+    /// What the Mac's detail shows for no row: the Today page. The sidebar's 今日 row selects it.
+    public static let todayID = "mad:today"
+    /// The Usage screen, opened from the person's row at the sidebar's foot (or ⋯ → 用量).
+    public static let usageID = "mad:usage"
 
     /// What the row is called: its name, else "codex 32d23a28" for an untitled agent.
     public var title: String {
@@ -124,9 +290,9 @@ public enum HomeNewItem: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .chat: "新对话"
-        case .channel: "新群聊"
-        case .team: "新团队"
+        case .chat: L("新对话")
+        case .channel: L("新群聊")
+        case .team: L("新团队")
         }
     }
 
@@ -148,10 +314,18 @@ public struct HomeActions {
     /// The search text changed (the list filters itself; this is for an app that also searches elsewhere).
     public var search: (String) -> Void
     public var menu: (HomeMenuItem) -> Void
+    /// An act on what waits (Allow, Deny, an answer): the item's id, the act's id, and the words for an input act.
+    public var act: (_ itemID: String, _ actID: String, _ text: String?) -> Void
+    /// Today's 打断 on a working agent.
+    public var interrupt: (_ agentID: String) -> Void
 
     public init(open: @escaping (HomeRow.ID) -> Void = { _ in }, switchMac: @escaping () -> Void = {},
                 create: @escaping (HomeNewItem) -> Void = { _ in }, search: @escaping (String) -> Void = { _ in },
-                menu: @escaping (HomeMenuItem) -> Void = { _ in }) {
+                menu: @escaping (HomeMenuItem) -> Void = { _ in },
+                act: @escaping (String, String, String?) -> Void = { _, _, _ in },
+                interrupt: @escaping (String) -> Void = { _ in }) {
+        self.act = act
+        self.interrupt = interrupt
         self.open = open
         self.switchMac = switchMac
         self.create = create
@@ -166,14 +340,14 @@ public enum HomeMenuItem: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .usage: "用量"
-        case .board: "看板"
-        case .skills: "技能"
-        case .devices: "手机和已配对设备"
-        case .notifications: "通知"
-        case .switchMac: "切换 Mac"
-        case .addProject: "添加项目"
-        case .theme: "主题"
+        case .usage: L("用量")
+        case .board: L("看板")
+        case .skills: L("技能")
+        case .devices: L("手机和已配对设备")
+        case .notifications: L("通知")
+        case .switchMac: L("切换 Mac")
+        case .addProject: L("添加项目")
+        case .theme: L("主题")
         }
     }
 

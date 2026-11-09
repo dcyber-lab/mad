@@ -22,6 +22,14 @@ public protocol MadAPI: ChatAPI {
     func pictureData(url: String) async throws -> Data
     /// POST /api/inbox: the person acts on an inbox item.
     func act(key: String, verb: String, option: String?, text: String?) async throws
+    /// POST /api/budget {op, usd}: "open" lifts mad's own budget for the day, "raise" adds `usd` to it.
+    func budget(op: String, usd: Double) async throws
+    /// POST /api/agents/stop?id: puts the agent to sleep.
+    func sleepAgent(id: String) async throws
+    /// PATCH /api/agents?id {name}: the person's name for the agent.
+    func renameAgent(id: String, name: String) async throws
+    /// POST /api/terminal?id: opens the agent in mad's terminal deck on the Mac.
+    func openTerminal(agent id: String) async throws
 }
 
 extension MadClient: MadAPI {}
@@ -49,4 +57,10 @@ extension MadAPI {
 
     /// A fake of the Mac that has no pictures need not say so.
     public func pictureData(url: String) async throws -> Data { throw ConnectionError.unexpected("No picture.") }
+
+    /// Nor a budget, a way to sleep or rename an agent, or a terminal.
+    public func budget(op: String, usd: Double) async throws { throw ConnectionError.unexpected("No budget.") }
+    public func sleepAgent(id: String) async throws { throw ConnectionError.unexpected("No sleep.") }
+    public func renameAgent(id: String, name: String) async throws { throw ConnectionError.unexpected("No rename.") }
+    public func openTerminal(agent id: String) async throws { throw ConnectionError.unexpected("No terminal.") }
 }
