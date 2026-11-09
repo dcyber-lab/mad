@@ -80,6 +80,41 @@ final class NativeDefaultTests: MadUITestCase {
         shot("the new agent in the home list")
     }
 
+    /// A first message that does not go stays written: the new agent's page says why above the composer, which holds the
+    /// text and the way back stay in reach; reopening the agent later has neither the note nor the draft.
+    func testAFirstMessageThatDoesNotGoWaitsInTheComposerOnce() {
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
+        tap("新建")
+        tap("新对话")
+        let box = app.textViews["newchat.text"]
+        XCTAssertTrue(box.waitForExistence(timeout: 10))
+        box.tap()
+        box.typeText("[fail] try again")
+        app.buttons["newchat.send"].tap()
+        let note = elements(containing: "its host did not start").firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 15), "the page does not say why the message did not go")
+        let composer = app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "[fail] try again")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5), "the unsent text is not in the composer")
+        XCTAssertTrue(composer.isHittable, "something covers the composer")
+        XCTAssertLessThanOrEqual(note.frame.maxY, composer.frame.minY, "the note is not above the composer")
+        XCTAssertTrue(element("返回").firstMatch.isHittable, "the note covers the way back")
+        shot("the unsent first message in the composer, the note above it")
+        tap("返回")
+        var swipes = 0
+        let started = row(beginningWith: "[fail] try again")
+        while !(started.waitForExistence(timeout: 3) && started.isHittable) && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(started.exists, "the agent is not in the home list")
+        started.tap()
+        XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(elements(containing: "its host did not start").firstMatch.exists, "the note came back when the agent was reopened")
+        XCTAssertFalse(app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "[fail] try again")).firstMatch.exists,
+                       "the draft came back when the agent was reopened")
+        shot("the reopened conversation, composer empty")
+    }
+
     func testAMenuItemThatIsNotNativeYetOpensThePageInASheet() {
         tap("更多")
         let item = app.buttons["看板"].firstMatch

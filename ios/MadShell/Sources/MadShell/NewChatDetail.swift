@@ -12,6 +12,28 @@ struct StartedChat: Equatable {
     var failure: String?
 }
 
+/// What a started agent's page is handed when it opens, by agent id: a first message that did not go (the composer's
+/// draft) and why (a note at the top of its page) are given once; a first message that went is its bubble until the
+/// transcript has it.
+struct Handovers: Equatable {
+    var drafts: [String: String] = [:]
+    var failures: [String: String] = [:]
+    var firsts: [String: String] = [:]
+
+    mutating func add(_ chat: StartedChat) {
+        let wrote = !chat.text.isEmpty
+        drafts[chat.id] = chat.failure != nil && wrote ? chat.text : nil
+        failures[chat.id] = chat.failure
+        firsts[chat.id] = chat.failure == nil && wrote ? chat.text : nil
+    }
+
+    /// The page took its draft and note: reopening it does not bring them back (the bubble stays, it gives way by itself).
+    mutating func took(_ id: String) {
+        drafts[id] = nil
+        failures[id] = nil
+    }
+}
+
 struct NewChatDetail: View {
     let api: NewChatAPI
     let projects: [Project]

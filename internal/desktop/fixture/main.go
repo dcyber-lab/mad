@@ -202,6 +202,8 @@ type startedAgent struct {
 	agent   map[string]any
 	text    string
 	at      time.Time
+	// failed: its first message did not go, so it has no transcript
+	failed bool
 }
 
 // startedTranscriptAfter is how long a started agent has no transcript yet, as the real one's first message takes a
@@ -513,7 +515,8 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 }
 
 // start is POST /api/agents {project, kind, model, text}: an agent that works on the first message, in the project's
-// list of the deck from then on. The id is the answer, as the real one's.
+// list of the deck from then on. The id is the answer, as the real one's; with "[fail]" in the text the first message
+// does not go and the answer says why ({id, error}).
 func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Project, Kind, Model, Text string }
 	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Project == "" {
@@ -532,7 +535,13 @@ func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
 	if t := strings.TrimSpace(req.Text); t != "" {
 		agent["title"] = t
 	}
-	f.started = append(f.started, startedAgent{project: req.Project, agent: agent, text: strings.TrimSpace(req.Text), at: time.Now()})
+	failed := strings.Contains(req.Text, "[fail]")
+	f.started = append(f.started, startedAgent{project: req.Project, agent: agent, text: strings.TrimSpace(req.Text), at: time.Now(), failed: failed})
+	// a first message with [fail] in it does not go, as when the real host did not start: the agent is there all the same
+	if failed {
+		reply(w, map[string]any{"id": id, "error": "its host did not start"})
+		return
+	}
 	reply(w, map[string]any{"id": id})
 }
 
@@ -587,7 +596,7 @@ func (f *fixture) startedChat(w http.ResponseWriter, r *http.Request, s startedA
 	const offset = 100
 	q := r.URL.Query()
 	from, _ := strconv.ParseInt(q.Get("from"), 10, 64)
-	if time.Since(s.at) < startedTranscriptAfter {
+	if s.failed || time.Since(s.at) < startedTranscriptAfter {
 		reply(w, map[string]any{"file": "started", "offset": 0, "reset": true, "entries": []any{}})
 		return
 	}

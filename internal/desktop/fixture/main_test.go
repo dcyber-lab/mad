@@ -417,3 +417,23 @@ func TestStartedAgentHasAWindowModeAndATranscriptAfterAMoment(t *testing.T) {
 		t.Errorf("read again: %d entries", again)
 	}
 }
+
+// A first message with [fail] does not go: the answer says why, and the agent is started all the same.
+func TestStartedAgentWhoseFirstMessageFailsSaysWhy(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"claude","text":"[fail] hello"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var got struct{ ID, Error string }
+	_ = json.NewDecoder(r.Body).Decode(&got)
+	if got.ID == "" || got.Error == "" {
+		t.Errorf("answer %+v, want an id and an error", got)
+	}
+}
