@@ -50,9 +50,7 @@ enum GrokAvatar {
 struct StatusRing: View {
     let state: CharacterState
     let size: CGFloat
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.madAvatarBackdrop) private var backdrop
-    @State private var spin = false
 
     /// The states drawn inside a ring, at 82%.
     static func ringed(_ state: CharacterState) -> Bool { state == .needsYou || state == .working }
@@ -65,13 +63,7 @@ struct StatusRing: View {
                 Circle().inset(by: 2 * u).stroke(Color.madWait, lineWidth: 5 * u)
             case .working:
                 Circle().inset(by: 2 * u).stroke(Color.madLine2, lineWidth: 4 * u)
-                // stroke-dasharray 80 222 of a circle of r 48: 80 / 301.6 of the way round
-                Circle().inset(by: 2 * u).trim(from: 0, to: 0.265)
-                    .stroke(Color.madWork, style: StrokeStyle(lineWidth: 5 * u, lineCap: .round))
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .animation(reduceMotion ? nil : .linear(duration: 1.4).repeatForever(autoreverses: false), value: spin)
-                    .onAppear { if !reduceMotion { spin = true } }
-                    .onChange(of: reduceMotion) { _, still in spin = !still }
+                TurningArc(size: size)
             case .done:
                 // <circle cx=86 cy=86 r=13 fill=done stroke=paper stroke-width=5>
                 Circle().fill(Color.madDone)
