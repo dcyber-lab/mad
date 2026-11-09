@@ -3,7 +3,8 @@
 [![CI](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml/badge.svg)](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Run many coding-agent TUIs (Claude Code, Codex, pi, or a plain shell) side by
+Run many coding-agent TUIs (Claude Code, Codex, pi, Google's Antigravity
+CLI, or a plain shell) side by
 side in one terminal, organized by project. A project sidebar stays on the
 left; the selected agent's real TUI fills the right.
 
@@ -62,7 +63,8 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
   that recent macOS refuses to load); the release binaries need no Go
 - At least one agent CLI on your `PATH`:
   [`claude`](https://docs.anthropic.com/en/docs/claude-code),
-  [`codex`](https://github.com/openai/codex), `pi`, …
+  [`codex`](https://github.com/openai/codex), `pi`,
+  [`agy`](https://antigravity.google/docs/cli/reference/) (Antigravity CLI), …
 - `ps` and `lsof` (used by auto-sync)
 
 ## Installation
@@ -502,10 +504,10 @@ Tailscale app on the same tailnet) or a Cloudflare Tunnel.
 
 ## Reading the sidebar
 
-An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
-shell; custom kinds set `icon` and `color` in `agents.json` or get their
-initial) and is named after its conversation: the title you set with `/rename` (claude)
-or in the app (codex), else the one claude generated, else the first thing
+An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `▲`
+agy (Antigravity CLI), `$` shell; custom kinds set `icon` and `color` in
+`agents.json` or get their initial) and is named after its conversation:
+the title you set with `/rename` (claude) or in the app (codex), else the one claude generated, else the first thing
 you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
 your own instead, kept until you clear it. The line under a claude or codex
 agent says what it is on: the tool being called and what it was pointed at
@@ -1216,10 +1218,15 @@ the mad you use: its state and the generated files go in
   upgrade, `mad` says so when the versions differ, and may fail to open the
   deck with `open terminal failed: not a terminal`. Run `mad kill-server`
   and then `mad`; that stops every agent, press `enter` on each to resume.
-- codex and pi have no hooks, so their `waiting` state relies on matching
-  on-screen text and may miss new prompt wording. Their `running` state comes
+- codex, pi and agy have no hooks, so their `waiting` state relies on matching
+  on-screen text and may miss new prompt wording (add patterns with
+  `waiting` in `agents.json`). Their `running` state comes
   from screen changes: a long command that prints nothing can briefly look
   idle.
+- agy chooses its own conversation ids and mad doesn't read its
+  conversations yet, so `enter` after a crash reopens the latest
+  conversation in the agent's folder (`agy --continue`), agy agents are
+  never put to sleep, and their rows show no title or usage.
 - The Claude desktop app doesn't expose which session a process serves; mad
   picks the newest session in that process's directory. This is exact when
   each conversation has its own directory (the app's default worktrees).

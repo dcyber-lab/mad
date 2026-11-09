@@ -132,6 +132,23 @@ func TestPiAndShell(t *testing.T) {
 	}
 }
 
+// agy picks its own conversation ids, so mad can only reopen the latest
+// one, and has nothing to put an agent to sleep with.
+func TestAgy(t *testing.T) {
+	withHome(t)
+	agy := ByName(Builtin(), "agy")
+	a := &state.Agent{ID: "id-6"}
+	if got := agy.Command(a, false, Launch{}); got != "agy" {
+		t.Errorf("agy start = %q", got)
+	}
+	if got := agy.Command(a, true, Launch{}); got != "agy --continue" {
+		t.Errorf("agy resume = %q", got)
+	}
+	if agy.Resume != "" {
+		t.Errorf("agy resumes by id (%q): it would be put to sleep", agy.Resume)
+	}
+}
+
 // A kind from agents.json that names its sessions has no provider to say
 // which were written, so it resumes the one it knows of, if any.
 func TestNamedKindWithoutProvider(t *testing.T) {
@@ -178,7 +195,7 @@ func TestLoadMergesAgentsJSON(t *testing.T) {
 	for _, k := range kinds {
 		names = append(names, k.Name)
 	}
-	if strings.Join(names, ",") != "claude,codex,pi,shell,gemini" {
+	if strings.Join(names, ",") != "claude,codex,pi,agy,shell,gemini" {
 		t.Fatalf("kinds = %v", names)
 	}
 	// Fields set replace the built-in's, the rest stay.
@@ -240,6 +257,9 @@ func TestScreenWaiting(t *testing.T) {
 		{"codex", "› 1. Update now\n  2. Skip\n  enter continue · esc skip", true},
 		{"codex", "› Ask Codex to do anything\n  ? for shortcuts", false},
 		{"pi", "anything", false},
+		{"agy", "Allow execution of: go test ./...", true},
+		{"agy", "Do you trust this folder?", true},
+		{"agy", "> Type your message", false},
 	}
 	for _, c := range cases {
 		if got := ByName(kinds, c.kind).ScreenWaiting(c.screen); got != c.want {
