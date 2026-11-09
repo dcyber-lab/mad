@@ -109,7 +109,11 @@ func chatText(_ text: String, mine: Bool, colors: [String: Color] = [:]) -> Attr
         guard let r = Range(m.range, in: plain) else { continue }
         let from = a.characters.index(a.characters.startIndex, offsetBy: plain.distance(from: plain.startIndex, to: r.lowerBound))
         let to = a.characters.index(a.characters.startIndex, offsetBy: plain.distance(from: plain.startIndex, to: r.upperBound))
+        #if os(iOS)
+        a[from..<to].font = .system(size: 19, weight: .semibold)
+        #else
         a[from..<to].font = .body.weight(.semibold)
+        #endif
         let name = String(plain[r].dropFirst())
         if let c = colors[name] {
             a[from..<to].foregroundColor = c

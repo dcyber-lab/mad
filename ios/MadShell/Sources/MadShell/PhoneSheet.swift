@@ -21,7 +21,7 @@ struct PhoneSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L("在你的手机上")).font(.system(size: 20, weight: .semibold))
             content
-            if let failure { Text(failure).font(Font.system(size: 13)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+            if let failure { Text(failure).font(Font.mad(13)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 if status?.on == true {
                     Button(L("关闭入口")) { Task { await set(on: false) } }.disabled(busy)
@@ -71,9 +71,9 @@ struct PhoneSheet: View {
             Text(status.via == "cloudflare"
                  ? L("用手机相机扫它：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。")
                  : L("用手机相机扫它（手机要在你的 tailnet 里）：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。"))
-                .font(Font.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(Font.mad(13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Text(status.url ?? "").font(Font.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Text(status.url ?? "").font(Font.mad(12, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 0)
                 Button(copied ? L("已复制") : L("复制")) {
                     NSPasteboard.general.clearContents()
@@ -85,12 +85,12 @@ struct PhoneSheet: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             if !devices.isEmpty {
-                Text(L("已配对的手机")).font(Font.system(size: 13)).foregroundStyle(.secondary)
+                Text(L("已配对的手机")).font(Font.mad(13)).foregroundStyle(.secondary)
                 ForEach(devices) { d in
                     HStack {
                         Text(d.name).font(Font.system(size: 15))
                         if let seen = d.lastSeen {
-                            Text(seen, format: .relative(presentation: .named)).font(Font.system(size: 13)).foregroundStyle(.secondary)
+                            Text(seen, format: .relative(presentation: .named)).font(Font.mad(13)).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
                         Button(L("移除")) { Task { await remove(d) } }.buttonStyle(.borderless).foregroundStyle(Color.madDanger)

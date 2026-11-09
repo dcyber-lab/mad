@@ -1,0 +1,363 @@
+<title>mad iPhone v6</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a row of real-size phone screens (393pt wide) that wraps to one column on a phone; each screen is a light iOS screen drawn to Grok bot's measured metrics. */
+:root {
+  --page: #eef0f3; --ink: #15171a; --muted: #6b7280; --rule: #d9dde3; --frame: #0d0e10;
+  /* inside the phone: deliberately light, as the screens are mocked in light mode */
+  --s-bg: #ffffff; --s-ink: #0b0b0c; --s-2: #8d8d93; --s-3: #b4b4ba; --s-bubble: #f1f1f3; --s-line: #ececef;
+  --s-mine: #dbeafe; --s-blue: #1d74f5; --s-wait: #c2610c; --s-wait-bg: #fff7ed; --s-work: #16a34a; --s-done: #2563eb;
+  --s-code: #f5f5f7; --s-shadow: 0 6px 24px rgba(15, 18, 30, .10), 0 1px 3px rgba(15, 18, 30, .06);
+  --sans: -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; color-scheme: dark }
+
+body { background: var(--page); color: var(--ink); font-family: var(--sans); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+header.page { max-width: 1280px; margin: 0 auto 24px; display: grid; gap: 6px; }
+header.page h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+header.page p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; max-width: 68ch; }
+.board { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 393px), 393px)); gap: 36px 28px; justify-content: center; }
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+figcaption { font-size: 13px; color: var(--muted); line-height: 1.5; }
+figcaption b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+
+/* the phone */
+.phone { width: 100%; max-width: 393px; height: 852px; border-radius: 52px; background: var(--frame); padding: 9px; box-sizing: border-box; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
+.scr { position: relative; height: 100%; border-radius: 44px; overflow: hidden; background: var(--s-bg); color: var(--s-ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.status { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 36px; font-weight: 600; font-size: 16px; position: relative; z-index: 3; }
+.island { position: absolute; left: 50%; top: 11px; transform: translateX(-50%); width: 122px; height: 35px; border-radius: 20px; background: #000; }
+.status .r { display: flex; gap: 6px; align-items: center; }
+.status .bat { width: 25px; height: 12px; border: 1.5px solid currentColor; border-radius: 4px; position: relative; opacity: .9 }
+.status .bat::after { content: ""; position: absolute; inset: 1.5px 6px 1.5px 1.5px; background: currentColor; border-radius: 1.5px }
+.body { position: absolute; inset: 54px 0 0; overflow-y: auto; scrollbar-width: none; }
+.body::-webkit-scrollbar { display: none }
+
+/* round floating buttons, as Grok's */
+.fab { width: 44px; height: 44px; border-radius: 50%; background: var(--s-bg); box-shadow: var(--s-shadow); display: grid; place-items: center; flex: none; border: 0; color: var(--s-ink); cursor: pointer; }
+.fab svg { width: 20px; height: 20px }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 0; gap: 10px; position: relative; z-index: 2; }
+.pill { height: 44px; border-radius: 22px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 8px; padding: 0 16px 0 8px; min-width: 0; }
+.pill .t { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill .sub { font-size: 12px; color: var(--s-2); white-space: nowrap; }
+.pill .stack { display: grid; line-height: 1.15; min-width: 0 }
+.machine { font-size: 15px; font-weight: 500; color: var(--s-ink); padding: 0 14px; gap: 4px; height: 36px; }
+.machine .chev { color: var(--s-2); font-size: 12px }
+
+/* home */
+.hero { margin: 18px 16px 6px; border-radius: 22px; background: var(--s-wait-bg); padding: 16px 16px 14px; display: grid; gap: 12px; }
+.hero .h { display: flex; align-items: center; gap: 8px; color: var(--s-wait); font-weight: 600; font-size: 15px; }
+.hero .h .n { margin-left: auto; font-weight: 500; color: var(--s-2); font-size: 14px }
+.task { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; }
+.task > div { min-width: 0 }
+.task .name { font-size: 17px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px }
+.task .name span { font-weight: 400; color: var(--s-2); font-size: 14px }
+.task .what { font-size: 15px; color: #6b4a2a; margin-top: 2px }
+.cmd { font-family: var(--mono); font-size: 14px; background: rgba(255,255,255,.75); border-radius: 10px; padding: 9px 11px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #3a3a3f }
+.acts { display: flex; gap: 8px; margin-top: 10px }
+.btn { height: 38px; border-radius: 19px; padding: 0 18px; font: 600 15px/1 var(--sans); border: 1px solid #e3e3e8; background: var(--s-bg); color: var(--s-ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.btn.primary { background: #0b0b0c; color: #fff; border-color: #0b0b0c }
+.btn.big { height: 50px; border-radius: 25px; font-size: 17px; flex: 1 }
+.btn.ghost { border: 0; background: none; color: var(--s-2); padding: 0 6px; font-weight: 500 }
+
+.sect { font-size: 14px; color: var(--s-2); padding: 20px 24px 2px; display: flex; justify-content: space-between; }
+.sect code { font-family: var(--mono); font-size: 13px }
+.row { display: grid; grid-template-columns: 50px 1fr auto; gap: 0 14px; align-items: center; padding: 0 22px; height: 80px; cursor: pointer; }
+.row:hover { background: #fafafb }
+.row .nm { font-size: 19px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em }
+.row .pv { font-size: 16px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px }
+.row .pv b { font-weight: 500; color: #6b6b72 }
+.row .side { display: grid; justify-items: end; align-self: stretch; align-content: center; gap: 9px; font-size: 14px; color: var(--s-3); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--s-blue) }
+.faded { opacity: .45 }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 22px 30px; display: flex; gap: 12px; align-items: center; background: linear-gradient(to top, rgba(255,255,255,1) 55%, rgba(255,255,255,0)); }
+.dock .fab { width: 50px; height: 50px }
+.search { flex: 1; height: 50px; border-radius: 25px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 10px; padding: 0 18px; font-size: 18px; color: var(--s-2); }
+.search svg { width: 21px; height: 21px; color: var(--s-ink) }
+
+/* chat */
+.chatbody { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none; padding: 112px 0 300px; }
+.chatbody::-webkit-scrollbar { display: none }
+.overlay-top { position: absolute; left: 0; right: 0; top: 54px; z-index: 2; }
+.fade-top { position: absolute; left: 0; right: 0; top: 0; height: 128px; background: linear-gradient(rgba(255,255,255,.96) 60%, rgba(255,255,255,0)); z-index: 1; }
+.seg { display: flex; justify-content: center; margin-top: 10px; }
+.seg div { display: flex; background: var(--s-bubble); border-radius: 16px; padding: 3px; font-size: 14px; }
+.seg span { padding: 5px 16px; border-radius: 13px; color: var(--s-2) }
+.seg span.on { background: var(--s-bg); color: var(--s-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08) }
+.msg { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0 10px; padding: 0 16px; margin-top: 14px; align-items: end; }
+.msg .who { grid-column: 2; grid-row: 1; font-size: 14px; color: var(--s-2); margin: 0 0 6px 4px }
+.msg .av { grid-column: 1; grid-row: 2; }
+.msg > .bubble, .msg > .steps { grid-column: 2; grid-row: 2; }
+.msg > .receipt { grid-row: 3; }
+.bubble { background: var(--s-bubble); border-radius: 24px; padding: 13px 17px; font-size: 19px; line-height: 1.45; max-width: 86%; width: fit-content; letter-spacing: -.005em; }
+.bubble p { margin: 0 } .bubble p + p { margin-top: 8px }
+.bubble code { font-family: var(--mono); font-size: 16px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 6px }
+.mine { display: flex; justify-content: flex-end; padding: 0 16px; margin-top: 18px; }
+.mine .bubble { background: var(--s-mine); border-bottom-right-radius: 8px }
+.at { font-weight: 600 }
+.steps { grid-column: 2; border: 1px solid var(--s-line); border-radius: 18px; padding: 4px 0; width: fit-content; max-width: 86%; }
+.step { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 15px; color: #55555b; white-space: nowrap; }
+.step b { color: var(--s-ink); font-weight: 600 }
+.step .x { width: 8px; height: 8px; border-radius: 50%; background: var(--s-work); flex: none }
+.step .x.bad { background: #dc2626 } .step .x.run { background: none; border: 2px solid var(--s-3); border-top-color: var(--s-ink); width: 6px; height: 6px }
+.step .more { margin-left: auto; color: var(--s-3) }
+.receipt { grid-column: 2; display: flex; gap: 3px; align-items: center; margin: 6px 0 0 4px; font-size: 12px; color: var(--s-3) }
+.composer { position: absolute; left: 16px; right: 16px; bottom: 30px; height: 58px; border-radius: 29px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 10px; padding: 0 8px; z-index: 3; }
+.composer .ic { width: 42px; height: 42px; border-radius: 50%; background: #f2f2f4; display: grid; place-items: center; flex: none }
+.composer .ic svg { width: 20px; height: 20px }
+.composer .ph { flex: 1; font-size: 18px; color: var(--s-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.approve { position: absolute; left: 12px; right: 12px; bottom: 100px; background: var(--s-bg); border-radius: 28px; box-shadow: 0 10px 40px rgba(15,18,30,.16), 0 1px 3px rgba(15,18,30,.08); padding: 18px 18px 14px; z-index: 3; display: grid; gap: 12px; }
+.approve .h { display: flex; justify-content: space-between; align-items: baseline; }
+.approve .h b { color: var(--s-wait); font-size: 17px }
+.approve .h span { color: var(--s-2); font-size: 14px }
+.approve .cmdbox { font-family: var(--mono); font-size: 15px; line-height: 1.5; background: var(--s-code); border-radius: 14px; padding: 12px 14px; color: #2b2b30; white-space: pre-wrap; overflow-wrap: anywhere }
+.approve .row2 { display: flex; gap: 10px }
+.approve .also { text-align: center; font-size: 15px; color: var(--s-2) }
+.keyhint { font-size: 12px; color: var(--s-3) }
+
+/* usage */
+.spend { padding: 22px 24px 8px; }
+.spend .k { font-size: 15px; color: var(--s-2) }
+.spend .v { font-size: 44px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 2px }
+.spend .v small { font-size: 17px; font-weight: 500; color: var(--s-2); margin-left: 6px; letter-spacing: 0 }
+.card { margin: 14px 16px 0; background: #f7f7f9; border-radius: 22px; padding: 6px 0; }
+.card .ttl { font-size: 15px; font-weight: 600; color: #3c3c42; padding: 12px 18px 4px; display: flex; justify-content: space-between }
+.card .ttl span { font-weight: 400; color: var(--s-2); font-size: 14px }
+.meter { padding: 10px 18px 12px; display: grid; gap: 8px; }
+.meter .l { display: flex; justify-content: space-between; font-size: 17px; }
+.meter .l span { color: var(--s-2); font-size: 15px; font-variant-numeric: tabular-nums }
+.bar { height: 8px; border-radius: 4px; background: #e6e6ea; overflow: hidden }
+.bar i { display: block; height: 100%; border-radius: 4px; background: var(--s-work) }
+.bar i.warn { background: #e8890c }
+.line { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 10px 18px; font-size: 17px; }
+.line + .line { border-top: 1px solid #ececef; margin-left: 64px; padding-left: 0; grid-template-columns: 1fr auto; }
+.line .amt { font-variant-numeric: tabular-nums; color: #3c3c42 }
+.line .p { font-size: 14px; color: var(--s-2) }
+
+/* menu sheet */
+.dim { position: absolute; inset: 0; background: rgba(10,12,18,.28); z-index: 4 }
+.sheet { position: absolute; left: 8px; right: 8px; bottom: 8px; border-radius: 38px; background: var(--s-bg); z-index: 5; padding: 10px 18px 26px; }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: #d6d6db; margin: 0 auto 16px }
+.who2 { display: flex; align-items: center; gap: 12px; padding: 0 4px 16px; border-bottom: 1px solid var(--s-line) }
+.who2 .n { font-size: 19px; font-weight: 600 } .who2 .m { font-size: 14px; color: var(--s-2) }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 6px; padding: 20px 0 6px; }
+.tile { display: grid; justify-items: center; gap: 8px; font-size: 13px; color: #3c3c42; text-align: center }
+.tile i { width: 56px; height: 56px; border-radius: 18px; background: #f2f2f5; display: grid; place-items: center; font-style: normal }
+.tile i svg { width: 24px; height: 24px }
+.sheet .list { border-top: 1px solid var(--s-line); margin-top: 14px; }
+.sheet .li { display: flex; justify-content: space-between; padding: 15px 4px; font-size: 17px; border-bottom: 1px solid var(--s-line) }
+.sheet .li span { color: var(--s-2) }
+:focus-visible { outline: 2px solid var(--s-blue); outline-offset: 2px }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin 1.4s linear infinite; transform-origin: 50% 50% } }
+@keyframes spin { to { transform: rotate(360deg) } }
+</style>
+
+<header class="page">
+  <h1>mad 的 iPhone 版：照 Grok bot 重新排版</h1>
+  <p>尺寸照你发的 Grok 截图量出来：列表头像 46、名字 19、预览 16，每行 80 高；聊天正文 19，发言人 14；顶部两颗圆钮加中间胶囊，底部圆钮加搜索胶囊。点首页的行可以跳到对应的屏。数据是示例。</p>
+</header>
+
+<main class="board">
+
+<figure id="home">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>3:58</span><div class="island"></div><span class="r"><span class="bat"></span></span></div>
+    <div class="body" style="padding-bottom:110px">
+      <div class="topbar">
+        <div class="fab" data-av="person"></div>
+        <div class="pill machine">heng 的 MacBook Pro <span class="chev">▾</span></div>
+        <button class="fab" aria-label="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+
+      <section class="hero" aria-label="待处理">
+        <div class="h"><span class="dot" style="background:var(--s-wait)"></span>待处理 <span class="n">1</span></div>
+        <div class="task">
+          <span data-av="need0001-bbbb" data-ring="wait" data-size="40"></span>
+          <div>
+            <div class="name">给我绘制一个表格 <span>3 分钟</span></div>
+            <div class="what">想运行一条命令</div>
+            <div class="cmd">$ python3 make_table.py --out report.xlsx</div>
+            <div class="acts"><button class="btn primary">允许</button><button class="btn">拒绝</button><button class="btn ghost" data-go="agent">查看 ›</button></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="sect"><span>群聊</span></div>
+      <div class="row" data-go="group"><span data-group="ios"></span><div style="min-width:0"><div class="nm">ios</div><div class="pv">architect: 第 3 条也上线了，三条全部完成。</div></div><div class="side">9:04<span class="dot"></span></div></div>
+      <div class="row" data-go="group"><span data-group="five"></span><div style="min-width:0"><div class="nm">five</div><div class="pv">kim: 五个成员的群</div></div><div class="side">昨天</div></div>
+
+      <div class="sect"><span>mad</span><code>main · $689</code></div>
+      <div class="row" data-go="agent"><span data-av="work0001-aaaa" data-ring="work"></span><div style="min-width:0"><div class="nm">Sidebar token 统计</div><div class="pv"><b>Bash</b> go test ./internal/...</div></div><div class="side">现在</div></div>
+      <div class="row" data-go="agent"><span data-av="need0001-bbbb" data-ring="wait"></span><div style="min-width:0"><div class="nm">给我绘制一个表格</div><div class="pv">想运行一条命令，等你确认</div></div><div class="side">3 分钟</div></div>
+      <div class="row" data-go="agent"><span data-av="idle0001-dddd" data-ring="done"></span><div style="min-width:0"><div class="nm">notes</div><div class="pv">整理好了，写在 NOTES.md</div></div><div class="side">10:12</div></div>
+      <div class="row faded"><span data-av="stop0001-cccc" data-ring="stop"></span><div style="min-width:0"><div class="nm">Mad ideas</div><div class="pv">已停止</div></div><div class="side">周六</div></div>
+    </div>
+    <div class="dock">
+      <button class="fab" data-go="menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 13.5v6.5M13.5 16.75H20" stroke-linecap="round"/></svg></button>
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>搜索</div>
+    </div>
+  </div></div>
+  <figcaption><b>首页</b>机器名放在顶部胶囊里；待处理固定在最上，能直接允许；下面按群聊和项目排，行高、字号照 Grok。左下角是菜单，右下角是搜索。</figcaption>
+</figure>
+
+<figure id="agent">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>3:59</span><div class="island"></div><span class="r"><span class="bat"></span></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" data-go="home" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="need0001-bbbb" data-ring="wait" data-size="32"></span><div class="stack"><span class="t">给我绘制一个表格</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动 · 2</span></div></div>
+    </div>
+    <div class="chatbody" style="padding-top:150px">
+      <div class="mine"><div class="bubble">给我绘制一个表格，按负责人分组，存成 report.xlsx</div></div>
+      <div class="msg"><span class="av" data-av="need0001-bbbb" data-size="26"></span><div class="bubble"><p>好的，我先看一下数据：</p><p>· 读 board.json<br>· 按负责人分组<br>· 写成 report.xlsx</p></div></div>
+      <div class="msg"><span></span><div class="steps">
+        <div class="step"><span class="x"></span><b>读取</b> board.json</div>
+        <div class="step"><span class="x bad"></span><b>运行</b> go test ./internal/board <span class="more">›</span></div>
+      </div></div>
+      <div class="msg"><span class="av" data-av="need0001-bbbb" data-size="26"></span><div class="bubble"><p>测试没过，少了一条任务：循环从 <code>tasks[1:]</code> 开始，第一条被漏掉了。改好了，现在生成表格。</p></div></div>
+      <div class="msg"><span></span><div class="steps"><div class="step"><span class="x run spin"></span><b>运行</b> python3 make_table.py…</div></div></div>
+    </div>
+    <section class="approve" aria-label="批准">
+      <div class="h"><b>想运行一条命令</b><span>等了 3 分钟</span></div>
+      <div class="cmdbox">$ python3 make_table.py --out report.xlsx</div>
+      <div class="row2"><button class="btn big">拒绝</button><button class="btn big primary">允许</button></div>
+      <div class="also">本次会话都允许</div>
+    </section>
+    <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息…</span><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg></span></div>
+  </div></div>
+  <figcaption><b>agent 对话</b>顶部和 Grok 一样：返回钮、名字胶囊、⋯。AI 的话用灰气泡、19 号字；工具调用收成一张小清单。等你批准时，卡片浮在输入框上面，按钮大、命令完整显示。</figcaption>
+</figure>
+
+<figure id="group">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>3:59</span><div class="island"></div><span class="r"><span class="bat"></span></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top"><div class="topbar">
+      <button class="fab" data-go="home" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+      <div class="pill"><span data-group="ios" data-size="34"></span><div class="stack"><span class="t">ios</span><span class="sub">3 个成员 · 1 个在工作</span></div></div>
+      <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+    </div></div>
+    <div class="chatbody" style="padding-bottom:120px">
+      <div class="mine"><div class="bubble"><span class="at" style="color:#1f66ff">@architect</span> 把三条修复排一下，<span class="at" style="color:#ff5a1f">@builder</span> 来做</div></div>
+      <div class="msg"><span class="who">architect</span><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">好。第 1 条是登录页的回退按钮，第 2 条是列表到底部不跟随，第 3 条是图片发送失败没有提示。</div></div>
+      <div class="msg"><span class="who">builder</span><span class="av" data-av="team0001-bld0" data-ring="work" data-size="26"></span><div class="bubble">收到，先做第 1 条，提好 PR 发群里。</div></div>
+      <div class="msg"><span class="who">architect</span><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">第 3 条也上线了，三条全部完成。</div><div class="receipt"><span data-av="team0001-bld0" data-size="16"></span><span data-av="team0001-rev0" data-size="16"></span>已读</div></div>
+    </div>
+    <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息到 ios</span><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg></span></div>
+  </div></div>
+  <figcaption><b>群聊</b>和你发的 Grok 截图一样：发言人名字在气泡上方，小头像在左下，我的消息是浅蓝色；@ 的名字用成员自己的颜色，已读用小头像表示。</figcaption>
+</figure>
+
+<figure id="usage">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>4:01</span><div class="island"></div><span class="r"><span class="bat"></span></span></div>
+    <div class="body">
+      <div class="topbar">
+        <button class="fab" data-go="home" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill" style="padding-left:16px"><span class="t">用量</span></div>
+        <span style="width:44px"></span>
+      </div>
+      <div class="spend"><div class="k">今天花了</div><div class="v">$15.86<small>按 API 价格估算</small></div></div>
+      <div class="card">
+        <div class="ttl">订阅额度 <span>超过 80% 变橙</span></div>
+        <div class="meter"><div class="l">5 小时窗口 <span>62% · 2 小时后重置</span></div><div class="bar"><i style="width:62%"></i></div></div>
+        <div class="meter"><div class="l">本周 <span>84% · 周四重置</span></div><div class="bar"><i class="warn" style="width:84%"></i></div></div>
+      </div>
+      <div class="card">
+        <div class="ttl">今天花得最多</div>
+        <div class="line"><span data-av="work0001-aaaa" data-size="34"></span><div>Sidebar token 统计<div class="p">mad · main</div></div><span class="amt">$6.40</span></div>
+        <div class="line"><div>给我绘制一个表格<div class="p">mad · main</div></div><span class="amt">$4.12</span></div>
+        <div class="line"><div>ios 群聊<div class="p">3 个成员</div></div><span class="amt">$3.05</span></div>
+      </div>
+      <div class="card" style="margin-bottom:40px">
+        <div class="ttl">mad 自己的 agent 预算</div>
+        <div class="meter"><div class="l">每天 $20.00 <span>已用 $4.20</span></div><div class="bar"><i style="width:21%"></i></div></div>
+        <div style="padding:4px 18px 14px"><button class="btn" style="width:100%;height:46px;border-radius:23px">今天不限</button></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>用量</b>最重要的数（今天花了多少）放大放在最上面；下面是三张分组卡片：额度用进度条，花费排出前三，预算和「今天不限」放在一起。</figcaption>
+</figure>
+
+<figure id="menu">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>4:02</span><div class="island"></div><span class="r"><span class="bat"></span></span></div>
+    <div class="body" style="filter:saturate(.9)">
+      <div class="topbar"><div class="fab" data-av="person"></div><div class="pill machine">heng 的 MacBook Pro <span class="chev">▾</span></div><span class="fab"></span></div>
+      <div class="row"><span data-group="ios"></span><div><div class="nm">ios</div><div class="pv">architect: 第 3 条也上线了</div></div><div class="side">9:04</div></div>
+      <div class="row"><span data-av="work0001-aaaa" data-ring="work"></span><div><div class="nm">Sidebar token 统计</div><div class="pv">Bash go test ./…</div></div><div class="side">现在</div></div>
+    </div>
+    <div class="dim"></div>
+    <section class="sheet" aria-label="菜单">
+      <div class="grab"></div>
+      <div class="who2"><span data-av="person" data-size="48"></span><div><div class="n">Heng Du</div><div class="m">heng 的 MacBook Pro · 已连接</div></div></div>
+      <div class="tiles">
+        <div class="tile" data-go="usage"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg></i>用量</div>
+        <div class="tile"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="4.5" height="16" rx="1.2"/><rect x="10" y="4" width="4.5" height="11" rx="1.2"/><rect x="16" y="4" width="4.5" height="7" rx="1.2"/></svg></i>看板</div>
+        <div class="tile"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5 14.4 9l5.6.5-4.3 3.7 1.3 5.6L12 15.9 7 18.8l1.3-5.6L4 9.5 9.6 9z"/></svg></i>技能</div>
+        <div class="tile"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 20a2 2 0 0 0 3.4 0" stroke-linecap="round"/></svg></i>通知</div>
+      </div>
+      <div class="list">
+        <div class="li">手机和已配对设备 <span>2 台 ›</span></div>
+        <div class="li">切换 Mac <span>›</span></div>
+        <div class="li">添加项目 <span>›</span></div>
+        <div class="li">主题 <span>跟随系统 ›</span></div>
+      </div>
+    </section>
+  </div></div>
+  <figcaption><b>菜单</b>首页左下角的圆钮打开：上面是你和当前连着的 Mac，常用的四项做成大图标，其余的放在列表里。</figcaption>
+</figure>
+
+</main>
+
+<script>
+// mad's avatar (the same as the apps' GrokAvatar): a solid circle or a tilted rounded square with two slanted eyes,
+// colour and shape from a stable hash of the id; a ring around it tells the state.
+const COLORS = ["#8a3ffc", "#ff5a1f", "#1f66ff", "#ff4d8d", "#1fbf75", "#12b5d6", "#f5b324", "#6a5cff"];
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function body(id, stopped) {
+  const h = hash(id), col = COLORS[h % 8], round = (h >> 3) % 2 === 0;
+  const shape = round ? `<circle cx="50" cy="50" r="40" fill="${col}"/>`
+    : `<rect x="12" y="12" width="76" height="76" rx="26" fill="${col}" transform="rotate(-12 50 50)"/>`;
+  const eyes = stopped
+    ? [36, 60].map(x => `<rect x="${x - 7}" y="44" width="14" height="5" rx="2.5" fill="rgba(0,0,0,.75)"/>`).join("")
+    : [36, 60].map(x => `<rect x="-3.5" y="-9" width="7" height="18" rx="3.5" fill="rgba(0,0,0,.78)" transform="translate(${x} 43) rotate(-16)"/>`).join("");
+  return shape + eyes;
+}
+function avatar(id, size, ring) {
+  const inner = ring === "wait" || ring === "work" ? `<g transform="translate(9 9) scale(.82)">${body(id, false)}</g>` : body(id, ring === "stop");
+  let r = "";
+  if (ring === "wait") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e8890c" stroke-width="5"/>`;
+  if (ring === "work") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e5e5ea" stroke-width="4"/><g class="spin"><circle cx="50" cy="50" r="46.5" fill="none" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-dasharray="78 300"/></g>`;
+  if (ring === "done") r = `<circle cx="86" cy="86" r="11" fill="#2563eb" stroke="#fff" stroke-width="5"/>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="display:block;overflow:visible">${inner}${r}</svg>`;
+}
+const MEMBERS = { ios: ["team0001-arch", "team0001-bld0", "team0001-rev0"], five: ["kim-0001", "lee-0002", "park-0003", "five-04", "five-05"] };
+function groupTile(name, size) {
+  const m = MEMBERS[name] || [], s = size * .56;
+  const spots = [[0, 0], [size - s, size * .06], [size * .2, size - s]];
+  return `<div style="position:relative;width:${size}px;height:${size}px">` + m.slice(0, 3).map((id, i) =>
+    `<div style="position:absolute;left:${spots[i][0]}px;top:${spots[i][1]}px">${avatar(id, s)}</div>`).join("") +
+    (m.length > 3 ? `<div style="position:absolute;right:-2px;bottom:-2px;font:600 ${size * .3}px var(--sans);color:#a1a1a8">+${m.length - 3}</div>` : "") + `</div>`;
+}
+function person(size) {
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#ef4444);display:grid;place-items:center;color:#fff;font:600 ${size * .42}px var(--sans)">H</div>`;
+}
+document.querySelectorAll("[data-av]").forEach(el => {
+  const size = +(el.dataset.size || (el.classList.contains("fab") ? 38 : 50));
+  el.innerHTML = el.dataset.av === "person" ? person(size) : avatar(el.dataset.av, size, el.dataset.ring);
+});
+document.querySelectorAll("[data-group]").forEach(el => { el.innerHTML = groupTile(el.dataset.group, +(el.dataset.size || 50)); });
+// a tap on a row, a ‹ or a tile scrolls to the screen it would open
+document.querySelectorAll("[data-go]").forEach(el => el.addEventListener("click", e => {
+  e.stopPropagation();
+  document.getElementById(el.dataset.go)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}));
+</script>

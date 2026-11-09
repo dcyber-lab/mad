@@ -34,12 +34,12 @@ struct MadButtonStyle: ButtonStyle {
     }
 
     private var font: Font {
-        if size == .small { return .system(size: 11.5) }
-        if size == .regular { return .system(size: 12.5) }
+        if size == .small { return .mad(11.5) }
+        if size == .regular { return .mad(12.5) }
         #if os(iOS)
         return .system(size: 15, weight: kind == .primary ? .semibold : .regular)
         #else
-        return .system(size: 13.5, weight: kind == .primary ? .semibold : .regular)
+        return .mad(13.5, weight: kind == .primary ? .semibold : .regular)
         #endif
     }
 
@@ -78,7 +78,7 @@ struct Kbd: View {
     var body: some View {
         #if os(macOS)
         Text(keys)
-            .font(.system(size: 10.5, design: .monospaced))
+            .font(.mad(10.5, design: .monospaced))
             .foregroundStyle(Color.madFg3)
             .padding(.horizontal, 4)
             .padding(.bottom, 1)
@@ -100,7 +100,7 @@ struct MadPill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .medium))
+            .font(.mad(11.5, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(color)
             .padding(.horizontal, 6)
@@ -119,7 +119,7 @@ struct StateDot: View {
 /// A command or a question in a box of code: one line, cut at the end.
 struct CommandBox: View {
     let text: String
-    var font: Font = .system(size: 11.5, design: .monospaced)
+    var font: Font = .mad(11.5, design: .monospaced)
     /// Set to whether the line had to be cut, once it is laid out.
     var cut: Binding<Bool>?
     @State private var whole: CGFloat = .infinity

@@ -82,7 +82,9 @@ public struct ChannelView: View {
         ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
                         replying: $replying, send: actions.send)
             .frame(maxWidth: MadColumn.maxWidth)
+            #if os(macOS)
             .padding(.horizontal, MadColumn.side)
+            #endif
             .frame(maxWidth: .infinity)
     }
 
@@ -92,9 +94,9 @@ public struct ChannelView: View {
         // changes the list's inset (the list stays where it is under it), a composer that grows goes up over the list, and
         // what scrolls under the head is blurred by its material, not cut.
         messages
-            .safeAreaInset(edge: .top, spacing: 0) { head.background(.ultraThinMaterial) }
-            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.ultraThinMaterial) }
-            .background(Color.clear)
+            .safeAreaInset(edge: .top, spacing: 0) { head.background(alignment: .top) { PhoneHeadFade() } }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(alignment: .bottom) { PhoneFootFade() } }
+            .background(Color.madPaper)
         #else
         VStack(spacing: 0) {
             head
@@ -107,7 +109,55 @@ public struct ChannelView: View {
 
     /// The head (the approved design's, v5): back (phone), the tile with the name and "4 位成员 · 2 个在工作" (it opens
     /// 群信息), and at the right the members' avatars in a stack and the 群信息 toggle. A hairline under it.
-    private var head: some View {
+    @ViewBuilder private var head: some View {
+        #if os(iOS)
+        phoneHead
+        #else
+        macHead
+        #endif
+    }
+
+    #if os(iOS)
+    /// The phone's head (design v6): the round back button, the capsule with the group's tile, its name and
+    /// "3 个成员 · 1 个在工作" (it opens 群信息), and the round ⋯ (also 群信息).
+    private var phoneHead: some View {
+        PhoneTopBar {
+            if let back = actions.back { PhoneBackButton { back() } } else { Color.clear.frame(width: Phone.button, height: Phone.button) }
+        } center: {
+            Button { panelOpen = true } label: {
+                PhoneTitlePill(title: screen.title, sub: phoneSub) {
+                    GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 34,
+                              dot: (screen.members + screen.helpers).contains { $0.state == .needsYou })
+                        .frame(width: 34, height: 34)
+                }
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
+            .accessibilityHint(L("群信息"))
+        } trailing: {
+            PhoneRoundButton(action: { panelOpen.toggle() }) { Image(systemName: "ellipsis") }
+                .accessibilityLabel(L("群信息"))
+        }
+    }
+
+    /// "3 个成员 · 1 个在工作" (a quiet channel says only its count); a bad link says so instead.
+    private var phoneSub: String {
+        if let note { return note.text }
+        let live = screen.members.filter { !$0.dim }
+        guard !live.isEmpty else { return screen.stateLine }
+        let count = Lf("%lld 个成员", live.count)
+        // one clause, so the capsule never cuts it: who waits for the person first, else who works
+        let needing = (screen.members + screen.helpers).filter { !$0.dim && $0.state == .needsYou }.count
+        let working = (screen.members + screen.helpers).filter { !$0.dim && $0.state == .working }.count
+        if needing > 0 { return count + " · " + Lf("%lld 个在等你", needing) }
+        if working > 0 { return count + " · " + Lf("%lld 个在工作", working) }
+        return count
+    }
+    @Environment(\.madLinkNote) private var note
+    #endif
+
+    private var macHead: some View {
         HStack(spacing: 10) {
             if let back = actions.back {
                 Button { back() } label: {
@@ -398,7 +448,7 @@ public struct ChannelView: View {
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
         switch item {
         case .time(_, let text):
-            Text(text).font(.system(size: 11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            Text(text).font(.mad(11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
         case .note(let id, _) where id == "quiet" || id == "empty":
             Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
@@ -428,18 +478,19 @@ public struct ChannelView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 12)
             #else
-            HStack(alignment: .bottom, spacing: 8) {
-                CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: 26)
+            // Grok's group chat: the sender's name in grey over the bubbles, the small avatar at the last bubble's bottom-left
+            HStack(alignment: .bottom, spacing: Phone.chatSide - 6) {
+                CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: Phone.chatAvatar)
+                    .frame(width: Phone.chatAvatar, height: Phone.chatAvatar)
                     .onTapGesture { actions.openAgent(run.sender.id) }
-                    .padding(.bottom, 2)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(run.sender.name).font(MadType.label).foregroundStyle(.secondary).padding(.leading, 4).lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(run.sender.name).font(Phone.sender).foregroundStyle(Color.madFg2).padding(.leading, 4).padding(.bottom, 2).lineLimit(1)
                     ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
                 }
                 // to the column's right edge (a Spacer here would add the HStack's spacing before it)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.top, 10)
+            .padding(.top, 14)
             #endif
         }
     }

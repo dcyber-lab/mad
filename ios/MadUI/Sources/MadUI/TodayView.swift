@@ -63,14 +63,14 @@ public struct TodayView: View {
             + Text(Lf("%lld 个刚完成", today.done)).bold().foregroundColor(.madDone)
             + Text(L("。"))
         if !today.spend.isEmpty { t = t + Text(Lf("今天花了 %@。", today.spend)) }
-        return t.font(.system(size: 13.5)).foregroundColor(.madFg2).fixedSize(horizontal: false, vertical: true)
+        return t.font(.mad(13.5)).foregroundColor(.madFg2).fixedSize(horizontal: false, vertical: true)
     }
 
     private func block<Content: View>(_ title: String, color: Color, keys: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 StateDot(color: color)
-                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.madFg2)
+                Text(title).font(.mad(12.5, weight: .semibold)).foregroundStyle(Color.madFg2)
                 Spacer(minLength: 0)
                 if keys {
                     HStack(spacing: 4) {
@@ -78,7 +78,7 @@ public struct TodayView: View {
                         Kbd("⌥N")
                         Text(L("下一个"))
                     }
-                    .font(.system(size: 11.5))
+                    .font(.mad(11.5))
                     .foregroundStyle(Color.madFg3)
                 }
             }
@@ -87,7 +87,7 @@ public struct TodayView: View {
     }
 
     private func quiet(_ text: String) -> some View {
-        Text(text).font(.system(size: 12.5)).foregroundStyle(Color.madFg3).padding(.horizontal, 2)
+        Text(text).font(.mad(12.5)).foregroundStyle(Color.madFg3).padding(.horizontal, 2)
     }
 
     private var keys: some View {
@@ -97,7 +97,7 @@ public struct TodayView: View {
             key("⌘\\", L("侧栏"))
             key("⌘I", L("详情"))
         }
-        .font(.system(size: 11.5))
+        .font(.mad(11.5))
         .foregroundStyle(Color.madFg3)
         .frame(maxWidth: .infinity)
         .padding(.top, 6)
@@ -120,7 +120,7 @@ struct PageHead<Trailing: View>: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
-                if !sub.isEmpty { Text(sub).font(.system(size: 12)).foregroundStyle(Color.madFg3).lineLimit(1) }
+                if !sub.isEmpty { Text(sub).font(.mad(12)).foregroundStyle(Color.madFg3).lineLimit(1) }
             }
             Spacer(minLength: 8)
             HStack(spacing: 8) { trailing }
@@ -156,18 +156,18 @@ struct WaitingTask: View {
         HStack(alignment: .top, spacing: 12) {
             CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: 36)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
-                if !item.whereLine.isEmpty { Text(item.whereLine).font(.system(size: 12)).foregroundStyle(Color.madFg3).lineLimit(1) }
+                Text(item.name).font(.mad(13.5, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
+                if !item.whereLine.isEmpty { Text(item.whereLine).font(.mad(12)).foregroundStyle(Color.madFg3).lineLimit(1) }
                 if item.isPermission || item.mono {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        Text(item.detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.madFg).fixedSize()
+                        Text(item.detail).font(.mad(12, design: .monospaced)).foregroundStyle(Color.madFg).fixedSize()
                             .padding(.horizontal, 9).padding(.vertical, 6)
                     }
                     .background(Color.madCode, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
                     .padding(.top, 4)
                 } else if !item.detail.isEmpty {
-                    Text(item.detail).font(.system(size: 13)).foregroundStyle(Color.madFg).padding(.top, 4)
+                    Text(item.detail).font(.mad(13)).foregroundStyle(Color.madFg).padding(.top, 4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 FlowLayout(spacing: 6) {
@@ -188,7 +188,7 @@ struct WaitingTask: View {
                 Text(item.age)
                 if !item.cost.isEmpty { Text(item.cost) }
             }
-            .font(.system(size: 11.5))
+            .font(.mad(11.5))
             .monospacedDigit()
             .foregroundStyle(Color.madFg3)
         }
@@ -220,11 +220,11 @@ struct LinesBox: View {
                 HStack(spacing: 12) {
                     CharacterView(id: line.id, kind: line.kind, state: line.state, size: 28)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(line.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
-                        sub(line).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
+                        Text(line.name).font(.mad(13, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
+                        sub(line).font(.mad(12)).lineLimit(1).truncationMode(.tail)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(line.number).font(.system(size: 12)).monospacedDigit().foregroundStyle(Color.madFg3).lineLimit(1).fixedSize()
+                    Text(line.number).font(.mad(12)).monospacedDigit().foregroundStyle(Color.madFg3).lineLimit(1).fixedSize()
                     Button(button) { act(line.id) }.buttonStyle(.mad(.normal, .small))
                 }
                 .padding(.horizontal, 14)
@@ -244,7 +244,7 @@ struct LinesBox: View {
         if !line.tool.isEmpty { parts.append(Text(line.tool)) }
         if !line.detail.isEmpty {
             parts.append(line.tool.isEmpty ? Text(line.detail)
-                         : Text(line.detail).font(.system(size: 11.5, design: .monospaced)).foregroundColor(.madFg2))
+                         : Text(line.detail).font(.mad(11.5, design: .monospaced)).foregroundColor(.madFg2))
         }
         guard var t = parts.first else { return Text("") }
         for p in parts.dropFirst() { t = t + Text(" · ") + p }

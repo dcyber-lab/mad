@@ -6,67 +6,55 @@ import SwiftUI
 struct WaitingCard: View {
     let item: HomeWaiting
     let actions: HomeActions
-    /// The phone's card is larger (28pt avatar, 15pt name, 14pt buttons), and a question shows only its words.
-    var phone = false
     /// Whether the command box had to cut the command: then Allow is not offered beside it, Review is (it opens the
     /// agent, whose card shows the whole command). Until the box is measured it counts as cut.
     @State private var cut = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: phone ? 8 : 6) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: phone ? 28 : 24)
+                CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: 24)
                 Text(item.name)
-                    .font(phone ? Font.system(size: 15, weight: .semibold) : Font.system(size: 13, weight: .medium))
+                    .font(Font.mad(13, weight: .medium))
                     .foregroundStyle(Color.madFg)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(item.age).font(.system(size: phone ? 12 : 11)).monospacedDigit().foregroundStyle(Color.madFg3)
+                Text(item.age).font(.system(size: 11)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
-            if phone && !item.isPermission {
-                Text(item.detail).font(.system(size: 14)).foregroundStyle(Color.madFg).lineLimit(2)
-            } else if !item.detail.isEmpty {
+            if !item.detail.isEmpty {
                 CommandBox(text: item.detail, font: item.mono
-                           ? Font.system(size: phone ? 12.5 : 11.5, design: .monospaced)
-                           : Font.system(size: phone ? 12.5 : 11.5), cut: $cut)
+                           ? Font.system(size: 11.5, design: .monospaced)
+                           : Font.system(size: 11.5), cut: $cut)
             }
-            if !(phone && !item.isPermission) {
-                HStack(spacing: 6) {
-                    if item.isPermission {
-                        if cut && !item.detail.isEmpty {
-                            Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(.mad(.primary, size))
-                                .help(L("允许之前先看完全部内容"))
-                        } else if let allow = item.allow {
-                            Button(allow.label) { actions.act(item.id, allow.id, nil) }.buttonStyle(.mad(.primary, size))
-                        }
-                        if let deny = item.deny {
-                            Button(deny.label) { actions.act(item.id, deny.id, nil) }.buttonStyle(.mad(.normal, size))
-                        }
-                    } else {
-                        Button(L("回复")) { actions.open(item.agentID) }.buttonStyle(.mad(.normal, size))
+            HStack(spacing: 6) {
+                if item.isPermission {
+                    if cut && !item.detail.isEmpty {
+                        Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(.mad(.primary, size))
+                            .help(L("允许之前先看完全部内容"))
+                    } else if let allow = item.allow {
+                        Button(allow.label) { actions.act(item.id, allow.id, nil) }.buttonStyle(.mad(.primary, size))
                     }
-                    Spacer(minLength: 0)
-                    Text(item.project).font(.system(size: phone ? 12 : 11)).foregroundStyle(Color.madFg3).lineLimit(1)
+                    if let deny = item.deny {
+                        Button(deny.label) { actions.act(item.id, deny.id, nil) }.buttonStyle(.mad(.normal, size))
+                    }
+                } else {
+                    Button(L("回复")) { actions.open(item.agentID) }.buttonStyle(.mad(.normal, size))
                 }
+                Spacer(minLength: 0)
+                Text(item.project).font(.system(size: 11)).foregroundStyle(Color.madFg3).lineLimit(1)
             }
         }
-        .padding(.horizontal, phone ? 12 : 10)
-        .padding(.vertical, phone ? 10 : 8)
-        .background(Color.madPaper, in: RoundedRectangle(cornerRadius: phone ? 14 : 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: phone ? 14 : 10, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: phone ? 14 : 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.madPaper, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture { actions.open(item.agentID) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(item.name), needs you, \(item.detail)")
     }
 
-    private var size: MadButtonStyle.Size {
-        #if os(iOS)
-        phone ? .regular : .small
-        #else
-        .small
-        #endif
-    }
+    private var size: MadButtonStyle.Size { .small }
 }
 
 /// A section's head in the list: "待处理 2" in amber with its dot, "群聊" with a +, a project with its git and cost.
@@ -74,7 +62,6 @@ struct ListHead<Trailing: View>: View {
     let title: String
     var count: Int?
     var attention = false
-    var phone = false
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
@@ -85,7 +72,7 @@ struct ListHead<Trailing: View>: View {
             Spacer(minLength: 8)
             trailing.fontWeight(.medium)
         }
-        .font(.system(size: phone ? 12.5 : 11.5))
+        .font(.system(size: 11.5))
         .monospacedDigit()
         .foregroundStyle(attention ? Color.madWait : Color.madFg3)
         .lineLimit(1)
@@ -103,7 +90,7 @@ struct ProjectMetaLine: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if !meta.branch.isEmpty { Text(meta.branch).font(.system(size: 11.5, design: .monospaced)).lineLimit(1) }
+            if !meta.branch.isEmpty { Text(meta.branch).font(.mad(11.5, design: .monospaced)).lineLimit(1) }
             ForEach(meta.parts, id: \.self) { Text($0).fixedSize() }
         }
     }

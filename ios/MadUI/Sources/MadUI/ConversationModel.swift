@@ -53,10 +53,11 @@ public struct AgentConversation: Equatable, Sendable {
     /// The waiting ring shows while something waits on the person.
     public var needsYou: Bool { ask != nil || state == .needsYou }
 
-    /// What the empty composer says. A long title is cut: the hint stays one line, as the bar is.
+    /// What the empty composer says. The title is quoted, as an agent's title is often its task ("给我绘制一个表格"),
+    /// which read as a second 给 bare. A long title is cut: the hint stays one line, as the bar is.
     public var composerPrompt: String {
         let name = title.count > 28 ? String(title.prefix(28)) + "…" : title
-        return Lf("发消息给 %@", name)
+        return Lf("发消息给「%@」", name)
     }
 
     /// The interrupt button shows while the agent works, and only when nothing is typed (typing turns it into send).

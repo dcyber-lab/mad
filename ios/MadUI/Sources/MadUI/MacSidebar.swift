@@ -65,7 +65,7 @@ public struct MacSidebar: View {
             Spacer(minLength: 76)
             Button(action: actions.switchMac) {
                 Text(model.machine + " ▾")
-                    .font(.system(size: 12))
+                    .font(.mad(12))
                     .foregroundStyle(Color.madFg2)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -89,7 +89,7 @@ public struct MacSidebar: View {
             Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium))
             TextField(L("搜索或跳转"), text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(.mad(13))
                 .foregroundStyle(Color.madFg)
                 .focused($searchFocused)
                 .onChange(of: query) { _, q in actions.search(q) }
@@ -122,7 +122,7 @@ public struct MacSidebar: View {
         VStack(spacing: 6) {
             ForEach(model.waiting) { WaitingCard(item: $0, actions: actions) }
             if model.waiting.isEmpty {
-                Text(L("都处理完了")).font(.system(size: 12.5)).foregroundStyle(Color.madFg3)
+                Text(L("都处理完了")).font(.mad(12.5)).foregroundStyle(Color.madFg3)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 2).padding(.vertical, 2)
             }
         }
@@ -149,9 +149,9 @@ public struct MacSidebar: View {
             Button { selection = HomeRow.usageID; actions.open(HomeRow.usageID) } label: {
                 HStack(spacing: 10) {
                     PersonPicture(name: model.person ?? NSFullUserName(), size: 28)
-                    Text(model.person ?? NSFullUserName()).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
+                    Text(model.person ?? NSFullUserName()).font(.mad(13.5, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
                     Spacer(minLength: 0)
-                    Text(L("用量 ›")).font(.system(size: 11)).foregroundStyle(Color.madFg3)
+                    Text(L("用量 ›")).font(.mad(11)).foregroundStyle(Color.madFg3)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 6)
                 .modifier(SelectedRowBackground(selected: selection == HomeRow.usageID))

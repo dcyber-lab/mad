@@ -93,6 +93,15 @@ public struct UsageView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
+        phoneBody
+        #else
+        macBody
+        #endif
+    }
+
+    #if os(macOS)
+    private var macBody: some View {
         VStack(spacing: 0) {
             head
             ScrollView {
@@ -115,7 +124,7 @@ public struct UsageView: View {
                     if let b = screen.budget {
                         block(L("mad 自己的 agent 预算"), note: b.note) {
                             Bar(part: b.part, hot: b.hot || b.closed)
-                            if b.closed { Text(L("已用完，agent 在等")).font(.system(size: 12)).foregroundStyle(Color.madWait) }
+                            if b.closed { Text(L("已用完，agent 在等")).font(.mad(12)).foregroundStyle(Color.madWait) }
                         }
                     }
                 }
@@ -129,40 +138,12 @@ public struct UsageView: View {
         .background(Color.madPaper)
         .environment(\.madAvatarBackdrop, Color.madPaper)
     }
+    #endif
 
-    private var padding: CGFloat {
-        #if os(iOS)
-        16
-        #else
-        28
-        #endif
-    }
+    private var padding: CGFloat { 28 }
 
-    @ViewBuilder private var head: some View {
-        #if os(iOS)
-        HStack(spacing: 10) {
-            if let back = actions.back {
-                Button(action: back) {
-                    Image(systemName: "chevron.left").font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.madAccent)
-                        .frame(width: 30, height: 36)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("返回")
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(L("用量")).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.madFg)
-                Text(L("订阅额度和今天的花费（按 API 价格估算）")).font(.system(size: 12)).foregroundStyle(Color.madFg3).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            lift
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
-        #else
+    private var head: some View {
         PageHead(title: L("用量"), sub: L("订阅额度和今天的花费（按 API 价格估算）")) { lift }
-        #endif
     }
 
     @ViewBuilder private var lift: some View {
@@ -174,16 +155,16 @@ public struct UsageView: View {
     private func block<Content: View>(_ title: String, note: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.madFg2)
+                Text(title).font(.mad(12.5, weight: .semibold)).foregroundStyle(Color.madFg2)
                 Spacer(minLength: 0)
-                if !note.isEmpty { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.madFg3).lineLimit(1) }
+                if !note.isEmpty { Text(note).font(.mad(11.5)).foregroundStyle(Color.madFg3).lineLimit(1) }
             }
             content()
         }
     }
 
     private func quiet(_ text: String) -> some View {
-        Text(text).font(.system(size: 12.5)).foregroundStyle(Color.madFg3).padding(.horizontal, 2)
+        Text(text).font(.mad(12.5)).foregroundStyle(Color.madFg3).padding(.horizontal, 2)
     }
 
     private func lines(_ items: [UsageLine]) -> some View {
@@ -197,11 +178,11 @@ public struct UsageView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.madRaise).frame(width: 28, height: 28)
                     }
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(line.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
-                        sub(line).font(.system(size: 12)).lineLimit(1)
+                        Text(line.name).font(.mad(13, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
+                        sub(line).font(.mad(12)).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(line.number).font(.system(size: 12)).monospacedDigit().foregroundStyle(Color.madFg3)
+                    Text(line.number).font(.mad(12)).monospacedDigit().foregroundStyle(Color.madFg3)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -216,7 +197,7 @@ public struct UsageView: View {
     private func sub(_ line: UsageLine) -> Text {
         let rest = Text(line.sub).foregroundColor(.madFg3)
         guard !line.mono.isEmpty else { return rest }
-        let mono = Text(line.mono).font(.system(size: 11.5, design: .monospaced)).foregroundColor(.madFg2)
+        let mono = Text(line.mono).font(.mad(11.5, design: .monospaced)).foregroundColor(.madFg2)
         return line.sub.isEmpty ? mono : mono + Text(" · ").foregroundColor(.madFg3) + rest
     }
 }
@@ -232,7 +213,7 @@ struct QuotaCard: View {
                 Spacer(minLength: 0)
                 Text(quota.reset).monospacedDigit().foregroundStyle(Color.madFg3).lineLimit(1)
             }
-            .font(.system(size: 12.5))
+            .font(.mad(12.5))
             Text(verbatim: "\(quota.percent)%").font(.system(size: 24, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(Color.madFg)
             Bar(part: Double(quota.percent) / 100, hot: quota.hot)
