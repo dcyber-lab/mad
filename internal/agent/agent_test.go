@@ -261,6 +261,7 @@ func TestScreenWaiting(t *testing.T) {
 		{"agy", "Run this command?\n  go test ./...\n> Yes", true},
 		{"agy", "Allow calling this tool?", true},
 		{"agy", "Do you trust the contents of this project?", true},
+		{"agy", " Welcome to the Antigravity CLI. You are currently not signed in.\n Select login method:\n > 1. Google OAuth", true},
 		{"agy", "Do you trust this folder?", true},
 		{"agy", "> Type your message", false},
 	}

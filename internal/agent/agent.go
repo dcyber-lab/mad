@@ -84,8 +84,8 @@ var builtin = []Kind{
 		// Google's Antigravity CLI. It names its conversations itself:
 		// mad learns the id from agy's hooks (package discover) and resumes
 		// that one, or the folder's latest while none is known. Status is
-		// read from the screen; the prompts are its approval questions and
-		// the folder trust one.
+		// read from the screen; the prompts are its approval questions, the
+		// folder trust one and its sign-in.
 		Name:         "agy",
 		Icon:         "▲",
 		Color:        "#4285f4", // Google blue
@@ -95,6 +95,7 @@ var builtin = []Kind{
 		Waiting: []string{
 			`Run this command\?`, `Allow access to this URL\?`, `Allow calling this tool\?`, `(?i)allow execution`,
 			`(?i)apply this change`, `(?i)do you want to`, `(?i)do you trust`, `(?i)trust this folder`,
+			`Select login method`,
 		},
 	},
 	{
