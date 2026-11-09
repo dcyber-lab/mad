@@ -47,6 +47,80 @@ final class NativeDefaultTests: MadUITestCase {
         shot("the agent's conversation")
     }
 
+    /// + → 新对话 is native: a box to write in, sending starts the agent and opens its conversation, and after the way
+    /// back the new agent is in the home list (it was lost when the page did this in a sheet).
+    func testNewChatIsNativeAndTheNewAgentIsInTheHomeAfterBack() {
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
+        tap("新建")
+        tap("新对话")
+        XCTAssertFalse(app.webViews.firstMatch.exists, "新对话 opened the page, not the native screen")
+        let box = app.textViews["newchat.text"]
+        XCTAssertTrue(box.waitForExistence(timeout: 10), "the native 新对话 has no box to write in")
+        shot("the native 新对话")
+        box.tap()
+        box.typeText("Fixture started chat")
+        let send = app.buttons["newchat.send"]
+        XCTAssertTrue(send.isEnabled, "send is off with a message written")
+        send.tap()
+        XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 15), "sending did not open the new agent's conversation")
+        // right after send the page is not empty: the person's first message is their bubble (the fixture's transcript
+        // comes seconds later), and the composer is live, not the terminal note
+        let message = "Fixture started chat"
+        let mine = { self.app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", message)).count }
+        XCTAssertGreaterThan(mine(), 1, "the first message is not shown as a bubble right after send (only the head has it)")
+        XCTAssertFalse(elements(containing: "在终端里运行").firstMatch.exists, "the conversation says the agent runs in a terminal")
+        shot("the new agent's conversation, first message at once")
+        let before = mine()
+        XCTAssertTrue(elements(containing: "Fixture reply").firstMatch.waitForExistence(timeout: 20), "the agent's reply did not come")
+        XCTAssertEqual(mine(), before, "the first message is twice once the transcript has it")
+        shot("the new agent's conversation, with its reply")
+        tap("返回")
+        // the new row is below the fold on a short phone: scroll to it
+        let started = row(beginningWith: "Fixture started chat")
+        var swipes = 0
+        while !(started.waitForExistence(timeout: 3) && started.isHittable) && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(started.exists, "the new agent is not in the home list after the way back")
+        shot("the new agent in the home list")
+    }
+
+    /// A first message that does not go stays written: the new agent's page says why above the composer, which holds the
+    /// text and the way back stay in reach; reopening the agent later has neither the note nor the draft.
+    func testAFirstMessageThatDoesNotGoWaitsInTheComposerOnce() {
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
+        tap("新建")
+        tap("新对话")
+        let box = app.textViews["newchat.text"]
+        XCTAssertTrue(box.waitForExistence(timeout: 10))
+        box.tap()
+        box.typeText("[fail] try again")
+        app.buttons["newchat.send"].tap()
+        let note = elements(containing: "its host did not start").firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 15), "the page does not say why the message did not go")
+        let composer = app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "[fail] try again")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5), "the unsent text is not in the composer")
+        XCTAssertTrue(composer.isHittable, "something covers the composer")
+        XCTAssertLessThanOrEqual(note.frame.maxY, composer.frame.minY, "the note is not above the composer")
+        XCTAssertTrue(element("返回").firstMatch.isHittable, "the note covers the way back")
+        shot("the unsent first message in the composer, the note above it")
+        tap("返回")
+        var swipes = 0
+        let started = row(beginningWith: "[fail] try again")
+        while !(started.waitForExistence(timeout: 3) && started.isHittable) && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(started.exists, "the agent is not in the home list")
+        started.tap()
+        XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(elements(containing: "its host did not start").firstMatch.exists, "the note came back when the agent was reopened")
+        XCTAssertFalse(app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "[fail] try again")).firstMatch.exists,
+                       "the draft came back when the agent was reopened")
+        shot("the reopened conversation, composer empty")
+    }
+
     func testAMenuItemThatIsNotNativeYetOpensThePageInASheet() {
         tap("菜单")
         let item = app.buttons["看板"].firstMatch

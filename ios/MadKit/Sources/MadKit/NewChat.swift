@@ -54,6 +54,12 @@ public struct PastSession: Equatable, Decodable, Identifiable, Sendable {
 public struct StartedAgent: Equatable, Decodable, Sendable {
     public var id: String
     public var error: String?
+
+    /// Why the first message did not go, when it did not (the agent is started all the same).
+    public var failure: String? { error.flatMap { $0.isEmpty ? nil : $0 } }
+
+    /// What the person wrote that the agent did not get: all of `text` when the first message failed, else nothing.
+    public func unsent(_ text: String) -> String { failure == nil ? "" : text }
 }
 
 /// Starting a chat from the app: the models, the past sessions, and a new agent (the page's new chat).

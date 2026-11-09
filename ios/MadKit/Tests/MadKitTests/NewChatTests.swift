@@ -32,4 +32,17 @@ final class NewChatTests: XCTestCase {
         XCTAssertEqual(models.map(\.value), ["opus", "x"])
         XCTAssertEqual(models[0].detail, "best")
     }
+
+    /// The server starts the agent even when its first message fails: the reply says why, and the text that did not go is
+    /// kept for the person (it is not lost with the screen).
+    func testAFirstMessageThatDidNotGoIsKeptAndSaysWhy() throws {
+        let failed = try JSONDecoder().decode(StartedAgent.self, from: Data(#"{"id":"a1","error":"host is not up"}"#.utf8))
+        XCTAssertEqual(failed.id, "a1")
+        XCTAssertEqual(failed.failure, "host is not up")
+        XCTAssertEqual(failed.unsent("画个表"), "画个表")
+        let sent = try JSONDecoder().decode(StartedAgent.self, from: Data(#"{"id":"a2"}"#.utf8))
+        XCTAssertNil(sent.failure)
+        XCTAssertEqual(sent.unsent("画个表"), "")
+        XCTAssertNil(StartedAgent(id: "a3", error: "").failure, "an empty error is no error")
+    }
 }

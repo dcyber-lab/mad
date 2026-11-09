@@ -168,6 +168,7 @@ func newHandler(name, web string) (http.Handler, error) {
 	mux.HandleFunc("POST /api/bus/post", f.post)
 	mux.HandleFunc("POST /api/pair", f.pair)
 	mux.HandleFunc("POST /api/budget", f.budget)
+	mux.HandleFunc("POST /api/agents", f.start)
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
 		mux.HandleFunc("GET /api/"+p, func(w http.ResponseWriter, r *http.Request) { reply(w, []any{}) })
 	}
@@ -192,7 +193,22 @@ type fixture struct {
 	posted map[string][]json.RawMessage
 	// postedAt: when each posted message came, by channel and number: its receipt moves on as time passes.
 	postedAt map[string]map[int]time.Time
+	// started: the agents the person started through POST /api/agents, with the project's path; the deck lists them.
+	started []startedAgent
 }
+
+type startedAgent struct {
+	project string
+	agent   map[string]any
+	text    string
+	at      time.Time
+	// failed: its first message did not go, so it has no transcript
+	failed bool
+}
+
+// startedTranscriptAfter is how long a started agent has no transcript yet, as the real one's first message takes a
+// moment to reach it: the app shows the person's message meanwhile.
+const startedTranscriptAfter = 3 * time.Second
 
 func reply(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -220,6 +236,7 @@ func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
 	}
 	f.spendMu.Unlock()
 	relative(d, now)
+	f.addStarted(d)
 	if _, ok := f.scn.Deck["working"]; !ok {
 		d["working"] = running(d)
 	}
@@ -277,6 +294,10 @@ func relative(v any, now time.Time) {
 
 // chat answers an agent's transcript: the scenario's, or an empty one.
 func (f *fixture) chat(w http.ResponseWriter, r *http.Request) {
+	if s, ok := f.startedAgent(r.URL.Query().Get("id")); ok {
+		f.startedChat(w, r, s)
+		return
+	}
 	if raw, ok := f.scn.Chat[r.URL.Query().Get("id")]; ok {
 		// A client that has read it (its file, from the end) is told there is nothing new, as the
 		// real one does, so a poll does not add the entries again.
@@ -491,4 +512,102 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
+}
+
+// start is POST /api/agents {project, kind, model, text}: an agent that works on the first message, in the project's
+// list of the deck from then on. The id is the answer, as the real one's; with "[fail]" in the text the first message
+// does not go and the answer says why ({id, error}).
+func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Project, Kind, Model, Text string }
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Project == "" {
+		http.Error(w, "project is needed", http.StatusBadRequest)
+		return
+	}
+	if req.Kind == "" {
+		req.Kind = "claude"
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id := fmt.Sprintf("new%05d-aaaa", len(f.started)+1)
+	// a headless kind runs in window mode, as the real agentAdd starts it
+	agent := map[string]any{"id": id, "kind": req.Kind, "status": "running", "shown": "working", "chat": true, "color": "#d97757",
+		"headless": true, "mode": "window"}
+	if t := strings.TrimSpace(req.Text); t != "" {
+		agent["title"] = t
+	}
+	failed := strings.Contains(req.Text, "[fail]")
+	f.started = append(f.started, startedAgent{project: req.Project, agent: agent, text: strings.TrimSpace(req.Text), at: time.Now(), failed: failed})
+	// a first message with [fail] in it does not go, as when the real host did not start: the agent is there all the same
+	if failed {
+		reply(w, map[string]any{"id": id, "error": "its host did not start"})
+		return
+	}
+	reply(w, map[string]any{"id": id})
+}
+
+// addStarted puts the agents started through the fixture into their projects of deck d. The scenario's projects are
+// shared by every look, so they are copied, not changed.
+func (f *fixture) addStarted(d map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.started) == 0 {
+		return
+	}
+	ps, _ := d["projects"].([]any)
+	out := make([]any, len(ps))
+	for i, p := range ps {
+		m, _ := p.(map[string]any)
+		out[i] = p
+		if m == nil {
+			continue
+		}
+		cp := make(map[string]any, len(m))
+		for k, v := range m {
+			cp[k] = v
+		}
+		as, _ := m["agents"].([]any)
+		as = as[:len(as):len(as)]
+		for _, s := range f.started {
+			if m["path"] == s.project {
+				as = append(as, s.agent)
+			}
+		}
+		cp["agents"] = as
+		out[i] = cp
+	}
+	d["projects"] = out
+}
+
+// startedAgent is the agent started through the fixture with this id.
+func (f *fixture) startedAgent(id string) (startedAgent, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.started {
+		if s.agent["id"] == id {
+			return s, true
+		}
+	}
+	return startedAgent{}, false
+}
+
+// startedChat is a started agent's transcript: empty for a moment, then the person's first message and a reply,
+// read once (a client that has read it is told there is nothing new).
+func (f *fixture) startedChat(w http.ResponseWriter, r *http.Request, s startedAgent) {
+	const offset = 100
+	q := r.URL.Query()
+	from, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+	if s.failed || time.Since(s.at) < startedTranscriptAfter {
+		reply(w, map[string]any{"file": "started", "offset": 0, "reset": true, "entries": []any{}})
+		return
+	}
+	if q.Get("file") == "started" && from >= offset {
+		reply(w, map[string]any{"file": "started", "offset": offset, "entries": []any{}})
+		return
+	}
+	entries := []any{}
+	if s.text != "" {
+		entries = append(entries, map[string]any{"kind": "user", "text": s.text})
+	}
+	entries = append(entries, map[string]any{"kind": "text", "text": "Fixture reply: on it."})
+	reply(w, map[string]any{"file": "started", "offset": offset, "reset": true, "entries": entries})
 }

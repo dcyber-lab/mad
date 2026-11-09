@@ -34,10 +34,12 @@ public struct ConversationView: View {
     @State private var judgedInset: CGFloat = -1
     #endif
 
-    public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true) {
+    /// `draft` is what the composer starts with (a first message that did not go out, to send again with a tap).
+    public init(model: AgentConversation, actions: ConversationActions = .init(), showsBack: Bool = true, draft: String = "") {
         self.model = model
         self.actions = actions
         self.showsBack = showsBack
+        _draft = State(initialValue: draft)
     }
 
     /// The phone's foot: what waits on the person as a sheet in the composer's place, else the composer. (The Mac's

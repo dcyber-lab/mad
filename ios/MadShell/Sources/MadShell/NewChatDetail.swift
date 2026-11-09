@@ -1,16 +1,54 @@
-#if os(macOS)
 import MadKit
 import MadUI
 import SwiftUI
 
-/// 新对话 on the Mac, in the window's detail pane (the page's new chat, natively): 想做点什么？, a box to write the first
+/// 新对话, on the Mac in the window's detail pane and on the iPhone as a screen over the home list (the page's new chat, natively): 想做点什么？, a box to write the first
 /// message in with the project, the kind and the model under it, and the project's earlier sessions to pick up.
 /// Sending starts an agent with that message and opens it.
+/// An agent started from 新对话: its id, the first message, and why that did not go (nil when it went).
+struct StartedChat: Equatable {
+    var id: String
+    var text: String
+    var failure: String?
+    /// When it was started.
+    var at = Date()
+}
+
+/// What a started agent's page is handed when it opens, by agent id: a first message that did not go (the composer's
+/// draft) and why (a note at the top of its page) are given once; a first message that went is its bubble until the
+/// transcript has it.
+struct Handovers: Equatable {
+    var drafts: [String: String] = [:]
+    var failures: [String: String] = [:]
+    var firsts: [String: PendingFirst] = [:]
+
+    mutating func add(_ chat: StartedChat) {
+        let wrote = !chat.text.isEmpty
+        drafts[chat.id] = chat.failure != nil && wrote ? chat.text : nil
+        failures[chat.id] = chat.failure
+        firsts[chat.id] = chat.failure == nil && wrote ? PendingFirst(text: chat.text, since: chat.at) : nil
+    }
+
+    /// The page took its draft and note: reopening it does not bring them back (the bubble stays, it gives way by itself).
+    mutating func took(_ id: String) {
+        drafts[id] = nil
+        failures[id] = nil
+    }
+}
+
 struct NewChatDetail: View {
     let api: NewChatAPI
     let projects: [Project]
     /// Opens the agent that was started (after the deck has it).
-    let started: (String) async -> Void
+    let started: (StartedChat) async -> Void
+    /// The iPhone's way back to the list (it draws its own head); the Mac's detail pane has none.
+    var onBack: (() -> Void)?
+
+    #if os(macOS)
+    private static let top: CGFloat = 72, side: CGFloat = 32
+    #else
+    private static let top: CGFloat = 28, side: CGFloat = 18
+    #endif
 
     static let kinds: [(id: String, name: String)] = [("claude", "Claude"), ("codex", "Codex"), ("pi", "Pi")]
 
@@ -26,7 +64,34 @@ struct NewChatDetail: View {
 
     private var project: Project? { projects.first { $0.path == projectPath } ?? projects.first }
 
+    private var composerFont: Font { .system(size: 16.5) } // composerFont, which the phone has not
+
     var body: some View {
+        VStack(spacing: 0) {
+            #if os(iOS)
+            head
+            #endif
+            page
+        }
+        .background(Color.madPaper)
+    }
+
+    #if os(iOS)
+    private var head: some View {
+        HStack {
+            Button { onBack?() } label: {
+                Image(systemName: "chevron.backward").font(.system(size: 19, weight: .medium)).foregroundStyle(Color.madFg)
+                    .frame(width: Phone.button, height: Phone.button)
+            }
+            .accessibilityLabel("返回")
+            .accessibilityIdentifier("newchat.back")
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+    }
+    #endif
+
+    private var page: some View {
         ScrollView {
             VStack(spacing: 0) {
                 if let p = project {
@@ -40,15 +105,14 @@ struct NewChatDetail: View {
                     Text(L("项目就是 agent 工作所在的目录。")).font(.system(size: 16.5)).foregroundStyle(Color.madFg3).padding(.top, 8)
                 }
             }
-            .padding(.top, 72)
+            .padding(.top, Self.top)
             .padding(.bottom, 40)
             .frame(maxWidth: 760)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, Self.side)
             .frame(maxWidth: .infinity)
         }
         // the whole pane: a scroll view alone in the detail takes only its content's width
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.madPaper)
         .task(id: project?.path) { await loadHistory() }
         .task(id: "\(project?.path ?? "")|\(kind)") { await loadModels() }
         .onAppear { focused = true }
@@ -65,37 +129,26 @@ struct NewChatDetail: View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text(L("问点什么，或者交代一件事")).font(Mac.composerText).foregroundStyle(Color.madFg3)
+                    Text(L("问点什么，或者交代一件事")).font(composerFont).foregroundStyle(Color.madFg3)
                         .padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
                 }
                 TextEditor(text: $text)
-                    .font(Mac.composerText)
+                    .accessibilityIdentifier("newchat.text")
+                    .font(composerFont)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 48, maxHeight: 220)
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focused)
+                    #if os(macOS)
                     // ⏎ sends, ⇧⏎ starts a new line (as the page and the chats do)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) { return .ignored }
                         send(p)
                         return .handled
                     }
+                    #endif
             }
-            HStack(spacing: 8) {
-                projectMenu(p)
-                kindPicker
-                modelMenu
-                Spacer(minLength: 8)
-                Button { send(p) } label: {
-                    Image(systemName: "arrow.up").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(canSend ? Color.madPaper : Color.madFg3)
-                        .frame(width: 34, height: 34)
-                        .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .help(L("发送"))
-            }
+            chips(p)
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -103,6 +156,31 @@ struct NewChatDetail: View {
         .background(Color.madPaper, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
         .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
+    }
+
+    /// The project, the kind and the model, and the send button; on the phone the send button has a line to itself.
+    @ViewBuilder private func chips(_ p: Project) -> some View {
+        #if os(macOS)
+        HStack(spacing: 8) { projectMenu(p); kindPicker; modelMenu; Spacer(minLength: 8); sendButton(p) }
+        #else
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) { projectMenu(p); modelMenu; Spacer(minLength: 8) }
+            HStack(spacing: 8) { kindPicker; Spacer(minLength: 8); sendButton(p) }
+        }
+        #endif
+    }
+
+    private func sendButton(_ p: Project) -> some View {
+        Button { send(p) } label: {
+            Image(systemName: "arrow.up").font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(canSend ? Color.madPaper : Color.madFg3)
+                .frame(width: 34, height: 34)
+                .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .help(L("发送"))
+        .accessibilityIdentifier("newchat.send")
     }
 
     private var canSend: Bool { !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -221,9 +299,9 @@ struct NewChatDetail: View {
             do {
                 let r = try await api.startAgent(project: p.path, kind: k, model: session.isEmpty ? model : "", text: t,
                                                  session: session, cwd: cwd)
-                done()
-                if let e = r.error, !e.isEmpty { error = e }
-                await started(r.id)
+                // a first message that did not go stays written, and goes with the agent to its page
+                if r.failure == nil { done() }
+                await started(StartedChat(id: r.id, text: t, failure: r.failure))
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
@@ -249,4 +327,3 @@ private struct PastRowStyle: ButtonStyle {
             .background(configuration.isPressed ? Color.madRaise : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
-#endif
