@@ -818,7 +818,7 @@ const askButtonsJS = `(() => {
     const r = b.getBoundingClientRect();
     return { text: b.textContent.trim(), w: r.width, h: r.height, left: r.left, right: r.right };
   });
-  return { btns, left: cr.left, right: cr.right, colLeft: col.left, colRight: col.right, sideways: card.scrollWidth > card.clientWidth + 0.5 };
+  return { btns, chatW: card.closest(".chat").clientWidth, left: cr.left, right: cr.right, colLeft: col.left, colRight: col.right, sideways: card.scrollWidth > card.clientWidth + 0.5 };
 })()`
 
 // A button of an agent's ask card is no taller than 44px and no wider than the card, at a phone's width and a
@@ -871,8 +871,8 @@ func TestAskCardButtonsStayCompact(t *testing.T) {
 							Text              string
 							W, H, Left, Right float64
 						}
-						Left, Right, ColLeft, ColRight float64
-						Sideways                       bool
+						Left, Right, ColLeft, ColRight, ChatW float64
+						Sideways                              bool
 					}
 					if err := json.Unmarshal(v, &r); err != nil {
 						t.Fatalf("%s: %v", v, err)
@@ -891,14 +891,26 @@ func TestAskCardButtonsStayCompact(t *testing.T) {
 					if r.Sideways {
 						t.Error("the card scrolls sideways")
 					}
-					if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
-						if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
-							var s struct{ Data []byte }
-							if json.Unmarshal(res, &s) == nil {
-								_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("ask-%s-%d-%s.png", agent[:4], w, theme)), s.Data, 0o644)
+					if w < 600 && (r.Left < 13.5 || r.Left > 14.5 || r.Right < r.ChatW-14.5 || r.Right > r.ChatW-13.5) {
+						t.Errorf("the card is %.0f..%.0f, want the column's 14px side edges", r.Left, r.Right)
+					}
+					shot := func(name string) {
+						if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
+							if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+								var s struct{ Data []byte }
+								if json.Unmarshal(res, &s) == nil {
+									_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("ask-%s-%d-%s%s.png", agent[:4], w, theme, name)), s.Data, 0o644)
+								}
 							}
 						}
 					}
+					shot("")
+					// in flight: the act that opens the card is the tapped one, as the page marks it
+					if _, err := c.eval(`(() => { const b = document.querySelector(".ask-inbox .btn.chip:not(.more)"); b.classList.add("busy"); for (const x of document.querySelectorAll(".ask-inbox .btn")) x.disabled = true; })()`); err != nil {
+						t.Fatal(err)
+					}
+					time.Sleep(300 * time.Millisecond)
+					shot("-busy")
 				})
 			}
 		}

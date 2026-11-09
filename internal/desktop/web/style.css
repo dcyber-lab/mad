@@ -2168,8 +2168,8 @@ html.ptype .quota { grid-template-columns: minmax(0, 1fr); }
 #palette .pnone { padding: 12px 16px; color: var(--text-3); font-size: 13px; }
 
 /* a phone: what the agent asks rises from the bottom, its buttons as wide as the screen */
-html.ptype .chat .wait.asks { position: sticky; bottom: 0; margin: 0 -16px; padding: 0; max-width: none; z-index: 3; }
-html.ptype .chat .wait.asks .ask { margin: 0; border-radius: 16px 16px 0 0; border-width: 1px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08); }
+html.ptype .chat .wait.asks { position: sticky; bottom: 0; margin: 0; padding: 0 14px 8px; max-width: none; z-index: 3; }
+html.ptype .chat .wait.asks .ask { margin: 0; border-radius: 16px; border-width: 1px; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08); }
 html.ptype .chat .wait.asks .ask .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px 14px; }
 html.ptype .chat .wait.asks .ask .acts .btn { padding: 10px; font-size: 15px; border-radius: 12px; justify-content: center; }
 html.ptype .chat .wait.asks .ask .acts .btn:nth-child(n+3) { grid-column: 1 / -1; }
@@ -2190,3 +2190,5 @@ html .chat .wait.asks .ask .acts.chips .btn.chip:disabled { opacity: 0.5; }
 html .chat .wait.asks .ask .acts.chips .btn.chip.busy:disabled { opacity: 1; background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; animation: chipbusy 1.1s ease-in-out infinite alternate; }
 @keyframes chipbusy { from { opacity: 1; } to { opacity: 0.6; } }
 .ask .abody .abtext.qtext { font-size: 15px; line-height: 1.5; padding: 10px 14px; background: none; }
+html .chat .wait.asks .ask .acts.chips .btn.chip.primary:nth-child(n) { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; font-weight: 500; }
+html .chat .wait.asks .ask .acts.chips .btn.chip.primary:hover:not(:disabled) { background: var(--primary-bg); opacity: 0.88; }

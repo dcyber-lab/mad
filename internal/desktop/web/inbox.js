@@ -296,7 +296,7 @@ function fitRows(root) {
 // actButton is act a of item it as a button: an act that takes words
 // opens the reply box, open goes to the item, the rest are sent.
 function actButton(it, a, where, chip) {
-  const cls = chip ? `chip${a.input ? " more" : ""}` : a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
+  const cls = chip ? `chip${a.primary && !a.input ? " primary" : ""}${a.input ? " more" : ""}` : a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
   const b = rowButton(actLabel(a), cls, () => {
     if (a.verb === "open") openItem(it);
     else if (a.input) openReply(it, a, where);
