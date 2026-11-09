@@ -373,13 +373,13 @@ function drawListNow() {
   }
 
   const nodes = [];
+  // v5: Today, then what waits on you as cards to act on in place, then the chats and the projects
+  if (!q) nodes.push(todayRow(), pendingGroup());
   if (!deck.projects.length) {
     const p = el("div", "none");
     p.innerHTML = T("还没有项目。在 git 仓库里运行 <code>mad</code>，或者 <code>mad spawn</code>。", "No projects yet. Run <code>mad</code> in a git repository, or <code>mad spawn</code>.");
     nodes.push(p);
   }
-  // v5: Today, then what waits on you as cards to act on in place, then the chats and the projects
-  if (!q) nodes.push(todayRow(), pendingGroup());
   nodes.push(channelsGroup(q));
 
   for (const p of deck.projects) {
