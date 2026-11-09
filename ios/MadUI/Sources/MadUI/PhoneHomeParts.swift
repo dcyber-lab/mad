@@ -64,7 +64,9 @@ private struct PhoneWaitingTask: View {
 
     private var buttons: some View {
         HStack(spacing: 8) {
-            if item.isPermission {
+            if item.mustOpen {
+                pill(L("查看"), primary: true) { actions.open(item.agentID) }
+            } else if item.isPermission {
                 if cut && !item.detail.isEmpty {
                     // the whole command is read before it is allowed
                     pill(L("查看"), primary: true) { actions.open(item.agentID) }

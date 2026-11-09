@@ -410,16 +410,20 @@ func TestMCPCreateWithoutAsking(t *testing.T) {
 	}
 	for i := 0; i < autoPerHour; i++ {
 		got := mcpCall(t, createArch, "agent_new", fmt.Sprintf(`{"kind":"claude","name":"scout%d","message":"hi"}`, i))
-		var out struct {
-			Status string
-			Agent  struct{ Label string }
-		}
-		if err := json.Unmarshal([]byte(got), &out); err != nil || out.Status != "created" || out.Agent.Label != fmt.Sprintf("scout%d", i) {
+		var out struct{ Status, Request, Item string }
+		if err := json.Unmarshal([]byte(got), &out); err != nil || out.Status != "creating" || out.Item != "create:"+out.Request {
 			t.Fatalf("%d: %q %v", i, got, err)
 		}
+		// It started in the background (here at once), and the agent is told.
+		if r, _ := create.Get(out.Request); r.Status != create.Created || !r.Auto {
+			t.Fatalf("%d: %+v", i, r)
+		}
 	}
-	if len(*specs) != autoPerHour || len(create.List()) != 0 || len(toldAsker(t)) != 0 {
-		t.Fatalf("spawned %d, waiting %v, told %q", len(*specs), create.List(), toldAsker(t))
+	if told := toldAsker(t); len(told) != autoPerHour || !strings.Contains(told[0], `"status":"created"`) {
+		t.Errorf("told %q", told)
+	}
+	if len(*specs) != autoPerHour || len(create.List()) != 0 {
+		t.Fatalf("spawned %d, waiting %v", len(*specs), create.List())
 	}
 	// The next one asks.
 	r := asked(t, "agent_new", `{"kind":"claude","name":"one-too-many","message":"hi"}`)

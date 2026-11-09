@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -25,13 +26,15 @@ const (
 	TypeTeam  = "team"
 )
 
-// Where a request stands: Waiting for the person; Allowed (being created);
+// Where a request stands: Waiting for the person; Allowed (the person
+// said yes) and Creating (a process claimed it and is starting it);
 // then how it ended: Created, Declined, Changes (declined with words that
 // went back to the agent), Expired (no answer) or Failed (allowed, but it
 // did not start).
 const (
 	Waiting  = "waiting"
 	Allowed  = "allowed"
+	Creating = "creating" // claimed by the process that starts it
 	Created  = "created"
 	Declined = "declined"
 	Changes  = "changes"
@@ -120,6 +123,17 @@ type Result struct {
 	Team    string `json:"team,omitempty"`
 	Channel string `json:"channel,omitempty"`
 	Reason  string `json:"reason,omitempty"`
+	// Note is something the agent should know of a request that went through:
+	// the new agent came up asking something, its first message did not go.
+	Note string `json:"note,omitempty"`
+	// Agents are a team's agents by role.
+	Agents []RoleAgent `json:"agents,omitempty"`
+}
+
+// RoleAgent is the agent that plays a role of a team.
+type RoleAgent struct {
+	Role  string `json:"role"`
+	Agent string `json:"agent"`
 }
 
 // Outcome is how a request stands, for a card's result line: status is one
@@ -135,7 +149,7 @@ type Outcome struct {
 func (r Request) Outcome() Outcome {
 	st := r.Status
 	if st == Allowed {
-		st = "creating"
+		st = Creating
 	}
 	return Outcome{Status: st, Result: r.Result, Reply: r.Reply, At: r.DoneAt}
 }
@@ -153,6 +167,41 @@ func valid(id string) bool {
 	return err == nil
 }
 
+// lock holds the lock of the requests while fn runs: every read-modify-write
+// of a request is under it, since several processes (the window, the deck,
+// the agents' servers) answer, claim and sweep them.
+func lock(fn func() error) error {
+	if err := os.MkdirAll(dir(), 0o755); err != nil {
+		return err
+	}
+	lf, err := os.OpenFile(filepath.Join(dir(), ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+	return fn()
+}
+
+// modify runs fn on request id under the lock and writes it when fn says
+// to. A request that is not there is ErrGone.
+func modify(id string, fn func(*Request) (bool, error)) error {
+	return lock(func() error {
+		r, err := Get(id)
+		if err != nil {
+			return err
+		}
+		save, err := fn(&r)
+		if err != nil || !save {
+			return err
+		}
+		return write(r)
+	})
+}
+
 func write(r Request) error {
 	if err := os.MkdirAll(dir(), 0o755); err != nil {
 		return err
@@ -167,21 +216,28 @@ func write(r Request) error {
 // Add queues spec as asked for by agent byID (labeled by), answering in
 // channel from ("" for none).
 func Add(by, byID, from string, spec Spec) (Request, error) {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	r := Request{ID: "c-" + hex.EncodeToString(b), By: by, ByID: byID, From: from, At: time.Now().UTC().Truncate(time.Millisecond), Status: Waiting, Spec: spec}
-	return r, write(r)
-}
-
-// AddAuto records a request that is carried out without asking: Allowed
-// from the start.
-func AddAuto(by, byID, from string, spec Spec) (Request, error) {
-	r, err := Add(by, byID, from, spec)
+	r, err := newRequest(by, byID, from, spec)
 	if err != nil {
 		return r, err
 	}
+	return r, lock(func() error { return write(r) })
+}
+
+func newRequest(by, byID, from string, spec Spec) (Request, error) {
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+	return Request{ID: "c-" + hex.EncodeToString(b), By: by, ByID: byID, From: from, At: time.Now().UTC().Truncate(time.Millisecond), Status: Waiting, Spec: spec}, err
+}
+
+// AddAuto records a request that is carried out without asking: Allowed
+// from the start, never waiting.
+func AddAuto(by, byID, from string, spec Spec) (Request, error) {
+	r, err := newRequest(by, byID, from, spec)
 	r.Auto, r.Status, r.AnsweredAt = true, Allowed, r.At
-	return r, write(r)
+	if err != nil {
+		return r, err
+	}
+	return r, lock(func() error { return write(r) })
 }
 
 // AutoSince counts the requests carried out without asking since t.
@@ -208,35 +264,61 @@ func Get(id string) (Request, error) {
 }
 
 // Answer records the person's answer to a waiting request: allow, or deny,
-// with words (reply) that tell the agent what to change.
+// with words (reply) that tell the agent what to change. A request that is
+// not waiting any more (answered, expired) is ErrGone.
 func Answer(id string, allow bool, reply string) error {
-	r, err := Get(id)
-	if err != nil || r.Status != Waiting {
+	err := modify(id, func(r *Request) (bool, error) {
+		if r.Status != Waiting {
+			return false, ErrGone
+		}
+		switch reply = strings.TrimSpace(reply); {
+		case allow:
+			r.Status, r.AnsweredAt = Allowed, time.Now().UTC()
+		case reply != "":
+			r.Status, r.Reply, r.DoneAt = Changes, reply, time.Now().UTC()
+		default:
+			r.Status, r.DoneAt = Declined, time.Now().UTC()
+		}
+		return true, nil
+	})
+	if err != nil {
 		return ErrGone
 	}
-	switch reply = strings.TrimSpace(reply); {
-	case allow:
-		r.Status, r.AnsweredAt = Allowed, time.Now().UTC()
-	case reply != "":
-		r.Status, r.Reply, r.DoneAt = Changes, reply, time.Now().UTC()
-	default:
-		r.Status, r.DoneAt = Declined, time.Now().UTC()
-	}
-	return write(r)
+	return nil
 }
 
-// Finish records how a request that is waiting or allowed ended. It does
-// nothing to one that ended already.
-func Finish(id, status string, res Result) error {
-	r, err := Get(id)
-	if err != nil {
-		return err
-	}
-	if r.Status != Waiting && r.Status != Allowed {
-		return nil
-	}
-	r.Status, r.Result, r.DoneAt = status, res, time.Now().UTC()
-	return write(r)
+// Claim takes an allowed request to start it: Allowed becomes Creating, for
+// one caller only. It is false when it is not allowed (any more), or
+// another process claimed it.
+func Claim(id string) (Request, bool) {
+	var got Request
+	ok := false
+	_ = modify(id, func(r *Request) (bool, error) {
+		if r.Status != Allowed {
+			return false, nil
+		}
+		r.Status, r.AnsweredAt = Creating, time.Now().UTC()
+		got, ok = *r, true
+		return true, nil
+	})
+	return got, ok
+}
+
+// Finish ends request id as status, if it still stands at from, the status
+// the caller saw: a compare-and-set, so an end meant for a request that
+// was answered meanwhile (a sweep's expiry, an Allow landing with it) does
+// not happen. It reports whether it did.
+func Finish(id, from, status string, res Result) (bool, error) {
+	done := false
+	err := modify(id, func(r *Request) (bool, error) {
+		if r.Status != from {
+			return false, nil
+		}
+		r.Status, r.Result, r.DoneAt = status, res, time.Now().UTC()
+		done = true
+		return true, nil
+	})
+	return done, err
 }
 
 // Remove drops request id.
@@ -258,7 +340,7 @@ func All() []Request {
 		if err != nil {
 			continue
 		}
-		if r.Status != Waiting && r.Status != Allowed && time.Since(r.DoneAt) > Keep || r.Status == Allowed && time.Since(r.At) > Keep {
+		if r.Status != Waiting && r.Status != Allowed && r.Status != Creating && time.Since(r.DoneAt) > Keep || time.Since(r.At) > Keep+Expiry {
 			Remove(id)
 			continue
 		}
@@ -280,4 +362,4 @@ func List() []Request {
 }
 
 // Put writes r as it is: for a test to age or end a request.
-func Put(r Request) error { return write(r) }
+func Put(r Request) error { return lock(func() error { return write(r) }) }

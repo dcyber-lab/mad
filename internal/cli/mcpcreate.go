@@ -254,8 +254,16 @@ func mcpCreateRun(_ context.Context, id, from string, spec create.Spec) (string,
 		if err != nil {
 			return "", err
 		}
-		_, out, err := creator.Run(r)
-		return out, err
+		// A team takes minutes to come up and this server is serial: start it
+		// in the background and tell the agent when it is done, as for an
+		// allowed request.
+		creator.Go(func() { creator.Run(r) })
+		return mcpJSON(map[string]any{
+			"status":  "creating",
+			"request": r.ID,
+			"item":    "create:" + r.ID,
+			"say":     "starting it; you'll be told by a message from mad when it is ready (or why not). End your turn now.",
+		})
 	}
 	r, err := create.Add(me.Label, id, from, spec)
 	if err != nil {
