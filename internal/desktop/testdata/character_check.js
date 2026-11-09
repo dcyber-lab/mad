@@ -17,15 +17,25 @@ for (const v of vectors) {
     assert.deepStrictEqual(p[k], v[k], `${v.id}: ${k}`);
   }
 }
-// the drawing: the shape's body, the pastel and the face's deep color, and a calm face to begin with
+// the drawing (v5, the Mac app's GrokAvatar): a circle for an even shape, else a tilted rounded square, in the
+// saturated color of its hash; the two slanted eyes to begin with; a stopped one faded with its eyes shut; the
+// ring of its state around it
 for (const v of vectors) {
   const svg = charSVG(v.id);
-  assert(svg.includes(SHAPES[v.shape][2]), `${v.id}: the body`);
-  assert(svg.includes(`--fill:${COLORS[v.colour]};--face:${mix(STRONG[v.colour], 0.55)}`), `${v.id}: the colors`);
-  assert(svg.includes(EXPR.calm), `${v.id}: the first face`);
-  assert(charSVG(v.id, null, "ask", true).includes(`${EXPR.ask}`) && charSVG(v.id, null, "ask", true).includes("opacity:0.5"), `${v.id}: a stopped one and its face`);
-  assert(svg.includes(`translate(24 ${23 + SHAPES[v.shape][1]})`), `${v.id}: the face's place`);
+  assert(svg.includes(v.shape % 2 === 0 ? "<circle class=\"c-body\"" : "<rect class=\"c-body\""), `${v.id}: the body`);
+  assert(svg.includes(`fill:${C.GROK[v.colour]}`), `${v.id}: the color`);
+  assert(svg.includes(EXPR.calm) && EXPR.calm === C.EYES, `${v.id}: the first face`);
+  const stopped = charSVG(v.id, null, "ask", true);
+  assert(stopped.includes(C.SHUT) && stopped.includes("opacity:0.45"), `${v.id}: a stopped one and its face`);
+  assert(svg.includes("translate(23.28 20.16)"), `${v.id}: the face's place`);
+  assert(charSVG(v.id, null, "ask", false, "wait").includes("c-ring-wait"), `${v.id}: the ring of one that waits`);
+  assert(charSVG(v.id, null, "focus", false, "work").includes("c-spin"), `${v.id}: the arc of one that works`);
+  assert(charSVG(v.id, null, "calm", false, "done").includes("c-badge"), `${v.id}: the dot of one that finished`);
 }
+assert.strictEqual(C.charRing("waiting"), "wait");
+assert.strictEqual(C.charRing("running"), "work");
+assert.strictEqual(C.charRing("finished"), "done");
+assert.strictEqual(C.charRing("idle"), "");
 assert.deepStrictEqual(Object.keys(EXPR).sort(), ["ask", "calm", "focus", "happy", "sleep", "think", "wink", "wow"]);
 assert(/^#[0-9a-f]{6}$/.test(mix("#6f9bff", 0.55)));
 const styles = new Set(vectors.map((v) => v.style));
@@ -34,7 +44,7 @@ assert.strictEqual(new Set(vectors.map((v) => v.shape)).size, 8, "the vectors do
 // No rule of the page may reach a part of a character, as `.avatar .dot` (the status dot's) and
 // `.avatar.chara .dot { display: none }` reached the eyes when they were `.dot`: every class a character is
 // drawn with is its own (c-), and the stylesheet only paints them (fill, stroke, font), under `.chara`.
-const markup = [...Object.values(EXPR), ...SHAPES.map((x) => x[2]), charSVG("x"), charSVG("x", [1, 2, 3])].join("\n");
+const markup = [...Object.values(EXPR), ...SHAPES.map((x) => x[2]), charSVG("x"), charSVG("x", [1, 2, 3]), charSVG("x", null, "focus", false, "work"), charSVG("x", null, "calm", false, "done")].join("\n");
 const used = new Set([...markup.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));
 for (const c of used) assert(c.startsWith("c-"), `a character part has the class "${c}", which another rule of the page may be about`);
 const css = fs.readFileSync(`${__dirname}/../web/style.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -48,6 +58,8 @@ for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     if (!hit) continue;
     rules++;
     assert(/^\.chara\s/.test(sel), `"${sel}" is about a character part but not under .chara`);
+    // the one part made to move: the arc of a working one turns (still under Reduce Motion)
+    if (hit === "c-spin") continue;
     for (const d of decls) assert(painting.has(d), `"${sel}" sets ${d} on a character part: it may hide or move it`);
   }
 }

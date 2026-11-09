@@ -97,17 +97,14 @@ function plan(id) {
 
 
 
-// EXPR: the expressions, strokes and dots in the face's color; the face's origin (0, 0) is between the eyes.
-const EXPR = {
-  happy: '<path class="c-ink" d="M-7.5 1 q2.5 -3 5 0"/><path class="c-ink" d="M2.5 1 q2.5 -3 5 0"/><path class="c-ink" d="M-3.5 6 q3.5 3.5 7 0"/>',
-  focus: '<circle class="c-eye" cx="-5" cy="0" r="1.9"/><circle class="c-eye" cx="5" cy="0" r="1.9"/><path class="c-ink" d="M-7.5 -4.2 l5 0.3"/><path class="c-ink" d="M7.5 -4.2 l-5 0.3"/><path class="c-ink" d="M-2.5 7 h5"/>',
-  think: '<circle class="c-eye" cx="-4" cy="-1.5" r="1.9"/><circle class="c-eye" cx="6" cy="-1.5" r="1.9"/><path class="c-ink" d="M-1 7 q3 -1.5 6 0"/><path class="c-ink" d="M11 -9 q2 -3 0 -5" opacity=".7"/><circle class="c-eye" cx="12.5" cy="-1" r="1" opacity=".6"/>',
-  wow: '<circle class="c-ink" cx="-5" cy="0" r="2.6"/><circle class="c-ink" cx="5" cy="0" r="2.6"/><ellipse class="c-ink" cx="0" cy="7.5" rx="2" ry="2.6"/>',
-  wink: '<circle class="c-eye" cx="-5" cy="0" r="1.9"/><path class="c-ink" d="M2.5 0.5 h5"/><path class="c-ink" d="M-3.5 5.5 q3.5 3.5 7 0"/>',
-  ask: '<circle class="c-eye" cx="-5" cy="0" r="1.9"/><circle class="c-eye" cx="5" cy="0" r="1.9"/><path class="c-ink" d="M-8 -5 q3 -2 6 0"/><path class="c-ink" d="M2 -5.5 q3 -2.5 6 -1"/><path class="c-ink" d="M-2.5 7.5 q1.2 -1.2 2.5 0 q1.3 1.2 2.5 0"/><text x="12" y="-9" font-size="9" font-weight="700">?</text>',
-  calm: '<circle class="c-eye" cx="-5" cy="0" r="1.9"/><circle class="c-eye" cx="5" cy="0" r="1.9"/><path class="c-ink" d="M-3 6 q3 2.5 6 0"/>',
-  sleep: '<path class="c-ink" d="M-7.5 0 q2.5 2 5 0"/><path class="c-ink" d="M2.5 0 q2.5 2 5 0"/><path class="c-ink" d="M-2 7 h4"/><text x="11" y="-7" font-size="7" font-weight="700" opacity=".7">z</text>',
-};
+// The v5 look (the Mac app's GrokAvatar): a solid, saturated circle or tilted rounded square, picked by
+// the same hash (shape even: circle), with two slanted dark eyes. Every expression is those eyes; asleep
+// (stopped, and an idle one's blink) shuts them. The face's origin (0, 0) is between the eyes.
+const GROK = ["#8a3ffc", "#ff5a1f", "#1f66ff", "#ff4d8d", "#1fbf75", "#12b5d6", "#f5b324", "#6a5cff"];
+const EYES = '<rect class="c-eye" x="-8.28" y="-4.8" width="3.6" height="9.6" rx="1.8" transform="rotate(-16 -6.48 0)"/>' +
+  '<rect class="c-eye" x="4.68" y="-4.8" width="3.6" height="9.6" rx="1.8" transform="rotate(-16 6.48 0)"/>';
+const SHUT = '<rect class="c-eye" x="-10.33" y="-1.2" width="7.7" height="2.4" rx="1.2"/><rect class="c-eye" x="2.63" y="-1.2" width="7.7" height="2.4" rx="1.2"/>';
+const EXPR = { happy: EYES, focus: EYES, think: EYES, wow: EYES, wink: EYES, ask: EYES, calm: EYES, sleep: SHUT };
 
 // charExpr is the expression a character of key has in state ("work", "need", "idle" or "stop"), before it
 // moves: a working one starts with the first of its own order (still, with reduced motion, "focus").
@@ -115,17 +112,36 @@ function charExpr(state, key) {
   return state === "work" ? (charReduced.matches ? "focus" : plan(key).order[0]) : state === "need" ? "ask" : state === "stop" ? "sleep" : "calm";
 }
 
-// charSVG is the character of key, 48 by 48 (nested at x y with width w when box is given): its body in
-// the pastel (CSS --fill), its face in the deep color (--face), with the face of expr; a stopped one is
-// at half opacity. It is all there is to a still one; charStart makes the others move.
-function charSVG(key, box, expr = "calm", stopped = false) {
+// charRing is the ring around a character, from its agent's shown state: an amber ring while it waits on
+// the person, a turning green arc while it works, a blue dot once it finished unseen; nothing otherwise.
+function charRing(shown) {
+  return shown === "waiting" ? "wait" : shown === "running" || shown === "starting" ? "work" : shown === "finished" ? "done" : "";
+}
+
+// charSVG is the character of key, 48 by 48 (nested at x y with width w when box is given): its body in its
+// color, its eyes as expr has them; a stopped one is faded with its eyes shut. ring ("wait", "work",
+// "done" or "") draws its state around it (charRing); inside a ring the body is drawn at 82%. It is all
+// there is to a still one; charStart makes the others move.
+function charSVG(key, box, expr = "calm", stopped = false, ring = "") {
   const { shape, colour } = charLook(key);
-  const [, dy, body] = SHAPES[shape];
-  const style = `--fill:${COLORS[colour]};--face:${mix(STRONG[colour], 0.55)}${stopped ? ";opacity:0.5" : ""}`;
-  const inner = `<g class="c-all"><g class="c-head">${body}<g class="c-face" transform="translate(24 ${23 + dy})"><g class="c-facein">${EXPR[expr]}</g></g></g></g>`;
+  const col = GROK[colour];
+  const body = shape % 2 === 0
+    ? `<circle class="c-body" cx="24" cy="24" r="19.2" style="fill:${col}"/>`
+    : `<rect class="c-body" x="5.76" y="5.76" width="36.48" height="36.48" rx="12.48" style="fill:${col}" transform="rotate(-12 24 24)"/>`;
+  const inner = `<g class="c-all"><g class="c-head">${body}<g class="c-face" transform="translate(23.28 20.16)"><g class="c-facein">${EXPR[stopped ? "sleep" : expr] || EYES}</g></g></g></g>`;
+  let around = "", content = inner;
+  if (ring === "wait" || ring === "work") {
+    content = `<g transform="translate(4.32 4.32) scale(0.82)">${inner}</g>`;
+    around = ring === "wait"
+      ? '<circle class="c-ring-wait" cx="24" cy="24" r="23.04"/>'
+      : '<circle class="c-ring-track" cx="24" cy="24" r="23.04"/><circle class="c-ring-work c-spin" cx="24" cy="24" r="23.04" stroke-dasharray="38.4 106.4"/>';
+  }
+  const badge = ring === "done" ? '<circle class="c-badge" cx="41.28" cy="41.28" r="6.24"/>' : "";
+  const style = stopped ? ' style="opacity:0.45"' : "";
+  const all = `${around}${content}${badge}`;
   return box
-    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48" style="${style}">${inner}</svg>`
-    : `<svg viewBox="0 0 48 48" style="${style}">${inner}</svg>`;
+    ? `<svg x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[2]}" viewBox="0 0 48 48"${style}>${all}</svg>`
+    : `<svg viewBox="0 0 48 48"${style}>${all}</svg>`;
 }
 
 // ---- how it moves: only a working one, and only while it is on the screen ----
@@ -294,11 +310,7 @@ function charStart(root, key, state, opts = {}) {
       run.ticks.push({ ms: p.beat, fn: () => { i = (i + 1) % p.order.length; set(p.order[i]); } });
     }
   } else if (state === "need") {
-    set("ask");
-    if (!still) {
-      head.style.transformOrigin = "50% 100%";
-      run.anims.push(head.animate([{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }], { duration: 900, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
-    }
+    set("ask"); // still: its amber ring says it waits
   } else if (state === "idle") {
     set("calm");
     // a blink every 2.5 to 5.5 seconds, from the one timer all blinks share
@@ -372,4 +384,4 @@ if (charReduced.addEventListener) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, EXPR, mix, charHash, charLook, rng, plan, charSVG, charExpr, charAvatarKey, charTileKey, charAdopt, charStart, charReduced, charBlinkers, get charBlinkTimer() { return charBlinkTimer; } };
+if (typeof module !== "undefined") module.exports = { SHAPES, COLORS, STRONG, GROK, EYES, SHUT, EXPR, charRing, mix, charHash, charLook, rng, plan, charSVG, charExpr, charAvatarKey, charTileKey, charAdopt, charStart, charReduced, charBlinkers, get charBlinkTimer() { return charBlinkTimer; } };

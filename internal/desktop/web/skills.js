@@ -68,21 +68,21 @@ function drawSkills() {
   const root = $("#skillview");
   const d = sk.data;
   const page = el("div", "skpage");
-  page.append(el("h1", "", "技能"),
-    el("p", "muted", "agent 存下来的做事方法。批准的技能会复制给 Claude、Codex 和 Pi，各自在它的 / 菜单里找到。"));
+  page.append(el("h1", "", T("技能", "Skills")),
+    el("p", "muted", T("agent 存下来的做事方法。批准的技能会复制给 Claude、Codex 和 Pi，各自在它的 / 菜单里找到。", "Ways of working the agents saved. An approved skill is copied to Claude, Codex and Pi, each in its own / menu.")));
   if (!d) {
-    page.append(el("p", "muted", "加载中…"));
+    page.append(el("p", "muted", T("加载中…", "Loading…")));
     root.replaceChildren(page);
     return;
   }
-  page.append(el("h2", "", `在等你${d.pending.length ? " · " + d.pending.length : ""}`));
-  if (!d.pending.length) page.append(el("p", "muted", "没有在等你的"));
+  page.append(el("h2", "", T(`在等你${d.pending.length ? " · " + d.pending.length : ""}`, `Waiting${d.pending.length ? " · " + d.pending.length : ""}`)));
+  if (!d.pending.length) page.append(el("p", "muted", T("没有在等你的", "Nothing waits on you")));
   for (const p of d.pending) page.append(pendingCard(p));
-  page.append(el("h2", "", "已批准"));
-  if (!d.approved.length) page.append(el("p", "muted", "还没有：agent 用 skill_save 存一个，或者在它的菜单里选“存为技能”。"));
+  page.append(el("h2", "", T("已批准", "Approved")));
+  if (!d.approved.length) page.append(el("p", "muted", T("还没有：agent 用 skill_save 存一个，或者在它的菜单里选“存为技能”。", "None yet: an agent saves one with skill_save, or pick “Save as skill” in its menu.")));
   const groups = new Map();
   for (const s of d.approved) {
-    const g = s.scope === "user" ? "你的，所有项目通用" : s.project_name || s.project;
+    const g = s.scope === "user" ? T("你的，所有项目通用", "Yours, for every project") : s.project_name || s.project;
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(s);
   }
@@ -99,8 +99,8 @@ function pendingCard(p) {
   const card = el("div", "skcard");
   const head = el("div", "skhead");
   head.append(el("b", "", "/" + p.name),
-    el("span", "pill", p.scope === "user" ? "所有项目" : p.project_name || "项目"),
-    el("span", "muted skby", `${p.by || "某个 agent"} · ${ago(p.at)}`));
+    el("span", "pill", p.scope === "user" ? T("所有项目", "All projects") : p.project_name || T("项目", "Project")),
+    el("span", "muted skby", T(`${p.by || "某个 agent"} · ${ago(p.at)}`, `${p.by || "an agent"} · ${ago(p.at)}`)));
   card.append(head, el("p", "skdesc", p.description));
   const actions = el("div", "skacts");
   if (sk.editing.has(p.name)) {
@@ -109,13 +109,13 @@ function pendingCard(p) {
     ta.spellcheck = false;
     ta.rows = Math.min(24, p.text.split("\n").length + 2);
     card.append(ta);
-    actions.append(button("批准", "primary", () => approveSkill(p, ta.value)),
-      button("取消", "", () => { sk.editing.delete(p.name); drawSkills(); }));
+    actions.append(button(T("批准", "Approve"), "primary", () => approveSkill(p, ta.value)),
+      button(T("取消", "Cancel"), "", () => { sk.editing.delete(p.name); drawSkills(); }));
   } else {
     card.append(md(p.body));
-    actions.append(button("批准", "primary", () => approveSkill(p)),
-      button("编辑", "", () => { sk.editing.add(p.name); drawSkills(); }),
-      button("丢弃", "danger", () => discardSkill(p)));
+    actions.append(button(T("批准", "Approve"), "primary", () => approveSkill(p)),
+      button(T("编辑", "Edit"), "", () => { sk.editing.add(p.name); drawSkills(); }),
+      button(T("丢弃", "Discard"), "danger", () => discardSkill(p)));
   }
   card.append(actions);
   return card;
@@ -133,7 +133,7 @@ async function approveSkill(p, body) {
   try {
     await api("POST", "/api/skills/approve", {}, body === undefined ? { name: p.name } : { name: p.name, body });
     sk.editing.delete(p.name);
-    toast(`已批准 /${p.name}`);
+    toast(T(`已批准 /${p.name}`, `Approved /${p.name}`));
     skillCache.clear();
     drawSkillsDot();
   } catch (e) {
@@ -143,8 +143,8 @@ async function approveSkill(p, body) {
 
 async function discardSkill(p) {
   const v = await dialog({
-    title: `丢弃 /${p.name}？`, body: el("p", "muted dtext", "它会被丢掉；agent 可以再存一次。"),
-    actions: [{ label: "取消", value: null }, { label: "丢弃", value: "d", cls: "danger" }],
+    title: T(`丢弃 /${p.name}？`, `Discard /${p.name}?`), body: el("p", "muted dtext", T("它会被丢掉；agent 可以再存一次。", "It is thrown away; an agent can save it again.")),
+    actions: [{ label: T("取消", "Cancel"), value: null }, { label: T("丢弃", "Discard"), value: "d", cls: "danger" }],
   });
   if (v !== "d") return;
   try {
@@ -210,7 +210,7 @@ async function saveAsSkill(a) {
       const r = await authFetch(`/api/queue?${new URLSearchParams({ id: a.id })}`, { method: "POST", body: SAVE_AS_SKILL });
       if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
     }
-    toast(`已请 ${label(a)} 存一个技能：到“技能”里批准它`);
+    toast(T(`已请 ${label(a)} 存一个技能：到“技能”里批准它`, `Asked ${label(a)} to save a skill: approve it in Skills`));
   } catch (e) {
     toast(e.message, "err");
   }
