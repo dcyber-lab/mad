@@ -1625,6 +1625,50 @@
           }
         }
       }
+    },
+    "想问你": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asks you"
+          }
+        }
+      }
+    },
+    "允许中…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowing…"
+          }
+        }
+      }
+    },
+    "拒绝中…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denying…"
+          }
+        }
+      }
+    },
+    "发送": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
