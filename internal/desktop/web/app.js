@@ -633,7 +633,7 @@ function waitAsk(it, a) {
     : it.context && it.context !== "needs you" ? T(`想用 ${it.context}`, `Wants to use ${it.context}`) : T("在等你", "Waiting for you");
   head.append(avatar(a, true), el("span", "t", what));
   const age = el("span", "al");
-  age.append(T("等了 ", "Waiting "), tick(it.since));
+  age.append(tick(it.since, "", T("等了 ", "Waiting ")));
   head.append(age);
   const body = el("div", "abody");
   if (it.text && it.kind === "question") body.append(el("div", "abtext qtext", it.text));
@@ -660,7 +660,7 @@ window.addEventListener("keydown", (e) => {
   const ae = document.activeElement;
   if (ae && ae !== document.body && ae.closest("input, textarea, [contenteditable], button, .popup, #dialog")) return;
   const o = current && opened.get(current);
-  const card = o && !o.wait.hidden && o.wait.querySelector(".ask-inbox:not(.sent)");
+  const card = o && !o.wait.hidden && o.wait.querySelector(".ask-inbox:not(.sent)") || cv.open && $("#chanask").querySelector(".ask-inbox:not(.sent)");
   if (!card) return;
   const it = inboxItem(card.dataset.key);
   if (!it) return;

@@ -1090,6 +1090,26 @@ func TestCreateCards(t *testing.T) {
 					t.Fatal(err)
 				}
 				time.Sleep(300 * time.Millisecond)
+				var open struct {
+					ActsShown bool
+					Chips     []struct {
+						Text string
+						H    float64
+						Fill bool
+					}
+				}
+				evalJSON(t, `(() => { const a = document.querySelector(".ask-create .acts"); return { actsShown: a.getBoundingClientRect().height > 0, chips: [...document.querySelectorAll(".ask-create .replybox .ra .btn")].map((b) => ({ text: b.textContent, h: b.getBoundingClientRect().height, fill: b.classList.contains("primary") })) }; })()`, &open)
+				if open.ActsShown {
+					t.Error("the three chips stay under the open field")
+				}
+				if len(open.Chips) != 2 || open.Chips[0].Text != "取消" || open.Chips[1].Text != "发送" || !open.Chips[1].Fill || open.Chips[0].Fill {
+					t.Errorf("the open field's chips: %+v", open.Chips)
+				}
+				for _, ch := range open.Chips {
+					if ch.H > 44.5 {
+						t.Errorf("%s is %.0fpx tall", ch.Text, ch.H)
+					}
+				}
 				var f struct {
 					Field, Send bool
 					Disabled    bool
@@ -1114,8 +1134,12 @@ func TestCreateCards(t *testing.T) {
 					Head  string
 					Lines []string
 					First string
+					Age   string
 				}
-				evalJSON(t, `(() => { const c = document.querySelector(".chat .wait .ask-create"); return { head: c.querySelector(".ah .t").textContent, lines: [...c.querySelectorAll(".crow")].map((e) => e.innerText.replace(/\s+/g, " ")), first: c.querySelector(".cfirst").innerText.replace(/\s+/g, " ") }; })()`, &r)
+				evalJSON(t, `(() => { const c = document.querySelector(".chat .wait .ask-create"); return { age: c.querySelector(".ah .al").textContent, head: c.querySelector(".ah .t").textContent, lines: [...c.querySelectorAll(".crow")].map((e) => e.innerText.replace(/\s+/g, " ")), first: c.querySelector(".cfirst").innerText.replace(/\s+/g, " ") }; })()`, &r)
+				if r.Age != "刚刚" {
+					t.Errorf("the age reads %q, want 刚刚 alone", r.Age)
+				}
 				if r.Head != "想创建一个团队" || r.Lines[0] != "architect负责人 Claude Opus" || r.Lines[1] != "builder Claude Sonnet" || len(r.Lines) != 3 || r.Lines[2] != "reviewer Codex" || !strings.HasPrefix(r.First, "第一件事 ") {
 					t.Errorf("the team card: %+v", r)
 				}
@@ -1177,13 +1201,44 @@ func TestCreateCards(t *testing.T) {
 				if r.Head != "architect 想创建一个 agent" {
 					t.Errorf("the channel card says %q", r.Head)
 				}
+				var ch struct {
+					Chips []struct {
+						Test   string
+						H, Rad float64
+						Fill   bool
+						Dashed bool
+					}
+					Gap float64
+				}
+				evalJSON(t, `(() => { const card = document.querySelector("#chanask .ask-create"); const cr = card.getBoundingClientRect(); const bs = [...card.querySelectorAll(".acts .btn")];
+				  const last = bs[bs.length - 1].getBoundingClientRect(); return { gap: cr.bottom - last.bottom,
+				  chips: bs.map((b) => { const cs = getComputedStyle(b); return { test: b.dataset.test, h: b.getBoundingClientRect().height, rad: parseFloat(cs.borderTopLeftRadius), fill: b.classList.contains("primary"), dashed: cs.borderTopStyle === "dashed" }; }) }; })()`, &ch)
+				if len(ch.Chips) != 3 || ch.Gap < 12 {
+					t.Errorf("the channel card's chips %+v, %.0fpx under them", ch.Chips, ch.Gap)
+				}
+				for i, b := range ch.Chips {
+					if b.H > 44.5 || b.Rad < 16 || b.Fill != (i == 0) || b.Dashed != (i == 2) {
+						t.Errorf("channel chip %s: %.0fpx tall, radius %.0f, filled %v, dashed %v", b.Test, b.H, b.Rad, b.Fill, b.Dashed)
+					}
+				}
+				shot("create-channel-" + name)
+				// ⏎ allows from the channel card too
+				if _, err := c.eval(`authFetch = () => new Promise(() => {}); document.activeElement && document.activeElement.blur(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(300 * time.Millisecond)
+				var sent string
+				evalJSON(t, `document.querySelector('#chanask [data-test="create.allow"]').textContent`, &sent)
+				if sent != "允许中…" {
+					t.Errorf("⏎ on the channel card left 允许 reading %q", sent)
+				}
+				shot("create-channel-sending-" + name)
 				if r.Results != 1 || len(r.Notes) != 1 || !strings.HasPrefix(r.Notes[0], "你拒绝了，没有创建") {
 					t.Errorf("channel lines: %d results, notes %q", r.Results, r.Notes)
 				}
 				if len(r.English) > 0 {
 					t.Errorf("English in the channel: %q", r.English)
 				}
-				shot("create-channel-" + name)
 			})
 			t.Run("list/"+name, func(t *testing.T) {
 				open(t, theme, w, "", `!!document.querySelector(".pcard, .row .rt .btn")`)

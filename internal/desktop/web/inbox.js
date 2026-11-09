@@ -73,9 +73,10 @@ function short(at) {
   return T(`${Math.floor(m / 1440)} 天`, `${Math.floor(m / 1440)} d`);
 }
 // tick is an age the page keeps current; suffix goes after it (" ago").
-function tick(at, suffix = "") {
+function tick(at, suffix = "", prefix = "") {
   const s = el("span", "t");
   s.dataset.at = at;
+  s.dataset.pre = prefix;
   s.dataset.suf = suffix;
   tickText(s);
   return s;
@@ -83,7 +84,7 @@ function tick(at, suffix = "") {
 function tickText(s) {
   const a = short(s.dataset.at);
   const suf = s.dataset.suf === " ago" ? T("前", " ago") : s.dataset.suf;
-  const t = a === T("刚刚", "now") ? a : a + suf;
+  const t = a === T("刚刚", "now") ? a : (s.dataset.pre || "") + a + suf; // under a minute: "刚刚" alone
   if (s.textContent !== t) s.textContent = t; // the same age is left alone: a selection in it stays
 }
 setInterval(() => {
@@ -417,8 +418,8 @@ function replyBox(it, r) {
     if (ta.value.trim()) act(it, a, ta.value.trim());
   };
   const ra = el("div", "ra");
-  const cancel = rowButton(T("取消", "Cancel"), "ghost", closeReply);
-  const sendBtn = rowButton(T("发送", "Send"), "primary", send, "", `${it.key}\nsend`);
+  const cancel = rowButton(T("取消", "Cancel"), it.kind === "create" ? "chip" : "ghost", closeReply);
+  const sendBtn = rowButton(T("发送", "Send"), it.kind === "create" ? "chip primary" : "primary", send, "", `${it.key}\nsend`);
   if (it.kind === "create") {
     cancel.dataset.test = "create.cancel";
     sendBtn.dataset.test = "create.send";

@@ -88,7 +88,7 @@ function createAsk(it, a, where) {
   const head = el("div", "ah");
   head.append(avatar(a || { id: it.agent, kind: "?" }, true), el("span", "t", createHead(c, where === "chan" ? it.title : "")));
   const age = el("span", "al");
-  age.append(T("等了 ", "Waiting "), tick(it.since));
+  age.append(tick(it.since, "", T("等了 ", "Waiting ")));
   head.append(age);
   const body = el("div", "abody");
   body.append(createBody(c));
