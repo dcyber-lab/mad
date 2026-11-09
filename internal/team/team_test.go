@@ -599,11 +599,12 @@ func TestStartChineseName(t *testing.T) {
 // template: its lead leads the channel, its topic is the goal.
 func TestStartOwnRoles(t *testing.T) {
 	root, specs, _ := project(t)
+	asker := bus.From{ID: "aaaa1111-0000-0000-0000-000000000009", Label: "gus", Kind: "claude"}
 	roles := []Role{
 		{Role: run.Role{Name: "checker", Agent: "codex", ReadOnly: true}},
 		{Role: run.Role{Name: "fixer", Agent: "claude:opus"}, Lead: true},
 	}
-	s, err := Start(Options{Project: root, Name: "fix-flaky", Goal: "stop the flake", Roles: roles})
+	s, err := Start(Options{Project: root, Name: "fix-flaky", Goal: "stop the flake", Custom: &Template{Name: "custom", Topic: "{{goal}}", Roles: roles}, By: &asker})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,12 +616,17 @@ func TestStartOwnRoles(t *testing.T) {
 	if _, lead := st.FindAgent(c.Lead); !ok || c.Topic != "stop the flake" || lead == nil || lead.Role != "fixer" {
 		t.Errorf("channel %+v, lead %+v", c, lead)
 	}
+	// Started by an agent: its channel and its kickoff are the agent's, not the person's.
+	msgs, _, _ := bus.Read(s.Channel, 0, 10)
+	if c.CreatedBy != asker.ID || len(msgs) != 1 || msgs[0].From.ID != asker.ID || !strings.HasPrefix(msgs[0].Text, "@fixer ") {
+		t.Errorf("created by %q, messages %+v", c.CreatedBy, msgs)
+	}
 	if list, _ := Running(nil); len(list) != 1 || list[0].Template != "custom" || len(list[0].Roles) != 2 {
 		t.Errorf("records %+v", list)
 	}
 	// Two leads is no team.
 	roles[0].Lead = true
-	if _, err := Start(Options{Project: root, Goal: "g", Roles: roles}); err == nil || !strings.Contains(err.Error(), "2 leads") {
+	if _, err := Start(Options{Project: root, Goal: "g", Custom: &Template{Name: "custom", Roles: roles}}); err == nil || !strings.Contains(err.Error(), "2 leads") {
 		t.Errorf("two leads: %v", err)
 	}
 	if name, err := CheckName("fix-flaky", "g"); err == nil {

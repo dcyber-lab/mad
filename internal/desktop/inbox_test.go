@@ -10,6 +10,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -162,6 +163,10 @@ func TestInboxCreateRequest(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
+	// Allowing would start an agent in the background: not here.
+	oldGo := creator.Go
+	creator.Go = func(func()) {}
+	t.Cleanup(func() { creator.Go = oldGo })
 	req, err := create.Add("alice", a1, "", create.Spec{Type: create.TypeAgent, Name: "scout", Project: "/p", ProjectName: "p", Kind: "claude", Message: "find the flake"})
 	if err != nil {
 		t.Fatal(err)

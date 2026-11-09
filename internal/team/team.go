@@ -190,9 +190,12 @@ type Options struct {
 	Goal       string
 	Permission string // run.PermAuto by default
 	Branch     string // all roles work in this branch's worktree; none: the project's directory
-	// Roles, when set, are the team's own roles (exactly one leads) instead of
-	// a template's; its brief is the goal.
-	Roles []Role
+	// Custom, when set, is the template to follow instead of looking Template
+	// up: one resolved earlier (an agent's request, which the person read).
+	Custom *Template
+	// By is who starts it, as the channel's creator and the kickoff's
+	// author: the person when nil.
+	By *bus.From
 	// Agents choose another agent for a role: role name → "claude:opus@high".
 	Agents map[string]string
 	Kinds  []agent.Kind
@@ -219,8 +222,8 @@ func Start(o Options) (*Started, error) {
 		return nil, errors.New("the team needs a goal")
 	}
 	var tpl Template
-	if len(o.Roles) > 0 {
-		tpl = Template{Name: "custom", Topic: "{{goal}}", Roles: o.Roles}.resolved()
+	if o.Custom != nil {
+		tpl = o.Custom.resolved()
 	} else if t, ok := ByName(root, o.Template); ok {
 		tpl = t
 	} else {
@@ -263,7 +266,7 @@ func Start(o Options) (*Started, error) {
 		return nil, err
 	}
 	if len(teams) >= MaxTeams {
-		return nil, fmt.Errorf("%d teams run already (the most there are at once); remove one first: mad team rm NAME", len(teams))
+		return nil, fmt.Errorf("%d teams run already (the most there are at once); one has to be removed first", len(teams))
 	}
 	name, err := teamName(o.Name, goal, teams)
 	if err != nil {
@@ -280,7 +283,11 @@ func Start(o Options) (*Started, error) {
 		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief))})
 	}
 	topic := strings.TrimSpace(render(string(tpl.Topic), goal))
-	if _, err := bus.Create(name, topic, nil, bus.From{ID: bus.You, Label: bus.You}); err != nil {
+	by := bus.From{ID: bus.You, Label: bus.You}
+	if o.By != nil {
+		by = *o.By
+	}
+	if _, err := bus.Create(name, topic, nil, by); err != nil {
 		return nil, err
 	}
 	// The record first: an agent's brief is read from it as its MCP server
@@ -340,7 +347,7 @@ func Start(o Options) (*Started, error) {
 	if kick == "" {
 		kick = "Goal: " + goal
 	}
-	if _, err := bus.Post(name, bus.From{ID: bus.You, Label: bus.You}, "@"+lead+" "+kick, 0); err != nil {
+	if _, err := bus.Post(name, by, "@"+lead+" "+kick, 0); err != nil {
 		out.Notes = append(out.Notes, "the kickoff was not posted: "+err.Error())
 	}
 	return out, nil
@@ -553,7 +560,7 @@ func CheckName(name, goal string) (string, error) {
 		return "", err
 	}
 	if len(teams) >= MaxTeams {
-		return "", fmt.Errorf("%d teams run already (the most there are at once); the person must remove one first", len(teams))
+		return "", fmt.Errorf("%d teams run already (the most there are at once): the team limit is reached, and the person can remove one", len(teams))
 	}
 	return teamName(name, goal, teams)
 }

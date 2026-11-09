@@ -39,9 +39,12 @@ const (
 	Failed   = "failed"
 )
 
-// Expiry is how long a request waits: its agent gives up on it sooner
-// (about ten minutes), so one older was left by an agent that died.
-const Expiry = 15 * time.Minute
+// Expiry is how long a request waits for the person.
+const Expiry = 10 * time.Minute
+
+// Interrupted is how long an allowed request may take to start before it
+// is taken for one that mad was closed on.
+const Interrupted = 15 * time.Minute
 
 // Keep is how long a request that ended is kept, for a card to show how.
 const Keep = 24 * time.Hour
@@ -49,12 +52,17 @@ const Keep = 24 * time.Hour
 // ErrGone: no such request waits (answered already, or given up on).
 var ErrGone = errors.New("that was answered already")
 
-// Role is a role of a team to start.
+// Role is a role of a team to start, as it will be: the card lists it and
+// the team starts with exactly these.
 type Role struct {
-	Role  string `json:"role"`
-	Kind  string `json:"kind"`
-	Model string `json:"model,omitempty"`
-	Lead  bool   `json:"lead,omitempty"`
+	Role     string `json:"role"`
+	Kind     string `json:"kind"`
+	Model    string `json:"model,omitempty"`
+	Effort   string `json:"effort,omitempty"`
+	Lead     bool   `json:"lead,omitempty"`
+	ReadOnly bool   `json:"read_only,omitempty"`
+	// Brief is what the role is told about its part.
+	Brief string `json:"brief,omitempty"`
 }
 
 // Spec is what would be created, in the words a card lists it with.
@@ -70,9 +78,15 @@ type Spec struct {
 	Message string `json:"message,omitempty"`
 	Channel string `json:"channel,omitempty"`
 	// A team: its goal, the template it follows, or its own roles.
-	Goal     string `json:"goal,omitempty"`
+	Goal string `json:"goal,omitempty"`
+	// Template is the template's name, as read when the request was made;
+	// Roles are its roles (or the agent's own), Topic and Kickoff its texts
+	// ({{goal}} in them is the goal): all resolved then, so the team starts
+	// as the card said even if the template's file changes.
 	Template string `json:"template,omitempty"`
 	Roles    []Role `json:"roles,omitempty"`
+	Topic    string `json:"topic,omitempty"`
+	Kickoff  string `json:"kickoff,omitempty"`
 }
 
 // Request is a Spec asked for by an agent.
@@ -85,6 +99,11 @@ type Request struct {
 	// shows the card there.
 	From   string `json:"from,omitempty"`
 	Status string `json:"status"`
+	// Auto: made without asking (agents_create_without_asking), so it was
+	// never on the desk.
+	Auto bool `json:"auto,omitempty"`
+	// AnsweredAt is when the person allowed it.
+	AnsweredAt time.Time `json:"answered_at,omitzero"`
 	// Reply is what the person said with Changes.
 	Reply string `json:"reply,omitempty"`
 	// Result is what was created (Created) or why not (Failed).
@@ -154,6 +173,28 @@ func Add(by, byID, from string, spec Spec) (Request, error) {
 	return r, write(r)
 }
 
+// AddAuto records a request that is carried out without asking: Allowed
+// from the start.
+func AddAuto(by, byID, from string, spec Spec) (Request, error) {
+	r, err := Add(by, byID, from, spec)
+	if err != nil {
+		return r, err
+	}
+	r.Auto, r.Status, r.AnsweredAt = true, Allowed, r.At
+	return r, write(r)
+}
+
+// AutoSince counts the requests carried out without asking since t.
+func AutoSince(t time.Time) int {
+	n := 0
+	for _, r := range All() {
+		if r.Auto && r.At.After(t) {
+			n++
+		}
+	}
+	return n
+}
+
 // Get is request id as it stands.
 func Get(id string) (Request, error) {
 	var r Request
@@ -175,7 +216,7 @@ func Answer(id string, allow bool, reply string) error {
 	}
 	switch reply = strings.TrimSpace(reply); {
 	case allow:
-		r.Status = Allowed
+		r.Status, r.AnsweredAt = Allowed, time.Now().UTC()
 	case reply != "":
 		r.Status, r.Reply, r.DoneAt = Changes, reply, time.Now().UTC()
 	default:
@@ -184,15 +225,14 @@ func Answer(id string, allow bool, reply string) error {
 	return write(r)
 }
 
-// Finish records how a request that was not waiting any more ended: Created
-// or Failed after Allowed, Expired from Waiting. It does nothing to one
-// that ended already.
+// Finish records how a request that is waiting or allowed ended. It does
+// nothing to one that ended already.
 func Finish(id, status string, res Result) error {
 	r, err := Get(id)
 	if err != nil {
 		return err
 	}
-	if r.Status != Waiting && r.Status != Allowed || r.Status == Allowed && status == Expired {
+	if r.Status != Waiting && r.Status != Allowed {
 		return nil
 	}
 	r.Status, r.Result, r.DoneAt = status, res, time.Now().UTC()
@@ -207,8 +247,8 @@ func Remove(id string) {
 }
 
 // All is the requests there are: those waiting and those that ended in the
-// last Keep, oldest first. One that waited longer than Expiry was left by
-// an agent that died: it ends as Expired.
+// last Keep, oldest first. Ending the ones that waited too long or lost
+// their agent is creator.Sweep's.
 func All() []Request {
 	ents, _ := os.ReadDir(dir())
 	var out []Request
@@ -217,10 +257,6 @@ func All() []Request {
 		r, err := Get(id)
 		if err != nil {
 			continue
-		}
-		if r.Status == Waiting && time.Since(r.At) > Expiry {
-			_ = Finish(id, Expired, Result{})
-			r, _ = Get(id)
 		}
 		if r.Status != Waiting && r.Status != Allowed && time.Since(r.DoneAt) > Keep || r.Status == Allowed && time.Since(r.At) > Keep {
 			Remove(id)
@@ -242,3 +278,6 @@ func List() []Request {
 	}
 	return out
 }
+
+// Put writes r as it is: for a test to age or end a request.
+func Put(r Request) error { return write(r) }

@@ -84,6 +84,10 @@ type Message struct {
 	// agent's request to create something ("create:c-1a2b3c4d"), so a view
 	// draws the line beside that card.
 	Ref string `json:"ref,omitempty"`
+	// Data is what an Event line says, for a view to draw its words from:
+	// for a create event the type (agent or team), name, and the new agent,
+	// team or channel, or why not.
+	Data map[string]string `json:"data,omitempty"`
 	// Images are the pictures it carries (images.go).
 	Images []Image `json:"images,omitempty"`
 }
@@ -540,10 +544,10 @@ const (
 
 // Event adds a note of mad's own to channel, with its Event and what it is
 // about (ref). It wakes no one and is not the text of any agent.
-func Event(channel, event, ref, text string) error {
+func Event(channel, event, ref, text string, data map[string]string) error {
 	err := change(channel, func(c *Channel, msgs []Message) error {
 		m := systemMsg(text)
-		m.Event, m.Ref = event, ref
+		m.Event, m.Ref, m.Data = event, ref, data
 		_, err := addMsg(channel, &msgs, m)
 		return err
 	})

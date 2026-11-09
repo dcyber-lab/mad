@@ -217,7 +217,7 @@
           "title": "architect",
           "context": "wants to start an agent",
           "text": "scout (claude:sonnet) in mad",
-          "body": "Find the flaky test in internal/bus and say what makes it flaky.\nStart with go test -run TestFollowUp -count=20.\n\nJoins #api",
+          "body": "First message: Find the flaky test in internal/bus and say what makes it flaky.\nStart with go test -run TestFollowUp -count=20.\n\nJoins #api",
           "since": "-1m",
           "blocks": true,
           "acts": [
@@ -225,7 +225,6 @@
               "verb": "allow",
               "label": "Allow",
               "kind": "create",
-              "row": true,
               "primary": true
             },
             {
@@ -254,7 +253,9 @@
             "message": "Find the flaky test in internal/bus and say what makes it flaky.\nStart with go test -run TestFollowUp -count=20.",
             "channel": "api"
           },
-          "from": "fold"
+          "from": "fold",
+          "full": true,
+          "where": "/fixture/mad"
         },
         {
           "key": "create:c-00000002",
@@ -263,7 +264,7 @@
           "title": "architect",
           "context": "wants to start a team",
           "text": "Team fix-flaky in mad",
-          "body": "Goal: stop the follow-up test from flaking\nfixer: claude:opus (lead)\nchecker: codex",
+          "body": "Goal: stop the follow-up test from flaking\nTemplate: dev\narchitect: claude:opus (lead)\n  You lead: break the goal into tasks on the board and hand them out.\nbuilder: claude:sonnet\n  You implement what the architect hands you.\nreviewer: codex (read only)\n  You review diffs: real problems only.\nKickoff: Goal: stop the follow-up test from flaking\n\nPlan the work and start.",
           "since": "-30s",
           "blocks": true,
           "acts": [
@@ -271,7 +272,6 @@
               "verb": "allow",
               "label": "Allow",
               "kind": "create",
-              "row": true,
               "primary": true
             },
             {
@@ -298,17 +298,30 @@
             "goal": "stop the follow-up test from flaking",
             "roles": [
               {
-                "role": "fixer",
+                "role": "architect",
                 "kind": "claude",
                 "model": "opus",
-                "lead": true
+                "lead": true,
+                "brief": "You lead: break the goal into tasks on the board and hand them out."
               },
               {
-                "role": "checker",
-                "kind": "codex"
+                "role": "builder",
+                "kind": "claude",
+                "model": "sonnet",
+                "brief": "You implement what the architect hands you."
+              },
+              {
+                "role": "reviewer",
+                "kind": "codex",
+                "read_only": true,
+                "brief": "You review diffs: real problems only."
               }
-            ]
-          }
+            ],
+            "template": "dev",
+            "kickoff": "Goal: {{goal}}\n\nPlan the work and start."
+          },
+          "full": true,
+          "where": "/fixture/mad"
         }
       ]
     },
@@ -382,6 +395,34 @@
           "at": "-19m"
         },
         "from": "fold"
+      },
+      {
+        "key": "create:c-00000008",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start an agent",
+        "text": "scout6 (claude:opus) in mad",
+        "since": "-40m",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "from": "fold",
+        "create": {
+          "type": "agent",
+          "name": "scout6",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "kind": "claude",
+          "model": "opus",
+          "message": "audit the bus"
+        },
+        "outcome": {
+          "status": "changes",
+          "reply": "use sonnet, not opus",
+          "at": "-39m"
+        }
       },
       {
         "key": "create:c-00000005",
@@ -518,7 +559,13 @@
         "kind": "system",
         "event": "created",
         "ref": "create:c-00000003",
-        "text": "Team ship-it was created."
+        "text": "Team ship-it was created.",
+        "data": {
+          "type": "team",
+          "name": "ship-it",
+          "team": "ship-it",
+          "channel": "ship-it"
+        }
       },
       {
         "seq": 5,
@@ -531,7 +578,11 @@
         "kind": "system",
         "event": "create_declined",
         "ref": "create:c-00000004",
-        "text": "You declined; nothing was created."
+        "text": "You declined; nothing was created.",
+        "data": {
+          "type": "agent",
+          "name": "scout2"
+        }
       }
     ]
   }

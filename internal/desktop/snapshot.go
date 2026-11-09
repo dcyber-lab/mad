@@ -14,6 +14,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -358,6 +359,7 @@ func (p *poller) Poll(now time.Time) {
 	// The bus is read again only when it moved (bus.Source).
 	look, _ := p.bus.Look(st, attention.Statuses(facts), now)
 	pending, _ := skill.PendingList()
+	creator.Sweep(st)
 	snap.Bus = busChannels(st, look)
 	snap.Spend = bus.SpendNow(now)
 	snap.Today = p.today

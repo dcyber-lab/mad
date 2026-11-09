@@ -1090,21 +1090,32 @@ project, name, first message, optionally a channel to join) and a team
 with `team_start` (name, goal, project, a template or its own roles). It
 is checked against what the deck has (projects, kinds, templates) and
 refused with a message the agent can relay. Then **you are asked**: a
-`create` card in the inbox (phone, window, deck, `mad board`) says what
-would be started: name, project, kind and model, roles and the first
-message, with Allow and Deny. The agent's tool call waits for your answer
-for about 10 minutes: Allow starts it and returns its id (and channel),
-Deny returns "the person declined", and no answer "the person hasn't
-answered yet". A fourth act, Ask for changes, sends your words back as
-the result ("the person wants changes: …") so the agent can propose
-again. An agent that was answering in a channel passes `from_channel`:
-the card shows there, and mad adds an event line (`created`,
-`create_declined`, `create_changes`, `create_expired`, `create_failed`,
-with `ref` the card's key) when it ends. How each request ended (created,
-declined, expired, failed, with the new id or the reason) is kept for a
-day in the snapshot's `creates`. `"agents_create_without_asking": true` in `config.json`
-skips the card (off by default). A spent budget refuses both tools, as
-it does `bus_handoff`.
+`create` card says everything that would be started: name, project,
+kind and model, the first message or the goal, every role with its brief
+(a template is read when the agent asks, and the team starts with
+exactly those roles), with Allow, Deny and Ask for changes. The card is
+answered on the phone or in the window; the deck's sidebar and `mad
+board` cannot answer it.
+
+The tool call does not wait: it returns at once with `"outcome":
+"asked"` and a request id, and the agent ends its turn. When you answer,
+mad starts what you allowed (a team's channel and kickoff are the asking
+agent's, so the day's budget counts them) and tells the agent in a DM:
+`created` with the new ids, `declined`, `changes` with your words (it
+can propose again), `expired` (no answer in 10 minutes, or the agent is
+gone from the deck: nothing starts), or `failed` with why. An agent that
+was answering in a channel passes `from_channel`: the card shows there,
+and mad adds an event line (`created`, `create_declined`,
+`create_changes`, `create_expired`, `create_failed`, with `ref` the
+card's key and `data` the type, name and ids). How each request ended is
+kept for a day in the snapshot's `creates`. A spent budget refuses both
+tools, as it does `bus_handoff`.
+
+`"agents_create_without_asking": true` in `config.json` skips the card
+(off by default), for at most 5 agents or teams an hour; the sixth asks.
+
+This gate holds against mad's tools. It does not hold against an agent
+with a shell that writes mad's state files (or starts agents itself).
 
 ### Skills
 
