@@ -1055,7 +1055,7 @@ func TestCreateCards(t *testing.T) {
 				    results: log.querySelectorAll(".cres").length, notes: [...log.querySelectorAll(".cnote")].map((e) => e.textContent),
 				    btns: [...card.querySelectorAll(".acts .btn")].map((b) => ({ test: b.dataset.test, text: b.textContent, cls: b.className, h: b.getBoundingClientRect().height })),
 				    left: cr.left, right: cr.right, chatW: card.closest(".chat").clientWidth,
-				    english: (txt.match(/wants to|Allow|Deny|AskUser|agent_new|team_start|mcp__|create:/g) || []) };
+				    english: (txt.match(/wants to|Allow|Deny|AskUser|agent_new|team_start|mcp__|create:|\[mad\] your request|asked the person/g) || []) };
 				})()`, &r)
 				if r.Head != "想创建一个 agent" || r.Name != "scout" {
 					t.Errorf("the card is %q %q, want 想创建一个 agent scout", r.Head, r.Name)
@@ -1063,8 +1063,8 @@ func TestCreateCards(t *testing.T) {
 				if len(r.Lines) != 2 || r.Lines[0] != "模型 Claude Sonnet" || r.Lines[1] != "加入群聊 api" {
 					t.Errorf("the spec rows are %q", r.Lines)
 				}
-				if r.Results != 2 || len(r.Notes) != 3 {
-					t.Errorf("%d result lines and %d grey lines (%q), want 2 and 3", r.Results, len(r.Notes), r.Notes)
+				if r.Results != 3 || len(r.Notes) != 4 {
+					t.Errorf("%d result lines and %d grey lines (%q), want 3 and 4", r.Results, len(r.Notes), r.Notes)
 				}
 				want := []string{"create.allow", "create.deny", "create.change"}
 				if len(r.Btns) != 3 {
@@ -1116,7 +1116,7 @@ func TestCreateCards(t *testing.T) {
 					First string
 				}
 				evalJSON(t, `(() => { const c = document.querySelector(".chat .wait .ask-create"); return { head: c.querySelector(".ah .t").textContent, lines: [...c.querySelectorAll(".crow")].map((e) => e.innerText.replace(/\s+/g, " ")), first: c.querySelector(".cfirst").innerText.replace(/\s+/g, " ") }; })()`, &r)
-				if r.Head != "想创建一个团队" || len(r.Lines) != 2 || r.Lines[0] != "fixer负责人 Claude Opus" || r.Lines[1] != "checker Codex" || !strings.HasPrefix(r.First, "第一件事 ") {
+				if r.Head != "想创建一个团队" || r.Lines[0] != "architect负责人 Claude Opus" || r.Lines[1] != "builder Claude Sonnet" || len(r.Lines) != 3 || r.Lines[2] != "reviewer Codex" || !strings.HasPrefix(r.First, "第一件事 ") {
 					t.Errorf("the team card: %+v", r)
 				}
 				shot("create-team-" + name)

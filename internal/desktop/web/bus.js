@@ -109,7 +109,7 @@ function teamRow(c, found) {
   return row({
     key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}${freshRow(c.id) ? " fresh" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
-      : String(c.last_text || "").replace(/\s+/g, " ").trim() || chanSub(c),
+      : (createTold(c.last_text) ? "" : String(c.last_text || "").replace(/\s+/g, " ").trim()) || chanSub(c),
     onclick: () => openChannel(c.id), title: c.topic || c.title,
   });
 }
@@ -831,6 +831,7 @@ function drawMessage(m) {
   const log = $("#chanlog");
   // What agents settle between themselves is not drawn: no bubble, no time line, no break in a run. A reply
   // may quote it, so what it said is kept.
+  if (createTold(m.text)) return; // mad's word to a bot on how its request ended
   if (quiet(m)) {
     cv.quiet.set(m.seq, { who: m.from.label, text: m.text || "" });
     return;

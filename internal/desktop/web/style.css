@@ -2230,3 +2230,5 @@ html .chat .wait.asks .ask .acts.chips .btn.chip.primary:hover:not(:disabled) { 
 @media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
 .ask-create .acts.chips .btn.chip:nth-child(n) { min-width: 92px; justify-content: center; text-align: center; }
 .pcard .pwhat { font-size: 12.5px; color: var(--waiting); font-weight: 600; margin: 2px 0 4px; }
+.cres.creating { cursor: default; }
+.cres.creating .spin { width: 20px; height: 20px; flex: none; margin: 0 10px 0 4px; }

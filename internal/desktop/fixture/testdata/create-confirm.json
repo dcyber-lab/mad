@@ -554,6 +554,30 @@
           "channel": "dm.fold0001-aaaa.fold0006-aaaa",
           "at": "-3h"
         }
+      },
+      {
+        "key": "create:c-00000009",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start a team",
+        "text": "Team release-prep in mad",
+        "since": "-6s",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "team",
+          "name": "release-prep",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "goal": "prepare the release notes"
+        },
+        "outcome": {
+          "status": "creating",
+          "at": "-5s"
+        }
       }
     ]
   },
@@ -646,7 +670,7 @@
       "entries": [
         {
           "kind": "user",
-          "text": "把发布检查拆成一个小组，再起一个 scout 看 CI。"
+          "text": "把发布检查拆成一个小组，再起几个 scout 看 CI。"
         },
         {
           "kind": "text",
@@ -663,7 +687,7 @@
         {
           "kind": "result",
           "id": "t1",
-          "text": "{\"outcome\": \"created\", \"team\": \"ship-it\", \"channel\": \"ship-it\", \"agents\": {\"architect\": \"fold0001-aaaa\"}}"
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000003\", \"item\": \"create:c-00000003\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
         },
         {
           "kind": "tool",
@@ -676,7 +700,20 @@
         {
           "kind": "result",
           "id": "t2",
-          "text": "the person declined"
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000004\", \"item\": \"create:c-00000004\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout6",
+          "args": "{\"name\": \"scout6\", \"kind\": \"claude\", \"model\": \"opus\", \"project\": \"/fixture/mad\", \"message\": \"audit the bus\"}",
+          "input": "{\"name\": \"scout6\", \"kind\": \"claude\", \"model\": \"opus\", \"project\": \"/fixture/mad\", \"message\": \"audit the bus\"}",
+          "id": "t7"
+        },
+        {
+          "kind": "result",
+          "id": "t7",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000008\", \"item\": \"create:c-00000008\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
         },
         {
           "kind": "tool",
@@ -689,7 +726,7 @@
         {
           "kind": "result",
           "id": "t3",
-          "text": "the person hasn't answered yet"
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000005\", \"item\": \"create:c-00000005\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
         },
         {
           "kind": "tool",
@@ -702,8 +739,7 @@
         {
           "kind": "result",
           "id": "t4",
-          "text": "not a directory: /fixture/mad",
-          "error": true
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000006\", \"item\": \"create:c-00000006\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
         },
         {
           "kind": "tool",
@@ -716,7 +752,24 @@
         {
           "kind": "result",
           "id": "t5",
-          "text": "{\"agent\": {\"id\": \"fold0006-aaaa\", \"label\": \"docs\"}, \"channel\": \"dm.fold0001-aaaa.fold0006-aaaa\"}"
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000007\", \"item\": \"create:c-00000007\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__team_start",
+          "label": "release-prep",
+          "args": "{\"name\": \"release-prep\", \"goal\": \"prepare the release notes\", \"project\": \"/fixture/mad\"}",
+          "input": "{\"name\": \"release-prep\", \"goal\": \"prepare the release notes\", \"project\": \"/fixture/mad\"}",
+          "id": "t8"
+        },
+        {
+          "kind": "result",
+          "id": "t8",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000009\", \"item\": \"create:c-00000009\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "user",
+          "text": "[mad] your request c-00000007 to create agent scout5: agent scout5 was created (id fold0006-aaaa)\n{\"status\":\"created\",\"request\":\"c-00000007\"}"
         },
         {
           "kind": "text",
@@ -729,6 +782,11 @@
           "args": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
           "input": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
           "id": "t6"
+        },
+        {
+          "kind": "result",
+          "id": "t6",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000001\", \"item\": \"create:c-00000001\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
         }
       ]
     },

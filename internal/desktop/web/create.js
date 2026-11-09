@@ -134,6 +134,17 @@ const cStateWord = (a) => (a ? { running: T("在工作", "working"), waiting: T(
 // c is the create spec (type, name, kind, model), out the outcome (team or agent, channel).
 function resultLine(c, out) {
   const team = isTeam(c);
+  if (out.status === "creating") {
+    // allowed, and mad is starting it: the line in its pending form, a spinner for the tile and no 打开
+    const b = el("div", "cres creating");
+    b.dataset.test = "create.result";
+    const n = c.name || "";
+    const title = team ? T(`正在创建团队「${n}」…`, `Creating team “${n}”…`) : T(`正在创建「${n}」…`, `Creating “${n}”…`);
+    const txt = el("div", "ctxt");
+    txt.append(el("div", "ct", title));
+    b.append(el("span", "spin"), txt);
+    return b;
+  }
   const id = team ? out.channel : out.agent;
   const here = team ? !!(id && busChannel(id)) : !!(id && agents.get(id));
   const b = el("button", `cres${here ? "" : " gone"}`);
@@ -147,7 +158,7 @@ function resultLine(c, out) {
   if (team && here) {
     const lead = ch.lead && agents.get(ch.lead);
     sub = T(`${(ch.members || []).length} 个成员`, `${(ch.members || []).length} members`) + " · " + (lead ? T(`负责人${cStateWord(lead)}`, `lead ${cStateWord(lead)}`) : c.project_name || "");
-  } else if (ag) sub = `${modelWords(c.kind, c.model)} · ${cStateWord(ag)}`;
+  } else if (ag) sub = `${modelWords(c.kind || ag.kind, c.model)} · ${cStateWord(ag)}`;
   const tile = here ? (team ? chanTile(id) : avatar(ag, true)) : avatar({ kind: "?", id: "" }, true);
   const txt = el("div", "ctxt");
   txt.append(el("div", "ct", title), el("div", "cs", sub));
@@ -181,43 +192,37 @@ function createNote(c, status, out) {
 // outcomeLine draws status of create c: the result line or a grey one; null for one still going.
 function outcomeLine(c, out) {
   const status = out.status;
-  return status === "created" ? resultLine(c, out) : createNote(c, status, out);
+  return status === "created" || status === "creating" ? resultLine(c, out) : createNote(c, status, out);
 }
 
 // createEventLine is mad's event line m of a channel (created, create_declined, ...) as the result line or a
 // grey line, from the request the line is about (m.ref) in the snapshot's creates.
 function createEventLine(m) {
+  const d = m.data || {};
   const x = createFor(m.ref);
-  if (!x || !x.create) return null;
+  const c = x?.create || { type: d.type, name: d.name };
   const status = { created: "created", create_declined: "declined", create_changes: "changes", create_expired: "expired", create_failed: "failed" }[m.event];
-  return outcomeLine(x.create, { ...(x.outcome || {}), status });
+  return outcomeLine(c, { status, team: d.team, agent: d.agent, channel: d.channel, reason: d.reason, reply: d.words });
 }
 
 // ---- in an agent's conversation: in place of its agent_new / team_start step ----
 
 const createTool = (tool) => /(^|__)(agent_new|team_start)$/.test(tool || "") ? (/team_start$/.test(tool) ? "team" : "agent") : "";
 
-// readOutcome is how a call ended, from its JSON result's outcome (a word, or {status, ...}); a result with
-// none is read by what it holds: a team or an agent made, or the words mad's tools have always said.
-function readOutcome(text, error) {
+// A tool step's result is {status: "asked", request, item}: the outcome is on that item in the snapshot's
+// creates, later; with create-without-asking on it is {status: "created", team | agent, channel} at once. Any
+// other result (an error) leaves the step as it was.
+function readResult(text) {
   let j = null;
-  try { j = JSON.parse(text); } catch (_) { /* words */ }
-  if (j && typeof j === "object") {
-    const o = typeof j.outcome === "string" ? { status: j.outcome } : j.outcome && typeof j.outcome === "object" ? { ...j.outcome } : {};
-    const agent = j.agent && typeof j.agent === "object" ? j.agent.id : j.agent;
-    const out = { status: o.status || (j.team || agent ? "created" : error ? "failed" : ""), team: o.team || j.team, agent: o.agent || agent, channel: o.channel || j.channel, reason: o.reason || j.reason || (error ? j.error || text : ""), reply: o.reply || j.reply || "" };
-    return out.status ? out : null;
-  }
-  const t = (text || "").trim();
-  if (/declined/i.test(t)) return { status: "declined" };
-  const w = /wants changes: ([\s\S]*)/.exec(t);
-  if (w) return { status: "changes", reply: w[1] };
-  if (/hasn't answered/i.test(t)) return { status: "expired" };
-  return error ? { status: "failed", reason: t } : null;
+  try { j = JSON.parse(text); } catch (_) { return null; }
+  if (!j || typeof j !== "object") return null;
+  if (j.status === "asked" && j.item) return { item: j.item };
+  if (j.status === "created") return { out: { status: "created", team: j.team, agent: j.agent && typeof j.agent === "object" ? j.agent.id : j.agent, channel: j.channel } };
+  return null;
 }
 
-// createSlot is the place of an agent_new / team_start step: nothing while the card is the place (no result),
-// then mad's line from the call's args and its result. A result it cannot read leaves the step as it was.
+// createSlot is the place of an agent_new / team_start step: nothing while the card is the place, then mad's
+// line, from the item's outcome as the snapshot has it (drawCreateSlots keeps it current).
 function createSlot(type, args) {
   const s = el("div", "cslot");
   s.hidden = true;
@@ -225,14 +230,39 @@ function createSlot(type, args) {
   return s;
 }
 
-function fillCreateSlot(s, text, error) {
-  const out = readOutcome(text, error);
-  const line = out && outcomeLine(s.createCall.c, out);
-  if (!line) return false;
-  s.replaceChildren(line);
-  s.hidden = false;
+const createSlots = new Set();
+
+// fillCreateSlot reads the result of the step in s: false when it is not one of mad's (the step is drawn as
+// any other).
+function fillCreateSlot(s, text) {
+  const r = readResult(text);
+  if (!r) return false;
+  Object.assign(s.createCall, r);
+  createSlots.add(s);
+  drawCreateSlots();
   return true;
 }
+
+// drawCreateSlots draws each slot from its item's outcome; with none, nothing.
+function drawCreateSlots() {
+  for (const s of createSlots) {
+    if (!s.isConnected) { createSlots.delete(s); continue; }
+    const call = s.createCall;
+    const x = call.item ? createFor(call.item) : null;
+    const out = call.out || (x && x.outcome);
+    const c = x?.create ? { ...call.c, ...x.create } : call.c;
+    const id = out && (out.team ? out.channel : out.agent);
+    const sig = JSON.stringify([LANG, out, c.name, !!(id && (agents.get(id) || busChannel(id))), out && agents.get(out.agent || "")?.status]);
+    if (s.dataset.sig === sig) continue;
+    s.dataset.sig = sig;
+    const line = out && outcomeLine(c, out);
+    s.hidden = !line;
+    s.replaceChildren(...(line ? [line] : []));
+  }
+}
+
+// What mad tells the asking agent when a request ended is its own plumbing: the line says it.
+const createTold = (text) => /^\[mad\] your request c-[0-9a-f]{8} to create /.test(text || "");
 
 // ---- the lists: what is new comes first ----
 

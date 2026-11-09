@@ -300,6 +300,7 @@ function drawSidebar() {
       drawList();
       drawHome();
       drawChanAsk();
+      drawCreateSlots();
     });
   }
   drawQueue();
@@ -1928,6 +1929,7 @@ function addEntry(o, e) {
   o.entries++;
   switch (e.kind) {
     case "user": {
+      if (createTold(e.text)) break; // mad's word to the bot on how its request ended: its line says it
       const m = el("div", "msg from-user");
       if ((e.text || "").trim()) m.append(md(e.text));
       if (e.images?.length) m.append(imageRow(e.images.map((i) => i.url)));
@@ -1970,7 +1972,7 @@ function addEntry(o, e) {
       const call = e.id && o.calls.get(e.id);
       const imgs = (e.images || []).map((i) => i.url);
       if (call && call.createCall) {
-        if (!fillCreateSlot(call, e.text, e.error)) {
+        if (e.error || !fillCreateSlot(call, e.text)) {
           // a result it cannot read: the step as any other
           const d = callCard(call.createCall.tool, call.createCall.args, ctxOf(o));
           call.replaceWith(d);
