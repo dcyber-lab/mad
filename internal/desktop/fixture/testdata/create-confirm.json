@@ -13,28 +13,28 @@
           {
             "id": "fold0001-aaaa",
             "kind": "claude",
-            "status": "waiting",
-            "shown": "waiting",
+            "status": "idle",
+            "shown": "idle",
             "chat": true,
             "color": "#d97757",
             "name": "architect",
             "headless": true,
             "mode": "window",
             "title": "architect",
-            "last": "想创建一个团队，等你确认"
+            "last": "在等你确认创建"
           },
           {
             "id": "fold0002-aaaa",
             "kind": "codex",
-            "status": "waiting",
-            "shown": "waiting",
+            "status": "idle",
+            "shown": "idle",
             "chat": true,
             "color": "#10a37f",
             "name": "builder",
             "headless": true,
             "mode": "window",
             "title": "builder",
-            "last": "想创建一个团队，等你确认"
+            "last": "在等你确认创建"
           },
           {
             "id": "fold0003-aaaa",
@@ -765,11 +765,11 @@
         {
           "kind": "result",
           "id": "t8",
-          "text": "{\"status\": \"asked\", \"request\": \"c-00000009\", \"item\": \"create:c-00000009\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+          "text": "{\"status\": \"creating\", \"request\": \"c-00000009\", \"item\": \"create:c-00000009\"}"
         },
         {
           "kind": "user",
-          "text": "[mad] your request c-00000007 to create agent scout5: agent scout5 was created (id fold0006-aaaa)\n{\"status\":\"created\",\"request\":\"c-00000007\"}"
+          "text": "[mad bus] 1 message for you (architect). Act on what asks you something; reply with\nbus_post(channel, text) in the channel or bus_dm(agent, text) privately, @mentioning\nwho should read it. Say nothing on the bus if nothing is asked of you.\nYour name on the bus is architect (the deck's name for this session). Who wrote reads only the bus: an answer written here reaches no one.\n\nDM with mad · mad · #3 · 00:05\n[mad] your request c-00000007 to create agent scout5: agent scout5 was created (id fold0006-aaaa, dm.fold0001-aaaa.fold0006-aaaa)\n{\"data\":{\"agent\":\"fold0006-aaaa\",\"name\":\"scout5\",\"type\":\"agent\"},\"request\":\"c-00000007\",\"say\":\"agent scout5 was created\",\"status\":\"created\"}\n"
         },
         {
           "kind": "text",

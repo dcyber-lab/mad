@@ -209,16 +209,13 @@ function createEventLine(m) {
 
 const createTool = (tool) => /(^|__)(agent_new|team_start)$/.test(tool || "") ? (/team_start$/.test(tool) ? "team" : "agent") : "";
 
-// A tool step's result is {status: "asked", request, item}: the outcome is on that item in the snapshot's
-// creates, later; with create-without-asking on it is {status: "created", team | agent, channel} at once. Any
-// other result (an error) leaves the step as it was.
+// A tool step's result is {status: "asked" | "creating", request, item}: the outcome is on that item in the
+// snapshot's creates, now or later. Any other result (an error) leaves the step as it was.
 function readResult(text) {
   let j = null;
   try { j = JSON.parse(text); } catch (_) { return null; }
   if (!j || typeof j !== "object") return null;
-  if (j.status === "asked" && j.item) return { item: j.item };
-  if (j.status === "created") return { out: { status: "created", team: j.team, agent: j.agent && typeof j.agent === "object" ? j.agent.id : j.agent, channel: j.channel } };
-  return null;
+  return (j.status === "asked" || j.status === "creating") && j.item ? { item: j.item } : null;
 }
 
 // createSlot is the place of an agent_new / team_start step: nothing while the card is the place, then mad's
@@ -249,7 +246,7 @@ function drawCreateSlots() {
     if (!s.isConnected) { createSlots.delete(s); continue; }
     const call = s.createCall;
     const x = call.item ? createFor(call.item) : null;
-    const out = call.out || (x && x.outcome);
+    const out = x && x.outcome;
     const c = x?.create ? { ...call.c, ...x.create } : call.c;
     const id = out && (out.team ? out.channel : out.agent);
     const sig = JSON.stringify([LANG, out, c.name, !!(id && (agents.get(id) || busChannel(id))), out && agents.get(out.agent || "")?.status]);
@@ -260,9 +257,6 @@ function drawCreateSlots() {
     s.replaceChildren(...(line ? [line] : []));
   }
 }
-
-// What mad tells the asking agent when a request ended is its own plumbing: the line says it.
-const createTold = (text) => /^\[mad\] your request c-[0-9a-f]{8} to create /.test(text || "");
 
 // ---- the lists: what is new comes first ----
 

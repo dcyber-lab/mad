@@ -601,7 +601,9 @@ function drawWait(o, a) {
   // TUI runs it). Run here (window mode), its host's own cards are in the log instead (drawAsks).
   // run here, its host draws what it asks (drawAsks); the inbox's card stands in only while the host has none
   const hostAsks = windowed(a) && !!(o.hs && o.hs.requests && o.hs.requests.length);
-  const it = !hostAsks && (a.status === "waiting" || shownStatus(a) === "waiting") ? needsYou().find((x) => x.agent === a.id) : null;
+  // A request to create an agent or a team is its asker's card whatever the asker does: it ends its turn after asking.
+  const it = (!hostAsks && (a.status === "waiting" || shownStatus(a) === "waiting") ? needsYou().find((x) => x.agent === a.id) : null)
+    || needsYou().find((x) => x.agent === a.id && x.kind === "create" && x.create);
   const busy = !windowed(a) && a.chat && a.headless && a.status === "running";
   o.wait.hidden = !it && !busy;
   if (o.wait.hidden) { o.wait.dataset.text = ""; return; }
@@ -1929,7 +1931,6 @@ function addEntry(o, e) {
   o.entries++;
   switch (e.kind) {
     case "user": {
-      if (createTold(e.text)) break; // mad's word to the bot on how its request ended: its line says it
       const m = el("div", "msg from-user");
       if ((e.text || "").trim()) m.append(md(e.text));
       if (e.images?.length) m.append(imageRow(e.images.map((i) => i.url)));

@@ -1055,7 +1055,7 @@ func TestCreateCards(t *testing.T) {
 				    results: log.querySelectorAll(".cres").length, notes: [...log.querySelectorAll(".cnote")].map((e) => e.textContent),
 				    btns: [...card.querySelectorAll(".acts .btn")].map((b) => ({ test: b.dataset.test, text: b.textContent, cls: b.className, h: b.getBoundingClientRect().height })),
 				    left: cr.left, right: cr.right, chatW: card.closest(".chat").clientWidth,
-				    english: (txt.match(/wants to|Allow|Deny|AskUser|agent_new|team_start|mcp__|create:|\[mad\] your request|asked the person/g) || []) };
+				    english: (txt.match(/wants to|Allow|Deny|AskUser|agent_new|team_start|mcp__|create:/g) || []) };
 				})()`, &r)
 				if r.Head != "想创建一个 agent" || r.Name != "scout" {
 					t.Errorf("the card is %q %q, want 想创建一个 agent scout", r.Head, r.Name)
