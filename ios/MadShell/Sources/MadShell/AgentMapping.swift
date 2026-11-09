@@ -6,24 +6,32 @@ import MadUI
 public enum AgentMapping {
     /// The screen for the agent `store` follows, as `deck` last said it stands.
     @MainActor
-    public static func conversation(store: AgentStore, deck: Deck) -> AgentConversation {
-        conversation(id: store.id, transcript: store.transcript, live: store.live, deck: deck)
+    public static func conversation(store: AgentStore, deck: Deck, pending: String = "") -> AgentConversation {
+        conversation(id: store.id, transcript: store.transcript, live: store.live, deck: deck, pending: pending)
     }
 
     /// The same from plain values, so a test needs no store.
+    /// `pending` is the first message the person sent when they started the agent: until the transcript has a message of
+    /// theirs it is shown as their bubble, and the agent as working, so the page never opens empty.
     public static func conversation(id: String, transcript: ChatTranscript, live: LiveState, deck: Deck,
-                                    now: Date = Date()) -> AgentConversation {
+                                    pending: String = "", now: Date = Date()) -> AgentConversation {
         let agent = deck.agent(id: id)
         let (canSend, hint) = sending(agent)
         let project = deck.projects.first { $0.agents.contains { $0.id == id } }
         let place = project.map { p in [p.name, p.branch ?? ""].filter { !$0.isEmpty }.joined(separator: " / ") } ?? ""
         let cost = (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : ""
+        var state = agent.map { CharacterState(status: $0.state) } ?? .stopped
+        var shown = entries(transcript)
+        if let first = pendingEntry(pending, transcript: transcript) {
+            shown.insert(first, at: 0)
+            if state == .idle || state == .starting { state = .working }
+        }
         return AgentConversation(
             title: agent?.label ?? id,
             agentID: id,
             kind: agent?.kind ?? "",
-            state: agent.map { CharacterState(status: $0.state) } ?? .stopped,
-            entries: entries(transcript),
+            state: state,
+            entries: shown,
             live: liveBubble(live, transcript: transcript, now: now),
             ask: ask(for: id, deck: deck, now: now),
             canSend: canSend,
@@ -36,6 +44,13 @@ public enum AgentMapping {
                              model: a.model, session: a.session.isEmpty ? a.id : a.session,
                              directory: shortPath(a.dir.isEmpty ? (project?.path ?? "") : a.dir))
             })
+    }
+
+    /// The person's first message as a bubble, while the transcript has none of theirs yet (it is theirs from then on, so
+    /// the bubble is never twice).
+    static func pendingEntry(_ text: String, transcript: ChatTranscript) -> ConvEntry? {
+        guard !text.isEmpty, !transcript.entries.contains(where: { $0.kind == "user" }) else { return nil }
+        return .user("pending", text, images: [])
     }
 
     /// Tokens in and out as the Details pane says them: "182k / 9.4k"; empty when there are none.

@@ -57,7 +57,17 @@ final class NativeDefaultTests: MadUITestCase {
         XCTAssertTrue(send.isEnabled, "send is off with a message written")
         send.tap()
         XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 15), "sending did not open the new agent's conversation")
-        shot("the new agent's conversation")
+        // right after send the page is not empty: the person's first message is their bubble (the fixture's transcript
+        // comes seconds later), and the composer is live, not the terminal note
+        let message = "Fixture started chat"
+        let mine = { self.app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", message)).count }
+        XCTAssertGreaterThan(mine(), 1, "the first message is not shown as a bubble right after send (only the head has it)")
+        XCTAssertFalse(elements(containing: "在终端里运行").firstMatch.exists, "the conversation says the agent runs in a terminal")
+        shot("the new agent's conversation, first message at once")
+        let before = mine()
+        XCTAssertTrue(elements(containing: "Fixture reply").firstMatch.waitForExistence(timeout: 20), "the agent's reply did not come")
+        XCTAssertEqual(mine(), before, "the first message is twice once the transcript has it")
+        shot("the new agent's conversation, with its reply")
         tap("返回")
         // the new row is below the fold on a short phone: scroll to it
         let started = row(beginningWith: "Fixture started chat")

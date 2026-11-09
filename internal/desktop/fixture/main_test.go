@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // get answers a GET to the fixture of scenario name.
@@ -359,5 +360,60 @@ func TestStartedAgentIsInTheDeck(t *testing.T) {
 		if n != 1 {
 			t.Errorf("look %d: the started agent is %d times in the project, want 1", look, n)
 		}
+	}
+}
+
+// A started agent runs in window mode and has no transcript for a moment; then it has the first message, once.
+func TestStartedAgentHasAWindowModeAndATranscriptAfterAMoment(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, _ := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"claude","text":"hello"}`))
+	var started struct{ ID string }
+	_ = json.NewDecoder(r.Body).Decode(&started)
+	r.Body.Close()
+	chat := func(query string) (file string, off int64, n int) {
+		r, err := http.Get(srv.URL + "/api/chat?id=" + started.ID + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		var c struct {
+			File    string
+			Offset  int64
+			Entries []struct{ Kind, Text string }
+		}
+		_ = json.NewDecoder(r.Body).Decode(&c)
+		return c.File, c.Offset, len(c.Entries)
+	}
+	if _, _, n := chat(""); n != 0 {
+		t.Errorf("a transcript at once: %d entries", n)
+	}
+	r, _ = http.Get(srv.URL + "/api/deck")
+	var d struct {
+		Projects []struct {
+			Agents []struct {
+				ID, Mode string
+				Headless bool
+			}
+		}
+	}
+	_ = json.NewDecoder(r.Body).Decode(&d)
+	r.Body.Close()
+	for _, a := range d.Projects[0].Agents {
+		if a.ID == started.ID && (a.Mode != "window" || !a.Headless) {
+			t.Errorf("the started agent: %+v", a)
+		}
+	}
+	time.Sleep(startedTranscriptAfter + 100*time.Millisecond)
+	file, off, n := chat("")
+	if n != 2 {
+		t.Fatalf("after a moment: %d entries, want the message and a reply", n)
+	}
+	if _, _, again := chat(fmt.Sprintf("&file=%s&from=%d", file, off)); again != 0 {
+		t.Errorf("read again: %d entries", again)
 	}
 }

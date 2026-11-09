@@ -16,6 +16,8 @@ public struct NativeRoot: View {
     @State private var notice: String?
     /// First messages that did not go out, by the agent that was started with them: its composer starts with the text.
     @State private var drafts: [String: String] = [:]
+    /// First messages that went, by agent: its page shows them as the person's bubble until its transcript has one.
+    @State private var firsts: [String: String] = [:]
     #if os(macOS)
     @State private var showPhone = false
     #endif
@@ -92,11 +94,12 @@ public struct NativeRoot: View {
     /// An agent was started from 新对话: the deck has it before its row opens; when its first message did not go, the
     /// notice says why and the text waits in its composer.
     @MainActor
-    private func newChatStarted(id: String, failure: String?, unsent: String) async {
+    private func newChatStarted(_ chat: StartedChat) async {
         await store.refresh()
-        drafts[id] = unsent.isEmpty ? nil : unsent
-        selection = id
-        notice = failure
+        drafts[chat.id] = chat.failure != nil && !chat.text.isEmpty ? chat.text : nil
+        firsts[chat.id] = chat.failure == nil && !chat.text.isEmpty ? chat.text : nil
+        selection = chat.id
+        notice = chat.failure
     }
 
     /// An act on what waits, from the list or Today: the item as the deck says now (one answered meanwhile sends
@@ -173,7 +176,7 @@ public struct NativeRoot: View {
         MacShell(model: model, selection: $selection, actions: actions, link: store.link,
                  rowOpen: selection.map { rowOpen($0) } ?? false) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb, home: model, homeActions: actions,
-                   drafts: drafts, newChatStarted: newChatStarted)
+                   drafts: drafts, firsts: firsts, newChatStarted: newChatStarted)
         }
         // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
         .environment(\.madLinkNote, LinkNote.message(for: store.link))
@@ -187,7 +190,7 @@ public struct NativeRoot: View {
         if let id = selection {
             NavigationStack {
                 Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 }, openWeb: openWeb, home: model,
-                       homeActions: actions, drafts: drafts, newChatStarted: newChatStarted)
+                       homeActions: actions, drafts: drafts, firsts: firsts, newChatStarted: newChatStarted)
                     // a channel and an agent draw their own head, with their own way back
                     .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
@@ -214,7 +217,8 @@ struct Detail: View {
     var homeActions = HomeActions()
     /// First messages that did not go out, by agent; 新对话's way to say an agent was started.
     var drafts: [String: String] = [:]
-    var newChatStarted: ((String, String?, String) async -> Void)?
+    var firsts: [String: String] = [:]
+    var newChatStarted: ((StartedChat) async -> Void)?
 
     var body: some View {
         if let id = selection, id != HomeRow.todayID {
@@ -226,7 +230,8 @@ struct Detail: View {
                 ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
                     .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
-                AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb, draft: drafts[agent.id] ?? "").id(agent.id)
+                AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb, draft: drafts[agent.id] ?? "",
+                            pending: firsts[agent.id] ?? "").id(agent.id)
             } else {
                 placeholder(id, L("已经不在了"))
             }
@@ -236,8 +241,8 @@ struct Detail: View {
     }
 
     @ViewBuilder private func newChat(_ starter: NewChatAPI) -> some View {
-        NewChatDetail(api: starter, projects: store.deck?.projects ?? [], started: { id, failure, unsent in
-            if let newChatStarted { await newChatStarted(id, failure, unsent) } else { open(id) }
+        NewChatDetail(api: starter, projects: store.deck?.projects ?? [], started: { chat in
+            if let newChatStarted { await newChatStarted(chat) } else { open(chat.id) }
         }, onBack: onBack)
         #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
@@ -312,9 +317,12 @@ struct AgentDetail: View {
     private let onBack: (() -> Void)?
     private let openWeb: ((WebTarget) -> Void)?
     private let draft: String
+    private let pending: String
 
-    init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil, draft: String = "") {
+    init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil, draft: String = "",
+         pending: String = "") {
         self.draft = draft
+        self.pending = pending
         self.api = api
         self.id = id
         self.onBack = onBack
@@ -323,7 +331,7 @@ struct AgentDetail: View {
     }
 
     var body: some View {
-        var model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0) }
+        var model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0, pending: pending) }
             ?? AgentConversation(title: id, agentID: id, canSend: false, sendHint: "")
         model.details?.finish = finish
         return ConversationView(model: model, actions: actions, showsBack: onBack != nil, draft: draft)

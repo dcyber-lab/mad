@@ -200,7 +200,13 @@ type fixture struct {
 type startedAgent struct {
 	project string
 	agent   map[string]any
+	text    string
+	at      time.Time
 }
+
+// startedTranscriptAfter is how long a started agent has no transcript yet, as the real one's first message takes a
+// moment to reach it: the app shows the person's message meanwhile.
+const startedTranscriptAfter = 3 * time.Second
 
 func reply(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -286,6 +292,10 @@ func relative(v any, now time.Time) {
 
 // chat answers an agent's transcript: the scenario's, or an empty one.
 func (f *fixture) chat(w http.ResponseWriter, r *http.Request) {
+	if s, ok := f.startedAgent(r.URL.Query().Get("id")); ok {
+		f.startedChat(w, r, s)
+		return
+	}
 	if raw, ok := f.scn.Chat[r.URL.Query().Get("id")]; ok {
 		// A client that has read it (its file, from the end) is told there is nothing new, as the
 		// real one does, so a poll does not add the entries again.
@@ -516,11 +526,13 @@ func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id := fmt.Sprintf("new%05d-aaaa", len(f.started)+1)
-	agent := map[string]any{"id": id, "kind": req.Kind, "status": "running", "shown": "working", "chat": true, "color": "#d97757"}
+	// a headless kind runs in window mode, as the real agentAdd starts it
+	agent := map[string]any{"id": id, "kind": req.Kind, "status": "running", "shown": "working", "chat": true, "color": "#d97757",
+		"headless": true, "mode": "window"}
 	if t := strings.TrimSpace(req.Text); t != "" {
 		agent["title"] = t
 	}
-	f.started = append(f.started, startedAgent{project: req.Project, agent: agent})
+	f.started = append(f.started, startedAgent{project: req.Project, agent: agent, text: strings.TrimSpace(req.Text), at: time.Now()})
 	reply(w, map[string]any{"id": id})
 }
 
@@ -555,4 +567,38 @@ func (f *fixture) addStarted(d map[string]any) {
 		out[i] = cp
 	}
 	d["projects"] = out
+}
+
+// startedAgent is the agent started through the fixture with this id.
+func (f *fixture) startedAgent(id string) (startedAgent, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.started {
+		if s.agent["id"] == id {
+			return s, true
+		}
+	}
+	return startedAgent{}, false
+}
+
+// startedChat is a started agent's transcript: empty for a moment, then the person's first message and a reply,
+// read once (a client that has read it is told there is nothing new).
+func (f *fixture) startedChat(w http.ResponseWriter, r *http.Request, s startedAgent) {
+	const offset = 100
+	q := r.URL.Query()
+	from, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+	if time.Since(s.at) < startedTranscriptAfter {
+		reply(w, map[string]any{"file": "started", "offset": 0, "reset": true, "entries": []any{}})
+		return
+	}
+	if q.Get("file") == "started" && from >= offset {
+		reply(w, map[string]any{"file": "started", "offset": offset, "entries": []any{}})
+		return
+	}
+	entries := []any{}
+	if s.text != "" {
+		entries = append(entries, map[string]any{"kind": "user", "text": s.text})
+	}
+	entries = append(entries, map[string]any{"kind": "text", "text": "Fixture reply: on it."})
+	reply(w, map[string]any{"file": "started", "offset": offset, "reset": true, "entries": entries})
 }

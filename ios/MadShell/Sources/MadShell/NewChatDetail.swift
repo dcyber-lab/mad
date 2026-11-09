@@ -5,12 +5,18 @@ import SwiftUI
 /// 新对话, on the Mac in the window's detail pane and on the iPhone as a screen over the home list (the page's new chat, natively): 想做点什么？, a box to write the first
 /// message in with the project, the kind and the model under it, and the project's earlier sessions to pick up.
 /// Sending starts an agent with that message and opens it.
+/// An agent started from 新对话: its id, the first message, and why that did not go (nil when it went).
+struct StartedChat: Equatable {
+    var id: String
+    var text: String
+    var failure: String?
+}
+
 struct NewChatDetail: View {
     let api: NewChatAPI
     let projects: [Project]
-    /// Opens the agent that was started (after the deck has it): its id, why its first message did not go (nil when it
-    /// went), and the text that did not go (to put in its composer).
-    let started: (String, String?, String) async -> Void
+    /// Opens the agent that was started (after the deck has it).
+    let started: (StartedChat) async -> Void
     /// The iPhone's way back to the list (it draws its own head); the Mac's detail pane has none.
     var onBack: (() -> Void)?
 
@@ -271,7 +277,7 @@ struct NewChatDetail: View {
                                                  session: session, cwd: cwd)
                 // a first message that did not go stays written, and goes with the agent to its page
                 if r.failure == nil { done() }
-                await started(r.id, r.failure, r.unsent(t))
+                await started(StartedChat(id: r.id, text: t, failure: r.failure))
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

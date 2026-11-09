@@ -225,5 +225,33 @@ final class AgentMappingTests: XCTestCase {
         XCTAssertEqual(AgentMapping.count(1_200_000), "1.2M")
         XCTAssertEqual(AgentMapping.shortPath("/Users/h/src/mad"), "~/src/mad")
     }
-}
 
+    /// A started agent has no transcript for a moment: its page opens on the person's first message and a working state,
+    /// not empty; once the transcript has a message of theirs the bubble is the transcript's, never twice.
+    func testAFirstMessageIsShownUntilTheTranscriptHasIt() throws {
+        let deck = try fixture("deck-edge-home", as: Deck.self)
+        let none = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck)
+        XCTAssertTrue(none.entries.isEmpty, "a transcript with nothing shows nothing")
+        let shown = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: "画个表")
+        XCTAssertEqual(shown.entries.count, 1)
+        guard case let .user(text, _) = shown.entries[0].content else { return XCTFail("not the person's bubble: \(shown.entries[0])") }
+        XCTAssertEqual(text, "画个表")
+        // once the transcript has the person's message the pending one goes: one bubble of it
+        var t = ChatTranscript()
+        t.apply(try JSONDecoder().decode(ChatPage.self, from: Data(#"{"file":"f","offset":10,"reset":true,"entries":[{"kind":"user","text":"画个表"},{"kind":"text","text":"好"}]}"#.utf8)))
+        let later = AgentMapping.conversation(id: needs, transcript: t, live: LiveState(), deck: deck, pending: "画个表")
+        XCTAssertEqual(later.entries.count, 2)
+        XCTAssertEqual(later.entries.filter { if case .user = $0.content { true } else { false } }.count, 1)
+    }
+
+    func testAnIdleOrStartingAgentWithAFirstMessageIsWorking() throws {
+        var deck = try fixture("deck-edge-home", as: Deck.self)
+        for state in ["idle", "starting"] {
+            for i in deck.projects.indices { for j in deck.projects[i].agents.indices where deck.projects[i].agents[j].id == needs {
+                deck.projects[i].agents[j].shown = state
+            } }
+            let c = AgentMapping.conversation(id: needs, transcript: ChatTranscript(), live: LiveState(), deck: deck, pending: "hi")
+            XCTAssertEqual(c.state, .working, state)
+        }
+    }
+}
