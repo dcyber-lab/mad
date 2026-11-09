@@ -35,6 +35,7 @@ func build(f Facts) View {
 	for _, r := range f.Creates {
 		b.create(r)
 	}
+	sort.SliceStable(b.created, func(i, j int) bool { return b.created[i].Since.After(b.created[j].Since) })
 	b.budget(f.Spend)
 	needs := order(b.items)
 	fin := b.finished()
@@ -43,6 +44,7 @@ func build(f Facts) View {
 		Activity: activities(f.Agents),
 		Working:  working(f.Agents),
 		Board:    b.rest,
+		Creates:  append([]Item{}, b.created...),
 	}
 }
 
@@ -60,6 +62,8 @@ type builder struct {
 	// alike.
 	rank map[string]int
 	rest []bus.Card
+	// created are the "create" items that ended, for View.Creates.
+	created []Item
 }
 
 // rankOf is the place of agent id's items among equals: items of no agent
@@ -347,7 +351,7 @@ func (b *builder) skill(p skill.Pending) {
 // waits for the answer, so it blocks.
 func (b *builder) create(r create.Request) {
 	s := r.Spec
-	it := Item{Key: keyCreate(r.ID), Kind: KindCreate, Agent: r.ByID, Title: r.By, Create: &s, Since: r.At, Blocks: true,
+	it := Item{Key: keyCreate(r.ID), Kind: KindCreate, Agent: r.ByID, Title: r.By, Create: &s, From: r.From, Since: r.At, Blocks: true,
 		Open: Open{Agent: r.ByID}, route: createRoute{id: r.ID}}
 	if !b.known[r.ByID] {
 		it.Agent = ""
@@ -383,6 +387,14 @@ func (b *builder) create(r create.Request) {
 		if s.Channel != "" {
 			it.Body += "\n\nJoins #" + s.Channel
 		}
+	}
+	if r.Status != create.Waiting {
+		o := r.Outcome()
+		it.Outcome, it.Blocks, it.route, it.Acts = &o, false, nil, []Act{}
+		it.oneLine()
+		it.rank = b.rankOf(it.Agent)
+		b.created = append(b.created, it)
+		return
 	}
 	b.add(it)
 }

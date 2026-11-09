@@ -1095,7 +1095,14 @@ would be started: name, project, kind and model, roles and the first
 message, with Allow and Deny. The agent's tool call waits for your answer
 for about 10 minutes: Allow starts it and returns its id (and channel),
 Deny returns "the person declined", and no answer "the person hasn't
-answered yet". `"agents_create_without_asking": true` in `config.json`
+answered yet". A fourth act, Ask for changes, sends your words back as
+the result ("the person wants changes: …") so the agent can propose
+again. An agent that was answering in a channel passes `from_channel`:
+the card shows there, and mad adds an event line (`created`,
+`create_declined`, `create_changes`, `create_expired`, `create_failed`,
+with `ref` the card's key) when it ends. How each request ended (created,
+declined, expired, failed, with the new id or the reason) is kept for a
+day in the snapshot's `creates`. `"agents_create_without_asking": true` in `config.json`
 skips the card (off by default). A spent budget refuses both tools, as
 it does `bus_handoff`.
 

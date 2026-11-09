@@ -80,6 +80,10 @@ type Message struct {
 	// Event says what mad's own note is, by meaning: "paused", "resumed" or "trimmed" (EventPaused,
 	// EventResumed, EventTrimmed). Views draw their own words for it (群已暂停, 群已恢复, 更早的消息已清理) and fall back to Text for a note without it (an older one).
 	Event string `json:"event,omitempty"`
+	// Ref names what an Event line is about: the key of the inbox card of an
+	// agent's request to create something ("create:c-1a2b3c4d"), so a view
+	// draws the line beside that card.
+	Ref string `json:"ref,omitempty"`
 	// Images are the pictures it carries (images.go).
 	Images []Image `json:"images,omitempty"`
 }
@@ -522,6 +526,32 @@ const (
 	EventResumed = "resumed"
 	EventTrimmed = "trimmed"
 )
+
+// The Events that say how an agent's request to create an agent or a team
+// ended (package create): the agent or team was made, the person declined
+// or asked for changes, did not answer in time, or it did not start.
+const (
+	EventCreated        = "created"
+	EventCreateDeclined = "create_declined"
+	EventCreateChanges  = "create_changes"
+	EventCreateExpired  = "create_expired"
+	EventCreateFailed   = "create_failed"
+)
+
+// Event adds a note of mad's own to channel, with its Event and what it is
+// about (ref). It wakes no one and is not the text of any agent.
+func Event(channel, event, ref, text string) error {
+	err := change(channel, func(c *Channel, msgs []Message) error {
+		m := systemMsg(text)
+		m.Event, m.Ref = event, ref
+		_, err := addMsg(channel, &msgs, m)
+		return err
+	})
+	if err == nil {
+		poked()
+	}
+	return err
+}
 
 func systemMsg(text string) Message {
 	return Message{From: From{ID: system, Label: system, Kind: "system"}, Kind: "system", Text: text}

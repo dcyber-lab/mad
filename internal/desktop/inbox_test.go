@@ -162,7 +162,7 @@ func TestInboxCreateRequest(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
-	req, err := create.Add("alice", a1, create.Spec{Type: create.TypeAgent, Name: "scout", Project: "/p", ProjectName: "p", Kind: "claude", Message: "find the flake"})
+	req, err := create.Add("alice", a1, "", create.Spec{Type: create.TypeAgent, Name: "scout", Project: "/p", ProjectName: "p", Kind: "claude", Message: "find the flake"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,5 +182,15 @@ func TestInboxCreateRequest(t *testing.T) {
 	}
 	if got, _ := create.Get(req.ID); got.Status != create.Allowed {
 		t.Errorf("status %q", got.Status)
+	}
+	// Once it ended, the card is in the snapshot's creates, with its outcome.
+	_ = create.Finish(req.ID, create.Created, create.Result{Agent: "new-agent", Channel: "dm.x"})
+	s.poll.Poll(time.Now())
+	snap = Snapshot{}
+	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Creates) != 1 || snap.Creates[0].Outcome == nil || snap.Creates[0].Outcome.Status != create.Created || snap.Creates[0].Outcome.Agent != "new-agent" || snap.Inbox.Needs != 0 {
+		t.Errorf("creates %+v, inbox %+v", snap.Creates, snap.Inbox)
 	}
 }

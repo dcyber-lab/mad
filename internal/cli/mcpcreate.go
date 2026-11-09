@@ -78,11 +78,40 @@ func cleanModel(model string) (string, error) {
 	return model, nil
 }
 
+// mcpFromChannel checks the channel an agent says it is answering in (the
+// bus does not keep track of that): one that exists and the agent is in.
+func mcpFromChannel(id, ref string) (string, error) {
+	ref = strings.TrimPrefix(strings.TrimSpace(ref), "#")
+	if ref == "" {
+		return "", nil
+	}
+	c, ok, _ := bus.Find(ref)
+	if !ok || strings.HasPrefix(c.ID, "dm.") {
+		return "", fmt.Errorf("no channel %q for from_channel: the one you are answering in (bus_who)", ref)
+	}
+	if !containsStr(c.Members, id) {
+		return "", fmt.Errorf("you are not in #%s", ref)
+	}
+	return c.ID, nil
+}
+
+func containsStr(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 // mcpAgentNew asks the person to let agent id start an agent with its
 // first message, then starts it.
-func mcpAgentNew(ctx context.Context, id, kind, model, project, name, message, channel string) (string, error) {
+func mcpAgentNew(ctx context.Context, id, kind, model, project, name, message, channel, from string) (string, error) {
 	_, st, err := mcpMe(id)
 	if err != nil {
+		return "", err
+	}
+	if from, err = mcpFromChannel(id, from); err != nil {
 		return "", err
 	}
 	if kind, model = strings.TrimSpace(kind), strings.TrimSpace(model); strings.Contains(kind, ":") && model == "" {
@@ -122,7 +151,7 @@ func mcpAgentNew(ctx context.Context, id, kind, model, project, name, message, c
 			return "", fmt.Errorf("no channel %q: bus_who lists them, bus_channel creates one", channel)
 		}
 	}
-	return mcpCreateRun(ctx, id, create.Spec{Type: create.TypeAgent, Name: name, Project: p.Path, ProjectName: p.Name,
+	return mcpCreateRun(ctx, id, from, create.Spec{Type: create.TypeAgent, Name: name, Project: p.Path, ProjectName: p.Name,
 		Kind: kind, Model: model, Message: message, Channel: channel})
 }
 
@@ -134,9 +163,12 @@ type mcpRole struct {
 
 // mcpTeamStart asks the person to let agent id start a team, then starts
 // it through the same path as the page's POST /api/team.
-func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl string, roles []mcpRole) (string, error) {
+func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl, from string, roles []mcpRole) (string, error) {
 	_, st, err := mcpMe(id)
 	if err != nil {
+		return "", err
+	}
+	if from, err = mcpFromChannel(id, from); err != nil {
 		return "", err
 	}
 	if goal = strings.TrimSpace(goal); goal == "" {
@@ -192,26 +224,39 @@ func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl string, rol
 	if spec.Name, err = team.CheckName(name, goal); err != nil {
 		return "", err
 	}
-	return mcpCreateRun(ctx, id, spec)
+	return mcpCreateRun(ctx, id, from, spec)
 }
 
 // mcpCreateRun gets the person's word for spec (unless the deck's
 // agents_create_without_asking is on) and carries it out. A spent budget
-// refuses it at once, before the person is asked.
-func mcpCreateRun(ctx context.Context, id string, spec create.Spec) (string, error) {
-	from, _, err := mcpMe(id)
+// refuses it at once, before the person is asked. from is the channel the
+// agent is answering in: the outcome is told there too.
+func mcpCreateRun(ctx context.Context, id, from string, spec create.Spec) (string, error) {
+	me, _, err := mcpMe(id)
 	if err != nil {
 		return "", err
 	}
 	if !bus.SpendOK(time.Now()) {
 		return "", bus.ErrSpent
 	}
+	reqID := ""
+	// end records how the request ended, and tells the channel it came from.
+	end := func(status string, res create.Result, event, text string) {
+		if reqID == "" {
+			return
+		}
+		_ = create.Finish(reqID, status, res)
+		if from != "" {
+			_ = bus.Event(from, event, "create:"+reqID, text)
+		}
+		_ = poke.Send(poke.Poll)
+	}
 	if cfg, _ := deck.LoadConfig(); !cfg.CreateWithoutAsking {
-		r, err := create.Add(from.Label, id, spec)
+		r, err := create.Add(me.Label, id, from, spec)
 		if err != nil {
 			return "", err
 		}
-		defer create.Remove(r.ID)
+		reqID = r.ID
 		_ = poke.Send(poke.Poll) // the window and the deck show it now
 		deadline := time.NewTimer(createTimeout)
 		defer deadline.Stop()
@@ -220,8 +265,10 @@ func mcpCreateRun(ctx context.Context, id string, spec create.Spec) (string, err
 		for answered := false; !answered; {
 			select {
 			case <-ctx.Done():
+				end(create.Expired, create.Result{}, bus.EventCreateExpired, "You did not confirm in time; nothing was created.")
 				return "", ctx.Err()
 			case <-deadline.C:
+				end(create.Expired, create.Result{}, bus.EventCreateExpired, "You did not confirm in time; nothing was created.")
 				return createNoAnswer, nil
 			case <-tick.C:
 				cur, err := create.Get(r.ID)
@@ -229,28 +276,53 @@ func mcpCreateRun(ctx context.Context, id string, spec create.Spec) (string, err
 				case err != nil:
 					return createNoAnswer, nil // taken back
 				case cur.Status == create.Declined:
+					if from != "" {
+						_ = bus.Event(from, bus.EventCreateDeclined, "create:"+reqID, "You declined; nothing was created.")
+					}
 					return createDeclined, nil
+				case cur.Status == create.Changes:
+					if from != "" {
+						_ = bus.Event(from, bus.EventCreateChanges, "create:"+reqID, "You asked for changes: "+cur.Reply)
+					}
+					return "the person wants changes: " + cur.Reply, nil
 				case cur.Status == create.Allowed:
 					answered = true
+				case cur.Status != create.Waiting:
+					return createNoAnswer, nil
 				}
 			}
 		}
 		if !bus.SpendOK(time.Now()) { // while it waited
+			end(create.Failed, create.Result{Reason: bus.ErrSpent.Error()}, bus.EventCreateFailed, "Nothing was created: today's budget is spent.")
 			return "", bus.ErrSpent
 		}
 	}
 	defer func() { _ = poke.Send(poke.Poll) }()
+	var out string
+	var res create.Result
 	if spec.Type == create.TypeTeam {
-		return startTeamFor(spec)
+		out, res, err = startTeamFor(spec)
+	} else {
+		out, res, err = startAgentFor(me, spec)
 	}
-	return startAgentFor(from, spec)
-}
-
-func startAgentFor(from bus.From, spec create.Spec) (string, error) {
-	a, err := spawnAgent(drive.Spec{Kind: spec.Kind, Model: spec.Model, Dir: spec.Project, Name: spec.Name}, kinds())
-	if a == nil {
+	what := "Agent " + spec.Name
+	if spec.Type == create.TypeTeam {
+		what = "Team " + spec.Name
+	}
+	if err != nil {
+		end(create.Failed, create.Result{Reason: err.Error()}, bus.EventCreateFailed, what+" was not created: "+err.Error())
 		return "", err
 	}
+	end(create.Created, res, bus.EventCreated, what+" was created.")
+	return out, nil
+}
+
+func startAgentFor(from bus.From, spec create.Spec) (string, create.Result, error) {
+	a, err := spawnAgent(drive.Spec{Kind: spec.Kind, Model: spec.Model, Dir: spec.Project, Name: spec.Name}, kinds())
+	if a == nil {
+		return "", create.Result{}, err
+	}
+	res := create.Result{Agent: a.ID}
 	out := map[string]any{"agent": map[string]string{"id": a.ID, "label": drive.Label(a)}}
 	if err != nil { // it came up asking something: the person must answer
 		out["note"] = "it came up asking something the person must answer: " + err.Error()
@@ -261,19 +333,19 @@ func startAgentFor(from bus.From, spec create.Spec) (string, error) {
 		if perr = bus.Join(spec.Channel, a.ID); perr == nil {
 			_, perr = bus.Post(spec.Channel, from, "@"+label+" "+spec.Message, 0)
 		}
-		out["channel"] = spec.Channel
+		res.Channel = spec.Channel
 	} else {
-		var ch string
-		ch, _, perr = bus.DM(from, a.ID, spec.Message)
-		out["channel"] = ch
+		res.Channel, _, perr = bus.DM(from, a.ID, spec.Message)
 	}
+	out["channel"] = res.Channel
 	if perr != nil {
 		out["warning"] = "the agent was started but its first message was not sent: " + perr.Error()
 	}
-	return mcpJSON(out)
+	text, err := mcpJSON(out)
+	return text, res, err
 }
 
-func startTeamFor(spec create.Spec) (string, error) {
+func startTeamFor(spec create.Spec) (string, create.Result, error) {
 	o := team.Options{Project: spec.Project, Template: spec.Template, Name: spec.Name, Goal: spec.Goal, Kinds: kinds()}
 	for _, r := range spec.Roles {
 		agentSpec := r.Kind
@@ -284,11 +356,12 @@ func startTeamFor(spec create.Spec) (string, error) {
 	}
 	got, err := startTeam(o)
 	if err != nil {
-		return "", err
+		return "", create.Result{}, err
 	}
 	agents := map[string]string{}
 	for _, r := range got.Roles {
 		agents[r.Role] = r.Agent
 	}
-	return mcpJSON(map[string]any{"team": got.Name, "channel": got.Channel, "agents": agents, "notes": got.Notes})
+	text, err := mcpJSON(map[string]any{"team": got.Name, "channel": got.Channel, "agents": agents, "notes": got.Notes})
+	return text, create.Result{Team: got.Name, Channel: got.Channel}, err
 }

@@ -181,29 +181,33 @@ func mcpTools(id string) []mcp.Tool {
 		},
 		{
 			Name:        "agent_new",
-			Description: "Start a new agent with a first message, optionally in a channel it joins. The person is asked first (a card in their inbox on the phone and the Mac) and this call waits for the answer, up to about 10 minutes: it returns the new agent's id and channel when they allow it, \"the person declined\", or \"the person hasn't answered yet\" (do not retry at once; say what you wanted and carry on). The new agent does not share your conversation: put everything it needs in message.",
-			InputSchema: obj([]string{"kind", "message"}, `"kind":{"type":"string","description":"claude, codex, ... (kinds the deck has)"},"model":{"type":"string","description":"for example opus, sonnet, gpt-5; the kind's default when omitted"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"name":{"type":"string","description":"its name on the bus: lowercase letters, digits and dashes; made up when omitted"},"message":{"type":"string","description":"its first message: the task and what it must know"},"channel":{"type":"string","description":"a channel that exists (bus_who) for it to join; the first message is posted there"}`),
+			Description: "Start a new agent with a first message, optionally in a channel it joins. The person is asked first (a card in their inbox on the phone and the Mac) and this call waits for the answer, up to about 10 minutes: it returns the new agent's id and channel when they allow it, \"the person declined\", \"the person wants changes: ...\" (they told you what to change: propose again), or \"the person hasn't answered yet\" (do not retry at once; say what you wanted and carry on). The new agent does not share your conversation: put everything it needs in message.",
+			InputSchema: obj([]string{"kind", "message"}, `"kind":{"type":"string","description":"claude, codex, ... (kinds the deck has)"},"model":{"type":"string","description":"for example opus, sonnet, gpt-5; the kind's default when omitted"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"name":{"type":"string","description":"its name on the bus: lowercase letters, digits and dashes; made up when omitted"},"message":{"type":"string","description":"its first message: the task and what it must know"},"channel":{"type":"string","description":"a channel that exists (bus_who) for it to join; the first message is posted there"},"from_channel":{"type":"string","description":"the channel you are answering in, if any: the person sees the confirm card and its outcome there"}`),
 			Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
-				var a struct{ Kind, Model, Project, Name, Message, Channel string }
+				var a struct {
+					Kind, Model, Project, Name, Message, Channel string
+					FromChannel                                  string `json:"from_channel"`
+				}
 				if err := json.Unmarshal(raw, &a); err != nil {
 					return "", err
 				}
-				return mcpAgentNew(ctx, id, a.Kind, a.Model, a.Project, a.Name, a.Message, a.Channel)
+				return mcpAgentNew(ctx, id, a.Kind, a.Model, a.Project, a.Name, a.Message, a.Channel, a.FromChannel)
 			},
 		},
 		{
 			Name:        "team_start",
 			Description: "Start a team: a channel, agents in roles, a lead, and the goal posted to the lead. Follow a template (the person's or the project's, \"dev\" by default) or give the roles. The person is asked first and this call waits for the answer, up to about 10 minutes, as agent_new does; it returns the team, its channel and its agents' ids when they allow it.",
-			InputSchema: obj([]string{"goal"}, `"name":{"type":"string","description":"the team's and its channel's name; made from the goal when omitted"},"goal":{"type":"string"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"template":{"type":"string","description":"a team template; dev by default when no roles are given"},"roles":{"type":"array","description":"the team's own roles instead of a template: exactly one leads (the first, if none is marked)","items":{"type":"object","required":["role","kind"],"properties":{"role":{"type":"string","description":"lowercase letters, digits and dashes"},"kind":{"type":"string","enum":["claude","codex"]},"model":{"type":"string"},"lead":{"type":"boolean"}}}}`),
+			InputSchema: obj([]string{"goal"}, `"name":{"type":"string","description":"the team's and its channel's name; made from the goal when omitted"},"goal":{"type":"string"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"template":{"type":"string","description":"a team template; dev by default when no roles are given"},"from_channel":{"type":"string","description":"the channel you are answering in, if any: the person sees the confirm card and its outcome there"},"roles":{"type":"array","description":"the team's own roles instead of a template: exactly one leads (the first, if none is marked)","items":{"type":"object","required":["role","kind"],"properties":{"role":{"type":"string","description":"lowercase letters, digits and dashes"},"kind":{"type":"string","enum":["claude","codex"]},"model":{"type":"string"},"lead":{"type":"boolean"}}}}`),
 			Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
 				var a struct {
 					Name, Goal, Project, Template string
+					FromChannel                   string `json:"from_channel"`
 					Roles                         []mcpRole
 				}
 				if err := json.Unmarshal(raw, &a); err != nil {
 					return "", err
 				}
-				return mcpTeamStart(ctx, id, a.Name, a.Goal, a.Project, a.Template, a.Roles)
+				return mcpTeamStart(ctx, id, a.Name, a.Goal, a.Project, a.Template, a.FromChannel, a.Roles)
 			},
 		},
 		{

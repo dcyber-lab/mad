@@ -75,6 +75,11 @@ type Item struct {
 	// Create is what a "create" item would start: its card lists the name,
 	// project, kind and model, roles and first message from it.
 	Create *create.Spec `json:"create,omitempty"`
+	// From is the channel the asking agent was answering in: its view shows
+	// the card there. Outcome is how a "create" item ended (View.Creates),
+	// for its result line; nil while it waits.
+	From    string          `json:"from,omitempty"`
+	Outcome *create.Outcome `json:"outcome,omitempty"`
 	// Tasks are the board's tasks this item holds up.
 	Tasks []TaskRef `json:"tasks,omitempty"`
 	// Since is when it began to wait. Surfaces tick its age themselves.

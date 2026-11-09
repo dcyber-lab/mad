@@ -120,7 +120,7 @@ func TestMCPAgentNewAllowed(t *testing.T) {
 	if len(*specs) != 0 {
 		t.Fatal("started before the person answered")
 	}
-	if err := create.Answer(r.ID, true); err != nil {
+	if err := create.Answer(r.ID, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {
@@ -160,7 +160,7 @@ func TestMCPAgentNewDM(t *testing.T) {
 	if r.Spec.Kind != "codex" || r.Spec.Model != "gpt-5" || !strings.HasPrefix(r.Spec.Name, "codex-") {
 		t.Fatalf("spec %+v", r.Spec)
 	}
-	_ = create.Answer(r.ID, true)
+	_ = create.Answer(r.ID, true, "")
 	got := <-res
 	if !strings.Contains(got, `"channel": "dm.`) {
 		t.Fatalf("result %q", got)
@@ -178,12 +178,12 @@ func TestMCPAgentNewDM(t *testing.T) {
 func TestMCPCreateDeclined(t *testing.T) {
 	specs, teams := createDeck(t)
 	r, res := asked(t, "agent_new", `{"kind":"claude","message":"hi"}`)
-	_ = create.Answer(r.ID, false)
+	_ = create.Answer(r.ID, false, "")
 	if got := <-res; got != "the person declined" {
 		t.Errorf("agent_new: %q", got)
 	}
 	r, res = asked(t, "team_start", `{"goal":"ship it"}`)
-	_ = create.Answer(r.ID, false)
+	_ = create.Answer(r.ID, false, "")
 	if got := <-res; got != "the person declined" {
 		t.Errorf("team_start: %q", got)
 	}
@@ -211,7 +211,7 @@ func TestMCPTeamStart(t *testing.T) {
 		s.Roles[0] != (create.Role{Role: "fixer", Kind: "claude", Model: "opus", Lead: true}) || s.Roles[1].Lead {
 		t.Fatalf("spec %+v", s)
 	}
-	_ = create.Answer(r.ID, true)
+	_ = create.Answer(r.ID, true, "")
 	var out struct {
 		Team, Channel string
 		Agents        map[string]string
@@ -232,7 +232,7 @@ func TestMCPTeamStart(t *testing.T) {
 	if r.Spec.Template != "dev" || len(r.Spec.Roles) != 0 || r.Spec.Name == "" {
 		t.Errorf("spec %+v", r.Spec)
 	}
-	_ = create.Answer(r.ID, true)
+	_ = create.Answer(r.ID, true, "")
 	<-res
 	if o := (*teams)[1]; o.Template != "dev" || len(o.Roles) != 0 {
 		t.Errorf("options %+v", o)
@@ -285,5 +285,121 @@ func TestMCPCreateBudgetSpent(t *testing.T) {
 	}
 	if len(*specs) != 0 || len(create.List()) != 0 {
 		t.Errorf("started %v, asked %v", *specs, create.List())
+	}
+}
+
+// eventsOf are the event lines of channel, as "event ref".
+func eventsOf(t *testing.T, channel string) []string {
+	t.Helper()
+	msgs, _, err := bus.Read(channel, 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, m := range msgs {
+		if strings.HasPrefix(m.Event, "create") {
+			if m.From.Kind != "system" {
+				t.Errorf("event line from %+v", m.From)
+			}
+			out = append(out, m.Event+" "+m.Ref)
+		}
+	}
+	return out
+}
+
+// The person's words go back as the result, the outcome stays on the
+// request and, from a channel, the channel gets an event line (not the
+// bot's text) for each way it ends.
+func TestMCPCreateOutcomesAndEvents(t *testing.T) {
+	_, teams := createDeck(t)
+	if _, err := bus.Create("api", "v2", []string{createArch}, bus.From{ID: createArch, Label: "architect"}); err != nil {
+		t.Fatal(err)
+	}
+	// from_channel must be a channel the agent is in.
+	if got := mcpCall(t, createArch, "agent_new", `{"kind":"claude","message":"hi","from_channel":"nowhere"}`); !strings.Contains(got, "ERROR ") || !strings.Contains(got, "from_channel") {
+		t.Errorf("unknown from_channel: %q", got)
+	}
+
+	r, res := asked(t, "agent_new", `{"kind":"claude","name":"scout","message":"hi","from_channel":"#api"}`)
+	if r.From != "api" {
+		t.Fatalf("from %q", r.From)
+	}
+	_ = create.Answer(r.ID, false, "use sonnet, not opus")
+	if got := <-res; got != "the person wants changes: use sonnet, not opus" {
+		t.Errorf("changes: %q", got)
+	}
+	if got, _ := create.Get(r.ID); got.Status != create.Changes || got.Reply != "use sonnet, not opus" {
+		t.Errorf("request %+v", got)
+	}
+
+	r, res = asked(t, "agent_new", `{"kind":"claude","name":"scout","message":"hi","from_channel":"api"}`)
+	_ = create.Answer(r.ID, false, "")
+	if got := <-res; got != "the person declined" {
+		t.Errorf("declined: %q", got)
+	}
+
+	r, res = asked(t, "agent_new", `{"kind":"claude","name":"scout","message":"hi","from_channel":"api"}`)
+	_ = create.Answer(r.ID, true, "")
+	var out struct{ Agent struct{ ID string } }
+	if err := json.Unmarshal([]byte(<-res), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := create.Get(r.ID); got.Status != create.Created || got.Result.Agent != out.Agent.ID || got.Result.Channel == "" || got.DoneAt.IsZero() {
+		t.Errorf("created: %+v", got)
+	}
+
+	r, res = asked(t, "team_start", `{"goal":"g","name":"tm","from_channel":"api"}`)
+	_ = create.Answer(r.ID, true, "")
+	<-res
+	if got, _ := create.Get(r.ID); got.Status != create.Created || got.Result.Team != "tm" || got.Result.Channel != "tm" {
+		t.Errorf("team created: %+v", got)
+	}
+
+	// A start that fails ends as failed, with its reason; the agent gets the error.
+	startTeam = func(team.Options) (*team.Started, error) { return nil, fmt.Errorf("starting the fixer: boom") }
+	r, res = asked(t, "team_start", `{"goal":"g","name":"tm2","from_channel":"api"}`)
+	_ = create.Answer(r.ID, true, "")
+	if got := <-res; !strings.HasPrefix(got, "ERROR ") || !strings.Contains(got, "boom") {
+		t.Errorf("failed: %q", got)
+	}
+	if got, _ := create.Get(r.ID); got.Status != create.Failed || !strings.Contains(got.Result.Reason, "boom") {
+		t.Errorf("failed request: %+v", got)
+	}
+
+	createTimeout = 30 * time.Millisecond
+	if got := mcpCall(t, createArch, "agent_new", `{"kind":"claude","name":"late","message":"hi","from_channel":"api"}`); got != "the person hasn't answered yet" {
+		t.Errorf("expired: %q", got)
+	}
+	var expired create.Request
+	for _, x := range create.All() {
+		if x.Status == create.Expired {
+			expired = x
+		}
+	}
+	if expired.ID == "" || expired.DoneAt.IsZero() {
+		t.Errorf("no expired request in %+v", create.All())
+	}
+
+	want := []string{"create_changes", "create_declined", "created", "created", "create_failed", "create_expired"}
+	var got []string
+	for _, e := range eventsOf(t, "api") {
+		ev, ref, _ := strings.Cut(e, " ")
+		if !strings.HasPrefix(ref, "create:c-") {
+			t.Errorf("event %q has ref %q", ev, ref)
+		}
+		got = append(got, ev)
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("events %v, want %v", got, want)
+	}
+	if len(*teams) != 1 {
+		t.Errorf("teams started: %d", len(*teams))
+	}
+	// No from_channel, no event line anywhere else.
+	r, res = asked(t, "agent_new", `{"kind":"claude","name":"quiet","message":"hi"}`)
+	_ = create.Answer(r.ID, true, "")
+	<-res
+	if n := len(eventsOf(t, "api")); n != len(want) {
+		t.Errorf("api has %d event lines", n)
 	}
 }

@@ -25,16 +25,26 @@ const (
 	TypeTeam  = "team"
 )
 
-// Where a request stands.
+// Where a request stands: Waiting for the person; Allowed (being created);
+// then how it ended: Created, Declined, Changes (declined with words that
+// went back to the agent), Expired (no answer) or Failed (allowed, but it
+// did not start).
 const (
 	Waiting  = "waiting"
 	Allowed  = "allowed"
+	Created  = "created"
 	Declined = "declined"
+	Changes  = "changes"
+	Expired  = "expired"
+	Failed   = "failed"
 )
 
-// Expiry is how long a request is listed: its agent gives up on it sooner
+// Expiry is how long a request waits: its agent gives up on it sooner
 // (about ten minutes), so one older was left by an agent that died.
 const Expiry = 15 * time.Minute
+
+// Keep is how long a request that ended is kept, for a card to show how.
+const Keep = 24 * time.Hour
 
 // ErrGone: no such request waits (answered already, or given up on).
 var ErrGone = errors.New("that was answered already")
@@ -67,12 +77,48 @@ type Spec struct {
 
 // Request is a Spec asked for by an agent.
 type Request struct {
-	ID     string    `json:"id"`
-	By     string    `json:"by"`    // the asking agent's label
-	ByID   string    `json:"by_id"` // and its id
-	At     time.Time `json:"at"`
-	Status string    `json:"status"`
+	ID   string    `json:"id"`
+	By   string    `json:"by"`    // the asking agent's label
+	ByID string    `json:"by_id"` // and its id
+	At   time.Time `json:"at"`
+	// From is the channel the agent was answering in, "" for none: its view
+	// shows the card there.
+	From   string `json:"from,omitempty"`
+	Status string `json:"status"`
+	// Reply is what the person said with Changes.
+	Reply string `json:"reply,omitempty"`
+	// Result is what was created (Created) or why not (Failed).
+	Result Result    `json:"result,omitempty"`
+	DoneAt time.Time `json:"done_at,omitzero"`
 	Spec   Spec      `json:"spec"`
+}
+
+// Result is how an allowed request went: the new agent's id, or the team's
+// name, its channel and its agents; the channel an agent joined; why it
+// failed.
+type Result struct {
+	Agent   string `json:"agent,omitempty"`
+	Team    string `json:"team,omitempty"`
+	Channel string `json:"channel,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// Outcome is how a request stands, for a card's result line: status is one
+// of the statuses above ("creating" for Allowed).
+type Outcome struct {
+	Status string `json:"status"`
+	Result
+	Reply string    `json:"reply,omitempty"`
+	At    time.Time `json:"at,omitzero"`
+}
+
+// Outcome is how r stands.
+func (r Request) Outcome() Outcome {
+	st := r.Status
+	if st == Allowed {
+		st = "creating"
+	}
+	return Outcome{Status: st, Result: r.Result, Reply: r.Reply, At: r.DoneAt}
 }
 
 func dir() string { return filepath.Join(paths.StateDir(), "create") }
@@ -99,11 +145,12 @@ func write(r Request) error {
 	return paths.WriteFileAtomic(path(r.ID), b)
 }
 
-// Add queues spec as asked for by agent byID (labeled by).
-func Add(by, byID string, spec Spec) (Request, error) {
+// Add queues spec as asked for by agent byID (labeled by), answering in
+// channel from ("" for none).
+func Add(by, byID, from string, spec Spec) (Request, error) {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
-	r := Request{ID: "c-" + hex.EncodeToString(b), By: by, ByID: byID, At: time.Now().UTC().Truncate(time.Millisecond), Status: Waiting, Spec: spec}
+	r := Request{ID: "c-" + hex.EncodeToString(b), By: by, ByID: byID, From: from, At: time.Now().UTC().Truncate(time.Millisecond), Status: Waiting, Spec: spec}
 	return r, write(r)
 }
 
@@ -119,16 +166,36 @@ func Get(id string) (Request, error) {
 	return r, nil
 }
 
-// Answer records the person's answer to a waiting request.
-func Answer(id string, allow bool) error {
+// Answer records the person's answer to a waiting request: allow, or deny,
+// with words (reply) that tell the agent what to change.
+func Answer(id string, allow bool, reply string) error {
 	r, err := Get(id)
 	if err != nil || r.Status != Waiting {
 		return ErrGone
 	}
-	r.Status = Declined
-	if allow {
+	switch reply = strings.TrimSpace(reply); {
+	case allow:
 		r.Status = Allowed
+	case reply != "":
+		r.Status, r.Reply, r.DoneAt = Changes, reply, time.Now().UTC()
+	default:
+		r.Status, r.DoneAt = Declined, time.Now().UTC()
 	}
+	return write(r)
+}
+
+// Finish records how a request that was not waiting any more ended: Created
+// or Failed after Allowed, Expired from Waiting. It does nothing to one
+// that ended already.
+func Finish(id, status string, res Result) error {
+	r, err := Get(id)
+	if err != nil {
+		return err
+	}
+	if r.Status != Waiting && r.Status != Allowed || r.Status == Allowed && status == Expired {
+		return nil
+	}
+	r.Status, r.Result, r.DoneAt = status, res, time.Now().UTC()
 	return write(r)
 }
 
@@ -139,22 +206,39 @@ func Remove(id string) {
 	}
 }
 
-// List is the requests that wait on the person, oldest first. One left
-// from longer than Expiry ago is dropped.
-func List() []Request {
+// All is the requests there are: those waiting and those that ended in the
+// last Keep, oldest first. One that waited longer than Expiry was left by
+// an agent that died: it ends as Expired.
+func All() []Request {
 	ents, _ := os.ReadDir(dir())
 	var out []Request
 	for _, e := range ents {
 		id := strings.TrimSuffix(e.Name(), ".json")
 		r, err := Get(id)
-		switch {
-		case err != nil:
-		case time.Since(r.At) > Expiry:
+		if err != nil {
+			continue
+		}
+		if r.Status == Waiting && time.Since(r.At) > Expiry {
+			_ = Finish(id, Expired, Result{})
+			r, _ = Get(id)
+		}
+		if r.Status != Waiting && r.Status != Allowed && time.Since(r.DoneAt) > Keep || r.Status == Allowed && time.Since(r.At) > Keep {
 			Remove(id)
-		case r.Status == Waiting:
+			continue
+		}
+		out = append(out, r)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out
+}
+
+// List is the requests that wait on the person, oldest first.
+func List() []Request {
+	var out []Request
+	for _, r := range All() {
+		if r.Status == Waiting {
 			out = append(out, r)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
 	return out
 }

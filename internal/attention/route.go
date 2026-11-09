@@ -313,11 +313,12 @@ func (createRoute) acts() []Act {
 	return []Act{
 		{Verb: VerbAllow, Label: "Allow", Kind: KindNew, Row: true, Primary: true},
 		{Verb: VerbDeny, Label: "Deny", Kind: KindNew, Row: true},
+		{Verb: VerbDeny, Label: "Ask for changes…", Kind: KindNew, Input: true},
 	}
 }
 
 func (r createRoute) do(a Answer, _ *Facts) error {
-	err := answerCreate(r.id, a.Verb == VerbAllow)
+	err := answerCreate(r.id, a.Verb == VerbAllow, a.Text)
 	if errors.Is(err, create.ErrGone) {
 		return ErrGone
 	}

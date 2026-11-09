@@ -62,8 +62,8 @@ type Facts struct {
 	Cards []bus.Card
 	// Skills are the skills waiting for approval (skill.PendingList).
 	Skills []skill.Pending
-	// Creates are the agents' requests to start an agent or a team, waiting
-	// for the person (create.List).
+	// Creates are the agents' requests to start an agent or a team: those
+	// waiting for the person and those that ended lately (create.All).
 	Creates []create.Request
 	// Spend is the day's budget for mad's own work.
 	Spend bus.SpendState
@@ -96,4 +96,8 @@ type View struct {
 	// column. Every waiting-you card became an item or was folded into
 	// one.
 	Board []bus.Card
+	// Creates are the "create" items that ended (declined, created, expired,
+	// failed) or are being created, newest first, each with its Outcome: not
+	// in the inbox, which holds the ones waiting.
+	Creates []Item
 }

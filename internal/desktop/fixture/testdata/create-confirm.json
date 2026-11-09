@@ -233,6 +233,12 @@
               "label": "Deny",
               "kind": "create",
               "row": true
+            },
+            {
+              "verb": "deny",
+              "label": "Ask for changes…",
+              "kind": "create",
+              "input": true
             }
           ],
           "open": {
@@ -247,7 +253,8 @@
             "model": "sonnet",
             "message": "Find the flaky test in internal/bus and say what makes it flaky.\nStart with go test -run TestFollowUp -count=20.",
             "channel": "api"
-          }
+          },
+          "from": "fold"
         },
         {
           "key": "create:c-00000002",
@@ -272,6 +279,12 @@
               "label": "Deny",
               "kind": "create",
               "row": true
+            },
+            {
+              "verb": "deny",
+              "label": "Ask for changes…",
+              "kind": "create",
+              "input": true
             }
           ],
           "open": {
@@ -298,7 +311,158 @@
           }
         }
       ]
-    }
+    },
+    "creates": [
+      {
+        "key": "create:c-00000003",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start a team",
+        "text": "Team ship-it in mad",
+        "since": "-5m",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "team",
+          "name": "ship-it",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "goal": "ship the release",
+          "roles": [
+            {
+              "role": "architect",
+              "kind": "claude",
+              "model": "opus",
+              "lead": true
+            },
+            {
+              "role": "builder",
+              "kind": "claude",
+              "model": "sonnet"
+            },
+            {
+              "role": "reviewer",
+              "kind": "codex"
+            }
+          ]
+        },
+        "outcome": {
+          "status": "created",
+          "team": "ship-it",
+          "channel": "ship-it",
+          "at": "-4m"
+        },
+        "from": "fold"
+      },
+      {
+        "key": "create:c-00000004",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start an agent",
+        "text": "scout2 (codex) in mad",
+        "since": "-20m",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "agent",
+          "name": "scout2",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "kind": "codex",
+          "message": "read the handlers"
+        },
+        "outcome": {
+          "status": "declined",
+          "at": "-19m"
+        },
+        "from": "fold"
+      },
+      {
+        "key": "create:c-00000005",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start an agent",
+        "text": "scout3 (claude:sonnet) in mad",
+        "since": "-1h",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "agent",
+          "name": "scout3",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "kind": "claude",
+          "model": "sonnet",
+          "message": "look at CI"
+        },
+        "outcome": {
+          "status": "expired",
+          "at": "-50m"
+        }
+      },
+      {
+        "key": "create:c-00000006",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start an agent",
+        "text": "scout4 (claude) in mad",
+        "since": "-2h",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "agent",
+          "name": "scout4",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "kind": "claude",
+          "message": "tidy up"
+        },
+        "outcome": {
+          "status": "failed",
+          "reason": "not a directory: /fixture/mad",
+          "at": "-2h"
+        }
+      },
+      {
+        "key": "create:c-00000007",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start an agent",
+        "text": "scout5 (claude) in mad",
+        "since": "-3h",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "agent",
+          "name": "scout5",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "kind": "claude",
+          "message": "read the logs"
+        },
+        "outcome": {
+          "status": "created",
+          "agent": "fold0006-aaaa",
+          "channel": "dm.fold0001-aaaa.fold0006-aaaa",
+          "at": "-3h"
+        }
+      }
+    ]
   },
   "messages": {
     "fold": [
@@ -342,6 +506,32 @@
         },
         "kind": "timer",
         "text": "每小时检查"
+      },
+      {
+        "seq": 4,
+        "at": "-4m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "event": "created",
+        "ref": "create:c-00000003",
+        "text": "Team ship-it was created."
+      },
+      {
+        "seq": 5,
+        "at": "-19m",
+        "from": {
+          "id": "mad",
+          "label": "mad",
+          "kind": "system"
+        },
+        "kind": "system",
+        "event": "create_declined",
+        "ref": "create:c-00000004",
+        "text": "You declined; nothing was created."
       }
     ]
   }
