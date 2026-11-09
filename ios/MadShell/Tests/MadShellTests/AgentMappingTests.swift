@@ -244,9 +244,9 @@ final class AgentMappingTests: XCTestCase {
         XCTAssertEqual(later.entries.filter { if case .user = $0.content { true } else { false } }.count, 1)
     }
 
-    func testAnIdleOrStartingAgentWithAFirstMessageIsWorking() throws {
+    func testAnIdleStartingOrStoppedAgentWithAFirstMessageIsWorking() throws {
         var deck = try fixture("deck-edge-home", as: Deck.self)
-        for state in ["idle", "starting"] {
+        for state in ["idle", "starting", "stopped"] {
             for i in deck.projects.indices { for j in deck.projects[i].agents.indices where deck.projects[i].agents[j].id == needs {
                 deck.projects[i].agents[j].shown = state
             } }

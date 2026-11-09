@@ -24,7 +24,7 @@ public enum AgentMapping {
         var shown = entries(transcript)
         if let first = pendingEntry(pending, transcript: transcript) {
             shown.insert(first, at: 0)
-            if state == .idle || state == .starting { state = .working }
+            if [.idle, .starting, .stopped].contains(state) { state = .working }
         }
         return AgentConversation(
             title: agent?.label ?? id,
