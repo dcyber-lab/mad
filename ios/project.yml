@@ -47,6 +47,7 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   # The Mac app: SwiftUI, shares MadKit and MadUI with the iPhone app. Signed to run locally
   # (ad hoc), not sandboxed: it reads mad's state directory and starts the mad it finds.
   madmac:
@@ -79,6 +80,7 @@ targets:
         DEVELOPMENT_TEAM: ""
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   madUITests:
     type: bundle.ui-testing
     platform: iOS

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/logo.svg" width="128" height="128" alt="mad logo: a window with a sidebar of agents and a prompt"></p>
+
 # mad — multi-agent deck
 
 [![CI](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml/badge.svg)](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml)
