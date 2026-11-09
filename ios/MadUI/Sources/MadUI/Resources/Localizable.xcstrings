@@ -208,7 +208,8 @@
             "value": ". "
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "一条消息最多 %lld 张图片。": {
       "extractionState": "manual",
@@ -527,7 +528,8 @@
             "value": "Reply"
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "回复 %@：%@": {
       "extractionState": "manual",
@@ -549,7 +551,8 @@
             "value": "Reply…"
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "图片和文件": {
       "extractionState": "manual",
@@ -1165,7 +1168,8 @@
             "value": "Usage"
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "用量 ›": {
       "extractionState": "manual",
@@ -1176,7 +1180,8 @@
             "value": "Usage ›"
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "目录": {
       "extractionState": "manual",
@@ -1504,6 +1509,28 @@
           "stringUnit": {
             "state": "translated",
             "value": ", "
+          }
+        }
+      }
+    },
+    "查看": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review"
+          }
+        }
+      }
+    },
+    "允许之前先看完全部内容": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read all of it before you allow it"
           }
         }
       }

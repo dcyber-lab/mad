@@ -8,6 +8,9 @@ struct WaitingCard: View {
     let actions: HomeActions
     /// The phone's card is larger (28pt avatar, 15pt name, 14pt buttons), and a question shows only its words.
     var phone = false
+    /// Whether the command box had to cut the command: then Allow is not offered beside it, Review is (it opens the
+    /// agent, whose card shows the whole command). Until the box is measured it counts as cut.
+    @State private var cut = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: phone ? 8 : 6) {
@@ -25,12 +28,15 @@ struct WaitingCard: View {
             } else if !item.detail.isEmpty {
                 CommandBox(text: item.detail, font: item.mono
                            ? Font.system(size: phone ? 12.5 : 11.5, design: .monospaced)
-                           : Font.system(size: phone ? 12.5 : 11.5))
+                           : Font.system(size: phone ? 12.5 : 11.5), cut: $cut)
             }
             if !(phone && !item.isPermission) {
                 HStack(spacing: 6) {
                     if item.isPermission {
-                        if let allow = item.allow {
+                        if cut && !item.detail.isEmpty {
+                            Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(.mad(.primary, size))
+                                .help(L("允许之前先看完全部内容"))
+                        } else if let allow = item.allow {
                             Button(allow.label) { actions.act(item.id, allow.id, nil) }.buttonStyle(.mad(.primary, size))
                         }
                         if let deny = item.deny {

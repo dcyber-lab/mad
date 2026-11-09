@@ -120,6 +120,10 @@ struct StateDot: View {
 struct CommandBox: View {
     let text: String
     var font: Font = .system(size: 11.5, design: .monospaced)
+    /// Set to whether the line had to be cut, once it is laid out.
+    var cut: Binding<Bool>?
+    @State private var whole: CGFloat = .infinity
+    @State private var room: CGFloat = 0
 
     var body: some View {
         Text(text)
@@ -127,10 +131,23 @@ struct CommandBox: View {
             .foregroundStyle(Color.madFg2)
             .lineLimit(1)
             .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { room = $0; report() }
+            .background(alignment: .leading) {
+                if cut != nil {
+                    Text(text).font(font).lineLimit(1).fixedSize().hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { whole = $0; report() }
+                }
+            }
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.madCode, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private func report() {
+        let isCut = whole > room + 0.5
+        if cut?.wrappedValue != isCut { cut?.wrappedValue = isCut }
     }
 }
 
