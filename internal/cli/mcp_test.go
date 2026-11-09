@@ -207,3 +207,19 @@ func TestMCPReadNamesPictures(t *testing.T) {
 		t.Error("bus_read's description does not say how to open the pictures")
 	}
 }
+
+// Without --agent, mad mcp serves the agent named by MAD_AGENT_ID (agy
+// reads its servers from its own config), and nothing outside a deck.
+func TestMCPAgentFromEnv(t *testing.T) {
+	isolate(t)
+	const list = `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}` + "\n" + `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"
+	t.Setenv("MAD_AGENT_ID", "")
+	code, out, errs := run(t, list, "mcp")
+	if code != 0 || strings.Contains(out, "bus_who") || !strings.Contains(out, `"tools":[]`) {
+		t.Errorf("outside a deck: %d %s %s", code, out, errs)
+	}
+	t.Setenv("MAD_AGENT_ID", "aaaa1111-0000-0000-0000-000000000001")
+	if code, out, errs = run(t, list, "mcp"); code != 0 || !strings.Contains(out, "bus_who") {
+		t.Errorf("in a deck: %d %s %s", code, out, errs)
+	}
+}

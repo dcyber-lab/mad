@@ -81,18 +81,20 @@ var builtin = []Kind{
 		Start: "pi {pi_live} {mad_mcp} --session-id {id}",
 	},
 	{
-		// Google's Antigravity CLI. It names its conversations itself and
-		// mad doesn't read them yet, so there is no id to resume: only the
-		// latest conversation in the folder (and no sleeping, which needs
-		// the id when two share a folder).
+		// Google's Antigravity CLI. It names its conversations itself:
+		// mad learns the id from agy's hooks (package discover) and resumes
+		// that one, or the folder's latest while none is known. Status is
+		// read from the screen; the prompts are its approval questions and
+		// the folder trust one.
 		Name:         "agy",
 		Icon:         "▲",
 		Color:        "#4285f4", // Google blue
 		Start:        "agy",
+		Resume:       "agy --conversation {sid}",
 		ResumeLatest: "agy --continue",
 		Waiting: []string{
-			`(?i)allow execution`, `(?i)waiting for (user )?confirmation`, `(?i)apply this change`,
-			`(?i)do you want to`, `(?i)trust this folder`,
+			`Run this command\?`, `Allow access to this URL\?`, `Allow calling this tool\?`, `(?i)allow execution`,
+			`(?i)apply this change`, `(?i)do you want to`, `(?i)do you trust`, `(?i)trust this folder`,
 		},
 	},
 	{

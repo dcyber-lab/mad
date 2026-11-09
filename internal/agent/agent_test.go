@@ -132,8 +132,8 @@ func TestPiAndShell(t *testing.T) {
 	}
 }
 
-// agy picks its own conversation ids, so mad can only reopen the latest
-// one, and has nothing to put an agent to sleep with.
+// agy picks its own conversation ids: once its hooks said which, it is
+// resumed by id, before that the folder's latest.
 func TestAgy(t *testing.T) {
 	withHome(t)
 	agy := ByName(Builtin(), "agy")
@@ -142,10 +142,11 @@ func TestAgy(t *testing.T) {
 		t.Errorf("agy start = %q", got)
 	}
 	if got := agy.Command(a, true, Launch{}); got != "agy --continue" {
-		t.Errorf("agy resume = %q", got)
+		t.Errorf("agy resume, id unknown = %q", got)
 	}
-	if agy.Resume != "" {
-		t.Errorf("agy resumes by id (%q): it would be put to sleep", agy.Resume)
+	a.SessionID = "ec33ebf9"
+	if got := agy.Command(a, true, Launch{Exists: func(string) bool { return true }}); got != "agy --conversation ec33ebf9" {
+		t.Errorf("agy resume = %q", got)
 	}
 }
 
@@ -257,7 +258,9 @@ func TestScreenWaiting(t *testing.T) {
 		{"codex", "› 1. Update now\n  2. Skip\n  enter continue · esc skip", true},
 		{"codex", "› Ask Codex to do anything\n  ? for shortcuts", false},
 		{"pi", "anything", false},
-		{"agy", "Allow execution of: go test ./...", true},
+		{"agy", "Run this command?\n  go test ./...\n> Yes", true},
+		{"agy", "Allow calling this tool?", true},
+		{"agy", "Do you trust the contents of this project?", true},
 		{"agy", "Do you trust this folder?", true},
 		{"agy", "> Type your message", false},
 	}

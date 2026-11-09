@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,9 +28,12 @@ type sleptMsg struct {
 }
 
 // canSleep: the kind can reopen the agent's session, so ending its process
-// loses nothing but what the process held.
+// loses nothing but what the process held. A kind that names its sessions
+// itself (no {id} in start) needs the agent's to be known: reopening "the
+// latest" could take another agent's.
 func (m *model) canSleep(a *state.Agent) bool {
-	return agent.ByName(m.kinds, a.Kind).Resume != ""
+	k := agent.ByName(m.kinds, a.Kind)
+	return k.Resume != "" && (a.SessionID != "" || strings.Contains(k.Start, "{id}"))
 }
 
 // sleepers are the agents that have sat idle off stage for sleep.after.
