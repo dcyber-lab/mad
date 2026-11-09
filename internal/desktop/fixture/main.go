@@ -168,6 +168,7 @@ func newHandler(name, web string) (http.Handler, error) {
 	mux.HandleFunc("POST /api/bus/post", f.post)
 	mux.HandleFunc("POST /api/pair", f.pair)
 	mux.HandleFunc("POST /api/budget", f.budget)
+	mux.HandleFunc("POST /api/agents", f.start)
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
 		mux.HandleFunc("GET /api/"+p, func(w http.ResponseWriter, r *http.Request) { reply(w, []any{}) })
 	}
@@ -192,6 +193,13 @@ type fixture struct {
 	posted map[string][]json.RawMessage
 	// postedAt: when each posted message came, by channel and number: its receipt moves on as time passes.
 	postedAt map[string]map[int]time.Time
+	// started: the agents the person started through POST /api/agents, with the project's path; the deck lists them.
+	started []startedAgent
+}
+
+type startedAgent struct {
+	project string
+	agent   map[string]any
 }
 
 func reply(w http.ResponseWriter, v any) {
@@ -220,6 +228,7 @@ func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
 	}
 	f.spendMu.Unlock()
 	relative(d, now)
+	f.addStarted(d)
 	if _, ok := f.scn.Deck["working"]; !ok {
 		d["working"] = running(d)
 	}
@@ -491,4 +500,59 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
+}
+
+// start is POST /api/agents {project, kind, model, text}: an agent that works on the first message, in the project's
+// list of the deck from then on. The id is the answer, as the real one's.
+func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Project, Kind, Model, Text string }
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Project == "" {
+		http.Error(w, "project is needed", http.StatusBadRequest)
+		return
+	}
+	if req.Kind == "" {
+		req.Kind = "claude"
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id := fmt.Sprintf("new%05d-aaaa", len(f.started)+1)
+	agent := map[string]any{"id": id, "kind": req.Kind, "status": "running", "shown": "working", "chat": true, "color": "#d97757"}
+	if t := strings.TrimSpace(req.Text); t != "" {
+		agent["title"] = t
+	}
+	f.started = append(f.started, startedAgent{project: req.Project, agent: agent})
+	reply(w, map[string]any{"id": id})
+}
+
+// addStarted puts the agents started through the fixture into their projects of deck d. The scenario's projects are
+// shared by every look, so they are copied, not changed.
+func (f *fixture) addStarted(d map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.started) == 0 {
+		return
+	}
+	ps, _ := d["projects"].([]any)
+	out := make([]any, len(ps))
+	for i, p := range ps {
+		m, _ := p.(map[string]any)
+		out[i] = p
+		if m == nil {
+			continue
+		}
+		cp := make(map[string]any, len(m))
+		for k, v := range m {
+			cp[k] = v
+		}
+		as, _ := m["agents"].([]any)
+		as = as[:len(as):len(as)]
+		for _, s := range f.started {
+			if m["path"] == s.project {
+				as = append(as, s.agent)
+			}
+		}
+		cp["agents"] = as
+		out[i] = cp
+	}
+	d["projects"] = out
 }

@@ -41,6 +41,29 @@ final class NativeDefaultTests: MadUITestCase {
         shot("the agent's conversation")
     }
 
+    /// + → 新对话 is native: a box to write in, sending starts the agent and opens its conversation, and after the way
+    /// back the new agent is in the home list (it was lost when the page did this in a sheet).
+    func testNewChatIsNativeAndTheNewAgentIsInTheHomeAfterBack() {
+        XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
+        tap("新建")
+        tap("新对话")
+        XCTAssertFalse(app.webViews.firstMatch.exists, "新对话 opened the page, not the native screen")
+        let box = app.textViews["newchat.text"]
+        XCTAssertTrue(box.waitForExistence(timeout: 10), "the native 新对话 has no box to write in")
+        shot("the native 新对话")
+        box.tap()
+        box.typeText("Fixture started chat")
+        let send = app.buttons["newchat.send"]
+        XCTAssertTrue(send.isEnabled, "send is off with a message written")
+        send.tap()
+        XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 15), "sending did not open the new agent's conversation")
+        shot("the new agent's conversation")
+        tap("返回")
+        let started = row(beginningWith: "Fixture started chat")
+        XCTAssertTrue(started.waitForExistence(timeout: 15), "the new agent is not in the home list after the way back")
+        shot("the new agent in the home list")
+    }
+
     func testAMenuItemThatIsNotNativeYetOpensThePageInASheet() {
         tap("更多")
         let item = app.buttons["看板"].firstMatch

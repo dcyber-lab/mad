@@ -316,3 +316,48 @@ func TestPostBecomesTheNextMessage(t *testing.T) {
 		t.Errorf("after the post: %+v", m)
 	}
 }
+
+// An agent started through POST /api/agents is in its project of the deck from then on, once for each look.
+func TestStartedAgentIsInTheDeck(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"codex","text":"hello"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var started struct{ ID string }
+	_ = json.NewDecoder(r.Body).Decode(&started)
+	r.Body.Close()
+	if started.ID == "" {
+		t.Fatal("no id answered")
+	}
+	for look := 0; look < 2; look++ {
+		r, err = http.Get(srv.URL + "/api/deck")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d struct {
+			Projects []struct {
+				Agents []struct{ ID, Kind, Title string }
+			}
+		}
+		_ = json.NewDecoder(r.Body).Decode(&d)
+		r.Body.Close()
+		n := 0
+		for _, a := range d.Projects[0].Agents {
+			if a.ID == started.ID {
+				n++
+				if a.Kind != "codex" || a.Title != "hello" {
+					t.Errorf("the started agent: %+v", a)
+				}
+			}
+		}
+		if n != 1 {
+			t.Errorf("look %d: the started agent is %d times in the project, want 1", look, n)
+		}
+	}
+}

@@ -47,17 +47,20 @@ public struct NativeRoot: View {
         return HomeMapping.model(from: deck, fallbackName: title)
     }
 
+    /// 新对话 is native: the detail shows it (the Mac's pane, the iPhone's screen over the list), when the server can
+    /// start agents for the app.
+    private var newChat: (() -> Void)? { api is NewChatAPI ? { selection = HomeRow.newChatID } : nil }
+
     private var actions: HomeActions {
         let act: (String, String, String?) -> Void = { item, act, text in Task { await self.act(item: item, act: act, text: text) } }
         let interrupt: (String) -> Void = { id in Task { try? await api.interrupt(agent: id); await store.refresh() } }
         #if os(macOS)
         // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
-        // 新对话 is native on the Mac too: the detail pane shows it, when the server can start agents for the app
-        let newChat: (() -> Void)? = api is NewChatAPI ? { selection = HomeRow.newChatID } : nil
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
                                 newChat: newChat, act: act, interrupt: interrupt)
         #else
-        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, act: act, interrupt: interrupt)
+        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, newChat: newChat, act: act,
+                                interrupt: interrupt)
         #endif
     }
 
@@ -147,7 +150,7 @@ public struct NativeRoot: View {
 
     /// Whether the row's own view draws its head and way back (a channel, an agent, Usage): the iPhone's bar stays out of it.
     private func drawsOwnHead(_ id: HomeRow.ID) -> Bool {
-        id == HomeRow.usageID || store.channel(id: id) != nil || store.agent(id: id) != nil
+        id == HomeRow.usageID || id == HomeRow.newChatID || store.channel(id: id) != nil || store.agent(id: id) != nil
     }
 
     /// On the Mac: whether a channel's or an agent's head is on screen (the link's note then goes in it).
@@ -217,13 +220,12 @@ struct Detail: View {
     }
 
     @ViewBuilder private func newChat(_ starter: NewChatAPI) -> some View {
-        #if os(macOS)
-        NewChatDetail(api: starter, projects: store.deck?.projects ?? []) { id in
+        NewChatDetail(api: starter, projects: store.deck?.projects ?? [], started: { id in
             await store.refresh() // the new agent is in the deck before its row opens
             open(id)
-        }
-        #else
-        placeholder(L("新对话"), "")
+        }, onBack: onBack)
+        #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
         #endif
     }
 
