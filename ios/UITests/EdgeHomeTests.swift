@@ -31,6 +31,12 @@ final class EdgeHomeTests: MadUITestCase {
         for (name, want) in [("ios", 1), ("five", 1), ("给我绘制一个表格", 2), ("shots", 0), ("pair", 0), ("solo", 0)] {
             XCTAssertTrue(element(name).firstMatch.waitForExistence(timeout: 10), "no row named \(name)")
             // an agent that needs you is also named in the 待处理 cards above its row: its row is the one with the images
+            // (the page draws the character of a row that is on the screen: scroll to it first)
+            var swipes = 0
+            while !(element(name).allElementsBoundByIndex.last?.isHittable ?? false) && swipes < 6 {
+                web.swipeUp()
+                swipes += 1
+            }
             let got = element(name).allElementsBoundByIndex.map { needsYouImages(in: $0) }.max() ?? 0
             XCTAssertEqual(got, want, "the \(name) row has \(got) “needs you” image(s), expected \(want)")
         }
