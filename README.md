@@ -5,7 +5,8 @@
 [![CI](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml/badge.svg)](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Run many coding-agent TUIs (Claude Code, Codex, pi, or a plain shell) side by
+Run many coding-agent TUIs (Claude Code, Codex, pi, Google's Antigravity
+CLI, or a plain shell) side by
 side in one terminal, organized by project. A project sidebar stays on the
 left; the selected agent's real TUI fills the right.
 
@@ -46,6 +47,9 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
 - **Non-invasive** — uses its own private tmux server and never touches your
   `~/.claude/settings.json` or your own tmux config; what the sidebar shows
   about a conversation is read from the transcripts the agents already write.
+  The one exception is agy, which reads hooks and MCP servers only from its
+  own global config: mad adds an entry named `mad` there (see
+  [Antigravity CLI](#antigravity-cli-agy)).
 - **Runs** — `o` hands a task to agents in roles: claude on Opus designs,
   claude on Sonnet implements, codex reviews and sends the work back until
   it passes. The run waits for you only when something needs you, and
@@ -64,7 +68,8 @@ and codex do. [docs/demo](docs/demo) re-records it.</sub>
   that recent macOS refuses to load); the release binaries need no Go
 - At least one agent CLI on your `PATH`:
   [`claude`](https://docs.anthropic.com/en/docs/claude-code),
-  [`codex`](https://github.com/openai/codex), `pi`, …
+  [`codex`](https://github.com/openai/codex), `pi`,
+  [`agy`](https://antigravity.google/docs/cli/reference/) (Antigravity CLI), …
 - `ps` and `lsof` (used by auto-sync)
 
 ## Installation
@@ -504,13 +509,13 @@ Tailscale app on the same tailnet) or a Cloudflare Tunnel.
 
 ## Reading the sidebar
 
-An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `$`
-shell; custom kinds set `icon` and `color` in `agents.json` or get their
-initial) and is named after its conversation: the title you set with `/rename` (claude)
-or in the app (codex), else the one claude generated, else the first thing
+An agent's row starts with its kind (`✻` claude, `>_` codex, `π` pi, `▲`
+agy (Antigravity CLI), `$` shell; custom kinds set `icon` and `color` in
+`agents.json` or get their initial) and is named after its conversation:
+the title you set with `/rename` (claude) or in the app (codex), else the one claude generated, else the first thing
 you asked, else just `claude`, `claude#2`. `t` on an agent sets a name of
-your own instead, kept until you clear it. The line under a claude or codex
-agent says what it is on: the tool being called and what it was pointed at
+your own instead, kept until you clear it. The line under a claude, codex
+or agy agent says what it is on: the tool being called and what it was pointed at
 while it runs or waits (`Bash · go test ./...`, `Edit · main.go`),
 otherwise the prompt it is working on or was last given. `i` hides that
 line everywhere, for a shorter list.
@@ -775,7 +780,8 @@ agent awake:
 ```
 
 Only agents whose kind can resume a session (`resume` in
-`agents.json`: claude and codex) are put to sleep, and never while running,
+`agents.json`: claude, codex and agy, the last two once mad knows their
+session) are put to sleep, and never while running,
 waiting for you or on stage. One that finished while you were elsewhere
 stays `● done` while asleep.
 
@@ -1194,6 +1200,44 @@ mad reads from claude's and codex's own files (titles, usage, the session
 picker, sessions open elsewhere) is Go code, one file per agent in
 `internal/discover`; see [CONTRIBUTING](CONTRIBUTING.md#adding-an-agent).
 
+## Antigravity CLI (agy)
+
+[`agy`](https://antigravity.google/docs/cli/reference/) is a built-in kind.
+It takes no settings on its command line, so when agy is installed the
+deck adds an entry named `mad` to agy's global config on every start, and
+leaves the rest of each file as it is:
+
+- `~/.gemini/config/hooks.json`: `SessionStart`, `PreInvocation`,
+  `PreToolUse` and `Stop` run `mad hook agy …`. The command does nothing
+  outside a deck (it checks `MAD_AGENT_ID`), so agy run elsewhere is not
+  affected.
+- `~/.gemini/config/mcp_config.json`: a `mad` server (`mad mcp`), for the
+  bus. Outside a deck it offers no tools.
+
+A file that isn't plain JSON (agy accepts comments) is not changed; the
+deck then works without that part. To remove the wiring, delete the `mad`
+entries.
+
+What this gives an agy agent:
+
+- **Resume.** The first hook tells mad the conversation's id; `enter` after
+  a crash, and waking from sleep, reopen it with `agy --conversation`.
+  Before that, `enter` reopens the folder's latest (`agy --continue`).
+- **`mad send -w` / `mad wait`.** A turn ends with agy's `Stop` hook, and
+  its reply is read from the conversation's transcript
+  (`~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl`),
+  which agy writes a moment later.
+- **The line under its row:** the tool it called (`run_command · go test
+  ./...`) or the prompt it was given, from the same transcript.
+- **The bus**, through the MCP server. agy asks before a tool's first use.
+
+Not covered: agy's transcripts carry no token counts, so there is no usage
+or cost; its usage limits aren't shown; there is no session picker (mad
+can't tell which folder a conversation ran in) and no auto-sync of agy run
+in other terminals; window mode and runs don't use agy. Status comes from
+the screen, as for codex: agy's hooks have no event for a permission
+prompt.
+
 ## Files
 
 | Path                                  | Contents                                          |
@@ -1201,6 +1245,7 @@ picker, sessions open elsewhere) is Go code, one file per agent in
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
+| `~/.gemini/config/hooks.json`, `mcp_config.json` | agy's own config; mad keeps an entry named `mad` in each (only when agy is installed) |
 | `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota, sleep) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
 | `~/.local/state/mad/status/`          | Status reported by hooks; `quota-<kind>.json` usage limits |
@@ -1223,10 +1268,11 @@ the mad you use: its state and the generated files go in
   upgrade, `mad` says so when the versions differ, and may fail to open the
   deck with `open terminal failed: not a terminal`. Run `mad kill-server`
   and then `mad`; that stops every agent, press `enter` on each to resume.
-- codex and pi have no hooks, so their `waiting` state relies on matching
-  on-screen text and may miss new prompt wording. Their `running` state comes
-  from screen changes: a long command that prints nothing can briefly look
-  idle.
+- codex, pi and agy say nothing when they ask for permission, so their
+  `waiting` state relies on matching on-screen text and may miss new prompt
+  wording (add patterns with `waiting` in `agents.json`). Their `running`
+  state comes from screen changes: a long command that prints nothing can
+  briefly look idle.
 - The Claude desktop app doesn't expose which session a process serves; mad
   picks the newest session in that process's directory. This is exact when
   each conversation has its own directory (the app's default worktrees).

@@ -469,14 +469,14 @@ install_mad() {
 check_agents() {
 	step "Agents"
 	found=""
-	for agent in claude codex pi; do
+	for agent in claude codex pi agy; do
 		if have "$agent"; then
 			info "$agent: $(command -v "$agent")"
 			found=1
 		fi
 	done
 	[ -n "$found" ] && return 0
-	info "none of claude, codex, pi is on your PATH"
+	info "none of claude, codex, pi, agy is on your PATH"
 	note "mad runs agents, and has none to run yet. They are yours to install and sign in to:
     claude  curl -fsSL https://claude.ai/install.sh | bash
     codex   npm install -g @openai/codex

@@ -132,6 +132,24 @@ func TestPiAndShell(t *testing.T) {
 	}
 }
 
+// agy picks its own conversation ids: once its hooks said which, it is
+// resumed by id, before that the folder's latest.
+func TestAgy(t *testing.T) {
+	withHome(t)
+	agy := ByName(Builtin(), "agy")
+	a := &state.Agent{ID: "id-6"}
+	if got := agy.Command(a, false, Launch{}); got != "agy" {
+		t.Errorf("agy start = %q", got)
+	}
+	if got := agy.Command(a, true, Launch{}); got != "agy --continue" {
+		t.Errorf("agy resume, id unknown = %q", got)
+	}
+	a.SessionID = "ec33ebf9"
+	if got := agy.Command(a, true, Launch{Exists: func(string) bool { return true }}); got != "agy --conversation ec33ebf9" {
+		t.Errorf("agy resume = %q", got)
+	}
+}
+
 // A kind from agents.json that names its sessions has no provider to say
 // which were written, so it resumes the one it knows of, if any.
 func TestNamedKindWithoutProvider(t *testing.T) {
@@ -178,7 +196,7 @@ func TestLoadMergesAgentsJSON(t *testing.T) {
 	for _, k := range kinds {
 		names = append(names, k.Name)
 	}
-	if strings.Join(names, ",") != "claude,codex,pi,shell,gemini" {
+	if strings.Join(names, ",") != "claude,codex,pi,agy,shell,gemini" {
 		t.Fatalf("kinds = %v", names)
 	}
 	// Fields set replace the built-in's, the rest stay.
@@ -240,6 +258,12 @@ func TestScreenWaiting(t *testing.T) {
 		{"codex", "› 1. Update now\n  2. Skip\n  enter continue · esc skip", true},
 		{"codex", "› Ask Codex to do anything\n  ? for shortcuts", false},
 		{"pi", "anything", false},
+		{"agy", "Run this command?\n  go test ./...\n> Yes", true},
+		{"agy", "Allow calling this tool?", true},
+		{"agy", "Do you trust the contents of this project?", true},
+		{"agy", " Welcome to the Antigravity CLI. You are currently not signed in.\n Select login method:\n > 1. Google OAuth", true},
+		{"agy", "Do you trust this folder?", true},
+		{"agy", "> Type your message", false},
 	}
 	for _, c := range cases {
 		if got := ByName(kinds, c.kind).ScreenWaiting(c.screen); got != c.want {

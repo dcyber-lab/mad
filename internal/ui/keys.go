@@ -245,7 +245,7 @@ func (m *model) pickKind(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if k := m.kinds[i].Name; discover.Lookup(k) != nil {
+	if k := m.kinds[i].Name; discover.ListsSessions(k) {
 		return m.openSessionPicker(r.proj, k)
 	}
 	return m.newAgent(r.proj, m.kinds[i].Name)

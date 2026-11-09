@@ -92,10 +92,21 @@ type Tool struct {
 }
 
 // providers are the kinds mad follows, in the order they are scanned.
-var providers = []Provider{claude{}, codex{}}
+var providers = []Provider{claude{}, codex{}, agy{}}
 
 // Providers returns every kind mad follows.
 func Providers() []Provider { return providers }
+
+// ListsSessions reports whether kind's provider can list the sessions
+// run in a project, to offer them when an agent is started.
+func ListsSessions(kind string) bool {
+	p := Lookup(kind)
+	if p == nil {
+		return false
+	}
+	l, ok := p.(interface{ ListsSessions() bool })
+	return !ok || l.ListsSessions()
+}
 
 // Setup runs every provider's Setup.
 func Setup(quota bool) error {

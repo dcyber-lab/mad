@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -22,13 +23,23 @@ import (
 
 // mcpCmd serves mad's tools to the agent that started it, over stdio
 // (`mad mcp --agent <id>`, put on its command line by deck.MCPFlags): the
-// bus, to talk with the deck's other agents and the person.
+// bus, to talk with the deck's other agents and the person. Without
+// --agent the agent is MAD_AGENT_ID, for agents that read their MCP
+// servers from a config of their own (agy): outside a deck there is none,
+// and it serves nothing.
 func mcpCmd(args []string, stdio IO) error {
 	fs := flags("mcp", stdio.Err)
-	id := fs.String("agent", "", "the `id` of the agent it serves")
+	id := fs.String("agent", "", "the `id` of the agent it serves (default: $MAD_AGENT_ID)")
 	resumed := fs.String("resumed", "", "the protocol `version` of a session an older mad began (set when it replaces itself)")
-	if err := fs.Parse(args); err != nil || *id == "" || fs.NArg() > 0 {
+	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		return errUsage
+	}
+	if *id == "" {
+		*id = os.Getenv("MAD_AGENT_ID")
+	}
+	if *id == "" {
+		srv := &mcp.Server{Name: "mad", Version: version(), Serial: true, Resumed: *resumed}
+		return srv.Serve(context.Background(), stdio.In, stdio.Out)
 	}
 	srv := &mcp.Server{Name: "mad", Version: version(), Instructions: mcpIdentity(*id) + mcpInstructions, Tools: mcpTools(*id), Serial: true, Resumed: *resumed}
 	return srv.Serve(context.Background(), mcpUpgrade(srv, args, stdio.In), stdio.Out)
