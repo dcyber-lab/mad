@@ -230,6 +230,16 @@ final class WebMenuTests: XCTestCase {
         XCTAssertEqual(switched, 2)
     }
 
+    /// 新对话 is native when the app can start agents: + → 新对话 calls `newChat`, not the page; 新群聊 and 新团队 still open it.
+    func testNewChatOpensNativelyWhenTheAppCanStartAgents() {
+        var asked: [WebTarget] = []
+        var started = 0
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: nil, openWeb: { asked.append($0) }, newChat: { started += 1 })
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(started, 1)
+        XCTAssertEqual(asked, [.view(.newchannel), .view(.newteam)])
+    }
+
     func testThePlusMenuHasNewChatChannelAndTeam() {
         XCTAssertEqual(HomeNewItem.allCases.map(\.title), ["新对话", "新群聊", "新团队"])
     }

@@ -18,6 +18,14 @@ struct ReceiptLine: View {
         #endif
     }
 
+    #if os(iOS)
+    private var faceSize: CGFloat { 16 }
+    private var wordFont: Font { .system(size: 12) }
+    #else
+    private var faceSize: CGFloat { 14 }
+    private var wordFont: Font { .mad(11) }
+    #endif
+
     /// Those who read it or replied, at most five.
     private var seen: [ChannelReceipt.Target] { Array((receipt?.targets ?? []).filter(\.seen).prefix(5)) }
 
@@ -30,9 +38,9 @@ struct ReceiptLine: View {
             Spacer(minLength: 0)
             // who has seen it, as their small avatars, then the word (the design's receipt: "(a)(b) 已读")
             HStack(spacing: 4) {
-                ForEach(seen) { t in CharacterView(id: t.id, kind: t.kind, state: .idle, size: 14) }
+                ForEach(seen) { t in CharacterView(id: t.id, kind: t.kind, state: .idle, size: faceSize) }
                 Text(word)
-                    .font(.system(size: 11))
+                    .font(wordFont)
                     .foregroundStyle(Color.madFg3)
                     .lineLimit(1)
                     .contentTransition(.opacity)

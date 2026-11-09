@@ -22,9 +22,7 @@ struct ChannelBubbleView: View {
     var colors: [String: Color] = [:]
 
     var body: some View {
-        Group {
-            if let fold = bubble.fold { folded(fold) } else { whole }
-        }
+        content
         .contextMenu {
             Button { reply() } label: { Label(L("回复"), systemImage: "arrowshape.turn.up.left") }
             if !bubble.text.isEmpty {
@@ -33,6 +31,29 @@ struct ChannelBubbleView: View {
         }
     }
 
+    @ViewBuilder private var content: some View {
+        #if os(macOS)
+        // hover: reply and a menu with copy, at the bubble's side
+        MacHoverRow(side: mine ? .trailing : .leading, copyText: bubble.text.isEmpty ? nil : bubble.text, reply: reply) {
+            Group { if let fold = bubble.fold { folded(fold) } else { whole } }
+        }
+        #else
+        Group { if let fold = bubble.fold { folded(fold) } else { whole } }
+        #endif
+    }
+
+    #if os(iOS)
+    private var bodyFont: Font { Phone.message }
+    private var lineSpacing: CGFloat { Phone.messageLineSpacing }
+    private var padding: EdgeInsets { Phone.bubblePadding }
+    private var radius: CGFloat { Phone.bubbleRadius }
+    #else
+    private var bodyFont: Font { MadType.message }
+    private var lineSpacing: CGFloat { MadType.messageLineSpacing }
+    private var padding: EdgeInsets { Mac.bubblePadding }
+    private var radius: CGFloat { Mac.bubbleRadius }
+    #endif
+
     private var picturesOnly: Bool { bubble.text.isEmpty && bubble.quote == nil && !bubble.images.isEmpty }
 
     @ViewBuilder private var whole: some View {
@@ -40,20 +61,19 @@ struct ChannelBubbleView: View {
             if let q = bubble.quote { quote(q) }
             if !bubble.text.isEmpty {
                 Text(chatText(bubble.text, mine: mine, colors: colors))
-                    .font(MadType.message)
-                    .lineSpacing(MadType.messageLineSpacing)
+                    .font(bodyFont)
+                    .lineSpacing(lineSpacing)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !bubble.images.isEmpty { pictures }
         }
         .foregroundStyle(mine ? Color.madMineFg : Color.primary)
-        .padding(.horizontal, picturesOnly ? 0 : (mine ? 14 : 13))
-        .padding(.vertical, picturesOnly ? 0 : 8)
+        .padding(picturesOnly ? EdgeInsets() : padding)
         .hugging(maxWidth: maxWidth)
         .background {
             if !picturesOnly {
-                if mine { MineShape().fill(Color.madMine) } else { RoundedRectangle(cornerRadius: 18).fill(Color.chatBubble) }
+                if mine { MineShape().fill(Color.madMine) } else { RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color.chatBubble) }
             }
         }
         // as wide as its text, and no wider than its share of the column

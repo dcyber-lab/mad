@@ -27,6 +27,10 @@ It needs Xcode with the iOS platform installed (Xcode > Settings > Components)
 and `brew install xcodegen`. To open it: `cd ios && xcodegen generate && open
 mad.xcodeproj`.
 
+The app icons are drawn in `docs/logo/*.svg`; after changing one, run
+`ios/scripts/icons.sh` (needs `brew install librsvg`) to re-render the PNGs in
+`App/Assets.xcassets` and `MacApp/Assets.xcassets`.
+
 The simulator build is ad hoc signed (`CODE_SIGN_IDENTITY=-`), not unsigned: an
 unsigned app has no Keychain access, so it would forget every pairing.
 

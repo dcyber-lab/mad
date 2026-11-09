@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/logo.svg" width="128" height="128" alt="mad logo: a sidebar of agents and a prompt on a dark tile"></p>
+
 # mad — multi-agent deck
 
 [![CI](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml/badge.svg)](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml)
@@ -638,6 +640,11 @@ whole thing off with `{"quota": false}` in `config.json`.
 - **Resume**: claude and pi are started with `--session-id <agent uuid>`;
   for codex the thread id is recorded. If tmux dies or the machine restarts,
   press `enter` on the agent to resume the same conversation.
+
+For the proposed runtime direction, see [agent threads and file
+communication](docs/agent-runtime.md): lifecycle, message delivery, recovery,
+and scheduling. This is an architecture proposal, not a description of
+features available today.
 
 ## Notifications
 

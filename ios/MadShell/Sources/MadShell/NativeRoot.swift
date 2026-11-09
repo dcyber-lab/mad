@@ -14,6 +14,8 @@ public struct NativeRoot: View {
     @State private var selection: HomeRow.ID?
     /// What the Mac refused when the person acted on something that waits, until dismissed.
     @State private var notice: String?
+    /// What the pages of agents started from 新对话 are handed when they open.
+    @State private var handovers = Handovers()
     #if os(macOS)
     @State private var showPhone = false
     #endif
@@ -47,15 +49,20 @@ public struct NativeRoot: View {
         return HomeMapping.model(from: deck, fallbackName: title)
     }
 
+    /// 新对话 is native: the detail shows it (the Mac's pane, the iPhone's screen over the list), when the server can
+    /// start agents for the app.
+    private var newChat: (() -> Void)? { api is NewChatAPI ? { selection = HomeRow.newChatID } : nil }
+
     private var actions: HomeActions {
         let act: (String, String, String?) -> Void = { item, act, text in Task { await self.act(item: item, act: act, text: text) } }
         let interrupt: (String) -> Void = { id in Task { try? await api.interrupt(agent: id); await store.refresh() } }
         #if os(macOS)
         // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
-                                act: act, interrupt: interrupt)
+                                newChat: newChat, act: act, interrupt: interrupt)
         #else
-        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, act: act, interrupt: interrupt)
+        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, newChat: newChat, act: act,
+                                interrupt: interrupt)
         #endif
     }
 
@@ -63,13 +70,15 @@ public struct NativeRoot: View {
     /// and everything that is not native yet (the other ⋯ items, the + items) opens the page on its view. The search
     /// needs nothing of the app: the list filters itself.
     static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
-                            openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil,
+                            openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil, newChat: (() -> Void)? = nil,
                             act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                             interrupt: @escaping (String) -> Void = { _ in }) -> HomeActions {
         HomeActions(
             open: open,
             switchMac: { switchMac?() },
-            create: { item in openWeb?(.view(Self.webView(forNew: item))) },
+            create: { item in
+                if item == .chat, let newChat { newChat() } else { openWeb?(.view(Self.webView(forNew: item))) }
+            },
             menu: { item in
                 if item == .switchMac { switchMac?() }
                 else if item == .usage { open(HomeRow.usageID) }
@@ -78,6 +87,15 @@ public struct NativeRoot: View {
             },
             act: act,
             interrupt: interrupt)
+    }
+
+    /// An agent was started from 新对话: the deck has it before its row opens; when its first message did not go, its
+    /// page says why at the top and the text waits in its composer.
+    @MainActor
+    private func newChatStarted(_ chat: StartedChat) async {
+        await store.refresh()
+        handovers.add(chat)
+        selection = chat.id
     }
 
     /// An act on what waits, from the list or Today: the item as the deck says now (one answered meanwhile sends
@@ -143,7 +161,7 @@ public struct NativeRoot: View {
 
     /// Whether the row's own view draws its head and way back (a channel, an agent, Usage): the iPhone's bar stays out of it.
     private func drawsOwnHead(_ id: HomeRow.ID) -> Bool {
-        id == HomeRow.usageID || store.channel(id: id) != nil || store.agent(id: id) != nil
+        id == HomeRow.usageID || id == HomeRow.newChatID || store.channel(id: id) != nil || store.agent(id: id) != nil
     }
 
     /// On the Mac: whether a channel's or an agent's head is on screen (the link's note then goes in it).
@@ -153,19 +171,22 @@ public struct NativeRoot: View {
         #if os(macOS)
         MacShell(model: model, selection: $selection, actions: actions, link: store.link,
                  rowOpen: selection.map { rowOpen($0) } ?? false) {
-            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb, home: model, homeActions: actions)
+            Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb, home: model, homeActions: actions,
+                   handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted)
         }
         // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
         .environment(\.madLinkNote, LinkNote.message(for: store.link))
         .sheet(isPresented: $showPhone) {
             if let phone = api as? PhoneAPI { PhoneSheet(api: phone) { showPhone = false } }
         }
+        // the menu bar's 前往 does what the sidebar's menu does
+        .focusedSceneValue(\.madHomeMenu, actions.menu)
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {
             NavigationStack {
                 Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 }, openWeb: openWeb, home: model,
-                       homeActions: actions)
+                       homeActions: actions, handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted)
                     // a channel and an agent draw their own head, with their own way back
                     .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
@@ -190,22 +211,39 @@ struct Detail: View {
     /// The list's model and actions: Today is drawn from them.
     var home = HomeModel(machine: "", sections: [])
     var homeActions = HomeActions()
+    /// First messages that did not go out, by agent; 新对话's way to say an agent was started.
+    var handovers = Handovers()
+    var tookHandover: (String) -> Void = { _ in }
+    var newChatStarted: ((StartedChat) async -> Void)?
 
     var body: some View {
         if let id = selection, id != HomeRow.todayID {
             if id == HomeRow.usageID {
                 UsageDetail(api: api, onBack: onBack, open: open)
+            } else if id == HomeRow.newChatID, let starter = api as? NewChatAPI {
+                newChat(starter)
             } else if store.channel(id: id) != nil {
                 ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
                     .id(id) // another channel is another store
             } else if let agent = store.agent(id: id) {
-                AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb).id(agent.id)
+                AgentDetail(api: api, id: agent.id, onBack: onBack, openWeb: openWeb, draft: handovers.drafts[agent.id] ?? "",
+                            startNote: handovers.failures[agent.id], pending: handovers.firsts[agent.id],
+                            tookHandover: { tookHandover(agent.id) }).id(agent.id)
             } else {
                 placeholder(id, L("已经不在了"))
             }
         } else {
             TodayView(model: home, actions: homeActions)
         }
+    }
+
+    @ViewBuilder private func newChat(_ starter: NewChatAPI) -> some View {
+        NewChatDetail(api: starter, projects: store.deck?.projects ?? [], started: { chat in
+            if let newChatStarted { await newChatStarted(chat) } else { open(chat.id) }
+        }, onBack: onBack)
+        #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+        #endif
     }
 
     private func placeholder(_ title: String, _ note: String) -> some View {
@@ -275,8 +313,16 @@ struct AgentDetail: View {
     private let id: String
     private let onBack: (() -> Void)?
     private let openWeb: ((WebTarget) -> Void)?
+    private let draft: String
+    private let pending: PendingFirst?
+    private let tookHandover: () -> Void
 
-    init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil) {
+    init(api: MadAPI, id: String, onBack: (() -> Void)?, openWeb: ((WebTarget) -> Void)? = nil, draft: String = "",
+         startNote: String? = nil, pending: PendingFirst? = nil, tookHandover: @escaping () -> Void = {}) {
+        self.draft = draft
+        self.tookHandover = tookHandover
+        _failure = State(initialValue: startNote)
+        self.pending = pending
         self.api = api
         self.id = id
         self.onBack = onBack
@@ -285,26 +331,43 @@ struct AgentDetail: View {
     }
 
     var body: some View {
-        var model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0) }
+        var model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0, pending: pending) }
             ?? AgentConversation(title: id, agentID: id, canSend: false, sendHint: "")
         model.details?.finish = finish
-        return ConversationView(model: model, actions: actions, showsBack: onBack != nil)
+        return ConversationView(model: model, actions: actions, showsBack: onBack != nil, draft: draft)
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
+            // the draft and the note it was opened with are taken: reopening the agent does not bring them back
+            .onAppear { tookHandover() }
             .task(id: scenePhase) {
                 guard scenePhase == .active else { return }
                 await store.run()
             }
             // the finish menu: looked at when the page opens and again when the project's git changes
             .task(id: gitKey) { await loadFinish() }
-            .overlay(alignment: .top) {
-                if let note = store.notice ?? failure {
-                    NoticeBar(text: note) { store.dismissNotice(); failure = nil }
-                } else {
-                    NoticeBar(text: done, ok: true) { done = nil }
+            .overlay(alignment: noteAlignment) {
+                Group {
+                    if let note = store.notice ?? failure {
+                        NoticeBar(text: note) { store.dismissNotice(); failure = nil }
+                    } else {
+                        NoticeBar(text: done, ok: true) { done = nil }
+                    }
                 }
+                #if os(iOS)
+                // over the composer, not over the head: the way back and the unsent text stay in reach
+                .padding(.bottom, 92)
+                #endif
             }
+    }
+
+    /// The notice sits at the top on the Mac, and just above the composer on the phone (its head has the way back).
+    private var noteAlignment: Alignment {
+        #if os(iOS)
+        .bottom
+        #else
+        .top
+        #endif
     }
 
     /// What the finish menu depends on: the branch, the changes and the commits not pushed of the agent's project.
@@ -404,7 +467,7 @@ struct UsageDetail: View {
     @State private var failure: String?
 
     var body: some View {
-        UsageView(screen: store.deck.map { UsageMapping.screen(from: $0) } ?? UsageScreen(),
+        UsageView(screen: screen,
                   actions: UsageActions(
                     liftToday: { Task { await lift() } },
                     openAgent: { open($0) },
@@ -413,6 +476,22 @@ struct UsageDetail: View {
             .toolbar(.hidden, for: .navigationBar)
             #endif
             .overlay(alignment: .top) { NoticeBar(text: failure) { failure = nil } }
+    }
+
+    private var screen: UsageScreen {
+        #if DEBUG
+        // `-nativeUsageSample YES`: a full screen of made-up numbers, to look at the layout the fixture has no data for
+        if UserDefaults.standard.bool(forKey: "nativeUsageSample") {
+            return UsageScreen(
+                quotas: [UsageQuota(title: "Claude", window: "5 小时", percent: 62, reset: "2 小时后重置"),
+                         UsageQuota(title: "Claude", window: "本周", percent: 84, reset: "周四重置")],
+                total: "$15.86",
+                agents: [UsageLine(id: "work0001-aaaa", name: "Sidebar token 统计", sub: "mad · main", number: "$6.40", agent: true, agentKind: "claude", state: .working),
+                         UsageLine(id: "need0001-bbbb", name: "给我绘制一个表格", sub: "mad · main", number: "$4.12", agent: true, agentKind: "codex", state: .needsYou)],
+                budget: UsageBudget(note: "每天 $20.00 · 已用 $4.20", part: 0.21))
+        }
+        #endif
+        return store.deck.map { UsageMapping.screen(from: $0) } ?? UsageScreen()
     }
 
     private func lift() async {

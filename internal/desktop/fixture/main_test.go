@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // get answers a GET to the fixture of scenario name.
@@ -81,7 +82,7 @@ func TestEdgeHome(t *testing.T) {
 	if n := len([]rune(d.Machine)); n != 60 {
 		t.Errorf("the Mac's name is %d characters", n)
 	}
-	if len(d.Working) != 2 || d.Inbox.Needs != 1 {
+	if len(d.Working) != 2 || d.Inbox.Needs != 3 {
 		t.Errorf("working %v, needs %d", d.Working, d.Inbox.Needs)
 	}
 	for _, c := range d.Bus {
@@ -314,5 +315,125 @@ func TestPostBecomesTheNextMessage(t *testing.T) {
 	}
 	if len(m.Messages) != 1 || m.Messages[0].Seq != 24 || m.Messages[0].Text != "hello there" || m.Messages[0].From.ID != "you" || m.Last != 24 {
 		t.Errorf("after the post: %+v", m)
+	}
+}
+
+// An agent started through POST /api/agents is in its project of the deck from then on, once for each look.
+func TestStartedAgentIsInTheDeck(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"codex","text":"hello"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var started struct{ ID string }
+	_ = json.NewDecoder(r.Body).Decode(&started)
+	r.Body.Close()
+	if started.ID == "" {
+		t.Fatal("no id answered")
+	}
+	for look := 0; look < 2; look++ {
+		r, err = http.Get(srv.URL + "/api/deck")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d struct {
+			Projects []struct {
+				Agents []struct{ ID, Kind, Title string }
+			}
+		}
+		_ = json.NewDecoder(r.Body).Decode(&d)
+		r.Body.Close()
+		n := 0
+		for _, a := range d.Projects[0].Agents {
+			if a.ID == started.ID {
+				n++
+				if a.Kind != "codex" || a.Title != "hello" {
+					t.Errorf("the started agent: %+v", a)
+				}
+			}
+		}
+		if n != 1 {
+			t.Errorf("look %d: the started agent is %d times in the project, want 1", look, n)
+		}
+	}
+}
+
+// A started agent runs in window mode and has no transcript for a moment; then it has the first message, once.
+func TestStartedAgentHasAWindowModeAndATranscriptAfterAMoment(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, _ := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"claude","text":"hello"}`))
+	var started struct{ ID string }
+	_ = json.NewDecoder(r.Body).Decode(&started)
+	r.Body.Close()
+	chat := func(query string) (file string, off int64, n int) {
+		r, err := http.Get(srv.URL + "/api/chat?id=" + started.ID + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		var c struct {
+			File    string
+			Offset  int64
+			Entries []struct{ Kind, Text string }
+		}
+		_ = json.NewDecoder(r.Body).Decode(&c)
+		return c.File, c.Offset, len(c.Entries)
+	}
+	if _, _, n := chat(""); n != 0 {
+		t.Errorf("a transcript at once: %d entries", n)
+	}
+	r, _ = http.Get(srv.URL + "/api/deck")
+	var d struct {
+		Projects []struct {
+			Agents []struct {
+				ID, Mode string
+				Headless bool
+			}
+		}
+	}
+	_ = json.NewDecoder(r.Body).Decode(&d)
+	r.Body.Close()
+	for _, a := range d.Projects[0].Agents {
+		if a.ID == started.ID && (a.Mode != "window" || !a.Headless) {
+			t.Errorf("the started agent: %+v", a)
+		}
+	}
+	time.Sleep(startedTranscriptAfter + 100*time.Millisecond)
+	file, off, n := chat("")
+	if n != 2 {
+		t.Fatalf("after a moment: %d entries, want the message and a reply", n)
+	}
+	if _, _, again := chat(fmt.Sprintf("&file=%s&from=%d", file, off)); again != 0 {
+		t.Errorf("read again: %d entries", again)
+	}
+}
+
+// A first message with [fail] does not go: the answer says why, and the agent is started all the same.
+func TestStartedAgentWhoseFirstMessageFailsSaysWhy(t *testing.T) {
+	h, err := newHandler("quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	r, err := http.Post(srv.URL+"/api/agents", "application/json", strings.NewReader(`{"project":"/fixture/mad","kind":"claude","text":"[fail] hello"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var got struct{ ID, Error string }
+	_ = json.NewDecoder(r.Body).Decode(&got)
+	if got.ID == "" || got.Error == "" {
+		t.Errorf("answer %+v, want an id and an error", got)
 	}
 }

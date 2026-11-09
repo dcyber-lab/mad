@@ -82,7 +82,9 @@ public struct ChannelView: View {
         ChannelComposer(placeholder: screen.placeholder, readOnly: screen.readOnly, mentions: screen.panel.members + screen.panel.helpers,
                         replying: $replying, send: actions.send)
             .frame(maxWidth: MadColumn.maxWidth)
+            #if os(macOS)
             .padding(.horizontal, MadColumn.side)
+            #endif
             .frame(maxWidth: .infinity)
     }
 
@@ -92,115 +94,86 @@ public struct ChannelView: View {
         // changes the list's inset (the list stays where it is under it), a composer that grows goes up over the list, and
         // what scrolls under the head is blurred by its material, not cut.
         messages
-            .safeAreaInset(edge: .top, spacing: 0) { head.background(.ultraThinMaterial) }
-            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(.ultraThinMaterial) }
-            .background(Color.clear)
+            .safeAreaInset(edge: .top, spacing: 0) { head.background(alignment: .top) { PhoneHeadFade() } }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(alignment: .bottom) { PhoneFootFade() } }
+            .background(Color.madPaper)
         #else
+        // no title bar (design v6): the list scrolls under a fade, the capsule and the round button float over it, and the
+        // composer floats over the list's foot
         VStack(spacing: 0) {
-            head
             messages
-            composerRow
+            composerRow.macFootBar()
         }
         .background(Color.madPaper)
+        // over the window's top edge even when a panel (the inspector) gives the window a title bar inset
+        .overlay(alignment: .top) { MacTopFade().ignoresSafeArea(.container, edges: .top) }
+        .overlay(alignment: .top) { macTop.ignoresSafeArea(.container, edges: .top) }
         #endif
     }
 
-    /// The head (the approved design's, v5): back (phone), the tile with the name and "4 位成员 · 2 个在工作" (it opens
-    /// 群信息), and at the right the members' avatars in a stack and the 群信息 toggle. A hairline under it.
+    #if os(iOS)
+    /// The phone's head (design v6): the round back button, the capsule with the group's tile, its name and
+    /// "3 个成员 · 1 个在工作" (it opens 群信息), and the round ⋯ (also 群信息).
     private var head: some View {
-        HStack(spacing: 10) {
+        PhoneTopBar {
+            if let back = actions.back { PhoneBackButton { back() } } else { Color.clear.frame(width: Phone.button, height: Phone.button) }
+        } center: {
+            Button { panelOpen = true } label: {
+                PhoneTitlePill(title: screen.title, sub: pillSub) {
+                    GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 34,
+                              dot: (screen.members + screen.helpers).contains { $0.state == .needsYou })
+                        .frame(width: 34, height: 34)
+                }
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
+            .accessibilityHint(L("群信息"))
+        } trailing: {
+            PhoneRoundButton(action: { panelOpen.toggle() }) { Image(systemName: "ellipsis") }
+                .accessibilityLabel(L("群信息"))
+        }
+    }
+    #else
+    /// The Mac's top (design v6): the capsule with the group's tile, its name and "3 个成员 · 1 个在工作" (it opens 群信息),
+    /// and the round 群信息 toggle in the corner.
+    private var macTop: some View {
+        MacTopBar(cornerWidth: 60) {
             if let back = actions.back {
-                Button { back() } label: {
-                    Image(systemName: "chevron.backward").font(.system(size: 21, weight: .semibold)).foregroundStyle(Color.madAccent).frame(width: 26, height: 34)
+                MacSymbolButton(symbol: "chevron.backward", label: L("返回")) { back() }
+            }
+        } pill: {
+            Button { panelOpen = true } label: {
+                MacTitlePill(title: screen.title, sub: pillSub) {
+                    GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: 26,
+                              dot: (screen.members + screen.helpers).contains { $0.state == .needsYou })
+                        .frame(width: 26, height: 26)
                 }
-                .buttonStyle(.plain).accessibilityLabel("返回")
+                .contentShape(Capsule())
             }
-            nameButton
-            Spacer(minLength: 0)
-            memberStack
-            infoButton
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
+            .accessibilityHint(L("群信息"))
+        } corner: {
+            MacSymbolButton(symbol: "sidebar.right", label: L("群信息"), on: panelOpen) { panelOpen.toggle() }
         }
-        #if os(macOS)
-        .padding(.leading, 20 + headLeading)
-        .padding(.trailing, 20)
-        .padding(.vertical, 12)
-        .frame(minHeight: 60)
-        #else
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
-        #endif
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
     }
+    #endif
 
-    @Environment(\.madHeadLeading) private var headLeading
-
-    /// The tile beside the name.
-    private var pillTile: CGFloat { 34 }
-
-    /// "4 位成员 · 2 个在工作": how many the team has, then how it stands (a quiet channel says only its count).
-    private var subLine: String {
-        let n = screen.members.filter { !$0.dim }.count
-        guard n > 0 else { return screen.stateLine }
-        let count = Lf("%lld 位成员", n)
-        if screen.stateLine.isEmpty || screen.stateLine == L("空闲") { return count }
-        return count + " · " + screen.stateLine
+    /// "3 个成员 · 1 个在工作" (a quiet channel says only its count); a bad link says so instead.
+    private var pillSub: String {
+        if let note { return note.text }
+        let live = screen.members.filter { !$0.dim }
+        guard !live.isEmpty else { return screen.stateLine }
+        let count = Lf("%lld 个成员", live.count)
+        // one clause, so the capsule never cuts it: who waits for the person first, else who works
+        let needing = (screen.members + screen.helpers).filter { !$0.dim && $0.state == .needsYou }.count
+        let working = (screen.members + screen.helpers).filter { !$0.dim && $0.state == .working }.count
+        if needing > 0 { return count + " · " + Lf("%lld 个在等你", needing) }
+        if working > 0 { return count + " · " + Lf("%lld 个在工作", working) }
+        return count
     }
-
-    /// The members' avatars, overlapping, each ringed with the paper so they read apart: on the phone only the working
-    /// ones (up to three), on the Mac up to five.
-    private var memberStack: some View {
-        #if os(iOS)
-        let shown = Array(screen.members.filter { !$0.dim && $0.state == .working }.prefix(3))
-        let size: CGFloat = 26
-        #else
-        let shown = Array(screen.members.filter { !$0.dim }.prefix(5))
-        let size: CGFloat = 24
-        #endif
-        return HStack(spacing: -6) {
-            ForEach(shown) { m in
-                CharacterView(id: m.id, kind: m.kind, state: m.state, size: size)
-                    .background(Circle().fill(Color.madPaper).padding(-2))
-            }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private var nameButton: some View {
-        Button { panelOpen = true } label: {
-            HStack(spacing: 10) {
-                GroupTile(members: screen.members.filter { !$0.dim }.map { ($0.id, $0.kind, $0.state) }, size: pillTile,
-                          dot: (screen.members + screen.helpers).contains { $0.state == .needsYou }) // faces: the team's; the dot: everyone's
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(screen.title).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
-                    PillSubline(text: subLine)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(screen.title)，\(screen.stateLine)")
-        .accessibilityHint(L("群信息"))
-    }
-
-    private var titleSize: CGFloat {
-        #if os(iOS)
-        16
-        #else
-        15
-        #endif
-    }
-
-    /// The 群信息 toggle: the pane icon, filled while the panel is open.
-    private var infoButton: some View {
-        Button { panelOpen.toggle() } label: {
-            Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(panelOpen ? Color.madFg : Color.madFg2)
-                .frame(width: 30, height: 30)
-                .background(panelOpen ? Color.madRaise : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain).accessibilityLabel("群信息")
-    }
+    @Environment(\.madLinkNote) private var note
 
     private var messages: some View {
         ScrollViewReader { proxy in
@@ -254,11 +227,12 @@ public struct ChannelView: View {
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
                 #if os(macOS)
-                .padding(.top, 16)
+                .padding(.top, 76) // under the floating capsule
+                .padding(.bottom, 14)
                 #else
                 .padding(.top, 6)
-                #endif
                 .padding(.bottom, 10)
+                #endif
             }
             .overlay(alignment: .top) {
                 // an empty channel: one quiet line, a third of the way down the list area (the list itself is bottom-anchored)
@@ -398,7 +372,11 @@ public struct ChannelView: View {
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
         switch item {
         case .time(_, let text):
-            Text(text).font(.system(size: 11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            #if os(macOS)
+            Text(text).font(Mac.date).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 2)
+            #else
+            Text(text).font(.mad(11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            #endif
         case .note(let id, _) where id == "quiet" || id == "empty":
             Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
@@ -412,34 +390,41 @@ public struct ChannelView: View {
                 }
                 if b.lastOwn { ReceiptLine(receipt: b.receipt) }
             }
+            #if os(macOS)
+            .padding(.top, 14)
+            #else
             .padding(.top, 6)
+            #endif
         case .run(let run):
             #if os(macOS)
-            // As in a chat with one bot: no gutter; the sender's small character stands by its name above the bubbles
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: 20)
-                        .onTapGesture { actions.openAgent(run.sender.id) }
-                    Text(run.sender.name).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .padding(.leading, 2)
-                ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 12)
-            #else
-            HStack(alignment: .bottom, spacing: 8) {
-                CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: 26)
+            // Grok's group chat: the sender's name in its colour over the bubbles, the 28pt avatar at the last bubble's bottom-left
+            HStack(alignment: .bottom, spacing: MadColumn.gutter - Mac.chatAvatar) {
+                CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: Mac.chatAvatar)
+                    .frame(width: Mac.chatAvatar, height: Mac.chatAvatar)
                     .onTapGesture { actions.openAgent(run.sender.id) }
-                    .padding(.bottom, 2)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(run.sender.name).font(MadType.label).foregroundStyle(.secondary).padding(.leading, 4).lineLimit(1)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(run.sender.name).font(Mac.sender)
+                        .foregroundStyle(Color.madIdentity(id: run.sender.id, kind: run.sender.kind))
+                        .padding(.leading, 3).lineLimit(1)
+                    ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, Mac.messageGap)
+            #else
+            // Grok's group chat: the sender's name in grey over the bubbles, the small avatar at the last bubble's bottom-left
+            HStack(alignment: .bottom, spacing: Phone.chatSide - 6) {
+                CharacterView(id: run.sender.id, kind: run.sender.kind, state: run.sender.state, size: Phone.chatAvatar)
+                    .frame(width: Phone.chatAvatar, height: Phone.chatAvatar)
+                    .onTapGesture { actions.openAgent(run.sender.id) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(run.sender.name).font(Phone.sender).foregroundStyle(Color.madFg2).padding(.leading, 4).padding(.bottom, 2).lineLimit(1)
                     ForEach(run.bubbles) { b in bubble(b, mine: false, who: run.sender.name) }
                 }
                 // to the column's right edge (a Spacer here would add the HStack's spacing before it)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.top, 10)
+            .padding(.top, 14)
             #endif
         }
     }

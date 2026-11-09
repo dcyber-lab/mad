@@ -261,6 +261,8 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public static let todayID = "mad:today"
     /// The Usage screen, opened from the person's row at the sidebar's foot (or ⋯ → 用量).
     public static let usageID = "mad:usage"
+    /// The Mac's 新对话 page in the detail pane (no row of its own).
+    public static let newChatID = "mad:newchat"
 
     /// What the row is called: its name, else "codex 32d23a28" for an untitled agent.
     public var title: String {

@@ -5,29 +5,30 @@ import SwiftUI
 /// stay as they were (and grow with Dynamic Type).
 enum MadType {
     #if os(macOS)
+    // Design v6 for the Mac (docs/design/mac-v6.html): Grok bot's layout, a step larger, as the person asked.
     /// A row's or an agent's name.
-    static let rowName = Font.system(size: 15, weight: .medium)
+    static let rowName = Font.system(size: 16, weight: .medium)
     /// A row's last line.
-    static let rowLine = Font.system(size: 13)
+    static let rowLine = Font.system(size: 14)
     /// What is said: a message, what the person types.
-    static let message = Font.system(size: 15)
+    static let message = Font.system(size: 17)
     /// The opened text of a folded line, a card's body.
-    static let detail = Font.system(size: 15)
+    static let detail = Font.system(size: 16)
     /// The handoff / done line.
-    static let pill = Font.system(size: 14)
+    static let pill = Font.system(size: 15)
     /// A head's title.
-    static let title = Font.system(size: 17, weight: .semibold)
+    static let title = Font.system(size: 16, weight: .semibold)
     /// Sender names, the head's sub line, times, section titles.
-    static let label = Font.system(size: 13)
+    static let label = Font.system(size: 13.5)
     /// Quotes, notes, a row's small line.
-    static let small = Font.system(size: 13)
+    static let small = Font.system(size: 14)
     /// The smallest: a tag.
-    static let tag = Font.system(size: 12)
-    /// The extra space between the lines of what is said (15pt text on a 22 to 23pt pitch).
-    static let messageLineSpacing: CGFloat = 4
+    static let tag = Font.system(size: 13)
+    /// The extra space between the lines of what is said (17pt text on a 27pt pitch, the mockup's 1.6).
+    static let messageLineSpacing: CGFloat = 7
     /// Code in a bubble, and in a tool's input and result.
-    static let code = Font.system(size: 13, design: .monospaced)
-    static let codeSmall = Font.system(size: 12, design: .monospaced)
+    static let code = Font.system(size: 15, design: .monospaced)
+    static let codeSmall = Font.system(size: 14, design: .monospaced)
     #else
     static let rowName = Font.body.weight(.semibold)
     static let rowLine = Font.subheadline
@@ -49,18 +50,22 @@ enum MadType {
 /// and a bubble is as wide as its text up to a share of the column.
 enum MadColumn {
     #if os(macOS)
-    static let maxWidth: CGFloat = 960
+    static let maxWidth: CGFloat = 820
     static let side: CGFloat = 32
-    /// No gutter on the Mac: a sender's small character sits by its name above the bubbles.
-    static let gutter: CGFloat = 0
-    /// The most of the column a bubble takes.
-    static let bubbleShare: CGFloat = 0.58
+    /// The 28pt avatar and the 12pt after it (design v6): others' bubbles start after it, mine end at the right edge.
+    static let gutter: CGFloat = 40
+    /// The most of the room beside the gutter a bubble takes: 600 of the 780 a full column has left.
+    static let bubbleShare: CGFloat = 600.0 / 780.0
+    /// An agent's long answer may take 700 of the same 780.
+    static let wideShare: CGFloat = 700.0 / 780.0
+    /// The widest a long answer may be in a column `width` wide.
+    static func wideBubble(in width: CGFloat) -> CGFloat { max(120, (width - gutter) * wideShare) }
     #else
     static let maxWidth: CGFloat = 720
-    static let side: CGFloat = 14
+    static let side: CGFloat = 16
     /// The avatar (26) and the space after it.
-    static let gutter: CGFloat = 34
-    static let bubbleShare: CGFloat = 0.75
+    static let gutter: CGFloat = 36
+    static let bubbleShare: CGFloat = 0.86
     #endif
 
     /// The widest a bubble may be in a column `width` wide.
@@ -208,5 +213,35 @@ extension View {
     /// system lays them out, so no frame has an empty band in it. Older systems have `BottomWatch`'s settle check instead.
     @ViewBuilder func pinnedToBottomThroughResizes() -> some View {
         if #available(iOS 18, macOS 15, *) { defaultScrollAnchor(.bottom, for: .sizeChanges) } else { self }
+    }
+}
+
+extension Font {
+    /// A size chosen for the Mac's window. On the Mac it is that size; on the iPhone it is the text style a reader
+    /// expects there, at least 13pt, and it grows with Dynamic Type: the Mac's 11 to 13.5pt read too small in the
+    /// hand.
+    public static func mad(_ size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        #if os(macOS)
+        return .system(size: size, weight: weight, design: design)
+        #else
+        return .system(MadType.style(forMac: size), design: design, weight: weight)
+        #endif
+    }
+}
+
+extension MadType {
+    /// The iPhone's text style for a size chosen on the Mac: under 12 the footnote (13), under 13 the subheadline
+    /// (15), under 14 the callout (16), under 17 the body (17); bigger ones are titles, kept as they are.
+    static func style(forMac size: CGFloat) -> Font.TextStyle {
+        switch size {
+        case ..<12: .footnote
+        case ..<13: .subheadline
+        case ..<14: .callout
+        case ..<17: .body
+        case ..<20: .headline
+        case ..<22: .title3
+        case ..<28: .title2
+        default: .title
+        }
     }
 }

@@ -18,7 +18,10 @@ struct MadMacApp: App {
         }
         .defaultSize(width: 1200, height: 800)
         // ⌘N is the Today page's 新对话, not a second main window
-        .commands { CommandGroup(replacing: .newItem) {} }
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            MadMenuCommands()
+        }
         // The page, in a window of its own, for what has no native screen yet (usage, the board, an
         // agent's terminal ...). The server is the one the main window found.
         WindowGroup("mad", for: WebTarget.self) { $target in

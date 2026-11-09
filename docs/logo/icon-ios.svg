@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+<defs><linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33373f"/><stop offset=".55" stop-color="#1e2126"/><stop offset="1" stop-color="#15171b"/></linearGradient>
+<radialGradient id="toplight" cx=".5" cy="0" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".10"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".35" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity=".02"/></linearGradient>
+<linearGradient id="side" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset="1" stop-color="#fff" stop-opacity=".025"/></linearGradient>
+<linearGradient id="off" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d636e"/><stop offset="1" stop-color="#454a53"/></linearGradient>
+<linearGradient id="on" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc0ff"/><stop offset="1" stop-color="#5f95f5"/></linearGradient>
+<linearGradient id="chev" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e6e9ee"/></linearGradient>
+<filter id="glow" x="-50%" y="-100%" width="200%" height="300%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>
+<rect width="100" height="100" fill="url(#ink)"/>
+<rect width="100" height="100" fill="url(#toplight)"/>
+<rect width="33" height="100" fill="url(#side)"/>
+<rect x="32.75" width=".5" height="100" fill="#fff" fill-opacity=".09"/>
+<rect x="7.5" y="43.5" width="18" height="13" rx="6.5" fill="#7cacf8" fill-opacity=".16"/>
+<circle cx="16.5" cy="35" r="4.2" fill="url(#off)"/>
+<circle cx="16.5" cy="50" r="4.2" fill="url(#on)"/>
+<circle cx="16.5" cy="65" r="4.2" fill="url(#off)"/>
+<rect x="67" y="55.5" width="15" height="6" rx="3" fill="#7cacf8" filter="url(#glow)" opacity=".55"/>
+<path d="M54 41 L63 50 L54 59" stroke="url(#chev)" stroke-width="6.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="67" y="55.5" width="15" height="6" rx="3" fill="url(#on)"/>
+</svg>

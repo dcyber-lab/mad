@@ -47,18 +47,16 @@ struct ChannelComposer: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let q = replying { replyBar(q) }
-            if !images.isEmpty { thumbnails }
+            if let q = replying { replyBar(q).padding(.horizontal, phoneSide) }
+            if !images.isEmpty { thumbnails.padding(.horizontal, phoneSide) }
             field
-            if let note { Text(note).font(MadType.small).foregroundStyle(Color.madDanger) }
+            if let note { Text(note).font(MadType.small).foregroundStyle(Color.madDanger).padding(.horizontal, phoneSide) }
         }
-        // no side padding of its own: the column the messages are in gives the edges
+        // no side padding of its own: the column the messages are in gives the edges (the phone's capsule has its own)
         .padding(.top, 8)
         #if os(macOS)
-        .padding(.bottom, 16)
+        .padding(.bottom, 22)
         .onPasteCommand(of: [.image]) { providers in pasteImages(providers) }
-        #else
-        .padding(.bottom, 8)
         #endif
         // the @ list floats over the messages, its foot 8pt above the composer: the messages keep their size
         .overlay(alignment: .topLeading) {
@@ -67,7 +65,7 @@ struct ChannelComposer: View {
                 // edge) and grows upward over the messages, at its own height.
                 Color.clear.frame(height: 0)
                     .overlay(alignment: .bottomLeading) {
-                        mentionList.fixedSize(horizontal: false, vertical: true).padding(.bottom, 8)
+                        mentionList.fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).padding(.leading, max(0, phoneSide - 8))
                     }
             }
         }
@@ -76,27 +74,35 @@ struct ChannelComposer: View {
         .onChange(of: text) { _, _ in pick = 0 }
     }
 
+    /// How far the lines above the phone's capsule stand in from the screen's edge.
+    private var phoneSide: CGFloat {
+        #if os(iOS)
+        24
+        #else
+        18 // inside the capsule's rounded ends
+        #endif
+    }
+
     /// ＋, the field and send. On the Mac they are one rounded bar with a hairline and a soft shadow, as in a chat app;
     /// on the phone three pieces.
     @ViewBuilder private var field: some View {
         #if os(macOS)
-        HStack(alignment: .bottom, spacing: 8) {
+        // design v6: a floating capsule (54pt, the float fill, a soft shadow): + at the left, send at the right
+        HStack(alignment: .bottom, spacing: 12) {
             plus
             textField.padding(.vertical, 7)
             sendButton
         }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.chatComposer))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.chatLine))
-        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        .padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 9)
+        .frame(minHeight: Mac.composerHeight)
+        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
+        .macFloat()
         #else
-        HStack(alignment: .bottom, spacing: 8) {
+        // Grok's floating capsule: a grey round + at the left, the field, a grey round send at the right
+        PhoneComposerCapsule {
             plus
-            textField
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .frame(minHeight: 36)
-                .background(Color.chatCard, in: RoundedRectangle(cornerRadius: 19))
+            textField.padding(.vertical, 8)
             sendButton
         }
         #endif
@@ -106,7 +112,11 @@ struct ChannelComposer: View {
         TextField(placeholder, text: $text, axis: .vertical)
             .lineLimit(1...5)
             .textFieldStyle(.plain)
-            .font(MadType.message)
+            #if os(iOS)
+            .font(Phone.message)
+            #else
+            .font(Mac.composerText)
+            #endif
             .focused($focused)
             #if os(macOS)
             .onSubmit { submit() }
@@ -122,9 +132,15 @@ struct ChannelComposer: View {
         Button(action: submit) {
             Image(systemName: "arrow.up")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                #if os(iOS)
+                .foregroundStyle(canSend ? Color.madPaper : Color.madFg2)
+                .frame(width: 42, height: 42)
+                .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
+                #else
+                .foregroundStyle(canSend ? Color.madPaper : Color.madFg2)
                 .frame(width: 36, height: 36)
-                .background(canSend ? Color.chatBlue : Color.chatBlue.opacity(0.6), in: Circle())
+                .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
+                #endif
         }
         .buttonStyle(.plain)
         .disabled(!canSend)
@@ -182,11 +198,16 @@ struct ChannelComposer: View {
             #endif
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
                 #if os(iOS)
-                .background(Color.chatCard, in: Circle())
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(Color.madFg)
+                .frame(width: 42, height: 42)
+                .background(Color.madRaise, in: Circle())
+                #else
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.madFg)
+                .frame(width: 34, height: 34)
+                .background(Color.madRaise, in: Circle())
                 #endif
         }
         .menuStyle(.button)

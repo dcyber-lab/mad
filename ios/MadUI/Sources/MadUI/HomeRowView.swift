@@ -1,17 +1,24 @@
 import SwiftUI
 
 /// The sizes a list row is drawn at: the Mac's sidebar (the design's 32pt avatar, 13.5pt name, 12pt line) or the
-/// phone's home (44pt, 16pt and 13pt, growing with Dynamic Type).
+/// phone's home (50pt, 19pt and 16pt, as Grok's).
 struct RowMetrics {
     var avatar: CGFloat
     var name: Font
     var line: Font
     var end: Font
     var spacing: CGFloat
+    /// The phone's list draws the end (time over a marker) its own way.
+    var isPhone = false
 
-    static let mac = RowMetrics(avatar: 32, name: .system(size: 13.5, weight: .medium), line: .system(size: 12),
-                                end: .system(size: 11), spacing: 10)
-    static let phone = RowMetrics(avatar: 44, name: .callout.weight(.semibold), line: .footnote, end: .caption, spacing: 12)
+    /// Design v6 (docs/design/mac-v6.html): a 34pt picture, a 16pt name and a 14pt grey line, 12pt apart.
+    static let mac = RowMetrics(avatar: 34, name: MadType.rowName, line: MadType.rowLine,
+                                end: .system(size: 13), spacing: 12)
+    #if os(iOS)
+    /// Grok's measured home list: 50pt avatar, 19pt name, 16pt preview, 14pt time (see `Phone`).
+    static let phone = RowMetrics(avatar: Phone.rowAvatar, name: Phone.rowName, line: Phone.rowPreview, end: Phone.rowTime,
+                                  spacing: Phone.rowGap, isPhone: true)
+    #endif
 }
 
 /// A row of the list: the avatar with its state ring (or the group's tile), the name, one line under it (the tool in
@@ -37,7 +44,7 @@ struct HomeRowView: View {
             picture
                 // a stopped character fades itself; a row dimmed for another reason (asleep) is faded here
                 .opacity(row.dimmed && row.state != .stopped ? 0.5 : 1)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: metrics.isPhone ? 1 : 2) {
                 Text(row.title)
                     .font(metrics.name)
                     .foregroundStyle(Color.madFg)
@@ -67,6 +74,29 @@ struct HomeRowView: View {
     }
 
     @ViewBuilder private var end: some View {
+        #if os(iOS)
+        if metrics.isPhone { phoneEnd } else { macEnd }
+        #else
+        macEnd
+        #endif
+    }
+
+    #if os(iOS)
+    /// The phone's end: the time in light grey, and under it the unread dot or a 完成 pill.
+    private var phoneEnd: some View {
+        VStack(alignment: .trailing, spacing: 9) {
+            if !row.age.isEmpty { Text(row.age).font(metrics.end).monospacedDigit().foregroundStyle(Color.madFg3).lineLimit(1).fixedSize() }
+            if row.kind == .agent && row.state == .done {
+                MadPill(text: L("完成"))
+            } else if row.kind != .agent && row.unread > 0 {
+                Circle().fill(Color.madAccent).frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+    #endif
+
+    @ViewBuilder private var macEnd: some View {
         if row.kind == .agent && row.state == .done {
             MadPill(text: L("完成"))
         } else if row.kind != .agent && row.unread > 0 {
