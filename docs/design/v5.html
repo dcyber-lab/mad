@@ -138,7 +138,16 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
 .att-card .cmd { font: 11.5px var(--mono); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--code); border-radius: 6px; padding: 3px 7px }
 .att-card .acts { display: flex; gap: 6px; align-items: center }
 .att-card .acts kbd { margin-left: auto }
-.sb-foot { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: grid; gap: 8px }
+.sb-foot { border-top: 1px solid var(--line); padding: 6px 8px 8px; display: grid; gap: 8px }
+.me-pic { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; flex: none }
+.quota { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.q { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px }
+.q .top2 { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--fg-2) }
+.q .top2 span:last-child { color: var(--fg-3); font-variant-numeric: tabular-nums }
+.q .big { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1 }
+.qbar { height: 6px; background: var(--raise-2); border-radius: 6px; overflow: hidden }
+.qbar i { display: block; height: 100%; background: var(--fg-2); border-radius: 6px }
+.qbar i.hot { background: var(--wait) }
 .me { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 550 }
 .me .pic { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; display: grid; place-items: center; font-size: 12px }
 .me .spend { margin-left: auto; font-weight: 500; color: var(--fg-2); font-variant-numeric: tabular-nums; font-size: 12px }
@@ -378,7 +387,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
       <div class="f" role="row"><span class="sev m">中</span><div><h3>群聊里自己的消息太重</h3><p>满宽饱和蓝胶囊 + 粗体，一长串 @ 消息时整屏都是蓝色，agent 的回复反而显得次要。</p></div><p class="fix">自己的消息用浅蓝底深色字；@ 名字用对方的身份色标出；回执“2 个未读”改成头像小点。</p></div>
       <div class="f" role="row"><span class="sev m">中</span><div><h3>网页和原生的头像不一致</h3><p>Mac 已换成 Grok 风格饱和色头像（#153），网页还是粉彩小角色。</p></div><p class="fix">三端统一用 <span class="mono">GrokAvatar</span>，共享 <span class="mono">character-vectors.json</span> 的测试向量。</p></div>
       <div class="f" role="row"><span class="sev l">低</span><div><h3>次要文字对比度不够</h3><p><code class="mono">--text-3 #8e8e98</code> 在侧栏底色上约 3.1:1，低于 4.5:1；快捷键提示只有 10px。</p></div><p class="fix">次要灰改为 #6b6b76（约 5:1），快捷键提示 11px 起。</p></div>
-      <div class="f" role="row"><span class="sev l">低</span><div><h3>用量藏在底部一行小字</h3><p>5 小时和每周窗口的用量、今天的花费，是终端版标题栏的内容，窗口里不容易看到。</p></div><p class="fix">侧栏底部放两条细进度条，超过 80% 变琥珀色；今天花费跟在名字后面。</p></div>
+      <div class="f" role="row"><span class="sev l">低</span><div><h3>用量藏在底部一行小字</h3><p>5 小时和每周窗口的用量、今天的花费，是终端版标题栏的内容，窗口里不容易看到。</p></div><p class="fix">单独做一个“用量”页：四个额度窗口、今天按项目和 agent 的花费、mad 自己的预算。侧栏底部只留名字和“用量 ›”入口。</p></div>
       <div class="f" role="row"><span class="sev l">低</span><div><h3>空状态没有下一步</h3><p>群聊空状态只有一行“还没人说话。@ 一个 agent 可以叫醒它。”，居中在一大片空白里。</p></div><p class="fix">空群聊直接列出成员和“@ 叫醒”按钮；新对话空状态给最近用过的项目。</p></div>
     </div>
   </section>
@@ -400,9 +409,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
           <button class="search" type="button" id="openPal"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg><span>搜索或跳转</span><kbd>⌘K</kbd></button>
           <nav class="sb-list" id="sbList" aria-label="侧栏"></nav>
           <div class="sb-foot">
-            <div class="me"><span class="pic">H</span>Heng Du<span class="spend">今天 $6.82</span></div>
-            <div class="meter"><span>Claude 5h</span><span class="bar"><i style="width:42%"></i></span><span>42% · 2:10</span></div>
-            <div class="meter"><span>Claude 周</span><span class="bar"><i class="hot" style="width:83%"></i></span><span>83% · 周四</span></div>
+            <button class="row" type="button" data-go="usage" id="meRow" aria-current="false"><span class="me-pic">H</span><span class="txt"><span class="nm">Heng Du</span></span><span class="end"><span>用量 ›</span></span></button>
           </div>
         </aside>
         <main class="main" id="main"></main>
@@ -470,8 +477,8 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
     <div class="plan">
       <div class="pr"><span class="no">1</span><p><b>状态环和颜色</b>：头像加状态环，停止改为变淡，次要灰提到 4.5:1。三端一起改，影响最大、风险最小。</p><span class="where">GrokAvatar.swift · characters.js · style.css</span></div>
       <div class="pr"><span class="no">2</span><p><b>对话内审批卡</b>：agent 页末尾的审批卡和 iPhone 底部面板，复用概览的允许 / 拒绝接口。</p><span class="where">ConversationView.swift · app.js · actions.js</span></div>
-      <div class="pr"><span class="no">3</span><p><b>侧栏重排</b>：“待处理”置顶、项目标题带 git 和花费、机器胶囊、⌘K 搜索框、底部用量条。</p><span class="where">MacSidebar.swift · HomeSidebar.swift · app.js</span></div>
-      <div class="pr"><span class="no">4</span><p><b>概览 → 今日</b>：一句话总结，等你的卡片，在工作 / 刚完成的紧凑列表，空分组一行。</p><span class="where">HomeView.swift · inbox.js</span></div>
+      <div class="pr"><span class="no">3</span><p><b>侧栏重排</b>：“待处理”置顶、项目标题带 git 和花费、机器胶囊、⌘K 搜索框，底部只留个人入口。</p><span class="where">MacSidebar.swift · HomeSidebar.swift · app.js</span></div>
+      <div class="pr"><span class="no">4</span><p><b>概览 → 今日，加用量页</b>：一句话总结，等你的卡片，在工作 / 刚完成的紧凑列表，空分组一行；用量单独一页（原生替换现在网页上的用量页）。</p><span class="where">HomeView.swift · inbox.js</span></div>
       <div class="pr"><span class="no">5</span><p><b>详情栏和群聊细节</b>：分支 / 文件 / 花费 / 推送；自己消息浅底、@ 身份色、头像回执；网页换 Grok 头像。</p><span class="where">MacShell.swift · ChannelBubbleView.swift · bus.js</span></div>
     </div>
   </section>
@@ -591,7 +598,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
         <div class="side">4 分钟<span>$0.84</span></div></div>`;
     return `<div class="mh"><div class="t"><b>今日</b><span>11 月 9 日 周一</span></div><div class="right"><button class="btn" type="button">新对话 <kbd>⌘N</kbd></button><button class="btn" type="button">看板 <kbd>⌥B</kbd></button></div></div>
     <div class="body"><div class="col">
-      <div class="today-h"><p><b style="color:var(--wait)">${approved ? 1 : 2} 个在等你</b>，<b style="color:var(--work)">2 个在工作</b>，<b style="color:var(--done)">1 个刚完成</b>。今天花了 $6.82，Claude 周用量 83%。</p></div>
+      <div class="today-h"><p><b style="color:var(--wait)">${approved ? 1 : 2} 个在等你</b>，<b style="color:var(--work)">2 个在工作</b>，<b style="color:var(--done)">1 个刚完成</b>。今天花了 $6.82。</p></div>
       <div class="block"><div class="block-h"><span class="dot wait"></span>在等你<span class="k">按等待时间 · <kbd>⌥N</kbd> 下一个</span></div>
         ${waitTable}
         <div class="task wait">${av(1, 0, 'wait', 36)}<div class="tt"><b>kim</b><span class="where">blog · pi · 问了一个问题</span>
@@ -706,6 +713,23 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
         <div class="comp-row"><span>＋</span><span class="chip" style="padding-left:8px">发给 ${c.name}</span><span class="send" style="margin-left:auto;background:var(--accent);color:#fff">↑</span></div></div></div>`;
   }
 
+  function viewUsage() {
+    const q = (name, win, pct, reset, hot) => `<div class="q"><div class="top2"><span>${name} · ${win}</span><span>${reset}重置</span></div><div class="big">${pct}%</div><div class="qbar"><i class="${hot ? 'hot' : ''}" style="width:${pct}%"></i></div></div>`;
+    const ln = (lead, name, sub, num) => `<div class="line">${lead}<span class="tt"><b>${name}</b><span>${sub}</span></span><span class="num">${num}</span><span></span></div>`;
+    const box = `<span class="av" style="width:28px;height:28px;border-radius:8px;background:var(--raise)"></span>`;
+    return `<div class="mh"><div class="t"><b>用量</b><span>订阅额度和今天的花费（按 API 价格估算）</span></div><div class="right"><button class="btn" type="button">今天不限</button></div></div>
+    <div class="body"><div class="col">
+      <div class="block"><div class="block-h">订阅额度<span class="k">超过 80% 变琥珀色</span></div>
+        <div class="quota">${q('Claude', '5 小时', 42, '2:10 后', false)}${q('Claude', '每周', 83, '周四 09:00 ', true)}${q('Codex', '5 小时', 17, '3:40 后', false)}${q('Codex', '每周', 36, '周六 ', false)}</div></div>
+      <div class="block"><div class="block-h">今天的花费<span class="k">共 $6.82 · 昨天 $9.10</span></div>
+        <div class="lines">${ln(box, 'mad', '<code>main</code> · 5 个 agent', '$4.17')}${ln(box, 'deck 外的会话', 'Claude 桌面版和其他终端', '$2.45')}${ln(box, 'blog', '<code>draft</code> · 1 个 agent', '$0.20')}</div></div>
+      <div class="block"><div class="block-h">花得最多的 agent</div>
+        <div class="lines">${ln(av(5, 0, 'work', 28), 'Sidebar token 统计', 'mad · Opus · 182k 输入', '$2.31')}${ln(av(3, 1, 'work', 28), 'builder', 'mad · Sonnet', '$1.02')}${ln(av(2, 1, 'wait', 28), '给我绘制一个表格', 'mad · Opus', '$0.84')}</div></div>
+      <div class="block"><div class="block-h">mad 自己的 agent 预算<span class="k">每天 $20 · 已用 $6.82</span></div>
+        <div class="qbar"><i style="width:34%"></i></div></div>
+    </div></div>`;
+  }
+
   function renderInsp() {
     const a = cur.type === 'agent' ? A[cur.id] : null;
     const insp = document.getElementById('insp');
@@ -722,7 +746,8 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
 
   function render() {
     renderSide();
-    main.innerHTML = cur.type === 'today' ? viewToday() : cur.type === 'agent' ? viewAgent(cur.id) : viewChannel(cur.id);
+    document.getElementById('meRow').setAttribute('aria-current', String(cur.type === 'usage'));
+    main.innerHTML = cur.type === 'today' ? viewToday() : cur.type === 'usage' ? viewUsage() : cur.type === 'agent' ? viewAgent(cur.id) : viewChannel(cur.id);
     renderInsp();
   }
 
@@ -735,7 +760,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
     const g = e.target.closest('[data-go]');
     if (g && !e.target.closest('.pal')) {
       const [type, id] = g.dataset.go.split(':');
-      cur = type === 'today' ? { type } : { type, id };
+      cur = type === 'today' || type === 'usage' ? { type } : { type, id };
       if (type === 'agent') tab = 'chat';
       render();
     }
@@ -775,7 +800,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
       <div class="row">${av(5, 0, 'work', 44)}<span class="txt"><span class="nm">Sidebar token 统计</span><span class="sub"><b>Bash</b> go test ./internal/ui/...</span></span><span class="end">6 分钟</span></div>
       <div class="row">${av(4, 0, 'done', 44)}<span class="txt"><span class="nm">Mad ideas</span><span class="sub">完成 · 改了 3 个文件</span></span></div>
     </div>
-    <div class="ph-foot"><div class="meter"><span>Claude 5h</span><span class="bar"><i style="width:42%"></i></span><span>42%</span></div><div class="meter"><span>Claude 周</span><span class="bar"><i class="hot" style="width:83%"></i></span><span>83%</span></div></div>`;
+    <div class="ph-foot"><div class="row" style="padding:4px 2px"><span class="me-pic">H</span><span class="txt"><span class="nm" style="font-size:15px">Heng Du</span></span><span class="end" style="font-size:13px"><span>用量 ›</span></span></div></div>`;
 
   document.getElementById('ph2').innerHTML = sb + `
     <div class="ph-nav"><span class="back">‹</span>${av(2, 1, 'wait', 34)}<span class="t"><b>给我绘制一个表格</b><span>claude · mad / main · $0.84</span></span><span class="icon-btn" style="margin-left:auto">${ICON_MORE}</span></div>
