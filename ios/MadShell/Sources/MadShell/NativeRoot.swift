@@ -406,7 +406,7 @@ struct UsageDetail: View {
     @State private var failure: String?
 
     var body: some View {
-        UsageView(screen: store.deck.map { UsageMapping.screen(from: $0) } ?? UsageScreen(),
+        UsageView(screen: screen,
                   actions: UsageActions(
                     liftToday: { Task { await lift() } },
                     openAgent: { open($0) },
@@ -415,6 +415,22 @@ struct UsageDetail: View {
             .toolbar(.hidden, for: .navigationBar)
             #endif
             .overlay(alignment: .top) { NoticeBar(text: failure) { failure = nil } }
+    }
+
+    private var screen: UsageScreen {
+        #if DEBUG
+        // `-nativeUsageSample YES`: a full screen of made-up numbers, to look at the layout the fixture has no data for
+        if UserDefaults.standard.bool(forKey: "nativeUsageSample") {
+            return UsageScreen(
+                quotas: [UsageQuota(title: "Claude", window: "5 小时", percent: 62, reset: "2 小时后重置"),
+                         UsageQuota(title: "Claude", window: "本周", percent: 84, reset: "周四重置")],
+                total: "$15.86",
+                agents: [UsageLine(id: "work0001-aaaa", name: "Sidebar token 统计", sub: "mad · main", number: "$6.40", agent: true, agentKind: "claude", state: .working),
+                         UsageLine(id: "need0001-bbbb", name: "给我绘制一个表格", sub: "mad · main", number: "$4.12", agent: true, agentKind: "codex", state: .needsYou)],
+                budget: UsageBudget(note: "每天 $20.00 · 已用 $4.20", part: 0.21))
+        }
+        #endif
+        return store.deck.map { UsageMapping.screen(from: $0) } ?? UsageScreen()
     }
 
     private func lift() async {

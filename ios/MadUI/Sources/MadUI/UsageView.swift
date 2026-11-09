@@ -93,6 +93,15 @@ public struct UsageView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
+        phoneBody
+        #else
+        macBody
+        #endif
+    }
+
+    #if os(macOS)
+    private var macBody: some View {
         VStack(spacing: 0) {
             head
             ScrollView {
@@ -129,40 +138,12 @@ public struct UsageView: View {
         .background(Color.madPaper)
         .environment(\.madAvatarBackdrop, Color.madPaper)
     }
+    #endif
 
-    private var padding: CGFloat {
-        #if os(iOS)
-        16
-        #else
-        28
-        #endif
-    }
+    private var padding: CGFloat { 28 }
 
-    @ViewBuilder private var head: some View {
-        #if os(iOS)
-        HStack(spacing: 10) {
-            if let back = actions.back {
-                Button(action: back) {
-                    Image(systemName: "chevron.left").font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.madAccent)
-                        .frame(width: 30, height: 36)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("返回")
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(L("用量")).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.madFg)
-                Text(L("订阅额度和今天的花费（按 API 价格估算）")).font(.mad(12)).foregroundStyle(Color.madFg3).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            lift
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
-        #else
+    private var head: some View {
         PageHead(title: L("用量"), sub: L("订阅额度和今天的花费（按 API 价格估算）")) { lift }
-        #endif
     }
 
     @ViewBuilder private var lift: some View {
