@@ -13,6 +13,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -208,6 +209,7 @@ func (m *model) busCmd(now time.Time) tea.Cmd {
 	return func() tea.Msg {
 		look, _ := src.Look(st, statuses, time.Now())
 		skills, _ := skill.PendingList()
+		creator.Sweep(st)
 		return busMsg{cards: look.Cards, skills: skills, creates: create.List(), snap: busSnapOf(st, look, open)}
 	}
 }

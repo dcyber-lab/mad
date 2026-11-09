@@ -16,8 +16,8 @@ func TestCreateItems(t *testing.T) {
 	agentReq := create.Request{ID: "c-0000000a", By: "gus", ByID: "gus", At: at, Status: create.Waiting,
 		Spec: create.Spec{Type: create.TypeAgent, Name: "scout", Project: "/code/a", ProjectName: "a", Kind: "claude", Model: "sonnet", Message: "find the flaky test\nstart in handler_test.go", Channel: "api"}}
 	teamReq := create.Request{ID: "c-0000000b", By: "gus", ByID: "gus", At: at.Add(time.Second), Status: create.Waiting,
-		Spec: create.Spec{Type: create.TypeTeam, Name: "fix-flaky", Project: "/code/a", ProjectName: "a", Goal: "stop the flake",
-			Roles: []create.Role{{Role: "fixer", Kind: "claude", Model: "opus", Lead: true}, {Role: "checker", Kind: "codex"}}}}
+		Spec: create.Spec{Type: create.TypeTeam, Name: "fix-flaky", Project: "/code/a", ProjectName: "a", Goal: "stop the flake", Template: "dev", Kickoff: "Go: {{goal}}",
+			Roles: []create.Role{{Role: "fixer", Kind: "claude", Model: "opus", Lead: true, Brief: "lead it"}, {Role: "checker", Kind: "codex", ReadOnly: true}}}}
 	v := build(Facts{Agents: []Agent{agentAt("gus", "idle", at)}, Creates: []create.Request{agentReq, teamReq}, Now: t0})
 
 	a, ok := v.Inbox.Find("create:c-0000000a")
@@ -28,17 +28,17 @@ func TestCreateItems(t *testing.T) {
 	if a.Create == nil || a.Create.Name != "scout" || a.Create.Message != agentReq.Spec.Message || a.Create.Channel != "api" || a.Create.ProjectName != "a" {
 		t.Errorf("agent item's spec %+v", a.Create)
 	}
-	if a.Body != "find the flaky test\nstart in handler_test.go\n\nJoins #api" {
+	if a.Body != "First message: find the flaky test\nstart in handler_test.go\n\nJoins #api" || !a.Full || a.Where != "/code/a" {
 		t.Errorf("body %q", a.Body)
 	}
 	for _, act := range a.Acts {
-		if act.Kind != KindNew || !act.Row && !act.Input {
+		if act.Kind != KindNew || act.Verb == VerbAllow && act.Row || act.Verb == VerbDeny && !act.Row && !act.Input {
 			t.Errorf("act %+v", act)
 		}
 	}
 	tm, ok := v.Inbox.Find("create:c-0000000b")
 	if !ok || tm.Context != "wants to start a team" || tm.Text != "Team fix-flaky in a" || tm.Create == nil || len(tm.Create.Roles) != 2 ||
-		tm.Body != "Goal: stop the flake\nfixer: claude:opus (lead)\nchecker: codex" {
+		!tm.Full || tm.Body != "Goal: stop the flake\nTemplate: dev\nfixer: claude:opus (lead)\n  lead it\nchecker: codex (read only)\nKickoff: Go: stop the flake" {
 		t.Fatalf("team item %+v", tm)
 	}
 	if v.Inbox.Needs != 2 {

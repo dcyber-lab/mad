@@ -12,6 +12,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/paths"
@@ -21,17 +22,9 @@ import (
 	"github.com/dcyber-lab/mad/internal/team"
 )
 
-// Replaceable in tests.
-var (
-	startTeam     = team.Start
-	createTimeout = 10 * time.Minute
-	createPoll    = 500 * time.Millisecond
-)
-
-const (
-	createDeclined = "the person declined"
-	createNoAnswer = "the person hasn't answered yet"
-)
+// autoPerHour is how many agents or teams may be started in an hour without
+// asking (agents_create_without_asking); past it each asks again.
+var autoPerHour = 5
 
 var agentNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
@@ -201,15 +194,19 @@ func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl, from strin
 				leads++
 			}
 			tr = append(tr, team.Role{Role: madrun.Role{Name: strings.TrimSpace(r.Role), Agent: agentSpec}, Lead: r.Lead})
-			spec.Roles = append(spec.Roles, create.Role{Role: strings.TrimSpace(r.Role), Kind: kind, Model: model, Lead: r.Lead})
 		}
 		if leads == 0 { // the first leads unless told otherwise
-			tr[0].Lead, spec.Roles[0].Lead = true, true
+			tr[0].Lead = true
 		}
-		if err := team.Check(team.Template{Name: "custom", Topic: "{{goal}}", Roles: tr}); err != nil {
+		tpl := team.Template{Name: "custom", Topic: "{{goal}}", Roles: tr}
+		if err := team.Check(tpl); err != nil {
 			return "", err
 		}
+		spec.Template, spec.Topic = "", "{{goal}}"
+		spec.Roles = specRoles(tpl)
 	default:
+		// Read now, so the card lists what the team will be and it starts as
+		// listed, whatever the file says later.
 		t, ok := team.ByName(root, tmpl)
 		if !ok {
 			var names []string
@@ -219,7 +216,8 @@ func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl, from strin
 			}
 			return "", fmt.Errorf("no team template %q (templates: %s)", tmpl, strings.Join(names, ", "))
 		}
-		spec.Template = t.Name
+		spec.Template, spec.Topic, spec.Kickoff = t.Name, string(t.Topic), string(t.Kickoff)
+		spec.Roles = specRoles(t)
 	}
 	if spec.Name, err = team.CheckName(name, goal); err != nil {
 		return "", err
@@ -227,11 +225,23 @@ func mcpTeamStart(ctx context.Context, id, name, goal, project, tmpl, from strin
 	return mcpCreateRun(ctx, id, from, spec)
 }
 
-// mcpCreateRun gets the person's word for spec (unless the deck's
-// agents_create_without_asking is on) and carries it out. A spent budget
-// refuses it at once, before the person is asked. from is the channel the
-// agent is answering in: the outcome is told there too.
-func mcpCreateRun(ctx context.Context, id, from string, spec create.Spec) (string, error) {
+// specRoles are template t's roles as a request lists them.
+func specRoles(t team.Template) []create.Role {
+	var out []create.Role
+	for _, r := range t.Roles {
+		c := madrun.ParseChoice(r.Agent)
+		out = append(out, create.Role{Role: r.Name, Kind: c.Kind, Model: c.Model, Effort: c.Effort, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief))})
+	}
+	return out
+}
+
+// mcpCreateRun asks the person for spec, and returns at once: the tool call
+// does not wait (it would hold the agent's whole mad server). The window
+// starts what is allowed and tells the agent by DM (package creator); a
+// spent budget refuses now. With the deck's agents_create_without_asking it
+// starts at once, up to autoPerHour an hour, then asks. from is the channel
+// the agent is answering in.
+func mcpCreateRun(_ context.Context, id, from string, spec create.Spec) (string, error) {
 	me, _, err := mcpMe(id)
 	if err != nil {
 		return "", err
@@ -239,129 +249,23 @@ func mcpCreateRun(ctx context.Context, id, from string, spec create.Spec) (strin
 	if !bus.SpendOK(time.Now()) {
 		return "", bus.ErrSpent
 	}
-	reqID := ""
-	// end records how the request ended, and tells the channel it came from.
-	end := func(status string, res create.Result, event, text string) {
-		if reqID == "" {
-			return
-		}
-		_ = create.Finish(reqID, status, res)
-		if from != "" {
-			_ = bus.Event(from, event, "create:"+reqID, text)
-		}
-		_ = poke.Send(poke.Poll)
-	}
-	if cfg, _ := deck.LoadConfig(); !cfg.CreateWithoutAsking {
-		r, err := create.Add(me.Label, id, from, spec)
+	if cfg, _ := deck.LoadConfig(); cfg.CreateWithoutAsking && create.AutoSince(time.Now().Add(-time.Hour)) < autoPerHour {
+		r, err := create.AddAuto(me.Label, id, from, spec)
 		if err != nil {
 			return "", err
 		}
-		reqID = r.ID
-		_ = poke.Send(poke.Poll) // the window and the deck show it now
-		deadline := time.NewTimer(createTimeout)
-		defer deadline.Stop()
-		tick := time.NewTicker(createPoll)
-		defer tick.Stop()
-		for answered := false; !answered; {
-			select {
-			case <-ctx.Done():
-				end(create.Expired, create.Result{}, bus.EventCreateExpired, "You did not confirm in time; nothing was created.")
-				return "", ctx.Err()
-			case <-deadline.C:
-				end(create.Expired, create.Result{}, bus.EventCreateExpired, "You did not confirm in time; nothing was created.")
-				return createNoAnswer, nil
-			case <-tick.C:
-				cur, err := create.Get(r.ID)
-				switch {
-				case err != nil:
-					return createNoAnswer, nil // taken back
-				case cur.Status == create.Declined:
-					if from != "" {
-						_ = bus.Event(from, bus.EventCreateDeclined, "create:"+reqID, "You declined; nothing was created.")
-					}
-					return createDeclined, nil
-				case cur.Status == create.Changes:
-					if from != "" {
-						_ = bus.Event(from, bus.EventCreateChanges, "create:"+reqID, "You asked for changes: "+cur.Reply)
-					}
-					return "the person wants changes: " + cur.Reply, nil
-				case cur.Status == create.Allowed:
-					answered = true
-				case cur.Status != create.Waiting:
-					return createNoAnswer, nil
-				}
-			}
-		}
-		if !bus.SpendOK(time.Now()) { // while it waited
-			end(create.Failed, create.Result{Reason: bus.ErrSpent.Error()}, bus.EventCreateFailed, "Nothing was created: today's budget is spent.")
-			return "", bus.ErrSpent
-		}
+		_, out, err := creator.Run(r)
+		return out, err
 	}
-	defer func() { _ = poke.Send(poke.Poll) }()
-	var out string
-	var res create.Result
-	if spec.Type == create.TypeTeam {
-		out, res, err = startTeamFor(spec)
-	} else {
-		out, res, err = startAgentFor(me, spec)
-	}
-	what := "Agent " + spec.Name
-	if spec.Type == create.TypeTeam {
-		what = "Team " + spec.Name
-	}
+	r, err := create.Add(me.Label, id, from, spec)
 	if err != nil {
-		end(create.Failed, create.Result{Reason: err.Error()}, bus.EventCreateFailed, what+" was not created: "+err.Error())
 		return "", err
 	}
-	end(create.Created, res, bus.EventCreated, what+" was created.")
-	return out, nil
-}
-
-func startAgentFor(from bus.From, spec create.Spec) (string, create.Result, error) {
-	a, err := spawnAgent(drive.Spec{Kind: spec.Kind, Model: spec.Model, Dir: spec.Project, Name: spec.Name}, kinds())
-	if a == nil {
-		return "", create.Result{}, err
-	}
-	res := create.Result{Agent: a.ID}
-	out := map[string]any{"agent": map[string]string{"id": a.ID, "label": drive.Label(a)}}
-	if err != nil { // it came up asking something: the person must answer
-		out["note"] = "it came up asking something the person must answer: " + err.Error()
-	}
-	label := drive.Label(a)
-	var perr error
-	if spec.Channel != "" {
-		if perr = bus.Join(spec.Channel, a.ID); perr == nil {
-			_, perr = bus.Post(spec.Channel, from, "@"+label+" "+spec.Message, 0)
-		}
-		res.Channel = spec.Channel
-	} else {
-		res.Channel, _, perr = bus.DM(from, a.ID, spec.Message)
-	}
-	out["channel"] = res.Channel
-	if perr != nil {
-		out["warning"] = "the agent was started but its first message was not sent: " + perr.Error()
-	}
-	text, err := mcpJSON(out)
-	return text, res, err
-}
-
-func startTeamFor(spec create.Spec) (string, create.Result, error) {
-	o := team.Options{Project: spec.Project, Template: spec.Template, Name: spec.Name, Goal: spec.Goal, Kinds: kinds()}
-	for _, r := range spec.Roles {
-		agentSpec := r.Kind
-		if r.Model != "" {
-			agentSpec += ":" + r.Model
-		}
-		o.Roles = append(o.Roles, team.Role{Role: madrun.Role{Name: r.Role, Agent: agentSpec}, Lead: r.Lead})
-	}
-	got, err := startTeam(o)
-	if err != nil {
-		return "", create.Result{}, err
-	}
-	agents := map[string]string{}
-	for _, r := range got.Roles {
-		agents[r.Role] = r.Agent
-	}
-	text, err := mcpJSON(map[string]any{"team": got.Name, "channel": got.Channel, "agents": agents, "notes": got.Notes})
-	return text, create.Result{Team: got.Name, Channel: got.Channel}, err
+	_ = poke.Send(poke.Poll) // the window and the deck show it now
+	return mcpJSON(map[string]any{
+		"status":  "asked",
+		"item":    "create:" + r.ID,
+		"request": r.ID,
+		"say":     "asked the person (request " + r.ID + "); you'll be told by a message from mad when they answer, within about 10 minutes. End your turn now; do not ask again.",
+	})
 }

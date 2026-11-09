@@ -16,6 +16,7 @@ func TestRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(2 * time.Millisecond)
 	b, _ := Add("gus", "id-gus", "", Spec{Type: TypeTeam, Name: "t", Project: "/p", Goal: "g"})
 	if l := List(); len(l) != 2 || l[0].ID != a.ID || l[0].Spec.Name != "scout" || l[0].By != "gus" || l[1].ID != b.ID {
 		t.Fatalf("list %+v", l)
@@ -46,21 +47,17 @@ func TestRequests(t *testing.T) {
 		}
 		Remove(id)
 	}
-	// One that waited longer than Expiry was left by an agent that died: it
-	// ends as expired, and is kept to say so.
+	// One that waited too long is listed as it is: ending it is creator.Sweep's.
 	old := Request{ID: "c-00000001", At: time.Now().Add(-Expiry - time.Minute), Status: Waiting}
-	if err := write(old); err != nil {
+	if err := Put(old); err != nil {
 		t.Fatal(err)
 	}
-	if l := List(); len(l) != 1 || l[0].ID != b.ID {
+	if l := List(); len(l) != 2 {
 		t.Errorf("list with an old one: %+v", l)
-	}
-	if got, _ := Get(old.ID); got.Status != Expired || got.DoneAt.IsZero() {
-		t.Errorf("old one: %+v", got)
 	}
 	// Ended ones are kept for Keep, then dropped.
 	gone := Request{ID: "c-00000002", At: time.Now().Add(-Keep - time.Hour), Status: Declined, DoneAt: time.Now().Add(-Keep - time.Minute)}
-	if err := write(gone); err != nil {
+	if err := Put(gone); err != nil {
 		t.Fatal(err)
 	}
 	all := All()
@@ -96,12 +93,6 @@ func TestOutcomes(t *testing.T) {
 	_ = Answer(r.ID, true, "")
 	if got, _ := Get(r.ID); got.Outcome().Status != "creating" {
 		t.Errorf("allowed: %+v", got.Outcome())
-	}
-	if err := Finish(r.ID, Expired, Result{}); err != nil { // too late to expire
-		t.Fatal(err)
-	}
-	if got, _ := Get(r.ID); got.Status != Allowed {
-		t.Errorf("an allowed one expired: %q", got.Status)
 	}
 	_ = Finish(r.ID, Created, Result{Agent: "id-scout", Channel: "dm.x"})
 	if o, _ := Get(r.ID); o.Outcome().Status != Created || o.Outcome().Agent != "id-scout" || o.Outcome().Channel != "dm.x" {

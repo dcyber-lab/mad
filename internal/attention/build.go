@@ -356,6 +356,7 @@ func (b *builder) create(r create.Request) {
 	if !b.known[r.ByID] {
 		it.Agent = ""
 	}
+	it.Where = s.Project
 	where := s.ProjectName
 	if where == "" {
 		where = s.Project
@@ -363,34 +364,48 @@ func (b *builder) create(r create.Request) {
 	switch s.Type {
 	case create.TypeTeam:
 		it.Context, it.Text = "wants to start a team", "Team "+s.Name+" in "+where
-		it.Body = "Goal: " + s.Goal
+		lines := []string{"Goal: " + s.Goal}
 		if s.Template != "" {
-			it.Body += "\nTemplate: " + s.Template
+			lines = append(lines, "Template: "+s.Template)
 		}
 		for _, x := range s.Roles {
-			line := "\n" + x.Role + ": " + x.Kind
+			line := x.Role + ": " + x.Kind
 			if x.Model != "" {
 				line += ":" + x.Model
+			}
+			if x.Effort != "" {
+				line += "@" + x.Effort
 			}
 			if x.Lead {
 				line += " (lead)"
 			}
-			it.Body += line
+			if x.ReadOnly {
+				line += " (read only)"
+			}
+			lines = append(lines, line)
+			if x.Brief != "" {
+				lines = append(lines, "  "+strings.ReplaceAll(strings.TrimSpace(x.Brief), "\n", "\n  "))
+			}
 		}
+		if s.Kickoff != "" {
+			lines = append(lines, "Kickoff: "+strings.ReplaceAll(strings.TrimSpace(s.Kickoff), "{{goal}}", s.Goal))
+		}
+		it.Body = strings.Join(lines, "\n")
 	default:
 		what := s.Kind
 		if s.Model != "" {
 			what += ":" + s.Model
 		}
 		it.Context, it.Text = "wants to start an agent", s.Name+" ("+what+") in "+where
-		it.Body = s.Message
+		it.Body = "First message: " + s.Message
 		if s.Channel != "" {
 			it.Body += "\n\nJoins #" + s.Channel
 		}
 	}
+	it.Full = true // the whole request is what Allow lets through
 	if r.Status != create.Waiting {
 		o := r.Outcome()
-		it.Outcome, it.Blocks, it.route, it.Acts = &o, false, nil, []Act{}
+		it.Outcome, it.Blocks, it.Full, it.route, it.Acts = &o, false, false, nil, []Act{}
 		it.oneLine()
 		it.rank = b.rankOf(it.Agent)
 		b.created = append(b.created, it)
