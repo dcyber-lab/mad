@@ -26,7 +26,8 @@ struct AskChips: View {
             ForEach(card.acts) { a in
                 Button { tap(a) } label: { chip(a) }
                     .buttonStyle(.plain)
-                    .disabled(sent != nil)
+                    // not .disabled: SwiftUI would grey the tapped chip too; the others dim by themselves
+                    .allowsHitTesting(sent == nil)
             }
         }
         .task(id: sent) {
@@ -77,7 +78,8 @@ struct AskChipLabel: View {
 
     var body: some View {
         // the reserved words are laid out and drawn to nothing: the chip is as wide as the wider of the two
-        ZStack(alignment: .leading) {
+        // the words of an Allow or a Deny sit in the middle of the width reserved for them; a long option wraps from the left
+        ZStack(alignment: reserve == nil ? .leading : .center) {
             if let reserve { Text(reserve).hidden() }
             Text(text)
         }
