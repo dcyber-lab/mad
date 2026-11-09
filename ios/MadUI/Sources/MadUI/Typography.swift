@@ -57,10 +57,10 @@ enum MadColumn {
     static let bubbleShare: CGFloat = 0.58
     #else
     static let maxWidth: CGFloat = 720
-    static let side: CGFloat = 14
+    static let side: CGFloat = 16
     /// The avatar (26) and the space after it.
-    static let gutter: CGFloat = 34
-    static let bubbleShare: CGFloat = 0.75
+    static let gutter: CGFloat = 36
+    static let bubbleShare: CGFloat = 0.86
     #endif
 
     /// The widest a bubble may be in a column `width` wide.
