@@ -148,8 +148,8 @@ public struct MacSidebar: View {
             Rectangle().fill(Color.madLine).frame(height: 1)
             Button { selection = HomeRow.usageID; actions.open(HomeRow.usageID) } label: {
                 HStack(spacing: 10) {
-                    PersonPicture(name: NSFullUserName(), size: 28)
-                    Text(NSFullUserName()).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
+                    PersonPicture(name: model.person ?? NSFullUserName(), size: 28)
+                    Text(model.person ?? NSFullUserName()).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.madFg).lineLimit(1)
                     Spacer(minLength: 0)
                     Text(L("用量 ›")).font(.system(size: 11)).foregroundStyle(Color.madFg3)
                 }

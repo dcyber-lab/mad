@@ -15,8 +15,12 @@ public struct HomeModel: Equatable, Sendable {
     public var waiting: [HomeWaiting]
     /// The Today page (the Mac's first screen); nil before the deck is there.
     public var today: TodayModel?
+    /// The person's full name, as the Mac says it, for the foot of the list; nil when it does not say.
+    public var person: String?
 
-    public init(machine: String, sections: [HomeSection], usage: String? = nil, waiting: [HomeWaiting] = [], today: TodayModel? = nil) {
+    public init(machine: String, sections: [HomeSection], usage: String? = nil, waiting: [HomeWaiting] = [], today: TodayModel? = nil,
+                person: String? = nil) {
+        self.person = person
         self.machine = machine
         self.sections = sections
         self.usage = usage
@@ -68,7 +72,7 @@ public struct TodayModel: Equatable, Sendable {
     public var waiting: Int
     public var working: Int
     public var done: Int
-    /// What the agents have cost: "$6.82".
+    /// What today's responses cost over every session on the Mac: "$6.82"; empty when nothing.
     public var spend: String
     public var workingLines: [TodayLine]
     public var doneLines: [TodayLine]

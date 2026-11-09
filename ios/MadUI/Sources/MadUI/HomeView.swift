@@ -124,8 +124,8 @@ public struct HomeView: View {
             Divider()
             Button { actions.open(HomeRow.usageID) } label: {
                 HStack(spacing: 10) {
-                    PersonPicture(name: L("我"), size: 28)
-                    Text(L("我")).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.madFg)
+                    PersonPicture(name: model.person ?? L("我"), size: 28)
+                    Text(model.person ?? L("我")).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.madFg)
                     Spacer(minLength: 0)
                     Text(L("用量 ›")).font(.system(size: 13)).foregroundStyle(Color.madFg3)
                 }

@@ -125,6 +125,18 @@ final class HomeMappingTests: XCTestCase {
         XCTAssertEqual(meta?.parts, ["3 改动", "↑2", "$4.17"])
     }
 
+    func testTodaysSpendIsEverySessionsAndThePersonIsTheMacs() {
+        let agents = [Agent(id: "a", status: "idle", cost: 1)]
+        let m = HomeMapping.model(from: Deck(projects: [Project(name: "p", agents: agents)], user: "Heng Du", today: 6.82))
+        XCTAssertEqual(m.today?.spend, "$6.82", "today over every session, not the deck's agents' cost")
+        XCTAssertEqual(m.person, "Heng Du")
+        XCTAssertEqual(HomeMapping.model(from: Deck(projects: [Project(name: "p", agents: agents)])).today?.spend, "$1.00",
+                       "an older Mac: the agents' cost")
+        let usage = UsageMapping.screen(from: Deck(projects: [Project(name: "p", agents: agents)], today: 6.82))
+        XCTAssertEqual(usage.total, "$6.82")
+        XCTAssertEqual(usage.projects.map(\.number), ["$1.00"])
+    }
+
     func testUsageLine() throws {
         let d = try deck("deck-usage")
         XCTAssertEqual(HomeMapping.usageLine(d.usage), "Claude 5 小时 42% · 本周 71%")

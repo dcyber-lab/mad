@@ -265,13 +265,13 @@
         }
       }
     },
-    "今天的花费": {
+    "今天所有会话共 %@": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spent today"
+            "value": "%@ today across all sessions"
           }
         }
       }
@@ -331,6 +331,17 @@
         }
       }
     },
+    "会话花费": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session spend"
+          }
+        }
+      }
+    },
     "侧栏": {
       "extractionState": "manual",
       "localizations": {
@@ -382,17 +393,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "All read"
-          }
-        }
-      }
-    },
-    "共 %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ total"
           }
         }
       }
@@ -481,17 +481,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancel"
-          }
-        }
-      }
-    },
-    "变基到 main": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rebase on main"
           }
         }
       }
@@ -782,17 +771,6 @@
         }
       }
     },
-    "开 PR": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open PR"
-          }
-        }
-      }
-    },
     "待处理": {
       "extractionState": "manual",
       "localizations": {
@@ -910,17 +888,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Oldest first ·"
-          }
-        }
-      }
-    },
-    "推送": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push"
           }
         }
       }
@@ -1053,6 +1020,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "This session"
+          }
+        }
+      }
+    },
+    "模型": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
           }
         }
       }
@@ -1409,6 +1387,17 @@
         }
       }
     },
+    "输入 / 输出": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In / out"
+          }
+        }
+      }
+    },
     "还没有花费": {
       "extractionState": "manual",
       "localizations": {
@@ -1493,6 +1482,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "All clear"
+          }
+        }
+      }
+    },
+    "默认": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
           }
         }
       }

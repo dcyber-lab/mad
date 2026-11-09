@@ -29,7 +29,7 @@ public enum HomeMapping {
             }
         }
         return HomeModel(machine: deck.machine ?? fallbackName, sections: sections, usage: usageLine(deck.usage),
-                         waiting: waiting, today: today(deck, waiting: waiting.count, now: now))
+                         waiting: waiting, today: today(deck, waiting: waiting.count, now: now), person: deck.user)
     }
 
     /// A project's head line: its branch, files changed, commits not pushed, and what its agents have cost.
@@ -151,8 +151,9 @@ public enum HomeMapping {
 
     // MARK: Today
 
-    /// The Today page: the date, the counts, what all the agents have cost, who works (longest at it first) and who
-    /// just finished (the inbox's finished items, then agents whose run finished unseen).
+    /// The Today page: the date, the counts, what today cost over every session on the Mac (else what the deck's
+    /// agents have cost), who works (longest at it first) and who just finished (the inbox's finished items, then
+    /// agents whose run finished unseen).
     static func today(_ deck: Deck, waiting: Int, now: Date) -> TodayModel {
         let agents = deck.agents
         let working = agents.filter { CharacterState(status: $0.state) == .working }
@@ -160,7 +161,7 @@ public enum HomeMapping {
         let finishedIDs = deck.inbox.finished.compactMap(\.agent)
         var done: [Agent] = finishedIDs.compactMap { deck.agent(id: $0) }
         for a in agents where CharacterState(status: a.state) == .done && !done.contains(where: { $0.id == a.id }) { done.append(a) }
-        let total = agents.reduce(0.0) { $0 + $1.cost }
+        let total = deck.today > 0 ? deck.today : agents.reduce(0.0) { $0 + $1.cost }
         func place(_ a: Agent) -> String {
             guard let team = a.team, !team.isEmpty else { return "" }
             return deck.channels.first { $0.team?.name == team }.map { "#" + $0.id } ?? ""

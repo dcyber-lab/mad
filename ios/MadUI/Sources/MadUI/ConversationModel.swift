@@ -210,28 +210,46 @@ public struct AskAct: Identifiable, Equatable, Sendable {
     }
 }
 
-/// What the agent page's Details pane and 改动 tab show: how it stands, its project's git, its cost, its session.
+/// What the agent page's Details pane and 改动 tab show: how it stands, its project's git and the ways to finish its
+/// branch, its cost, its session.
 public struct AgentDetails: Equatable, Sendable {
-    /// How long it has been in its state: "23 分钟"; empty when not known.
+    /// How long it has been running: "23 分钟"; empty when not known.
     public var since: String
     public var branch: String
     /// Files changed in its project, and commits not pushed.
     public var changed: Int
     public var ahead: Int
     public var cost: String
+    /// Tokens in and out: "182k / 9.4k"; empty when none.
+    public var tokens: String
+    /// The model it runs ("Opus"); empty for the kind's default.
+    public var model: String
     /// The session's id (its first 8 characters show) and its directory ("~/src/mad").
     public var session: String
     public var directory: String
+    /// The ways to finish its branch (push, a PR, rebase, merge, the person's own), in the Mac's order.
+    public var finish: [FinishButton]
 
-    public init(since: String = "", branch: String = "", changed: Int = 0, ahead: Int = 0, cost: String = "", session: String = "",
-                directory: String = "") {
+    public init(since: String = "", branch: String = "", changed: Int = 0, ahead: Int = 0, cost: String = "", tokens: String = "",
+                model: String = "", session: String = "", directory: String = "", finish: [FinishButton] = []) {
         self.since = since; self.branch = branch; self.changed = changed; self.ahead = ahead; self.cost = cost
-        self.session = session; self.directory = directory
+        self.tokens = tokens; self.model = model; self.session = session; self.directory = directory; self.finish = finish
     }
 }
 
-/// The git buttons of the Details pane and the 改动 tab.
-public enum AgentGitAct: Sendable { case push, openPR, rebase, changes }
+/// One way to finish a branch, as a button: its place in the Mac's list (what is sent back with its name), its words,
+/// and whether it is the primary one (push and open a PR).
+public struct FinishButton: Identifiable, Equatable, Sendable {
+    public var index: Int
+    public var name: String
+    public var label: String
+    public var primary: Bool
+    public var id: String { "\(index)\u{1}\(name)" }
+
+    public init(index: Int, name: String, label: String, primary: Bool = false) {
+        self.index = index; self.name = name; self.label = label; self.primary = primary
+    }
+}
 
 /// What the screen does; each is a closure the app fills in.
 public struct ConversationActions {
@@ -250,8 +268,9 @@ public struct ConversationActions {
     public var openWeb: (() -> Void)?
     /// The ⋯ menu's 在终端打开: the agent in mad's terminal deck. Nil leaves it out.
     public var openTerminal: (() -> Void)?
+    /// A finish button of the Details pane or the 改动 tab was pressed.
+    public var finish: ((FinishButton) -> Void)?
     /// The Details pane's buttons; nil leaves a button out.
-    public var git: ((AgentGitAct) -> Void)?
     public var rename: ((String) -> Void)?
     public var sleep: (() -> Void)?
 
@@ -259,10 +278,10 @@ public struct ConversationActions {
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {},
-                openWeb: (() -> Void)? = nil, openTerminal: (() -> Void)? = nil, git: ((AgentGitAct) -> Void)? = nil,
+                openWeb: (() -> Void)? = nil, openTerminal: (() -> Void)? = nil, finish: ((FinishButton) -> Void)? = nil,
                 rename: ((String) -> Void)? = nil, sleep: (() -> Void)? = nil) {
         self.openTerminal = openTerminal
-        self.git = git
+        self.finish = finish
         self.rename = rename
         self.sleep = sleep
         self.openWeb = openWeb

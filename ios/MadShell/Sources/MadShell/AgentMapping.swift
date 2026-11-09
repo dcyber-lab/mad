@@ -31,10 +31,52 @@ public enum AgentMapping {
             place: place,
             cost: cost,
             details: agent.map { a in
-                AgentDetails(since: a.since.map { MadWords.age(now.timeIntervalSince($0)) } ?? "", branch: project?.branch ?? "",
-                             changed: project?.changed ?? 0, ahead: project?.ahead ?? 0, cost: cost, session: a.id,
-                             directory: project.map { shortPath($0.path) } ?? "")
+                AgentDetails(since: a.created.map { MadWords.age(now.timeIntervalSince($0)) } ?? "", branch: project?.branch ?? "",
+                             changed: project?.changed ?? 0, ahead: project?.ahead ?? 0, cost: cost, tokens: tokens(a),
+                             model: a.model, session: a.session.isEmpty ? a.id : a.session,
+                             directory: shortPath(a.dir.isEmpty ? (project?.path ?? "") : a.dir))
             })
+    }
+
+    /// Tokens in and out as the Details pane says them: "182k / 9.4k"; empty when there are none.
+    static func tokens(_ a: Agent) -> String {
+        guard a.tokensIn > 0 || a.tokensOut > 0 else { return "" }
+        return "\(count(a.tokensIn)) / \(count(a.tokensOut))"
+    }
+
+    /// A count of tokens, short: 950, 9.4k, 182k, 1.2M.
+    static func count(_ n: Int) -> String {
+        if n < 1000 { return "\(n)" }
+        if n < 10_000 { return String(format: "%.1fk", Double(n) / 1000) }
+        if n < 1_000_000 { return "\(Int((Double(n) / 1000).rounded()))k" }
+        return String(format: "%.1fM", Double(n) / 1_000_000)
+    }
+
+    // MARK: finishing a branch
+
+    /// The finish menu as buttons, in the page's words: push 推送, pr 推送并开 PR (the primary), rebase 变基到 base,
+    /// merge 合并到 base; the person's own keep their names.
+    public static func finishButtons(_ menu: FinishMenu) -> [FinishButton] {
+        let base = menu.base.isEmpty ? "main" : menu.base
+        return menu.actions.enumerated().map { i, a in
+            FinishButton(index: i, name: a.name, label: finishLabel(a, base: base), primary: a.kind == "pr")
+        }
+    }
+
+    static func finishLabel(_ a: FinishAction, base: String) -> String {
+        switch a.kind {
+        case "push": return L("推送")
+        case "pr": return L("推送并开 PR")
+        case "rebase": return Lf("变基到 %@", base)
+        case "merge": return Lf("合并到 %@", base)
+        default: return a.name
+        }
+    }
+
+    /// What a finish run says afterwards: "推送 · <its last line>", or "推送: <what went wrong>".
+    public static func finishNote(_ b: FinishButton, _ r: FinishResult) -> String {
+        let last = r.lastLine
+        return r.ok ? b.label + " · " + (last.isEmpty ? L("完成") : last) : b.label + ": " + (last.isEmpty ? L("没有成功") : last)
     }
 
     /// A path with the home folder as ~ ("~/src/mad").

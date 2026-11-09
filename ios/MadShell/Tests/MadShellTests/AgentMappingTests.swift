@@ -200,4 +200,30 @@ final class AgentMappingTests: XCTestCase {
         live.receive(LiveMessage(id: "m3", blocks: [LiveBlock(kind: "tool", tool: "Bash")], version: 1))
         XCTAssertEqual(try conversation(live: live).live, LiveBubble(markdown: ""), "still writing: the spinner")
     }
+
+    // MARK: details and finishing
+
+    func testFinishButtonsAreInThePagesWords() {
+        let menu = FinishMenu(branch: "feat", base: "trunk", actions: [
+            FinishAction(name: "push", kind: "push"), FinishAction(name: "push & open PR", kind: "pr"),
+            FinishAction(name: "rebase onto trunk", kind: "rebase"), FinishAction(name: "merge into trunk", kind: "merge"),
+            FinishAction(name: "deploy"),
+        ])
+        let b = AgentMapping.finishButtons(menu)
+        XCTAssertEqual(b.map(\.label), ["推送", "推送并开 PR", "变基到 trunk", "合并到 trunk", "deploy"])
+        XCTAssertEqual(b.map(\.primary), [false, true, false, false, false])
+        XCTAssertEqual(b.map(\.index), [0, 1, 2, 3, 4])
+        XCTAssertEqual(b[4].name, "deploy", "the name goes back with the index")
+        XCTAssertEqual(AgentMapping.finishNote(b[1], FinishResult(ok: true, output: "done\nhttps://x/pull/7\n")), "推送并开 PR · https://x/pull/7")
+        XCTAssertEqual(AgentMapping.finishNote(b[0], FinishResult(ok: false, output: "", error: "exit status 1")), "推送: exit status 1")
+    }
+
+    func testTokensAreShort() {
+        XCTAssertEqual(AgentMapping.count(950), "950")
+        XCTAssertEqual(AgentMapping.count(9400), "9.4k")
+        XCTAssertEqual(AgentMapping.count(182_000), "182k")
+        XCTAssertEqual(AgentMapping.count(1_200_000), "1.2M")
+        XCTAssertEqual(AgentMapping.shortPath("/Users/h/src/mad"), "~/src/mad")
+    }
 }
+

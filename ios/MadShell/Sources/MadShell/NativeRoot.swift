@@ -267,6 +267,10 @@ struct AgentDetail: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var store: AgentStore
     @State private var failure: String?
+    /// How the last finish run went, until dismissed (a note, not a failure, when it worked).
+    @State private var done: String?
+    /// The ways to finish the agent's branch, as the Mac last listed them.
+    @State private var finish: [FinishButton] = []
     private let api: MadAPI
     private let id: String
     private let onBack: (() -> Void)?
@@ -281,9 +285,10 @@ struct AgentDetail: View {
     }
 
     var body: some View {
-        let model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0) }
+        var model = deck.deck.map { AgentMapping.conversation(store: store, deck: $0) }
             ?? AgentConversation(title: id, agentID: id, canSend: false, sendHint: "")
-        ConversationView(model: model, actions: actions, showsBack: onBack != nil)
+        model.details?.finish = finish
+        return ConversationView(model: model, actions: actions, showsBack: onBack != nil)
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
@@ -291,7 +296,38 @@ struct AgentDetail: View {
                 guard scenePhase == .active else { return }
                 await store.run()
             }
-            .overlay(alignment: .top) { NoticeBar(text: store.notice ?? failure) { store.dismissNotice(); failure = nil } }
+            // the finish menu: looked at when the page opens and again when the project's git changes
+            .task(id: gitKey) { await loadFinish() }
+            .overlay(alignment: .top) {
+                if let note = store.notice ?? failure {
+                    NoticeBar(text: note) { store.dismissNotice(); failure = nil }
+                } else {
+                    NoticeBar(text: done, ok: true) { done = nil }
+                }
+            }
+    }
+
+    /// What the finish menu depends on: the branch, the changes and the commits not pushed of the agent's project.
+    private var gitKey: String {
+        let p = deck.deck?.projects.first { $0.agents.contains { $0.id == id } }
+        return "\(p?.branch ?? "")|\(p?.changed ?? 0)|\(p?.ahead ?? 0)"
+    }
+
+    private func loadFinish() async {
+        guard let menu = try? await api.finishActions(agent: id) else { return }
+        finish = AgentMapping.finishButtons(menu)
+    }
+
+    /// Runs a finish action, says how it went (its output's last line), and looks at the deck and the menu again.
+    private func runFinish(_ b: FinishButton) async {
+        do {
+            let r = try await api.runFinish(agent: id, index: b.index, name: b.name)
+            if r.ok { done = AgentMapping.finishNote(b, r); failure = nil } else { failure = AgentMapping.finishNote(b, r) }
+        } catch {
+            failure = (error as? ConnectionError)?.localizedDescription ?? error.localizedDescription
+        }
+        await deck.refresh()
+        await loadFinish()
     }
 
     private var actions: ConversationActions {
@@ -303,8 +339,7 @@ struct AgentDetail: View {
             back: { onBack?() },
             openWeb: openWeb.map { open in { open(.agent(id)) } },
             openTerminal: { Task { await run { try await api.openTerminal(agent: id) } } },
-            // push, open a PR and rebase are the deck's: the page on this agent has them
-            git: openWeb.map { open in { (_: AgentGitAct) in open(.agent(id)) } },
+            finish: { b in Task { await runFinish(b) } },
             rename: { name in Task { await run { try await api.renameAgent(id: id, name: name) } } },
             sleep: { Task { await run { try await api.sleepAgent(id: id) } } })
     }
@@ -338,17 +373,18 @@ struct AgentDetail: View {
     }
 }
 
-/// A line under the top that says what the Mac refused, with a way to dismiss it.
+/// A line under the top that says what the Mac refused (or, `ok`, how something went), with a way to dismiss it.
 struct NoticeBar: View {
     let text: String?
+    var ok = false
     let dismiss: () -> Void
 
     var body: some View {
         if let text {
             Button(action: dismiss) {
-                Label(text, systemImage: "exclamationmark.triangle")
+                Label(text, systemImage: ok ? "checkmark.circle" : "exclamationmark.triangle")
                     .font(.subheadline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(ok ? Color.madWork : Color.orange)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.regularMaterial)

@@ -135,4 +135,41 @@ final class BusMessageDecodingTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(DMResult.self, from: Data(#"{"channel":"dm.you.kim","seq":1,"woke":[]}"#.utf8)),
                        DMResult(channel: "dm.you.kim", seq: 1))
     }
+
+    func testTheAgentsSessionFieldsThePersonAndTodaysSpend() throws {
+        let json = #"""
+        {"user":" Heng Du ","today":6.82,"spend":{"day":"2026-11-09","usd":6.82,"budget_usd":20,"part":0.34,"open_today":true},
+         "projects":[{"name":"mad","agents":[{"id":"a1","kind":"claude","dir":"/Users/h/src/mad","session":"6625f15d-aaaa",
+           "model":"opus","tokens_in":182000,"tokens_out":9400,"created":"2026-11-09T10:00:00Z"}]}]}
+        """#
+        let d = try JSONDecoder().decode(Deck.self, from: Data(json.utf8))
+        XCTAssertEqual(d.user, "Heng Du")
+        XCTAssertEqual(d.today, 6.82)
+        XCTAssertEqual(d.spend?.budgetUSD, 20)
+        XCTAssertEqual(d.spend?.openToday, true)
+        let a = try XCTUnwrap(d.agent(id: "a1"))
+        XCTAssertEqual(a.dir, "/Users/h/src/mad")
+        XCTAssertEqual(a.session, "6625f15d-aaaa")
+        XCTAssertEqual(a.model, "opus")
+        XCTAssertEqual(a.tokensIn, 182000)
+        XCTAssertEqual(a.tokensOut, 9400)
+        XCTAssertNotNil(a.created)
+        // an older server sends none of them
+        let old = try decodeFixture(Deck.self, "deck-edge-home")
+        XCTAssertEqual(old.today, 0)
+        XCTAssertEqual(old.agent(id: "work0001-aaaa")?.model, "")
+    }
+
+    func testTheFinishMenuAndARun() throws {
+        let menu = try JSONDecoder().decode(FinishMenu.self, from: Data(#"""
+        {"branch":"feat","base":"main","actions":[{"name":"push","kind":"push"},{"name":"push & open PR","kind":"pr"},{"name":"deploy"}]}
+        """#.utf8))
+        XCTAssertEqual(menu.base, "main")
+        XCTAssertEqual(menu.actions, [FinishAction(name: "push", kind: "push"), FinishAction(name: "push & open PR", kind: "pr"),
+                                      FinishAction(name: "deploy")])
+        let ok = try JSONDecoder().decode(FinishResult.self, from: Data(#"{"ok":true,"output":"remote: x\nhttps://github.com/a/b/pull/7\n\n"}"#.utf8))
+        XCTAssertTrue(ok.ok)
+        XCTAssertEqual(ok.lastLine, "https://github.com/a/b/pull/7")
+        XCTAssertEqual(FinishResult(ok: false, output: "", error: "exit status 1").lastLine, "exit status 1")
+    }
 }

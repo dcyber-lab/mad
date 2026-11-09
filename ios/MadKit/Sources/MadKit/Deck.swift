@@ -23,8 +23,12 @@ public struct Deck: Equatable, Decodable, Sendable {
     public var at: Date?
     /// The day's budget for mad's own work; nil from a server that does not send it.
     public var spend: Spend?
+    /// The person's full name (else their login); nil from a server that does not send it.
+    public var user: String?
+    /// What today's responses cost at API prices, over every transcript on the Mac (not only the deck's), in dollars.
+    public var today: Double
 
-    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at, spend }
+    enum CodingKeys: String, CodingKey { case machine, projects, teams, bus, inbox, quota, states, working, at, spend, user, today }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -39,14 +43,17 @@ public struct Deck: Equatable, Decodable, Sendable {
         working = try c.decodeIfPresent([String].self, forKey: .working) ?? []
         at = MadDate.decode(c, .at)
         spend = (try? c.decodeIfPresent(Spend.self, forKey: .spend)) ?? nil
+        let u = try c.decodeIfPresent(String.self, forKey: .user)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        user = (u?.isEmpty ?? true) ? nil : u
+        today = try c.decodeIfPresent(Double.self, forKey: .today) ?? 0
     }
 
     public init(machine: String? = nil, projects: [Project] = [], teams: [Team] = [], channels: [Channel] = [],
                 inbox: Inbox = Inbox(), usage: [Usage] = [], states: [Look] = [], working: [String] = [], at: Date? = nil,
-                spend: Spend? = nil) {
+                spend: Spend? = nil, user: String? = nil, today: Double = 0) {
         self.machine = machine; self.projects = projects; self.teams = teams; self.channels = channels
         self.inbox = inbox; self.usage = usage; self.states = states; self.working = working; self.at = at
-        self.spend = spend
+        self.spend = spend; self.user = user; self.today = today
     }
 
     // MARK: Lookups
@@ -211,6 +218,14 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
     public var reply: String?
     /// Its last line, for a list.
     public var last: String
+    /// The directory it works in (its worktree, or the project's), its conversation's session id, the model it was
+    /// started with (empty: the kind's default), the tokens in (with the cache) and out, and when it was made.
+    public var dir: String
+    public var session: String
+    public var model: String
+    public var tokensIn: Int
+    public var tokensOut: Int
+    public var created: Date?
 
     /// What to call it: the person's name, else the conversation's title, else the kind and the
     /// first 8 characters of the id ("claude 6625f15d"), so untitled agents tell apart.
@@ -230,6 +245,7 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, kind, icon, color, name, title, status, shown, done, cost, role, team, chat, headless, mode
         case since, tool, target, reply, last
+        case dir, session, model, tokensIn = "tokens_in", tokensOut = "tokens_out", created
     }
 
     public init(from d: Decoder) throws {
@@ -254,6 +270,12 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
         target = try c.decodeIfPresent(String.self, forKey: .target)
         reply = try c.decodeIfPresent(String.self, forKey: .reply)
         last = try c.decodeIfPresent(String.self, forKey: .last) ?? ""
+        dir = try c.decodeIfPresent(String.self, forKey: .dir) ?? ""
+        session = try c.decodeIfPresent(String.self, forKey: .session) ?? ""
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        tokensIn = try c.decodeIfPresent(Int.self, forKey: .tokensIn) ?? 0
+        tokensOut = try c.decodeIfPresent(Int.self, forKey: .tokensOut) ?? 0
+        created = MadDate.decode(c, .created)
     }
 
     public init(id: String, kind: String = "", name: String? = nil, title: String? = nil, status: String = "",
@@ -263,6 +285,7 @@ public struct Agent: Equatable, Decodable, Identifiable, Sendable {
         self.status = status; self.shown = shown; self.done = false; self.cost = cost; self.role = role
         self.team = team; self.chat = false; self.headless = headless; self.mode = mode; self.since = nil
         self.tool = nil; self.target = nil; self.reply = nil; self.last = last
+        self.dir = ""; self.session = ""; self.model = ""; self.tokensIn = 0; self.tokensOut = 0; self.created = nil
     }
 }
 

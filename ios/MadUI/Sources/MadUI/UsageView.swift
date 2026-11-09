@@ -4,7 +4,7 @@ import SwiftUI
 /// cost the most, and mad's own budget for the day.
 public struct UsageScreen: Equatable, Sendable {
     public var quotas: [UsageQuota]
-    /// What all the agents have cost: "$6.82".
+    /// What today's responses cost over every session on the Mac: "$6.82"; empty when not known.
     public var total: String
     public var projects: [UsageLine]
     public var agents: [UsageLine]
@@ -106,7 +106,7 @@ public struct UsageView: View {
                             }
                         }
                     }
-                    block(L("今天的花费"), note: screen.total.isEmpty ? "" : Lf("共 %@", screen.total)) {
+                    block(L("会话花费"), note: screen.total.isEmpty ? "" : Lf("今天所有会话共 %@", screen.total)) {
                         if screen.projects.isEmpty { quiet(L("还没有花费")) } else { lines(screen.projects) }
                     }
                     if !screen.agents.isEmpty {

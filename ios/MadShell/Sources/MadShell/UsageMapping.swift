@@ -22,11 +22,12 @@ public enum UsageMapping {
         }
         let agents = deck.agents.filter { $0.cost > 0 }.sorted { $0.cost > $1.cost }.prefix(5).map { a in
             let project = deck.projects.first { $0.agents.contains { $0.id == a.id } }?.name ?? ""
-            return UsageLine(id: a.id, name: a.label, sub: [project, a.kind].filter { !$0.isEmpty }.joined(separator: " · "),
+            let input = a.tokensIn > 0 ? Lf("%lldk 输入", (a.tokensIn + 500) / 1000) : ""
+            return UsageLine(id: a.id, name: a.label, sub: [project, a.model.isEmpty ? a.kind : a.model, input].filter { !$0.isEmpty }.joined(separator: " · "),
                              number: MadWords.money(a.cost), agent: true, agentKind: a.kind, state: CharacterState(status: a.state))
         }
-        let total = deck.agents.reduce(0.0) { $0 + $1.cost }
-        return UsageScreen(quotas: quotas, total: total > 0 ? MadWords.money(total) : "", projects: projects,
+        // the block's note: what today cost over every session on the Mac, as the page says it
+        return UsageScreen(quotas: quotas, total: deck.today > 0 ? MadWords.money(deck.today) : "", projects: projects,
                            agents: Array(agents), budget: budget(deck.spend))
     }
 

@@ -56,6 +56,17 @@
         }
       }
     },
+    "%lldk 输入": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldk input"
+          }
+        }
+      }
+    },
     "%lld月%lld日 %@": {
       "extractionState": "manual",
       "localizations": {
@@ -327,6 +338,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancel"
+          }
+        }
+      }
+    },
+    "变基到 %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebase on %@"
+          }
+        }
+      }
+    },
+    "合并到 %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge into %@"
           }
         }
       }
@@ -672,6 +705,28 @@
         }
       }
     },
+    "推送": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push"
+          }
+        }
+      }
+    },
+    "推送并开 PR": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push & open PR"
+          }
+        }
+      }
+    },
     "改名": {
       "extractionState": "manual",
       "localizations": {
@@ -822,6 +877,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ a day"
+          }
+        }
+      }
+    },
+    "没有成功": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "failed"
           }
         }
       }

@@ -58,12 +58,16 @@ A free Apple ID's iPhone build stops opening after 7 days; run `make ios-device`
   errors only; the group tile's dot is amber. Secondary text is #6b6b76 / #8a8a95.
 - **Usage (v5):** its own native screen (the person's row at the sidebar's foot, ⋯ → 用量): the four windows,
   what the agents cost by project, the top spenders, mad's own budget and 今天不限 (`POST /api/budget`). No quota
-  bars in the sidebar or the iPhone's home. Costs are the agents' session costs (the deck has no per-day split).
+  bars in the sidebar or the iPhone's home. 会话花费's note and Today's sentence are the deck's `today` (what
+  today cost over every transcript on the Mac); the per-project and per-agent lines are the agents' session costs.
 - **Agent page (v5):** two tabs, 对话 and 改动; the terminal tab and button are gone, 在终端打开 is in ⋯ (it asks
   the Mac to open the deck, `POST /api/terminal`). The 改动 tab shows the branch and counts; the diff itself is
-  still the page's. The Mac's Details pane (⌘I): status, git, cost, session; Rename and Sleep are native
-  (`PATCH /api/agents`, `POST /api/agents/stop`), Push / Open PR / Rebase open the page on the agent, Stop
-  interrupts.
+  still the page's. The 改动 tab and the Mac's Details pane (⌘I) carry the finish actions of `GET /api/finish`
+  (推送, 推送并开 PR as the primary, 变基到 / 合并到 the base, the person's own by name), run with
+  `POST /api/finish` (the index and the name, so a changed list is refused); the output's last line shows as a note
+  and the deck and the menu are looked at again. Details shows 已运行 from the agent's `created`, the session's
+  cost, 输入 / 输出 tokens and the model (默认 when none), the session id and directory. Rename and Sleep are native
+  (`PATCH /api/agents`, `POST /api/agents/stop`); Stop interrupts. The foot of the list shows the deck's `user`.
 
 ## How the team works
 
@@ -91,8 +95,7 @@ A free Apple ID's iPhone build stops opening after 7 days; run `make ios-device`
   `swift test` before anything else, then the designer's acceptance against the mockup.
 - **v5 gaps:** the handoff card and folded handoff runs (the channel still hides the agents' bookkeeping, as v4
   decided; only long messages fold, now as a dashed capsule); the ⌘K command palette (the field filters the list);
-  the cost pane's in/out tokens and model (the deck does not send them); the empty group's members with @ wake;
-  the 改动 tab's own diff; the iPhone footer shows "我" (the phone does not know the person's name).
+  the empty group's members with @ wake; the 改动 tab's own diff.
 
 - **Native screens still on the page:** diff, board, skills, devices (the iPhone's), settings. The ⋯ menu and the
   agent page's ⋯ open the page on that view.

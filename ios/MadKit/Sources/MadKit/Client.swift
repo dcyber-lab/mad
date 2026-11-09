@@ -226,6 +226,32 @@ public struct MadClient: Sendable {
         try Self.check(data, response, [200, 204])
     }
 
+    /// GET /api/finish?id=<id>.
+    public func finishRequest(agent id: String) -> URLRequest {
+        request("/api/finish", query: [URLQueryItem(name: "id", value: id)])
+    }
+
+    public func finishActions(agent id: String) async throws -> FinishMenu {
+        let (data, response) = try await runRequest(finishRequest(agent: id))
+        try Self.check(data, response, [200])
+        return try Self.decodeJSON(FinishMenu.self, data)
+    }
+
+    /// POST /api/finish?id=<id>&i=<index>&name=<name>: a finish takes as long as a push or `gh pr create` does.
+    public func runFinishRequest(agent id: String, index: Int, name: String) -> URLRequest {
+        var r = request("/api/finish", query: [URLQueryItem(name: "id", value: id), URLQueryItem(name: "i", value: String(index)),
+                                               URLQueryItem(name: "name", value: name)])
+        r.httpMethod = "POST"
+        r.timeoutInterval = 200
+        return r
+    }
+
+    public func runFinish(agent id: String, index: Int, name: String) async throws -> FinishResult {
+        let (data, response) = try await runRequest(runFinishRequest(agent: id, index: index, name: name))
+        try Self.check(data, response, [200])
+        return try Self.decodeJSON(FinishResult.self, data)
+    }
+
     /// Sends a request; any failure to get an answer is .offline.
     func runRequest(_ r: URLRequest) async throws -> (Data, URLResponse) {
         do { return try await session.data(for: r) } catch { throw ConnectionError.offline }

@@ -509,8 +509,8 @@ struct ConversationIdentity: View {
     }
 }
 
-/// The 改动 tab: the project's branch, how many files changed and commits wait to be pushed, and the buttons. The
-/// diff itself is still the page's: 在网页里看改动 opens it.
+/// The 改动 tab: the branch, how many files changed and commits wait to be pushed, and the ways to finish the branch
+/// (push, push and open a PR, rebase, merge, the person's own). The diff itself is still the page's: 在网页里看改动.
 struct ChangesTab: View {
     let details: AgentDetails?
     let actions: ConversationActions
@@ -529,9 +529,10 @@ struct ChangesTab: View {
                 .foregroundStyle(Color.madFg2)
                 FlowLayout(spacing: 8) {
                     if let w = actions.openWeb { Button(L("在网页里看改动"), action: w).buttonStyle(.mad()) }
-                    if let git = actions.git {
-                        Button(L("推送")) { git(.push) }.buttonStyle(.mad())
-                        Button(L("开 PR")) { git(.openPR) }.buttonStyle(.mad(.primary))
+                    if let finish = actions.finish {
+                        ForEach(details?.finish ?? []) { b in
+                            Button(b.label) { finish(b) }.buttonStyle(.mad(b.primary ? .primary : .normal))
+                        }
                     }
                 }
                 if (details?.changed ?? 0) == 0 {
@@ -547,8 +548,8 @@ struct ChangesTab: View {
     }
 }
 
-/// The Mac's Details pane (⌘I): 状态 (now, how long), git (branch, changes, unpushed; Push, Open PR, Rebase on main),
-/// 花费 (this session), 会话 (its id and directory; Rename, Sleep, Stop).
+/// The Mac's Details pane (⌘I): 状态 (now, how long it has run), git (branch, changes, unpushed; the ways to finish the
+/// branch), 花费 (this session, tokens in and out, the model), 会话 (its id and directory; Rename, Sleep, Stop).
 struct AgentDetailsPane: View {
     let model: AgentConversation
     let actions: ConversationActions
@@ -566,16 +567,18 @@ struct AgentDetailsPane: View {
                         row(L("分支"), d.branch.isEmpty ? "—" : d.branch, mono: true)
                         row(L("改动"), Lf("%lld 个文件", d.changed))
                         row(L("未推送"), Lf("%lld 个提交", d.ahead))
-                        if let git = actions.git {
+                        if let finish = actions.finish, !d.finish.isEmpty {
                             FlowLayout(spacing: 6) {
-                                Button(L("推送")) { git(.push) }.buttonStyle(.mad(.normal, .small))
-                                Button(L("开 PR")) { git(.openPR) }.buttonStyle(.mad(.normal, .small))
-                                Button(L("变基到 main")) { git(.rebase) }.buttonStyle(.mad(.normal, .small))
+                                ForEach(d.finish) { b in
+                                    Button(b.label) { finish(b) }.buttonStyle(.mad(b.primary ? .primary : .normal, .small))
+                                }
                             }
                         }
                     }
                     section(L("花费")) {
                         row(L("本会话"), d.cost.isEmpty ? "—" : d.cost)
+                        if !d.tokens.isEmpty { row(L("输入 / 输出"), d.tokens) }
+                        row(L("模型"), d.model.isEmpty ? L("默认") : d.model)
                     }
                     section(L("会话")) {
                         row("id", String(d.session.prefix(8)), mono: true)
