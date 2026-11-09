@@ -864,6 +864,12 @@ function spendMeter(s) {
 // ---- search, theme ----
 
 $("#filter").addEventListener("input", () => drawSidebar());
+// on a wide window the sidebar's search field is the palette's (v5)
+$("#filter").addEventListener("focus", () => {
+  if (phone.matches || typeof openPalette !== "function") return;
+  $("#filter").blur();
+  openPalette();
+});
 $("#filter").addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     document.body.classList.remove("searching");
@@ -878,9 +884,8 @@ $("#filter").addEventListener("keydown", (e) => {
 window.addEventListener("keydown", (e) => {
   if (e.metaKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === "k") {
     e.preventDefault();
-    document.body.classList.add("searching");
-    $("#filter").focus();
-    $("#filter").select();
+    if (typeof openPalette === "function") openPalette(); // v5: the palette (palette.js)
+    else { document.body.classList.add("searching"); $("#filter").focus(); $("#filter").select(); }
   }
 }, true);
 if (!/Mac/.test(navigator.platform)) $("#filterKey").hidden = true;

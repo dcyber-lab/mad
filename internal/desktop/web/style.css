@@ -2150,3 +2150,30 @@ html.ptype .quota { grid-template-columns: minmax(0, 1fr); }
 .ask .abody > .diff, .ask .abody > .cbody, .ask .abody > .todos, .ask .abody > .quest, .ask .abody > .md { margin: 10px 12px; }
 .ask .ah .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask pre.input { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; }
+
+/* ---- the ⌘K palette ---- */
+#palette { position: fixed; inset: 0; z-index: 150; background: rgba(0, 0, 0, 0.18); display: grid; justify-items: center; align-items: start; padding-top: 12vh; }
+#palette[hidden] { display: none; }
+#palette .pal { width: min(560px, calc(100vw - 32px)); background: var(--bg); border-radius: 14px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-2); overflow: hidden; animation: rise 0.12s ease-out; }
+#palette input { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: none; font: inherit; font-size: 15px; padding: 14px 16px; color: var(--text); outline: none; }
+#palette .prows { max-height: 52vh; overflow-y: auto; padding: 4px 0 6px; }
+#palette .psect { font-size: 11px; color: var(--text-3); font-weight: 600; padding: 8px 14px 2px; }
+#palette .prow { display: flex; align-items: center; gap: 10px; width: calc(100% - 12px); margin: 0 6px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; text-align: left; cursor: pointer; color: var(--text); --row: var(--bg); }
+#palette .prow.on { background: var(--raise); --row: var(--raise); }
+#palette .prow .avatar.chara { width: 24px; height: 24px; flex: none; }
+#palette .ptxt { flex: 1; min-width: 0; display: grid; }
+#palette .pnm { font-weight: 550; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#palette .psub { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#palette .prow kbd { font-size: 10.5px; line-height: 15px; min-width: 0; padding: 0 4px; }
+#palette .pnone { padding: 12px 16px; color: var(--text-3); font-size: 13px; }
+
+/* a phone: what the agent asks rises from the bottom, its buttons as wide as the screen */
+html.ptype .chat .wait.asks { position: sticky; bottom: 0; margin: 0 -16px; padding: 0; max-width: none; z-index: 3; }
+html.ptype .chat .wait.asks .ask { margin: 0; border-radius: 16px 16px 0 0; border-width: 1px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08); }
+html.ptype .chat .wait.asks .ask .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px 14px; }
+html.ptype .chat .wait.asks .ask .acts .btn { padding: 10px; font-size: 15px; border-radius: 12px; justify-content: center; }
+html.ptype .chat .wait.asks .ask .acts .btn:nth-child(n+3) { grid-column: 1 / -1; }
+html.ptype .chat .wait.asks .ask .acts .hint { display: none; }
+html.ptype .chat .wait.asks { margin: 0; width: 100%; box-sizing: border-box; }
+html.ptype .chat .wait.asks .ask .ah, html.ptype .chat .wait.asks .ask pre.input { padding-left: 14px; padding-right: 14px; }
+html.ptype #details { display: none; }
