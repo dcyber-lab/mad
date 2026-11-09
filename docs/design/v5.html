@@ -460,7 +460,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
         <h3>保留和不做</h3>
         <ul>
           <li>保留：Grok 头像、中文界面、无标题栏、单列消息、⌘\ 开合侧栏、260–420pt 侧栏宽度。</li>
-          <li>保留：对话 / 终端 / 改动三个标签，新增“详情”栏，默认收起。</li>
+          <li>标签只留对话 / 改动两个，去掉终端；claude 自己的交互菜单（如 /config）这类少见情况，从 ⋯ 里“在终端打开”兜底。新增“详情”栏，默认收起。</li>
           <li>不做：新配色或新字体；Tab Bar；把概览做成仪表盘。</li>
           <li>工具名、claude / codex、命令原文保持英文。</li>
         </ul>
@@ -617,11 +617,10 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
     const head = `<div class="mh">${av(a.c, a.s, approved && id === 'table' ? 'work' : a.st, 34)}<div class="t"><b>${a.name}</b><span>${a.kind} · <span class="mono">${a.proj} / main</span>${a.cost ? ' · ' + a.cost : ''}</span></div>
       <div class="right"><div class="tabs" role="tablist">
         <button role="tab" type="button" data-tab="chat" aria-selected="${tab === 'chat'}">对话</button>
-        <button role="tab" type="button" data-tab="term" aria-selected="${tab === 'term'}">终端</button>
         <button role="tab" type="button" data-tab="diff" aria-selected="${tab === 'diff'}">改动 <span class="c">3</span></button></div>
-        <button class="icon-btn" type="button" data-insp aria-pressed="${inspOpen}" aria-label="详情 ⌘I">${ICON_SIDE}</button><button class="icon-btn" type="button" aria-label="更多">${ICON_MORE}</button></div></div>`;
+        <button class="icon-btn" type="button" data-insp aria-pressed="${inspOpen}" aria-label="详情 ⌘I">${ICON_SIDE}</button><button class="icon-btn" type="button" aria-label="更多（含：在终端打开）" title="更多 · 在终端打开">${ICON_MORE}</button></div></div>`;
     let body;
-    if (tab === 'term') {
+    if (false) {
       body = `<div class="col" style="max-width:none"><div class="term"><span class="d">~/src/mad (main)</span>
 <span class="g">❯</span> claude --resume 6625f15d
 <span class="d">───────────────────────────────────────────────</span>
@@ -781,7 +780,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--line-2); border-bottom-w
   document.getElementById('ph2').innerHTML = sb + `
     <div class="ph-nav"><span class="back">‹</span>${av(2, 1, 'wait', 34)}<span class="t"><b>给我绘制一个表格</b><span>claude · mad / main · $0.84</span></span><span class="icon-btn" style="margin-left:auto">${ICON_MORE}</span></div>
     <div class="ph-conv">
-      <div class="ph-tabs" style="padding:0"><div class="tabs"><button type="button" aria-selected="true">对话</button><button type="button" aria-selected="false">终端</button><button type="button" aria-selected="false">改动 <span class="c">3</span></button></div></div>
+      <div class="ph-tabs" style="padding:0"><div class="tabs"><button type="button" aria-selected="true">对话</button><button type="button" aria-selected="false">改动 <span class="c">3</span></button></div></div>
       <div class="msg-me" style="max-width:82%">给我绘制一个表格，把本周的任务汇总一下</div>
       <div class="msg-ai"><p>好的，我先读一下任务板，再生成表格。</p></div>
       <div class="tools"><div class="tool"><b>Read</b><span class="arg">board.json</span><span class="r ok">✓</span></div><div class="tool"><b>Run</b><span class="arg">go test ./internal/board/...</span><span class="r bad">✕</span></div></div>
