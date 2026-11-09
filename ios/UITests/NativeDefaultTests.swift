@@ -59,8 +59,14 @@ final class NativeDefaultTests: MadUITestCase {
         XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 15), "sending did not open the new agent's conversation")
         shot("the new agent's conversation")
         tap("返回")
+        // the new row is below the fold on a short phone: scroll to it
         let started = row(beginningWith: "Fixture started chat")
-        XCTAssertTrue(started.waitForExistence(timeout: 15), "the new agent is not in the home list after the way back")
+        var swipes = 0
+        while !(started.waitForExistence(timeout: 3) && started.isHittable) && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(started.exists, "the new agent is not in the home list after the way back")
         shot("the new agent in the home list")
     }
 

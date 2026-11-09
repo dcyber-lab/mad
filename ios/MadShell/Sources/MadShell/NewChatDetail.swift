@@ -8,8 +8,9 @@ import SwiftUI
 struct NewChatDetail: View {
     let api: NewChatAPI
     let projects: [Project]
-    /// Opens the agent that was started (after the deck has it).
-    let started: (String) async -> Void
+    /// Opens the agent that was started (after the deck has it): its id, why its first message did not go (nil when it
+    /// went), and the text that did not go (to put in its composer).
+    let started: (String, String?, String) async -> Void
     /// The iPhone's way back to the list (it draws its own head); the Mac's detail pane has none.
     var onBack: (() -> Void)?
 
@@ -268,9 +269,9 @@ struct NewChatDetail: View {
             do {
                 let r = try await api.startAgent(project: p.path, kind: k, model: session.isEmpty ? model : "", text: t,
                                                  session: session, cwd: cwd)
-                done()
-                if let e = r.error, !e.isEmpty { error = e }
-                await started(r.id)
+                // a first message that did not go stays written, and goes with the agent to its page
+                if r.failure == nil { done() }
+                await started(r.id, r.failure, r.unsent(t))
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
