@@ -81,7 +81,7 @@ func TestEdgeHome(t *testing.T) {
 	if n := len([]rune(d.Machine)); n != 60 {
 		t.Errorf("the Mac's name is %d characters", n)
 	}
-	if len(d.Working) != 2 || d.Inbox.Needs != 1 {
+	if len(d.Working) != 2 || d.Inbox.Needs != 3 {
 		t.Errorf("working %v, needs %d", d.Working, d.Inbox.Needs)
 	}
 	for _, c := range d.Bus {

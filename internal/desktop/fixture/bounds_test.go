@@ -806,3 +806,164 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 		})
 	}
 }
+
+// What the page reports of the buttons of the ask card at the end of an agent's conversation: every button's
+// box, and the card's.
+const askButtonsJS = `(() => {
+  const card = document.querySelector(".chat .wait .ask-inbox");
+  if (!card) return null;
+  const cr = card.getBoundingClientRect();
+  const col = card.parentElement.getBoundingClientRect();
+  const btns = [...card.querySelectorAll("button")].map((b) => {
+    const r = b.getBoundingClientRect();
+    return { text: b.textContent.trim(), w: r.width, h: r.height, left: r.left, right: r.right };
+  });
+  return { btns, chatW: card.closest(".chat").clientWidth, left: cr.left, right: cr.right, colLeft: col.left, colRight: col.right, sideways: card.scrollWidth > card.clientWidth + 0.5 };
+})()`
+
+// A button of an agent's ask card is no taller than 44px and no wider than the card, at a phone's width and a
+// desktop's, light and dark: a question's options are chips beside each other, not blocks; a permission's
+// buttons stay as they were. Where there is no Chrome, it is skipped.
+func TestAskCardButtonsStayCompact(t *testing.T) {
+	bin := chrome()
+	if bin == "" {
+		t.Skip("no Chrome: the ask card is not checked (MAD_CHROME names one)")
+	}
+	h, err := newHandler("edge-home", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := startChrome(t, bin)
+	if _, err := c.call("Page.enable", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, agent := range []string{"ask0001-dddd", "need0001-bbbb", "keys0001-eeee"} {
+		for _, theme := range []string{"light", "dark"} {
+			for _, w := range []int{390, 1600} {
+				t.Run(fmt.Sprintf("%s/%s/%d", agent, theme, w), func(t *testing.T) {
+					if _, err := c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": w, "height": 900, "deviceScaleFactor": 1, "mobile": w < 600}); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := c.call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}}); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := c.call("Page.navigate", map[string]any{"url": "about:blank"}); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := c.call("Page.navigate", map[string]any{"url": srv.URL + "/#token=" + strings.Repeat("0", 32) + "&agent=" + agent}); err != nil {
+						t.Fatal(err)
+					}
+					if !waitFor(20*time.Second, func() bool {
+						v, err := c.eval(`!!document.querySelector(".chat .wait .ask-inbox button")`)
+						return err == nil && string(v) == "true"
+					}) {
+						t.Fatal("the page did not draw the ask card")
+					}
+					time.Sleep(500 * time.Millisecond)
+					v, err := c.eval(askButtonsJS)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var r struct {
+						Btns []struct {
+							Text              string
+							W, H, Left, Right float64
+						}
+						Left, Right, ColLeft, ColRight, ChatW float64
+						Sideways                              bool
+					}
+					if err := json.Unmarshal(v, &r); err != nil {
+						t.Fatalf("%s: %v", v, err)
+					}
+					if len(r.Btns) < 2 {
+						t.Fatalf("the card has %d buttons", len(r.Btns))
+					}
+					for _, b := range r.Btns {
+						// one line is at most 44px; a long label (a TUI prompt's) wraps to two, no more
+						if max := map[bool]float64{false: 44.5, true: 58}[len([]rune(b.Text)) > 24]; b.H > max {
+							t.Errorf("%q is %.0fpx tall, want at most %.0f", b.Text, b.H, max)
+						}
+						if b.Right > r.Right+0.5 || b.Left < r.Left-0.5 || b.Right > float64(w)+0.5 {
+							t.Errorf("%q reaches %.0f..%.0f past its card %.0f..%.0f", b.Text, b.Left, b.Right, r.Left, r.Right)
+						}
+					}
+					if r.Sideways {
+						t.Error("the card scrolls sideways")
+					}
+					if w < 600 && (r.Left < 13.5 || r.Left > 14.5 || r.Right < r.ChatW-14.5 || r.Right > r.ChatW-13.5) {
+						t.Errorf("the card is %.0f..%.0f, want the column's 14px side edges", r.Left, r.Right)
+					}
+					shot := func(name string) {
+						if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
+							if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+								var s struct{ Data []byte }
+								if json.Unmarshal(res, &s) == nil {
+									_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("ask-%s-%d-%s%s.png", agent[:4], w, theme, name)), s.Data, 0o644)
+								}
+							}
+						}
+					}
+					shot("")
+					// in flight: the act that opens the card is the tapped one, as the page marks it
+					// in flight, by the real path: the first act's chip is clicked with the request stalled
+					boxes := `JSON.stringify({ card: (() => { const r = document.querySelector(".ask-inbox").getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })(),
+					  btns: [...document.querySelectorAll(".ask-inbox .btn")].map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent, box: [r.left, r.top, r.width, r.height], tapped: e.classList.contains("tapped") }; }) })`
+					type boxesT struct {
+						Card []float64
+						Btns []struct {
+							Text   string
+							Box    []float64
+							Tapped bool
+						}
+					}
+					read := func() boxesT {
+						t.Helper()
+						v, err := c.eval(boxes)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var s string
+						var b boxesT
+						if json.Unmarshal(v, &s) != nil || json.Unmarshal([]byte(s), &b) != nil {
+							t.Fatalf("%s", v)
+						}
+						return b
+					}
+					before := read()
+					if _, err := c.eval(`authFetch = () => new Promise(() => {}); document.querySelector(".ask-inbox .btn.chip:not(.more)").click()`); err != nil {
+						t.Fatal(err)
+					}
+					time.Sleep(400 * time.Millisecond)
+					after := read()
+					if fmt.Sprint(after.Card) != fmt.Sprint(before.Card) {
+						t.Errorf("a tapped card changes its box: %v, then %v", before.Card, after.Card)
+					}
+					if len(after.Btns) != len(before.Btns) {
+						t.Fatalf("a tapped card has %d buttons, was %d", len(after.Btns), len(before.Btns))
+					}
+					tapped := 0
+					for i, b := range after.Btns {
+						was := before.Btns[i]
+						if b.Tapped {
+							tapped++
+						}
+						// every chip keeps its row and height; the tapped one with its words kept keeps its size (one that says
+						// "允许中…" is another width, and its neighbours move along the row)
+						if b.Box[1] != was.Box[1] || b.Box[3] != was.Box[3] || (b.Tapped && b.Text == was.Text && fmt.Sprint(b.Box) != fmt.Sprint(was.Box)) {
+							t.Errorf("%q moved or grew when tapped: %v, then %v (%q)", was.Text, was.Box, b.Box, b.Text)
+						}
+						if b.Tapped && b.Text != was.Text && !strings.HasSuffix(b.Text, "…") {
+							t.Errorf("%q says %q in flight", was.Text, b.Text)
+						}
+					}
+					if tapped != 1 {
+						t.Errorf("%d chips are marked tapped, want 1", tapped)
+					}
+					shot("-busy")
+				})
+			}
+		}
+	}
+}

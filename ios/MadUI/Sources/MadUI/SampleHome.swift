@@ -32,6 +32,8 @@ public enum SampleHome {
             HomeSection(id: "mad", title: "mad", kind: .project(name: "mad"), rows: [
                 HomeRow(id: "work0001-aaaa", agentKind: "claude", name: "Sidebar token 统计", preview: "正在跑测试…", state: .working),
                 HomeRow(id: "need0001-bbbb", agentKind: "claude", name: "给我绘制一个表格", preview: "想运行一条命令，等你确认", state: .needsYou, needsYou: true),
+                HomeRow(id: "ask0001-dddd", agentKind: "claude", name: "适配一下谷歌的反重力 cli", preview: "在问你一个问题", state: .needsYou, needsYou: true),
+                HomeRow(id: "keys0001-eeee", agentKind: "claude", name: "清理构建目录", preview: "想运行一条命令，等你确认", state: .needsYou, needsYou: true),
                 HomeRow(id: "stop0001-cccc", agentKind: "claude", name: "Mad ideas", preview: "已停止", state: .stopped, dimmed: true),
                 HomeRow(id: "idle0001-dddd", agentKind: "claude", name: "notes"),
                 HomeRow(id: "unti0001-eeee", agentKind: "codex", name: "", preview: "ok"),

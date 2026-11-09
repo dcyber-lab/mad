@@ -34,6 +34,12 @@ final class NativeDefaultTests: MadUITestCase {
         tap("返回")
         let agent = row(beginningWith: "Sidebar token 统计")
         XCTAssertTrue(agent.waitForExistence(timeout: 10), "back from the channel did not show the home")
+        // the 待处理 card is long: the agent's row is below the fold
+        var swipes = 0
+        while !agent.isHittable && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
         agent.tap()
         // the agent page's tabs (the terminal button is gone: 在终端打开 is in ⋯)
         XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 10), "the agent's conversation did not open")
