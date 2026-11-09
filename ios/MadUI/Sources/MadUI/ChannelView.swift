@@ -398,7 +398,7 @@ public struct ChannelView: View {
     @ViewBuilder private func row(_ item: ChannelItem) -> some View {
         switch item {
         case .time(_, let text):
-            Text(text).font(.system(size: 11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
+            Text(text).font(.mad(11.5)).foregroundStyle(Color.madFg3).frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 8)
         case .note(let id, _) where id == "quiet" || id == "empty":
             Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):

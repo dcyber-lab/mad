@@ -283,7 +283,7 @@ public struct ConversationView: View {
         if model.showsInterrupt(draft: draft) {
             Button(action: actions.interrupt) {
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.mad(14, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color(hex: 0xff3b30)))
@@ -359,9 +359,9 @@ struct ConvTabs: View {
         Button { tab = t } label: {
             HStack(spacing: 5) {
                 Text(title)
-                if count > 0 { Text(verbatim: "\(count)").font(.system(size: 11)).monospacedDigit().foregroundStyle(Color.madFg3) }
+                if count > 0 { Text(verbatim: "\(count)").font(.mad(11)).monospacedDigit().foregroundStyle(Color.madFg3) }
             }
-            .font(.system(size: 12.5))
+            .font(.mad(12.5))
             .foregroundStyle(tab == t ? Color.madFg : Color.madFg2)
             .padding(.horizontal, 12)
             .padding(.vertical, 3)
@@ -384,11 +384,11 @@ struct HeadLine: View {
     var body: some View {
         var parts: [Text] = []
         if !model.kind.isEmpty { parts.append(Text(model.kind)) }
-        if !model.place.isEmpty { parts.append(Text(model.place).font(.system(size: 11.5, design: .monospaced))) }
+        if !model.place.isEmpty { parts.append(Text(model.place).font(.mad(11.5, design: .monospaced))) }
         if !model.cost.isEmpty { parts.append(Text(model.cost)) }
         var t = parts.first ?? Text(model.stateLine)
         for p in parts.dropFirst() { t = t + Text(" · ") + p }
-        return t.font(.system(size: 12)).foregroundColor(.madFg3).lineLimit(1)
+        return t.font(.mad(12)).foregroundColor(.madFg3).lineLimit(1)
     }
 }
 
@@ -520,12 +520,12 @@ struct ChangesTab: View {
             VStack(alignment: .leading, spacing: 16) {
                 FlowLayout(spacing: 8) {
                     if let d = details {
-                        if !d.branch.isEmpty { Text(d.branch).font(.system(size: 12, design: .monospaced)) }
+                        if !d.branch.isEmpty { Text(d.branch).font(.mad(12, design: .monospaced)) }
                         Text(Lf("%lld 个文件", d.changed))
                         if d.ahead > 0 { Text(Lf("↑%lld 未推送", d.ahead)) }
                     }
                 }
-                .font(.system(size: 12.5))
+                .font(.mad(12.5))
                 .foregroundStyle(Color.madFg2)
                 FlowLayout(spacing: 8) {
                     if let w = actions.openWeb { Button(L("在网页里看改动"), action: w).buttonStyle(.mad()) }
@@ -536,7 +536,7 @@ struct ChangesTab: View {
                     }
                 }
                 if (details?.changed ?? 0) == 0 {
-                    Text(L("没有未提交的改动")).font(.system(size: 12.5)).foregroundStyle(Color.madFg3)
+                    Text(L("没有未提交的改动")).font(.mad(12.5)).foregroundStyle(Color.madFg3)
                 }
             }
             .frame(maxWidth: 900, alignment: .leading)
@@ -599,10 +599,10 @@ struct AgentDetailsPane: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.madFg3)
+            Text(title).font(.mad(11.5, weight: .semibold)).foregroundStyle(Color.madFg3)
             content()
         }
-        .font(.system(size: 12.5))
+        .font(.mad(12.5))
     }
 
     private func row(_ key: String, _ value: String, mono: Bool = false) -> some View {
@@ -610,7 +610,7 @@ struct AgentDetailsPane: View {
             Text(key).foregroundStyle(Color.madFg3)
             Spacer(minLength: 8)
             Text(value)
-                .font(mono ? Font.system(size: 12, design: .monospaced) : Font.system(size: 12.5))
+                .font(mono ? Font.mad(12, design: .monospaced) : Font.mad(12.5))
                 .monospacedDigit()
                 .foregroundStyle(Color.madFg)
                 .lineLimit(1)
@@ -929,10 +929,10 @@ struct AskCardView: View {
                 Text(card.title).lineLimit(card.permission ? 1 : 3)
                 Spacer(minLength: 8)
                 if !card.waited.isEmpty {
-                    Text(card.waited).font(.system(size: 11.5)).fontWeight(.regular).foregroundStyle(Color.madFg3)
+                    Text(card.waited).font(.mad(11.5)).fontWeight(.regular).foregroundStyle(Color.madFg3)
                 }
             }
-            .font(.system(size: 12.5, weight: .semibold))
+            .font(.mad(12.5, weight: .semibold))
             .foregroundStyle(Color.madWait)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -942,13 +942,13 @@ struct AskCardView: View {
                 Group {
                     if card.mono {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            Text(card.detail).font(.system(size: 12.5, design: .monospaced)).lineSpacing(3).fixedSize()
+                            Text(card.detail).font(.mad(12.5, design: .monospaced)).lineSpacing(3).fixedSize()
                                 .textSelection(.enabled)
                                 .padding(.horizontal, 12).padding(.vertical, 10)
                         }
                         .background(Color.madCode)
                     } else {
-                        Text(card.detail).font(.system(size: 13)).foregroundStyle(Color.madFg)
+                        Text(card.detail).font(.mad(13)).foregroundStyle(Color.madFg)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 12).padding(.vertical, 10)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -973,7 +973,7 @@ struct AskCardView: View {
                 TextField(asking.label, text: $text, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.mad(13))
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(Color.madRaise, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .onSubmit(sendWords)
@@ -998,7 +998,7 @@ struct AskCardView: View {
                         if returnAct != nil { Kbd("⏎"); Text(L("允许")) }
                         if escapeAct != nil { Kbd("esc"); Text(L("拒绝")) }
                     }
-                    .font(.system(size: 11.5))
+                    .font(.mad(11.5))
                     .foregroundStyle(Color.madFg3)
                     .fixedSize()
                 }
@@ -1072,15 +1072,15 @@ struct AskSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(card.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.mad(14, weight: .semibold))
                     .foregroundStyle(Color.madWait)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                if !card.waited.isEmpty { Text(card.waited).font(.system(size: 12)).foregroundStyle(Color.madFg3) }
+                if !card.waited.isEmpty { Text(card.waited).font(.mad(12)).foregroundStyle(Color.madFg3) }
             }
             if !card.detail.isEmpty {
                 Text(card.detail)
-                    .font(card.mono ? Font.system(size: 13, design: .monospaced) : Font.system(size: 15))
+                    .font(card.mono ? Font.mad(13, design: .monospaced) : Font.system(size: 15))
                     .foregroundStyle(Color.madFg)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, card.mono ? 12 : 0)

@@ -60,7 +60,7 @@ public struct HomeView: View {
             }
             Button(action: actions.switchMac) {
                 Text(model.machine + " ▾")
-                    .font(.system(size: 12.5))
+                    .font(.mad(12.5))
                     .foregroundStyle(Color.madFg2)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -127,7 +127,7 @@ public struct HomeView: View {
                     PersonPicture(name: model.person ?? L("我"), size: 28)
                     Text(model.person ?? L("我")).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.madFg)
                     Spacer(minLength: 0)
-                    Text(L("用量 ›")).font(.system(size: 13)).foregroundStyle(Color.madFg3)
+                    Text(L("用量 ›")).font(.mad(13)).foregroundStyle(Color.madFg3)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)

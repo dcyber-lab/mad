@@ -32,7 +32,7 @@ struct ReceiptLine: View {
             HStack(spacing: 4) {
                 ForEach(seen) { t in CharacterView(id: t.id, kind: t.kind, state: .idle, size: 14) }
                 Text(word)
-                    .font(.system(size: 11))
+                    .font(.mad(11))
                     .foregroundStyle(Color.madFg3)
                     .lineLimit(1)
                     .contentTransition(.opacity)

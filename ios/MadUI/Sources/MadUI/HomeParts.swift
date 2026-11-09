@@ -17,14 +17,14 @@ struct WaitingCard: View {
             HStack(spacing: 8) {
                 CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: phone ? 28 : 24)
                 Text(item.name)
-                    .font(phone ? Font.system(size: 15, weight: .semibold) : Font.system(size: 13, weight: .medium))
+                    .font(phone ? Font.system(size: 15, weight: .semibold) : Font.mad(13, weight: .medium))
                     .foregroundStyle(Color.madFg)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(item.age).font(.system(size: phone ? 12 : 11)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
             if phone && !item.isPermission {
-                Text(item.detail).font(.system(size: 14)).foregroundStyle(Color.madFg).lineLimit(2)
+                Text(item.detail).font(.mad(14)).foregroundStyle(Color.madFg).lineLimit(2)
             } else if !item.detail.isEmpty {
                 CommandBox(text: item.detail, font: item.mono
                            ? Font.system(size: phone ? 12.5 : 11.5, design: .monospaced)
@@ -103,7 +103,7 @@ struct ProjectMetaLine: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if !meta.branch.isEmpty { Text(meta.branch).font(.system(size: 11.5, design: .monospaced)).lineLimit(1) }
+            if !meta.branch.isEmpty { Text(meta.branch).font(.mad(11.5, design: .monospaced)).lineLimit(1) }
             ForEach(meta.parts, id: \.self) { Text($0).fixedSize() }
         }
     }

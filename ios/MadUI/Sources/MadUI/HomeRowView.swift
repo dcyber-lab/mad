@@ -9,8 +9,8 @@ struct RowMetrics {
     var end: Font
     var spacing: CGFloat
 
-    static let mac = RowMetrics(avatar: 32, name: .system(size: 13.5, weight: .medium), line: .system(size: 12),
-                                end: .system(size: 11), spacing: 10)
+    static let mac = RowMetrics(avatar: 32, name: .mad(13.5, weight: .medium), line: .mad(12),
+                                end: .mad(11), spacing: 10)
     static let phone = RowMetrics(avatar: 44, name: .callout.weight(.semibold), line: .footnote, end: .caption, spacing: 12)
 }
 
