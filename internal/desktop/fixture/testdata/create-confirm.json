@@ -13,20 +13,28 @@
           {
             "id": "fold0001-aaaa",
             "kind": "claude",
-            "status": "idle",
-            "shown": "idle",
+            "status": "waiting",
+            "shown": "waiting",
             "chat": true,
             "color": "#d97757",
-            "name": "architect"
+            "name": "architect",
+            "headless": true,
+            "mode": "window",
+            "title": "architect",
+            "last": "想创建一个团队，等你确认"
           },
           {
             "id": "fold0002-aaaa",
             "kind": "codex",
-            "status": "idle",
-            "shown": "idle",
+            "status": "waiting",
+            "shown": "waiting",
             "chat": true,
             "color": "#10a37f",
-            "name": "builder"
+            "name": "builder",
+            "headless": true,
+            "mode": "window",
+            "title": "builder",
+            "last": "想创建一个团队，等你确认"
           },
           {
             "id": "fold0003-aaaa",
@@ -138,6 +146,50 @@
         "mention": true,
         "unread": 1,
         "lead": "fold0001-aaaa"
+      },
+      {
+        "id": "ship-it",
+        "title": "#ship-it",
+        "members": [
+          {
+            "id": "fold0001-aaaa",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "label": "builder",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "label": "reviewer",
+            "kind": "claude"
+          }
+        ],
+        "last": 1,
+        "last_text": "",
+        "last_at": "-4m",
+        "listed": true,
+        "unread": 1,
+        "lead": "fold0001-aaaa",
+        "team": {
+          "name": "ship-it",
+          "roles": [
+            {
+              "role": "architect",
+              "agent": "fold0001-aaaa"
+            },
+            {
+              "role": "builder",
+              "agent": "fold0002-aaaa"
+            },
+            {
+              "role": "reviewer",
+              "agent": "fold0003-aaaa"
+            }
+          ]
+        }
       }
     ],
     "board": [
@@ -259,8 +311,8 @@
         {
           "key": "create:c-00000002",
           "kind": "create",
-          "agent": "fold0001-aaaa",
-          "title": "architect",
+          "agent": "fold0002-aaaa",
+          "title": "builder",
           "context": "wants to start a team",
           "text": "Team fix-flaky in mad",
           "body": "Goal: stop the follow-up test from flaking\nfixer: claude:opus (lead)\nchecker: codex",
@@ -288,7 +340,7 @@
             }
           ],
           "open": {
-            "agent": "fold0001-aaaa"
+            "agent": "fold0002-aaaa"
           },
           "create": {
             "type": "team",
@@ -534,5 +586,115 @@
         "text": "You declined; nothing was created."
       }
     ]
+  },
+  "chat": {
+    "fold0001-aaaa": {
+      "file": "fixture",
+      "offset": 3000,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "把发布检查拆成一个小组，再起一个 scout 看 CI。"
+        },
+        {
+          "kind": "text",
+          "text": "好的，先起 ship-it 小组。"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__team_start",
+          "label": "ship-it",
+          "args": "{\"name\": \"ship-it\", \"goal\": \"ship the release\", \"project\": \"/fixture/mad\"}",
+          "input": "{\"name\": \"ship-it\", \"goal\": \"ship the release\", \"project\": \"/fixture/mad\"}",
+          "id": "t1"
+        },
+        {
+          "kind": "result",
+          "id": "t1",
+          "text": "{\"outcome\": \"created\", \"team\": \"ship-it\", \"channel\": \"ship-it\", \"agents\": {\"architect\": \"fold0001-aaaa\"}}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout2",
+          "args": "{\"name\": \"scout2\", \"kind\": \"codex\", \"project\": \"/fixture/mad\", \"message\": \"read the handlers\"}",
+          "input": "{\"name\": \"scout2\", \"kind\": \"codex\", \"project\": \"/fixture/mad\", \"message\": \"read the handlers\"}",
+          "id": "t2"
+        },
+        {
+          "kind": "result",
+          "id": "t2",
+          "text": "the person declined"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout3",
+          "args": "{\"name\": \"scout3\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"look at CI\"}",
+          "input": "{\"name\": \"scout3\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"look at CI\"}",
+          "id": "t3"
+        },
+        {
+          "kind": "result",
+          "id": "t3",
+          "text": "the person hasn't answered yet"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout4",
+          "args": "{\"name\": \"scout4\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"tidy up\"}",
+          "input": "{\"name\": \"scout4\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"tidy up\"}",
+          "id": "t4"
+        },
+        {
+          "kind": "result",
+          "id": "t4",
+          "text": "not a directory: /fixture/mad",
+          "error": true
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout5",
+          "args": "{\"name\": \"scout5\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"read the logs\"}",
+          "input": "{\"name\": \"scout5\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"read the logs\"}",
+          "id": "t5"
+        },
+        {
+          "kind": "result",
+          "id": "t5",
+          "text": "{\"agent\": {\"id\": \"fold0006-aaaa\", \"label\": \"docs\"}, \"channel\": \"dm.fold0001-aaaa.fold0006-aaaa\"}"
+        },
+        {
+          "kind": "text",
+          "text": "scout 起好了。再起一个，并且开一个修 flaky 的小组："
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout",
+          "args": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
+          "input": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
+          "id": "t6"
+        }
+      ]
+    },
+    "fold0002-aaaa": {
+      "file": "fixture",
+      "offset": 500,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "开一个修 flaky 的小组。"
+        },
+        {
+          "kind": "text",
+          "text": "好，我提个小组方案："
+        }
+      ]
+    }
   }
 }

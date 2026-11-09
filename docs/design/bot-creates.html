@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bot 建团队</title>
+<style>
+/* A row of real-size iPhone screens (393pt wide) that wraps to one column on a phone, then one Mac pane in a
+   sideways scroller. The screens are mocked in light mode with the app's own colour tokens (MadUI ChannelStyle). */
+:root {
+  --page: #eef0f3; --ink: #15171a; --muted: #5f6672; --rule: #d9dde3; --frame: #0d0e10; --card: #ffffff;
+  /* inside the phone: the app's light tokens */
+  --s-bg: #ffffff; --s-ink: #111114; --s-2: #6b6b76; --s-3: #a8a8b0; --s-bubble: #f0f0f3; --s-line: rgba(17,17,22,.08); --s-line2: rgba(15,15,22,.14);
+  --s-mine: #e9f0fe; --s-mine-fg: #0f2a66; --s-blue: #1f6bff; --s-wait: #c26a04; --s-wait-bg: #fff4e5; --s-work: #15803d;
+  --s-code: #f6f6f8; --s-raise: #efeff2;
+  --s-shadow: 0 6px 24px rgba(15,18,30,.10), 0 1px 3px rgba(15,18,30,.06);
+  --s-card-shadow: 0 10px 40px rgba(15,18,30,.16), 0 1px 3px rgba(15,18,30,.08);
+  --sans: -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; --card: #1a1d21; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; --card: #1a1d21; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+header.page { max-width: 1280px; margin: 0 auto 26px; display: grid; gap: 8px; }
+header.page h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+header.page p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 70ch; }
+.board { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, min(100%, 393px)); gap: 40px 28px; justify-content: center; }
+figure { margin: 0; display: grid; gap: 12px; align-content: start; min-width: 0; }
+figcaption { font-size: 14px; color: var(--muted); line-height: 1.6; }
+figcaption b { display: block; color: var(--ink); font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+h2.part { max-width: 1280px; margin: 56px auto 14px; font-size: 18px; }
+
+/* the phone */
+.phone { width: 393px; height: 852px; border-radius: 52px; background: var(--frame); padding: 9px; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
+.scr { position: relative; height: 100%; border-radius: 44px; overflow: hidden; background: var(--s-bg); color: var(--s-ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; }
+.status { flex: none; height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 38px; font-weight: 600; font-size: 16px; position: relative; z-index: 4; }
+.island { position: absolute; left: 50%; top: 11px; transform: translateX(-50%); width: 122px; height: 35px; border-radius: 20px; background: #000; }
+.status .bat { width: 25px; height: 12px; border: 1.5px solid currentColor; border-radius: 4px; position: relative; opacity: .9 }
+.status .bat::after { content: ""; position: absolute; inset: 1.5px 6px 1.5px 1.5px; background: currentColor; border-radius: 1.5px }
+
+.fab { width: 44px; height: 44px; border-radius: 50%; background: var(--s-bg); box-shadow: var(--s-shadow); display: grid; place-items: center; flex: none; border: 0; color: var(--s-ink); padding: 0 }
+.fab svg { width: 20px; height: 20px }
+.overlay-top { position: absolute; left: 0; right: 0; top: 54px; z-index: 3; }
+.fade-top { position: absolute; left: 0; right: 0; top: 0; height: 150px; background: linear-gradient(rgba(255,255,255,.97) 62%, rgba(255,255,255,0)); z-index: 2; pointer-events: none }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 0; gap: 10px; }
+.pill { height: 44px; border-radius: 22px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 8px; padding: 0 18px 0 6px; min-width: 0; }
+.pill .stack { display: grid; line-height: 1.18; min-width: 0 }
+.pill .t { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill .sub { font-size: 12px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.pill.machine { padding: 0 16px 0 18px; font-size: 17px; font-weight: 500; gap: 8px; flex: 1 1 auto; max-width: 240px }
+.pill.machine .mn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.pill.machine svg { flex: none }
+.pill.machine svg { width: 14px; height: 14px; color: var(--s-2) }
+.seg { display: flex; justify-content: center; margin-top: 10px; }
+.seg div { display: flex; background: var(--s-raise); border-radius: 16px; padding: 3px; font-size: 14px; }
+.seg span { padding: 5px 18px; border-radius: 13px; color: var(--s-2) }
+.seg span.on { background: var(--s-bg); color: var(--s-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08) }
+
+/* the conversation: messages sit on the foot (the card and the composer), the overflow goes up under the fade */
+.msgs { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 14px; }
+.foot { flex: none; display: grid; gap: 10px; padding-bottom: 34px; position: relative; z-index: 3 }
+.msg { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0 10px; padding: 0 16px; margin-top: 14px; align-items: end; }
+.msg .who { grid-column: 2; grid-row: 1; font-size: 14px; color: var(--s-2); margin: 0 0 6px 4px }
+.msg .av { grid-column: 1; grid-row: 2; }
+.msg > .bubble, .msg > .step, .msg > .made { grid-column: 2; grid-row: 2; }
+.bubble { background: var(--s-bubble); border-radius: 24px; padding: 13px 17px; font-size: 19px; line-height: 1.42; max-width: 86%; width: fit-content; letter-spacing: -.005em; }
+.bubble p { margin: 0 } .bubble p + p { margin-top: 8px }
+.mine { display: flex; justify-content: flex-end; padding: 0 16px; margin-top: 18px; }
+.mine .bubble { background: var(--s-mine); color: var(--s-mine-fg); border-bottom-right-radius: 8px }
+.at { font-weight: 600; color: var(--s-blue) }
+.step { border: 1px solid var(--s-line2); border-radius: 20px; height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 10px; font-size: 16px; color: #55555b; width: fit-content; max-width: 100%; white-space: nowrap; overflow: hidden }
+.step b { color: var(--s-ink); font-weight: 600 }
+.step .x { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; flex: none }
+
+/* the composer, as the app draws it today */
+.composer { margin: 0 16px; height: 58px; border-radius: 29px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.composer .ic { width: 42px; height: 42px; border-radius: 50%; background: var(--s-raise); display: grid; place-items: center; flex: none }
+.composer .ic.send { background: #f8f8f9; color: var(--s-3) }
+.composer .ic svg { width: 20px; height: 20px }
+.composer .ph { flex: 1; font-size: 18px; color: var(--s-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+
+/* the floating card above the composer (AskSheet): white, 28pt corners, soft shadow */
+.sheet { margin: 0 12px; background: var(--s-bg); border-radius: 28px; box-shadow: var(--s-card-shadow); padding: 18px 18px 12px; display: grid; gap: 12px; }
+.sheet .h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px }
+.sheet .h b { color: var(--s-wait); font-size: 17px; font-weight: 600 }
+.sheet .h span { color: var(--s-2); font-size: 14px; white-space: nowrap }
+/* questions: the words, then the answers as chips that wrap (#163's chips at the app's sizes) */
+.q { display: grid; gap: 8px }
+.q + .q { margin-top: 4px }
+.q .qq { font-size: 17px; line-height: 1.35 }
+.chips { display: flex; flex-wrap: wrap; gap: 8px }
+.chip { min-height: 36px; padding: 6px 14px; border-radius: 18px; border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-ink); font: 400 15px/1.35 var(--sans); display: inline-flex; align-items: center; text-align: left }
+.chip.on { background: var(--s-ink); color: #fff; border-color: transparent; font-weight: 500 }
+.chip.more { border-style: dashed; color: var(--s-2) }
+.qfoot { display: flex; align-items: center; justify-content: space-between; padding-top: 2px }
+.quiet { border: 0; background: none; color: var(--s-2); font: 400 15px/1 var(--sans); height: 40px; padding: 0 4px }
+.go { height: 40px; border-radius: 20px; padding: 0 22px; border: 0; background: var(--s-ink); color: #fff; font: 600 16px/1 var(--sans) }
+.go:disabled, .go.off { background: var(--s-raise); color: var(--s-3) }
+/* the confirm card's parts */
+.what { display: flex; align-items: baseline; gap: 10px; min-width: 0 }
+.what .nm { font-size: 21px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.what .pj { font-size: 15px; color: var(--s-2); white-space: nowrap }
+.spec { background: var(--s-code); border-radius: 14px; padding: 2px 14px; }
+.spec .r { display: flex; justify-content: space-between; align-items: center; gap: 12px; height: 40px; font-size: 16px; }
+.spec .r + .r { border-top: 1px solid var(--s-line) }
+.spec .r span { color: var(--s-2); font-size: 15px; white-space: nowrap }
+.first { display: grid; gap: 4px }
+.first .k { font-size: 14px; color: var(--s-2) }
+.first .v { font-size: 16px; line-height: 1.45 }
+.pills { display: flex; gap: 10px }
+.big { flex: 1; height: 50px; border-radius: 25px; border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-ink); font: 600 17px/1 var(--sans) }
+.big.yes { background: var(--s-ink); border-color: var(--s-ink); color: #fff }
+.change { text-align: center; color: var(--s-2); font-size: 15px; height: 36px; display: grid; place-items: center; margin-top: -4px }
+.field { background: var(--s-raise); border-radius: 14px; padding: 12px 14px; font-size: 17px; line-height: 1.4; color: var(--s-ink) }
+.field .caret { display: inline-block; width: 2px; height: 20px; background: var(--s-blue); vertical-align: -4px; margin-left: 1px }
+
+/* the result: mad's own line, not the bot's words */
+.made { margin: 16px 16px 0; border: 1px solid var(--s-line2); border-radius: 20px; padding: 12px 12px 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--s-bg); max-width: 100% }
+.made .t { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.made .s { font-size: 14px; color: var(--s-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.open { height: 34px; border-radius: 17px; border: 1px solid var(--s-line2); background: var(--s-bg); padding: 0 10px 0 14px; display: inline-flex; align-items: center; gap: 2px; font: 600 15px/1 var(--sans); color: var(--s-ink) }
+.open svg { width: 16px; height: 16px; color: var(--s-2) }
+.note { text-align: center; font-size: 14px; color: var(--s-2); margin: 16px 24px 0; line-height: 1.4 }
+
+/* home */
+.body { flex: 1; min-height: 0; overflow: hidden; position: relative }
+.hero { margin: 18px 16px 6px; border-radius: 22px; background: var(--s-wait-bg); padding: 16px 16px 14px; display: grid; gap: 12px; }
+.hero .hh { display: flex; align-items: center; gap: 8px; color: var(--s-wait); font-weight: 600; font-size: 16px; }
+.hero .hh .n { margin-left: auto; font-weight: 500; color: var(--s-2); font-size: 15px }
+.hero .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--s-wait) }
+.task { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; }
+.task > div { min-width: 0 }
+.task .name { font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px }
+.task .name span { font-weight: 400; color: var(--s-2); font-size: 15px; white-space: nowrap }
+.task .wh { font-size: 15px; color: #6b4a2a; margin-top: 2px }
+.task .box { font-size: 15px; background: rgba(255,255,255,.8); border-radius: 12px; padding: 9px 12px; margin-top: 8px; color: #3a3a3f; line-height: 1.4 }
+.task .acts { display: flex; gap: 8px; margin-top: 10px }
+.sbtn { height: 38px; border-radius: 19px; padding: 0 20px; font: 600 15px/1 var(--sans); border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-ink) }
+.sbtn.dark { background: var(--s-ink); color: #fff; border-color: var(--s-ink) }
+.sect { font-size: 14px; color: var(--s-2); padding: 20px 24px 2px; display: flex; justify-content: space-between; }
+.row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 0 14px; align-items: center; padding: 0 22px; height: 80px; }
+.row .nm { font-size: 19px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em }
+.row .pv { font-size: 16px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px }
+.row .side { display: grid; justify-items: end; align-self: stretch; align-content: center; gap: 9px; font-size: 14px; color: var(--s-3); }
+.row.new { background: linear-gradient(90deg, rgba(31,107,255,.07), rgba(31,107,255,0) 80%) }
+.udot { width: 10px; height: 10px; border-radius: 50%; background: var(--s-blue) }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 22px 30px; display: flex; gap: 12px; align-items: center; background: linear-gradient(to top, #fff 55%, rgba(255,255,255,0)); }
+.dock .fab { width: 50px; height: 50px }
+.search { flex: 1; height: 50px; border-radius: 25px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 10px; padding: 0 18px; font-size: 18px; color: var(--s-2); }
+.search svg { width: 21px; height: 21px; color: var(--s-ink) }
+.me { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg,#f59e0b,#ef4444); color: #fff; display: grid; place-items: center; font: 600 17px var(--sans); box-shadow: var(--s-shadow); flex: none }
+
+/* decisions */
+.notes { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.notes section { background: var(--card); border: 1px solid var(--rule); border-radius: 16px; padding: 16px 18px; }
+.notes h3 { margin: 0 0 6px; font-size: 15px }
+.notes p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted) }
+
+/* the Mac pane: the chat column of the window, with the card at the column's foot (AskCardView) */
+.scroller { max-width: 1280px; margin: 0 auto; overflow-x: auto; padding-bottom: 8px; }
+.mac { width: 960px; height: 600px; border-radius: 12px; overflow: hidden; position: relative; background: #fff; color: var(--s-ink); box-shadow: 0 24px 60px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.2); font-family: var(--sans); -webkit-font-smoothing: antialiased; display: grid; grid-template-columns: 250px 1fr; }
+.mac .side { background: #f7f7f8; border-right: 1px solid var(--s-line); padding: 16px 10px; display: grid; align-content: start; gap: 2px }
+.mac .lights { display: flex; gap: 8px; padding: 2px 8px 18px } .mac .lights i { width: 12px; height: 12px; border-radius: 50%; display: block }
+.mac .lights i:nth-child(1) { background: #ff5f57 } .mac .lights i:nth-child(2) { background: #febc2e } .mac .lights i:nth-child(3) { background: #28c840 }
+.mac .hd { font-size: 13px; color: var(--s-2); padding: 12px 10px 4px }
+.mac .mr { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 10px; }
+.mac .mr.sel { background: #e9e9ec }
+.mac .mr .n { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mac .mr .p { font-size: 13px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mac .pane { position: relative; min-width: 0 }
+.mac .title { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); height: 38px; border-radius: 19px; background: #fff; box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 8px; padding: 0 18px 0 8px; font-size: 15px; font-weight: 600; white-space: nowrap; z-index: 2 }
+.mac .title span { font-weight: 400; color: var(--s-2); font-size: 13px }
+.mac .colm { position: absolute; inset: 64px 0 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 32px 20px; }
+.mac .inner { width: 100%; max-width: 640px; margin: 0 auto; display: grid; gap: 14px }
+.mac .mm { display: flex; justify-content: flex-end }
+.mac .mm div { background: var(--s-mine); color: var(--s-mine-fg); border-radius: 18px 18px 6px 18px; padding: 10px 15px; font-size: 15px; line-height: 1.55; max-width: 58% }
+.mac .bm { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: end }
+.mac .bm .b { background: var(--s-bubble); border-radius: 18px; padding: 10px 15px; font-size: 15px; line-height: 1.55; width: fit-content; max-width: 70% }
+.mac .askc { border: 1px solid rgba(194,106,4,.45); border-radius: 12px; overflow: hidden; background: #fff }
+.mac .askc .ah { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--s-wait-bg); color: var(--s-wait); font-size: 12.5px; font-weight: 600 }
+.mac .askc .ah span { margin-left: auto; font-weight: 400; color: var(--s-2); font-size: 11.5px }
+.mac .askc .ab { padding: 10px 12px; border-bottom: 1px solid var(--s-line); display: grid; gap: 8px; font-size: 13px }
+.mac .askc .ab .nm { font-size: 15px; font-weight: 600 } .mac .askc .ab .nm span { font-weight: 400; color: var(--s-2); font-size: 13px; margin-left: 6px }
+.mac .askc .ab .roles { display: grid; grid-template-columns: auto 1fr; gap: 3px 16px; color: var(--s-ink) }
+.mac .askc .ab .roles span { color: var(--s-2) }
+.mac .askc .ab .fw { color: var(--s-2) } .mac .askc .ab .fw b { color: var(--s-ink); font-weight: 400 }
+.mac .askc .aa { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.mac .mb { display: inline-flex; align-items: center; height: 28px; border-radius: 8px; padding: 0 12px; border: 1px solid var(--s-line2); background: #fff; font: 500 12.5px/1 var(--sans); color: var(--s-ink) }
+.mac .mb.yes { background: var(--s-ink); color: #fff; border-color: var(--s-ink) }
+.mac .mb.q { border: 0; color: var(--s-2); padding: 0 4px }
+.mac .hint { margin-left: auto; font-size: 11.5px; color: var(--s-2); display: flex; gap: 4px; align-items: center }
+.mac kbd { font: 10.5px/15px var(--sans); border: 1px solid rgba(0,0,0,.12); border-radius: 4px; padding: 0 4px; color: var(--s-2) }
+.mac .comp { height: 46px; border-radius: 23px; box-shadow: var(--s-shadow); display: flex; align-items: center; padding: 0 18px; font-size: 15px; color: var(--s-3); background: #fff }
+:focus-visible { outline: 2px solid var(--s-blue); outline-offset: 2px }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin 1.4s linear infinite; transform-origin: 50% 50% } }
+@keyframes spin { to { transform: rotate(360deg) } }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>在对话里让 bot 建 agent 和团队</h1>
+  <p>你在任何对话或群聊里说「帮我建个团队做 X」，bot 先用「想问你」卡片问清缺的信息，再给你一张确认卡片，写明要建什么。你点「允许」才会建，建好后对话里有一行能直接打开，首页上马上出现。和 Grok bot 一样，卡片只负责确认，要改什么就跟 bot 说一句。下面是 iPhone 的 7 屏和 Mac 上的卡片，内容都是示例。</p>
+</header>
+
+<main class="board">
+
+<!-- 1 · ask what's missing -->
+<figure id="ask">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:41</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="idle0001-dddd" data-size="32"></span><div class="stack"><span class="t">notes</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动</span></div></div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble">帮我建个团队做发布前检查</div></div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">建之前还要你定两件事：</div></div>
+    </div>
+    <div class="foot">
+      <section class="sheet" aria-label="想问你">
+        <div class="h"><b>想问你</b><span>刚刚</span></div>
+        <div class="q"><div class="qq">要哪几个角色？</div><div class="chips"><button class="chip on">负责人 + 开发 + 评审（推荐）</button><button class="chip">开发 + 评审</button><button class="chip more">其他…</button></div></div>
+        <div class="q"><div class="qq">用什么模型？</div><div class="chips"><button class="chip">按角色搭配（推荐）</button><button class="chip">都用 Claude Sonnet</button><button class="chip more">其他…</button></div></div>
+        <div class="qfoot"><button class="quiet">跳过</button><button class="go off" disabled>发送</button></div>
+      </section>
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「notes」</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>1 · 问缺的信息</b>用现有的「想问你」卡片，选项是会换行的小块。几个问题放在一张卡片里，每题选一个，都选了「发送」才变黑；只有一个问题时点一下就是回答。bot 能自己推断的不问：notes 在 mad 里，所以不问项目；在群聊里发话时才会多一题「建在哪个项目？」。</figcaption>
+</figure>
+
+<!-- 2 · confirm: a team -->
+<figure id="confirm">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:42</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="idle0001-dddd" data-size="32"></span><div class="stack"><span class="t">notes</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动</span></div></div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble">帮我建个团队做发布前检查</div></div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">好，我按下面这样建，你确认一下。</div></div>
+    </div>
+    <div class="foot">
+      <section class="sheet" aria-label="想创建一个团队">
+        <div class="h"><b>想创建一个团队</b><span>刚刚</span></div>
+        <div class="what"><span class="nm">发布检查</span><span class="pj">项目 mad</span></div>
+        <div class="spec">
+          <div class="r">负责人<span>Claude Opus</span></div>
+          <div class="r">开发<span>Claude Sonnet</span></div>
+          <div class="r">评审<span>Codex</span></div>
+        </div>
+        <div class="first"><span class="k">第一件事</span><span class="v">列出 v0.4 发布前要查的：跑全部测试、看这周的改动、起草发布说明。</span></div>
+        <div class="pills"><button class="big">拒绝</button><button class="big yes">允许</button></div>
+        <div class="change">改一下…</div>
+      </section>
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「notes」</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>2 · 确认卡片：建团队</b>和「想运行一条命令」是同一种卡片，浮在输入框上面：建什么、在哪个项目、每个角色用什么模型、第一件事，一眼看完。「允许」是黑色实心。卡片不能直接改；点「改一下…」写一句，比如「评审也用 Claude」，bot 会重新出一张。</figcaption>
+</figure>
+
+<!-- 2b · change something -->
+<figure id="change">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:42</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="idle0001-dddd" data-size="32"></span><div class="stack"><span class="t">notes</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动</span></div></div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble">帮我建个团队做发布前检查</div></div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">好，我按下面这样建，你确认一下。</div></div>
+    </div>
+    <div class="foot">
+      <section class="sheet" aria-label="想创建一个团队">
+        <div class="h"><b>想创建一个团队</b><span>刚刚</span></div>
+        <div class="what"><span class="nm">发布检查</span><span class="pj">项目 mad</span></div>
+        <div class="spec">
+          <div class="r">负责人<span>Claude Opus</span></div>
+          <div class="r">开发<span>Claude Sonnet</span></div>
+          <div class="r">评审<span>Codex</span></div>
+        </div>
+        <div class="field">评审也用 Claude<span class="caret"></span></div>
+        <div class="pills"><button class="big">取消</button><button class="big yes">发送</button></div>
+      </section>
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「notes」</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>2b · 改一下</b>点「改一下…」后，卡片里出现一个输入框，按钮变成「取消 / 发送」。发出去就等于这次不建，bot 收到你的话，改好后出一张新卡片。这和现有的「拒绝并说明」是同一个动作，不用新做。</figcaption>
+</figure>
+
+<!-- 3 · after Allow -->
+<figure id="done">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:43</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="idle0001-dddd" data-size="32"></span><div class="stack"><span class="t">notes</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动</span></div></div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble">帮我建个团队做发布前检查</div></div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">建之前还要你定两件事：</div></div>
+            <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">好，我按下面这样建，你确认一下。</div></div>
+      <div class="made">
+        <span data-team="rel" data-size="40"></span>
+        <div style="min-width:0"><div class="t">团队「发布检查」建好了</div><div class="s">3 个成员 · 负责人在工作</div></div>
+        <button class="open">打开<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 5 7 7-7 7"/></svg></button>
+      </div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">建好了。负责人已经开始列清单，进展会在「发布检查」群里说。</div></div>
+    </div>
+    <div class="foot">
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「notes」</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>3 · 允许之后：对话里</b>卡片收起，原地留下一行结果：新团队的头像、名字、谁在工作，右边「打开」直接进团队的群聊。这一行是 mad 画的，不是 bot 写的字，所以总是准的；bot 自己的话在下面。</figcaption>
+</figure>
+
+<!-- 4 · after Allow: home -->
+<figure id="home">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:43</span><div class="island"></div><span class="bat"></span></div>
+    <div class="body">
+      <div class="topbar">
+        <span class="me">我</span>
+        <div class="pill machine"><span class="mn">Heng 的 MacBook Pro</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+        <button class="fab" aria-label="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div class="sect" style="padding-top:26px"><span>群聊</span></div>
+      <div class="row new"><span data-team="rel" data-size="50"></span><div style="min-width:0"><div class="nm">发布检查</div><div class="pv">负责人: 收到，先把要查的列出来。</div></div><div class="side">现在<span class="udot"></span></div></div>
+      <div class="row"><span data-team="ios" data-size="50"></span><div style="min-width:0"><div class="nm">ios</div><div class="pv">architect: 第 3 条也上线了，三条全部完成。</div></div><div class="side">9:04</div></div>
+      <div class="row"><span data-team="five" data-size="50"></span><div style="min-width:0"><div class="nm">five</div><div class="pv">kim: 五个成员的群</div></div><div class="side">昨天</div></div>
+      <div class="sect"><span>mad</span><span>main</span></div>
+      <div class="row"><span data-av="idle0001-dddd" data-ring="done"></span><div style="min-width:0"><div class="nm">notes</div><div class="pv">建好了。负责人已经开始列清单…</div></div><div class="side">现在</div></div>
+      <div class="row"><span data-av="work0001-aaaa" data-ring="work"></span><div style="min-width:0"><div class="nm">Sidebar token 统计</div><div class="pv"><b style="font-weight:500;color:#55555b">Bash</b> go test ./internal/...</div></div><div class="side">9:30</div></div>
+    </div>
+    <div class="dock">
+      <button class="fab" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></button>
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>搜索</div>
+    </div>
+  </div></div>
+  <figcaption><b>4 · 允许之后：首页</b>新团队已经在「群聊」最上面，和其他团队一样是一行加成员头像拼成的图标，带未读蓝点；第一次出现时这一行淡淡地亮一下。建的是单个 agent 的话，它出现在自己项目的最上面。</figcaption>
+</figure>
+
+<!-- 5 · after Deny -->
+<figure id="declined">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>9:43</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-av="idle0001-dddd" data-size="32"></span><div class="stack"><span class="t">notes</span><span class="sub">claude · mad / main</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="seg"><div><span class="on">对话</span><span>改动</span></div></div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble">帮我建个团队做发布前检查</div></div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">建之前还要你定两件事：</div></div>
+            <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">好，我按下面这样建，你确认一下。</div></div>
+      <div class="note">你拒绝了，没有创建团队「发布检查」</div>
+      <div class="msg"><span class="av" data-av="idle0001-dddd" data-size="26"></span><div class="bubble">好，先不建。想改什么随时告诉我。</div></div>
+    </div>
+    <div class="foot">
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「notes」</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>5 · 拒绝之后</b>卡片收起，只留一行居中的灰字，没有边框、没有按钮。10 分钟没回也是这样一行：「没等到你确认，没有创建团队「发布检查」」。和 Grok bot 一样，卡片处理完就原地变成结果。</figcaption>
+</figure>
+
+<!-- 6 · in a channel: one agent -->
+<figure id="channel">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>10:05</span><div class="island"></div><span class="bat"></span></div>
+    <div class="fade-top"></div>
+    <div class="overlay-top">
+      <div class="topbar">
+        <button class="fab" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg></button>
+        <div class="pill"><span data-team="ios" data-size="34"></span><div class="stack"><span class="t">ios</span><span class="sub">3 个成员 · 1 个在工作</span></div></div>
+        <button class="fab" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      </div>
+    </div>
+    <div class="msgs">
+      <div class="mine"><div class="bubble"><span class="at">@architect</span> 帮我建个 agent，每周五写周报发到群里</div></div>
+      <div class="msg"><span class="who">architect</span><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">好，我按这样建：</div></div>
+    </div>
+    <div class="foot">
+      <section class="sheet" aria-label="architect 想创建一个 agent">
+        <div class="h"><b>architect 想创建一个 agent</b><span>刚刚</span></div>
+        <div class="what"><span class="nm">周报助手</span><span class="pj">项目 mad</span></div>
+        <div class="spec">
+          <div class="r">模型<span>Claude Sonnet</span></div>
+          <div class="r">加入群聊<span>ios</span></div>
+        </div>
+        <div class="first"><span class="k">第一句话</span><span class="v">每周五 17:00 把这周合并的 PR 整理成周报，发到 ios 群。</span></div>
+        <div class="pills"><button class="big">拒绝</button><button class="big yes">允许</button></div>
+        <div class="change">改一下…</div>
+      </section>
+      <div class="composer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息到 ios</span><span class="ic send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+  </div></div>
+  <figcaption><b>6 · 在群聊里：建一个 agent</b>群里有好几个成员，所以卡片标题写上是谁要建：「architect 想创建一个 agent」。单个 agent 的卡片：名字、项目、模型、要加入的群、第一句话。确认卡片出现在你发话的那个群里。</figcaption>
+</figure>
+
+<!-- 7 · not in the conversation: home's 待处理 -->
+<figure id="pending">
+  <div class="phone"><div class="scr">
+    <div class="status"><span>10:06</span><div class="island"></div><span class="bat"></span></div>
+    <div class="body">
+      <div class="topbar">
+        <span class="me">我</span>
+        <div class="pill machine"><span class="mn">Heng 的 MacBook Pro</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+        <button class="fab" aria-label="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <section class="hero" aria-label="待处理">
+        <div class="hh"><span class="dot"></span>待处理 <span class="n">1</span></div>
+        <div class="task">
+          <span data-av="team0001-arch" data-ring="wait" data-size="44"></span>
+          <div>
+            <div class="name">architect <span>1 分钟</span></div>
+            <div class="wh">想创建一个 agent</div>
+            <div class="box">周报助手 · Claude Sonnet · mad</div>
+            <div class="acts"><button class="sbtn dark">查看</button><button class="sbtn">拒绝</button></div>
+          </div>
+        </div>
+      </section>
+      <div class="sect"><span>群聊</span></div>
+      <div class="row"><span data-team="rel" data-size="50"></span><div style="min-width:0"><div class="nm">发布检查</div><div class="pv">评审: 改动都看过了，没有问题。</div></div><div class="side">10:01</div></div>
+      <div class="row"><span data-team="ios" data-size="50"></span><div style="min-width:0"><div class="nm">ios</div><div class="pv">architect: 好，我按这样建：</div></div><div class="side">10:05</div></div>
+    </div>
+    <div class="dock">
+      <button class="fab" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></button>
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>搜索</div>
+    </div>
+  </div></div>
+  <figcaption><b>7 · 不在对话里时</b>确认卡片也进首页的「待处理」，和等你批准的命令排在一起，手机照常通知你。一行写清楚要建什么；「查看」打开发话的对话或群看完整卡片，「拒绝」可以直接点。「允许」只放在完整卡片上，先看清楚再建。</figcaption>
+</figure>
+
+</main>
+
+<h2 class="part">Mac 上</h2>
+<div class="scroller">
+  <div class="mac">
+    <div class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="hd">群聊</div>
+      <div class="mr"><span data-team="ios" data-size="30"></span><div style="min-width:0"><div class="n">ios</div><div class="p">architect: 第 3 条也上线了</div></div></div>
+      <div class="hd">mad</div>
+      <div class="mr sel"><span data-av="idle0001-dddd" data-size="30"></span><div style="min-width:0"><div class="n">notes</div><div class="p">好，我按下面这样建…</div></div></div>
+      <div class="mr"><span data-av="work0001-aaaa" data-ring="work" data-size="30"></span><div style="min-width:0"><div class="n">Sidebar token 统计</div><div class="p">Bash go test ./internal/...</div></div></div>
+    </div>
+    <div class="pane">
+      <div class="title"><span data-av="idle0001-dddd" data-size="24"></span>notes <span>claude · mad / main</span></div>
+      <div class="colm"><div class="inner">
+        <div class="mm"><div>帮我建个团队做发布前检查：跑测试、看改动、写发布说明</div></div>
+        <div class="bm"><span data-av="idle0001-dddd" data-size="24"></span><div class="b">好，我按下面这样建，你确认一下。</div></div>
+        <div class="askc">
+          <div class="ah"><span data-av="idle0001-dddd" data-ring="wait" data-size="18" style="margin-left:0"></span>想创建一个团队<span>刚刚</span></div>
+          <div class="ab">
+            <div class="nm">发布检查<span>项目 mad</span></div>
+            <div class="roles">负责人<span>Claude Opus</span>开发<span>Claude Sonnet</span>评审<span>Codex</span></div>
+            <div class="fw">第一件事 <b>列出 v0.4 发布前要查的：跑全部测试、看这周的改动、起草发布说明。</b></div>
+          </div>
+          <div class="aa"><button class="mb yes">允许</button><button class="mb">拒绝</button><button class="mb q">改一下…</button><span class="hint"><kbd>⏎</kbd>允许 <kbd>esc</kbd>拒绝</span></div>
+        </div>
+        <div class="comp">发消息给「notes」</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+<p style="max-width:1280px;margin:12px auto 0;font-size:14px;color:var(--muted);line-height:1.6">Mac 用现有的小卡片：橙色标题条、内容、紧凑的按钮，回车允许、Esc 拒绝。内容和手机一样。</p>
+
+<h2 class="part">几个决定</h2>
+<div class="notes">
+  <section><h3>建群不用问</h3><p>要你确认的标准是「会不会启动新的 agent」：启动就会占进程、花额度。建群本身不启动任何东西、不花钱，agent 交接任务时也常建群，每次都问会很烦。要是建群时顺带拉起新 agent，那一步照样要确认。</p></section>
+  <section><h3>只问缺的，一张卡片问完</h3><p>bot 先自己推断：在哪个项目的对话里就用那个项目，模型按角色给推荐。剩下的放进一张「想问你」卡片，最多三四个问题。群聊里发话时，bot 也可以直接在群里用文字问。</p></section>
+  <section><h3>卡片只管确认</h3><p>和 Grok bot 一样，确认卡片上不放下拉框和输入项。要改就点「改一下…」或者直接跟 bot 说，它会出一张新卡片。这样手机上卡片不会变成一张大表单。</p></section>
+  <section><h3>叫 agent，不叫 bot</h3><p>app 里其他地方都叫 agent（「1 个 agent」「这个 agent 已经不在了」），卡片上也写 agent。你更习惯叫 bot 的话，我把全 app 一起改。</p></section>
+  <section><h3>「以后不用问」</h3><p>先不放在卡片上，以后做成菜单里的一个开关。开着的时候不弹卡片，但对话里照样留下「建好了」那一行，你总能看到建了什么。</p></section>
+  <section><h3>顺带要修的</h3><p>手机原生的提问卡片现在标题写着 AskUserQuestion，选项还是一排排大按钮（网页在 #163 已改成小块）。第 1 屏的样子需要原生也改成「想问你」加小块。</p></section>
+</div>
+
+<script>
+// mad's avatar (the apps' GrokAvatar): a solid circle or a tilted rounded square with two slanted eyes, colour and
+// shape from a stable hash of the id; a ring tells the state.
+const COLORS = ["#8a3ffc", "#ff5a1f", "#1f66ff", "#ff4d8d", "#1fbf75", "#12b5d6", "#f5b324", "#6a5cff"];
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function body(id, stopped) {
+  const h = hash(id), col = COLORS[h % 8], round = (h >> 3) % 2 === 0;
+  const shape = round ? `<circle cx="50" cy="50" r="40" fill="${col}"/>`
+    : `<rect x="12" y="12" width="76" height="76" rx="26" fill="${col}" transform="rotate(-12 50 50)"/>`;
+  const eyes = stopped
+    ? [36, 60].map(x => `<rect x="${x - 7}" y="44" width="14" height="5" rx="2.5" fill="rgba(0,0,0,.75)"/>`).join("")
+    : [36, 60].map(x => `<rect x="-3.5" y="-9" width="7" height="18" rx="3.5" fill="rgba(0,0,0,.78)" transform="translate(${x} 43) rotate(-16)"/>`).join("");
+  return shape + eyes;
+}
+function avatar(id, size, ring) {
+  const inner = ring === "wait" || ring === "work" ? `<g transform="translate(9 9) scale(.82)">${body(id, false)}</g>` : body(id, ring === "stop");
+  let r = "";
+  if (ring === "wait") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e8890c" stroke-width="5"/>`;
+  if (ring === "work") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e5e5ea" stroke-width="4"/><g class="spin"><circle cx="50" cy="50" r="46.5" fill="none" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-dasharray="78 300"/></g>`;
+  if (ring === "done") r = `<circle cx="86" cy="86" r="11" fill="#2563eb" stroke="#fff" stroke-width="5"/>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="display:block;overflow:visible">${inner}${r}</svg>`;
+}
+// a team's tile: its first three members' avatars, as the home list draws it
+const TEAMS = { rel: ["rel00001-lead", "rel00001-dev0", "rel00001-rev0"], ios: ["team0001-arch", "team0001-bld0", "team0001-rev0"], five: ["kim-0001", "lee-0002", "park-0003"] };
+function tile(name, size) {
+  const m = TEAMS[name] || [], s = size * .56;
+  const spots = [[0, size * .1], [size - s, 0], [size * .26, size - s]];
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:none">` + m.slice(0, 3).map((id, i) =>
+    `<div style="position:absolute;left:${spots[i][0]}px;top:${spots[i][1]}px">${avatar(id, s)}</div>`).join("") + `</div>`;
+}
+document.querySelectorAll("[data-av]").forEach(el => { el.innerHTML = avatar(el.dataset.av, +(el.dataset.size || 50), el.dataset.ring); });
+document.querySelectorAll("[data-team]").forEach(el => { el.innerHTML = tile(el.dataset.team, +(el.dataset.size || 50)); });
+// a phone narrower than the screens: draw them smaller rather than squeeze what is inside
+function fit() {
+  for (const ph of document.querySelectorAll(".phone")) {
+    const room = ph.parentElement.clientWidth;
+    ph.style.zoom = room < 393 ? String(room / 393) : "";
+  }
+}
+fit();
+addEventListener("resize", fit);
+</script>
+</body>
+</html>

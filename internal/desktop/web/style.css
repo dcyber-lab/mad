@@ -2192,3 +2192,41 @@ html .chat .wait.asks .ask .acts.chips .btn.chip.tapped:disabled { opacity: 1; b
 .ask .abody .abtext.qtext { font-size: 15px; line-height: 1.5; padding: 10px 14px; background: none; }
 html .chat .wait.asks .ask .acts.chips .btn.chip.primary:nth-child(n) { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; font-weight: 500; }
 html .chat .wait.asks .ask .acts.chips .btn.chip.primary:hover:not(:disabled) { background: var(--primary-bg); opacity: 0.88; }
+
+/* ---- a bot asks to create an agent or a team: its confirm card, the result line, the grey lines ---- */
+.ask-create .cbody2 { display: grid; gap: 10px; padding: 12px 14px 4px; }
+.ask-create .cname { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.ask-create .cname b { font-size: 17px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-create .cproj { font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.ask-create .cspec { background: var(--code-bg); border-radius: 10px; padding: 0 12px; }
+.ask-create .crow { display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 34px; font-size: 14px; }
+.ask-create .crow + .crow { border-top: 1px solid var(--border); }
+.ask-create .cl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-create .ctag { margin-left: 6px; font-size: 12px; color: var(--text-3); }
+.ask-create .cr { color: var(--text-3); white-space: nowrap; }
+.ask-create .cfirst { display: grid; gap: 3px; }
+.ask-create .cfl { font-size: 13px; color: var(--text-3); }
+.ask-create .cft { font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-create .replybox { margin: 0 14px 14px; box-shadow: none; }
+#chanask { flex: none; padding: 0 14px 8px; }
+#chanask[hidden] { display: none; }
+#chanask .ask { max-width: 640px; margin: 8px auto 0; }
+.cslot { display: flex; justify-content: center; }
+.cslot[hidden] { display: none; }
+.cres {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 520px; margin: 14px auto; padding: 10px 12px 10px 14px; text-align: left;
+  border: 1px solid var(--border-2); border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.cres:disabled { cursor: default; }
+.cres .ctxt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.cres .ct { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cres .cs { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cres .copen { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding: 0 8px 0 12px; border: 1px solid var(--border-2); border-radius: 15px; font-size: 13.5px; font-weight: 600; flex: none; }
+.cres .copen .i { width: 13px; height: 13px; color: var(--text-3); }
+.cnote { margin: 14px 24px; text-align: center; font-size: 13px; line-height: 1.4; color: var(--text-3); overflow-wrap: anywhere; }
+#chanlog > .cres, #chanlog > .cnote { align-self: center; }
+@keyframes freshrow { from { background: color-mix(in srgb, var(--accent, var(--waiting)) 12%, transparent); } to { background: transparent; } }
+.row.fresh { animation: freshrow 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
+.ask-create .acts.chips .btn.chip:nth-child(n) { min-width: 92px; justify-content: center; text-align: center; }
+.pcard .pwhat { font-size: 12.5px; color: var(--waiting); font-weight: 600; margin: 2px 0 4px; }

@@ -299,6 +299,7 @@ function drawSidebar() {
     keepFocus(() => {
       drawList();
       drawHome();
+      drawChanAsk();
     });
   }
   drawQueue();
@@ -382,8 +383,9 @@ function drawListNow() {
   }
   nodes.push(channelsGroup(q));
 
+  const fresh = freshCreates();
   for (const p of deck.projects) {
-    const rest = p.agents.filter((a) => !teamed.has(a.id) && agentHas(a));
+    const rest = byFresh(p.agents.filter((a) => !teamed.has(a.id) && agentHas(a)), fresh.agents, (a) => a.id);
     const teams = (deck.teams || []).filter((t) => t.project === p.name && (!q || t.members.some((id) => rest.some((a) => a.id === id))));
     if (q && !rest.length) continue;
     const folded = !q && collapsed.has(p.path);
@@ -503,6 +505,7 @@ function agentRow(a, key) {
     title: `${a.kind} · ${look(st).word}${a.role ? " · " + a.role : ""}\n${a.id}`,
   });
   r.dataset.agent = a.id;
+  if (freshRow(a.id)) r.classList.add("fresh");
   r.oncontextmenu = (e) => { e.preventDefault(); agentMenu(a, { x: e.clientX, y: e.clientY }); };
   const more = el("button", "icon-btn more");
   more.type = "button";
@@ -620,6 +623,7 @@ function drawWait(o, a) {
 // long it has waited, what it asks in full (a command in mono), and every act; ⏎ and Esc answer it while
 // nothing else has the keyboard.
 function waitAsk(it, a) {
+  if (it.kind === "create" && it.create) return createAsk(it, a, "wait");
   const card = el("div", `ask ask-inbox${ib.pending.has(it.key) ? " sent" : ""}`);
   card.dataset.key = it.key;
   const head = el("div", "ah");
@@ -769,6 +773,7 @@ function drawHomeNow() {
 // is and what it is about; what it asks (a command in a box); every act, and Open chat; how long it has
 // waited and what its agent cost.
 function taskCard(it) {
+  it = createView(it);
   const p = ib.pending.get(it.key);
   const a = it.agent && agents.get(it.agent);
   const c = el("div", `task wait${p ? " pending" : ""}${ib.nextKey === it.key ? " sel" : ""}`);
@@ -1940,6 +1945,14 @@ function addEntry(o, e) {
       put(o, el("div", "cmd", e.label));
       break;
     case "tool": {
+      const ct = createTool(e.tool);
+      if (ct) {
+        // its card is the place while it waits; then mad's own line, not the bot's step
+        const s = createSlot(ct, parseArgs(e.args));
+        put(o, s);
+        if (e.id) o.calls.set(e.id, s);
+        break;
+      }
       const d = callCard(e.tool, parseArgs(e.args), ctxOf(o), e.label, e.input);
       put(o, d);
       if (e.id) o.calls.set(e.id, d);
@@ -1956,7 +1969,15 @@ function addEntry(o, e) {
       o.results++;
       const call = e.id && o.calls.get(e.id);
       const imgs = (e.images || []).map((i) => i.url);
-      if (call) {
+      if (call && call.createCall) {
+        if (!fillCreateSlot(call, e.text, e.error)) {
+          // a result it cannot read: the step as any other
+          const d = callCard(call.createCall.tool, call.createCall.args, ctxOf(o));
+          call.replaceWith(d);
+          o.calls.set(e.id, d);
+          callResult(d, e.text, e.error, imgs);
+        }
+      } else if (call) {
         callResult(call, e.text, e.error, imgs);
       } else {
         if (e.text || !imgs.length) put(o, el("pre", `output${e.error ? " err" : ""}`, e.text || "(no output)"));
@@ -2153,6 +2174,7 @@ function drawLive(o) {
         parts.push(n);
         shown = true;
       } else if (b.kind === "tool") {
+        if (createTool(b.tool)) continue; // its card is the place, then mad's line
         // codex run here: its host's items are not the transcript's, so a
         // call done, or one the transcript has begun, is left to it.
         if (hostCodex && (b.done || o.lastCall && !o.lastCall.matches(".done, .failed"))) continue;

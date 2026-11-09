@@ -967,3 +967,250 @@ func TestAskCardButtonsStayCompact(t *testing.T) {
 		}
 	}
 }
+
+// A bot's request to create an agent or a team: the confirm card in the asking agent's conversation and in
+// the channel it came from, mad's own result and grey lines, and the list row. At a phone's width and a
+// desktop's, light and dark; no English is left in the Chinese page. Where there is no Chrome, it is skipped.
+func TestCreateCards(t *testing.T) {
+	bin := chrome()
+	if bin == "" {
+		t.Skip("no Chrome: the create cards are not checked (MAD_CHROME names one)")
+	}
+	h, err := newHandler("create-confirm", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := startChrome(t, bin)
+	if _, err := c.call("Page.enable", nil); err != nil {
+		t.Fatal(err)
+	}
+	shot := func(name string) {
+		if dir := os.Getenv("MAD_BOUNDS_SHOTS"); dir != "" {
+			if res, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}); err == nil {
+				var s struct{ Data []byte }
+				if json.Unmarshal(res, &s) == nil {
+					_ = os.WriteFile(filepath.Join(dir, name+".png"), s.Data, 0o644)
+				}
+			}
+		}
+	}
+	evalJSON := func(t *testing.T, expr string, into any) {
+		t.Helper()
+		v, err := c.eval(expr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(v, into); err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
+	}
+	open := func(t *testing.T, theme string, w int, hash, ready string) {
+		t.Helper()
+		if _, err := c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": w, "height": 900, "deviceScaleFactor": 1, "mobile": w < 600}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Page.navigate", map[string]any{"url": "about:blank"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.call("Page.navigate", map[string]any{"url": srv.URL + "/#token=" + strings.Repeat("0", 32) + hash}); err != nil {
+			t.Fatal(err)
+		}
+		if !waitFor(20*time.Second, func() bool {
+			v, err := c.eval(ready)
+			return err == nil && string(v) == "true"
+		}) {
+			t.Fatalf("the page did not draw %s", ready)
+		}
+		time.Sleep(600 * time.Millisecond)
+	}
+	for _, theme := range []string{"light", "dark"} {
+		for _, w := range []int{390, 1400} {
+			name := fmt.Sprintf("%s-%d", theme, w)
+			t.Run("conversation/"+name, func(t *testing.T) {
+				open(t, theme, w, "&agent=fold0001-aaaa", `!!document.querySelector(".chat .wait .ask-create .btn")`)
+				var r struct {
+					Head, Name string
+					Lines      []string
+					Results    int
+					Notes      []string
+					Btns       []struct {
+						Test, Text, Cls string
+						H               float64
+					}
+					Left, Right, ChatW float64
+					English            []string
+				}
+				evalJSON(t, `(() => {
+				  const card = document.querySelector(".chat .wait .ask-create");
+				  const cr = card.getBoundingClientRect();
+				  const log = document.querySelector(".chat.on") || document.querySelector(".chat");
+				  const txt = card.innerText + " " + log.innerText;
+				  return { head: card.querySelector(".ah .t").textContent, name: card.querySelector(".cname b").textContent,
+				    lines: [...card.querySelectorAll(".crow")].map((e) => e.innerText.replace(/\s+/g, " ")),
+				    results: log.querySelectorAll(".cres").length, notes: [...log.querySelectorAll(".cnote")].map((e) => e.textContent),
+				    btns: [...card.querySelectorAll(".acts .btn")].map((b) => ({ test: b.dataset.test, text: b.textContent, cls: b.className, h: b.getBoundingClientRect().height })),
+				    left: cr.left, right: cr.right, chatW: card.closest(".chat").clientWidth,
+				    english: (txt.match(/wants to|Allow|Deny|AskUser|agent_new|team_start|mcp__|create:/g) || []) };
+				})()`, &r)
+				if r.Head != "想创建一个 agent" || r.Name != "scout" {
+					t.Errorf("the card is %q %q, want 想创建一个 agent scout", r.Head, r.Name)
+				}
+				if len(r.Lines) != 2 || r.Lines[0] != "模型 Claude Sonnet" || r.Lines[1] != "加入群聊 api" {
+					t.Errorf("the spec rows are %q", r.Lines)
+				}
+				if r.Results != 2 || len(r.Notes) != 3 {
+					t.Errorf("%d result lines and %d grey lines (%q), want 2 and 3", r.Results, len(r.Notes), r.Notes)
+				}
+				want := []string{"create.allow", "create.deny", "create.change"}
+				if len(r.Btns) != 3 {
+					t.Fatalf("the card has %d buttons", len(r.Btns))
+				}
+				for i, b := range r.Btns {
+					if b.Test != want[i] || b.H > 44.5 {
+						t.Errorf("button %d is %s, %.0fpx tall, want %s at most 44", i, b.Test, b.H, want[i])
+					}
+					if filled := strings.Contains(b.Cls, "primary"); filled != (i == 0) {
+						t.Errorf("%s: filled=%v", b.Test, filled)
+					}
+				}
+				if w < 600 && (r.Left < 13.5 || r.Left > 14.5 || r.Right < r.ChatW-14.5 || r.Right > r.ChatW-13.5) {
+					t.Errorf("the card is %.0f..%.0f, want the column's 14px side edges", r.Left, r.Right)
+				}
+				if len(r.English) > 0 {
+					t.Errorf("English in the Chinese page: %q", r.English)
+				}
+				shot("create-conversation-" + name)
+				// 改一下…: a field opens, 发送 waits for words
+				if _, err := c.eval(`document.querySelector('[data-test="create.change"]').click()`); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(300 * time.Millisecond)
+				var f struct {
+					Field, Send bool
+					Disabled    bool
+					Ph          string
+				}
+				evalJSON(t, `(() => { const s = document.querySelector('[data-test="create.send"]'); const f = document.querySelector('[data-test="create.field"]'); return { field: !!f, send: !!s, disabled: !!s && s.disabled, ph: f ? f.placeholder : "" }; })()`, &f)
+				if !f.Field || !f.Send || !f.Disabled || f.Ph != "告诉它要改什么" {
+					t.Errorf("the change field: %+v", f)
+				}
+				if _, err := c.eval(`(() => { const f = document.querySelector('[data-test="create.field"]'); f.value = "评审也用 Claude"; f.dispatchEvent(new Event("input")); })()`); err != nil {
+					t.Fatal(err)
+				}
+				evalJSON(t, `(() => { const s = document.querySelector('[data-test="create.send"]'); return { field: true, send: true, disabled: s.disabled, ph: "" }; })()`, &f)
+				if f.Disabled {
+					t.Error("发送 stays disabled with words in the field")
+				}
+				shot("create-change-" + name)
+			})
+			t.Run("team/"+name, func(t *testing.T) {
+				open(t, theme, w, "&agent=fold0002-aaaa", `!!document.querySelector(".chat .wait .ask-create .btn")`)
+				var r struct {
+					Head  string
+					Lines []string
+					First string
+				}
+				evalJSON(t, `(() => { const c = document.querySelector(".chat .wait .ask-create"); return { head: c.querySelector(".ah .t").textContent, lines: [...c.querySelectorAll(".crow")].map((e) => e.innerText.replace(/\s+/g, " ")), first: c.querySelector(".cfirst").innerText.replace(/\s+/g, " ") }; })()`, &r)
+				if r.Head != "想创建一个团队" || len(r.Lines) != 2 || r.Lines[0] != "fixer负责人 Claude Opus" || r.Lines[1] != "checker Codex" || !strings.HasPrefix(r.First, "第一件事 ") {
+					t.Errorf("the team card: %+v", r)
+				}
+				shot("create-team-" + name)
+			})
+			t.Run("sending/"+name, func(t *testing.T) {
+				open(t, theme, w, "&agent=fold0001-aaaa", `!!document.querySelector(".chat .wait .ask-create .btn")`)
+				boxes := `JSON.stringify([...document.querySelectorAll(".ask-create, .ask-create .btn")].map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.height]; }))`
+				before, err := c.eval(boxes)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := c.eval(`authFetch = () => new Promise(() => {}); document.querySelector('[data-test="create.allow"]').click()`); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(400 * time.Millisecond)
+				after, err := c.eval(boxes)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(before) != string(after) {
+					t.Errorf("a sending card changes its boxes:\nbefore %s\nafter  %s", before, after)
+				}
+				var s struct {
+					Text   string
+					Tapped bool
+				}
+				evalJSON(t, `({ text: document.querySelector('[data-test="create.allow"]').textContent, tapped: document.querySelector('[data-test="create.allow"]').classList.contains("tapped") })`, &s)
+				if s.Text != "允许中…" || !s.Tapped {
+					t.Errorf("the tapped button reads %q (tapped %v), want 允许中…", s.Text, s.Tapped)
+				}
+				shot("create-sending-" + name)
+			})
+			t.Run("channel/"+name, func(t *testing.T) {
+				open(t, theme, w, "", `!!document.querySelector("#chanview") && true`)
+				if _, err := c.eval(`openChannel("fold")`); err != nil {
+					t.Fatal(err)
+				}
+				if !waitFor(20*time.Second, func() bool {
+					v, err := c.eval(`!!document.querySelector("#chanask .ask-create")`)
+					return err == nil && string(v) == "true"
+				}) {
+					t.Fatal("the channel did not float the card")
+				}
+				if !waitFor(20*time.Second, func() bool {
+					v, err := c.eval(`document.querySelectorAll("#chanlog .cres, #chanlog .cnote").length >= 2`)
+					return err == nil && string(v) == "true"
+				}) {
+					t.Fatal("the channel did not draw mad's lines")
+				}
+				time.Sleep(600 * time.Millisecond)
+				var r struct {
+					Head    string
+					Results int
+					Notes   []string
+					English []string
+				}
+				evalJSON(t, `({ head: document.querySelector("#chanask .ah .t").textContent, results: document.querySelectorAll("#chanlog .cres").length, notes: [...document.querySelectorAll("#chanlog .cnote")].map((e) => e.textContent), english: ((document.querySelector("#chanview").innerText).match(/was created|You declined|wants to|Allow|Deny|create:/g) || []) })`, &r)
+				if r.Head != "architect 想创建一个 agent" {
+					t.Errorf("the channel card says %q", r.Head)
+				}
+				if r.Results != 1 || len(r.Notes) != 1 || !strings.HasPrefix(r.Notes[0], "你拒绝了，没有创建") {
+					t.Errorf("channel lines: %d results, notes %q", r.Results, r.Notes)
+				}
+				if len(r.English) > 0 {
+					t.Errorf("English in the channel: %q", r.English)
+				}
+				shot("create-channel-" + name)
+			})
+			t.Run("list/"+name, func(t *testing.T) {
+				open(t, theme, w, "", `!!document.querySelector(".pcard, .row .rt .btn")`)
+				var r struct {
+					Cards []struct {
+						Text string
+						Btns []string
+					}
+				}
+				evalJSON(t, `({ cards: [...document.querySelectorAll(".pcard")].map((c) => ({ text: c.innerText.replace(/\s+/g, " "), btns: [...c.querySelectorAll("button:not([hidden])")].map((b) => b.textContent) })) })`, &r)
+				found := 0
+				for _, cd := range r.Cards {
+					if strings.Contains(cd.Text, "想创建一个团队") || strings.Contains(cd.Text, "想创建一个 agent") {
+						found++
+						if strings.Contains(strings.Join(cd.Btns, ","), "允许") {
+							t.Errorf("a create row offers 允许: %v", cd.Btns)
+						}
+						if !strings.Contains(strings.Join(cd.Btns, ","), "查看") || !strings.Contains(strings.Join(cd.Btns, ","), "拒绝") {
+							t.Errorf("a create row has %v, want 查看 and 拒绝", cd.Btns)
+						}
+					}
+				}
+				if found == 0 {
+					t.Errorf("no create row among %d cards", len(r.Cards))
+				}
+				shot("create-list-" + name)
+			})
+		}
+	}
+}
