@@ -105,8 +105,9 @@ public struct ChannelView: View {
             composerRow.macFootBar()
         }
         .background(Color.madPaper)
-        .overlay(alignment: .top) { MacTopFade() }
-        .overlay(alignment: .top) { macTop }
+        // over the window's top edge even when a panel (the inspector) gives the window a title bar inset
+        .overlay(alignment: .top) { MacTopFade().ignoresSafeArea(.container, edges: .top) }
+        .overlay(alignment: .top) { macTop.ignoresSafeArea(.container, edges: .top) }
         #endif
     }
 

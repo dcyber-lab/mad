@@ -139,8 +139,9 @@ public struct ConversationView: View {
         }
         .background(Color.madPaper)
         // no title bar: the messages scroll under a fade, and the capsule and the round buttons float over it
-        .overlay(alignment: .top) { MacTopFade() }
-        .overlay(alignment: .top) { macTop }
+        // over the window's top edge even when a panel (the inspector) gives the window a title bar inset
+        .overlay(alignment: .top) { MacTopFade().ignoresSafeArea(.container, edges: .top) }
+        .overlay(alignment: .top) { macTop.ignoresSafeArea(.container, edges: .top) }
         .environment(\.madAvatarBackdrop, Color.madPaper)
         .environment(\.convImageLoader, actions.loadImage)
         .inspector(isPresented: $detailsOpen) {
@@ -189,6 +190,11 @@ public struct ConversationView: View {
                         AgentRow(model: model, avatar: avatar, hugs: true, wide: EntryView.isLong(live.markdown)) { LiveBubbleView(live: live) }
                             .id("live")
                     }
+                    #if os(macOS)
+                    // room for the approval card that floats over the list's foot, above the end mark: following the end
+                    // then shows the last entry above the card, not under it
+                    Color.clear.frame(height: askHeight > 0 ? askHeight + 12 : 0)
+                    #endif
                     Color.clear.frame(height: 1).id("end")
                         #if os(macOS)
                         .onDisappear { if keeper.leftBottom() { DispatchQueue.main.async { proxy.scrollTo("end") } } }
@@ -212,7 +218,7 @@ public struct ConversationView: View {
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
                 #if os(macOS)
-                .padding(.top, 76).padding(.bottom, 14 + (askHeight > 0 ? askHeight + 12 : 0))
+                .padding(.top, 76).padding(.bottom, 14)
                 #else
                 .padding(.vertical, 8)
                 #endif
@@ -224,6 +230,8 @@ public struct ConversationView: View {
             .onChange(of: model.live) { _, _ in follow(proxy) }
             .onChange(of: model.ask) { _, _ in follow(proxy) }
             #if os(macOS)
+            // the approval card's height is known only once it is drawn: the list's foot grows by it, so follow again
+            .onChange(of: askHeight) { _, _ in DispatchQueue.main.async { follow(proxy) } }
             .background(GeometryReader { g in
                 Color.clear.onChange(of: g.size) { _, _ in
                     if keeper.resized() { DispatchQueue.main.async { proxy.scrollTo("end") } }

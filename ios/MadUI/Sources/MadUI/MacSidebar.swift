@@ -92,7 +92,7 @@ public struct MacSidebar: View {
     private var machine: some View {
         Button(action: actions.switchMac) {
             HStack(spacing: 6) {
-                Text(model.machine).lineLimit(1).truncationMode(.middle)
+                Text(model.machine).lineLimit(1).truncationMode(.tail)
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
             }
             .font(.system(size: 14.5, weight: .medium))
