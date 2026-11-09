@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo/logo.svg" width="128" height="128" alt="mad logo: a window with a sidebar of agents and a prompt"></p>
+<p align="center"><img src="docs/logo/logo.svg" width="128" height="128" alt="mad logo: a sidebar of agents and a prompt on a dark tile"></p>
 
 # mad — multi-agent deck
 
