@@ -42,7 +42,7 @@ final class NativeDefaultTests: MadUITestCase {
     }
 
     func testAMenuItemThatIsNotNativeYetOpensThePageInASheet() {
-        tap("更多")
+        tap("菜单")
         let item = app.buttons["看板"].firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 5), "the ⋯ menu has no 看板")
         item.tap()
@@ -56,7 +56,7 @@ final class NativeDefaultTests: MadUITestCase {
     /// 用量 is native now: the person's row at the foot (and ⋯ → 用量) opens the Usage screen, with a way back.
     func testUsageIsANativeScreen() {
         XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40), "the native home did not come up")
-        tap("更多")
+        tap("菜单")
         tap("用量")
         XCTAssertTrue(element("订阅额度").firstMatch.waitForExistence(timeout: 10), "用量 did not open the Usage screen")
         XCTAssertFalse(app.webViews.firstMatch.exists, "用量 opened the page, not the native screen")
@@ -82,7 +82,7 @@ final class NativeDefaultTests: MadUITestCase {
     func testSwitchMacIsReachableAndLongPressChoosesTheWebVersion() {
         XCTAssertTrue(row(beginningWith: "ios").waitForExistence(timeout: 40))
         XCTAssertGreaterThanOrEqual(elements(containing: "switch Mac").count, 1, "no way to switch Mac on the home")
-        tap("更多")
+        tap("菜单")
         tap("切换 Mac")
         let mac = app.cells.firstMatch
         XCTAssertTrue(mac.waitForExistence(timeout: 10), "switching Mac did not show the Macs list")
