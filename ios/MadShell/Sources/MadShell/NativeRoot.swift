@@ -160,6 +160,8 @@ public struct NativeRoot: View {
         .sheet(isPresented: $showPhone) {
             if let phone = api as? PhoneAPI { PhoneSheet(api: phone) { showPhone = false } }
         }
+        // the menu bar's 前往 does what the sidebar's menu does
+        .focusedSceneValue(\.madHomeMenu, actions.menu)
         #else
         // The home list has its own navigation; a row opens the detail over it, with a way back.
         if let id = selection {

@@ -298,6 +298,17 @@
         }
       }
     },
+    "前往": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go"
+          }
+        }
+      }
+    },
     "加 $%@": {
       "extractionState": "manual",
       "localizations": {
