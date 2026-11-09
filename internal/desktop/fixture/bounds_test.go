@@ -906,10 +906,20 @@ func TestAskCardButtonsStayCompact(t *testing.T) {
 					}
 					shot("")
 					// in flight: the act that opens the card is the tapped one, as the page marks it
-					if _, err := c.eval(`(() => { const b = document.querySelector(".ask-inbox .btn.chip:not(.more)"); b.classList.add("busy"); for (const x of document.querySelectorAll(".ask-inbox .btn")) x.disabled = true; })()`); err != nil {
+					boxes := `JSON.stringify([...document.querySelectorAll(".ask-inbox, .ask-inbox .btn")].map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }))`
+					before, err := c.eval(boxes)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := c.eval(`(() => { const b = document.querySelector(".ask-inbox .btn.chip:not(.more)"); b.classList.add("tapped"); for (const x of document.querySelectorAll(".ask-inbox .btn")) x.disabled = true; })()`); err != nil {
 						t.Fatal(err)
 					}
 					time.Sleep(300 * time.Millisecond)
+					if after, err := c.eval(boxes); err != nil {
+						t.Fatal(err)
+					} else if string(after) != string(before) {
+						t.Errorf("a tapped card changes its boxes (left, top, width, height of the card and its buttons)\nbefore %s\nafter  %s", before, after)
+					}
 					shot("-busy")
 				})
 			}

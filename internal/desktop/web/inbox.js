@@ -308,7 +308,7 @@ function actButton(it, a, where, chip) {
     b.disabled = true;
     if (p.verb === a.verb && p.label === a.label && p.option === (a.option || "")) {
       // a question's chip keeps its words and shows it was the one tapped; any other act says what it is doing
-      if (chip) b.classList.add("busy");
+      if (chip) b.classList.add("tapped");
       if (!chip || it.kind !== "question") b.textContent = pendingWord(a);
     }
   }
