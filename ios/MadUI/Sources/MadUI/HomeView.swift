@@ -82,7 +82,7 @@ public struct HomeView: View {
         } center: {
             Button(action: actions.switchMac) {
                 HStack(spacing: 6) {
-                    Text(model.machine).font(Phone.title).foregroundStyle(Color.madFg).lineLimit(1).truncationMode(.middle)
+                    Text(model.machine).font(Phone.title).foregroundStyle(Color.madFg).lineLimit(1).truncationMode(.tail)
                     Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.madFg3)
                 }
                 .padding(.horizontal, 18)

@@ -1522,7 +1522,8 @@
             "value": "Review"
           }
         }
-      }
+      },
+      "generatesSymbol": false
     },
     "允许之前先看完全部内容": {
       "extractionState": "manual",
@@ -1542,6 +1543,85 @@
           "stringUnit": {
             "state": "translated",
             "value": "Back"
+          }
+        }
+      }
+    },
+    "菜单": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu"
+          }
+        }
+      }
+    },
+    "查看 ›": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review ›"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "今天花了": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spent today"
+          }
+        }
+      }
+    },
+    "按 API 价格估算": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated at API prices"
+          }
+        }
+      }
+    },
+    "今天花得最多": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Most spent today"
+          }
+        }
+      }
+    },
+    "%lld 个成员": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld members"
+          }
+        }
+      }
+    },
+    "发消息给「%@」": {
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message “%@”"
           }
         }
       }

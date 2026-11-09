@@ -484,7 +484,7 @@ struct ConvMoreMenu: View {
             #if os(iOS)
             Image(systemName: "ellipsis").font(.system(size: 19, weight: .medium)).foregroundStyle(Color.madFg)
                 .frame(width: Phone.button, height: Phone.button)
-                .background(Color.madPaper, in: Circle())
+                .background(Color.phoneFloatFill, in: Circle())
                 .contentShape(Circle())
                 .phoneFloat()
             #else

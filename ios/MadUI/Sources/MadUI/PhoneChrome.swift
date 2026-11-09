@@ -42,6 +42,14 @@ public enum Phone {
     public static let code = Font.system(size: 15, design: .monospaced)
 }
 
+extension Color {
+    /// What floats over the content is filled with: white in light mode; in dark mode a step above the paper, as the
+    /// paper itself would hide it (a shadow does not show on black).
+    public static var phoneFloatFill: Color {
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(Color.madRaise) : UIColor(Color.madPaper) })
+    }
+}
+
 extension View {
     /// The soft shadow under everything that floats over the content (round buttons, the title capsule, the
     /// composer, the search capsule).
@@ -69,7 +77,7 @@ public struct PhoneRoundButton<Label: View>: View {
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Color.madFg)
                 .frame(width: size, height: size)
-                .background(Color.madPaper, in: Circle())
+                .background(Color.phoneFloatFill, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -100,7 +108,7 @@ public struct PhoneTitlePill<Picture: View>: View {
         .padding(.leading, 6)
         .padding(.trailing, 16)
         .frame(height: Phone.button)
-        .background(Color.madPaper, in: Capsule())
+        .background(Color.phoneFloatFill, in: Capsule())
         .phoneFloat()
     }
 }
@@ -160,7 +168,7 @@ public struct PhoneComposerCapsule<Content: View>: View {
         HStack(spacing: 10) { content }
             .padding(.horizontal, 8)
             .frame(minHeight: Phone.composerHeight)
-            .background(Color.madPaper, in: RoundedRectangle(cornerRadius: Phone.composerHeight / 2, style: .continuous))
+            .background(Color.phoneFloatFill, in: RoundedRectangle(cornerRadius: Phone.composerHeight / 2, style: .continuous))
             .phoneFloat()
             .padding(.horizontal, 16)
             .padding(.bottom, Phone.footGap)
@@ -180,7 +188,7 @@ public struct PhoneComposerButton: View {
     public var body: some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 19, weight: .medium)).foregroundStyle(Color.madFg)
-                .frame(width: 42, height: 42).background(Color.madRaise, in: Circle())
+                .frame(width: 42, height: 42).background(Color.madFg.opacity(0.07), in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

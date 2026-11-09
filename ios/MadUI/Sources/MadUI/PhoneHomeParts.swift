@@ -181,7 +181,7 @@ struct PhoneMenuSheet: View {
                 PersonPicture(name: person, size: 48)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(person).font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
-                    Text(machine).font(.system(size: 14)).foregroundStyle(Color.madFg3).lineLimit(1).truncationMode(.middle)
+                    Text(machine).font(.system(size: 14)).foregroundStyle(Color.madFg3).lineLimit(1).truncationMode(.tail)
                 }
                 Spacer(minLength: 0)
             }
@@ -239,12 +239,3 @@ struct PhoneMenuSheet: View {
 }
 #endif
 
-#if os(iOS)
-extension Color {
-    /// What the home's floating buttons and capsules are filled with: white in light mode; in dark mode a step above
-    /// the paper, as the paper itself would hide them (the shadow does not show on black).
-    static var phoneFloatFill: Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(Color.madRaise) : UIColor(Color.madPaper) })
-    }
-}
-#endif
