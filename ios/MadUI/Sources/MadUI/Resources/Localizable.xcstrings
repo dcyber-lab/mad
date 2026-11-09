@@ -1534,6 +1534,17 @@
           }
         }
       }
+    },
+    "返回": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
