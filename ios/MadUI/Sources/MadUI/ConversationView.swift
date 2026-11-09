@@ -607,7 +607,7 @@ struct AgentDetailsPane: View {
             Text(key).foregroundStyle(Color.madFg3)
             Spacer(minLength: 8)
             Text(value)
-                .font(mono ? .system(size: 12, design: .monospaced) : .system(size: 12.5))
+                .font(mono ? Font.system(size: 12, design: .monospaced) : Font.system(size: 12.5))
                 .monospacedDigit()
                 .foregroundStyle(Color.madFg)
                 .lineLimit(1)
@@ -1077,7 +1077,7 @@ struct AskSheet: View {
             }
             if !card.detail.isEmpty {
                 Text(card.detail)
-                    .font(card.mono ? .system(size: 13, design: .monospaced) : .system(size: 15))
+                    .font(card.mono ? Font.system(size: 13, design: .monospaced) : Font.system(size: 15))
                     .foregroundStyle(Color.madFg)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, card.mono ? 12 : 0)

@@ -25,7 +25,7 @@ struct MadButtonStyle: ButtonStyle {
             .foregroundStyle(foreground)
             .padding(.horizontal, hpad)
             .padding(.vertical, vpad)
-            .frame(maxWidth: wide ? .infinity : nil)
+            .frame(maxWidth: wide ? CGFloat.infinity : nil)
             .background(background, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(kind == .normal || kind == .danger ? Color.madLine2 : Color.clear, lineWidth: 1))

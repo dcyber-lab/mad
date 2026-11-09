@@ -304,7 +304,7 @@ struct AgentDetail: View {
             openWeb: openWeb.map { open in { open(.agent(id)) } },
             openTerminal: { Task { await run { try await api.openTerminal(agent: id) } } },
             // push, open a PR and rebase are the deck's: the page on this agent has them
-            git: openWeb.map { open in { _ in open(.agent(id)) } },
+            git: openWeb.map { open in { (_: AgentGitAct) in open(.agent(id)) } },
             rename: { name in Task { await run { try await api.renameAgent(id: id, name: name) } } },
             sleep: { Task { await run { try await api.sleepAgent(id: id) } } })
     }

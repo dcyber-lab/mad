@@ -14,7 +14,7 @@ struct WaitingCard: View {
             HStack(spacing: 8) {
                 CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: phone ? 28 : 24)
                 Text(item.name)
-                    .font(phone ? .system(size: 15, weight: .semibold) : .system(size: 13, weight: .medium))
+                    .font(phone ? Font.system(size: 15, weight: .semibold) : Font.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.madFg)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -24,8 +24,8 @@ struct WaitingCard: View {
                 Text(item.detail).font(.system(size: 14)).foregroundStyle(Color.madFg).lineLimit(2)
             } else if !item.detail.isEmpty {
                 CommandBox(text: item.detail, font: item.mono
-                           ? .system(size: phone ? 12.5 : 11.5, design: .monospaced)
-                           : .system(size: phone ? 12.5 : 11.5))
+                           ? Font.system(size: phone ? 12.5 : 11.5, design: .monospaced)
+                           : Font.system(size: phone ? 12.5 : 11.5))
             }
             if !(phone && !item.isPermission) {
                 HStack(spacing: 6) {
