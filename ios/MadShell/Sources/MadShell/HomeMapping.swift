@@ -142,11 +142,14 @@ public enum HomeMapping {
         var detail = item.text ?? ""
         if detail.isEmpty { detail = item.body ?? item.title }
         if item.mono, !detail.hasPrefix("$ ") { detail = "$ " + detail }
+        // An agent's request to start an agent or a team is `full`: its whole spec is in the body, which this card does
+        // not show. No Allow here (an installed app meets this item before it has a card of its own): 查看 opens it.
+        let blind = item.kind == "create" && item.full
         return HomeWaiting(id: item.key, agentID: agent?.id ?? item.open.agent ?? item.open.channel ?? "",
                            agentKind: agent?.kind ?? "", name: agent?.label ?? item.title, project: project,
                            whereLine: whereLine, age: item.since.map { MadWords.age(now.timeIntervalSince($0)) } ?? "",
                            cost: (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : "",
-                           detail: detail, mono: item.mono, acts: ActWords.acts(of: item))
+                           detail: detail, mono: item.mono, acts: blind ? [] : ActWords.acts(of: item), mustOpen: blind)
     }
 
     // MARK: Today

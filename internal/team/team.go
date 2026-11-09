@@ -266,7 +266,7 @@ func Start(o Options) (*Started, error) {
 		return nil, err
 	}
 	if len(teams) >= MaxTeams {
-		return nil, fmt.Errorf("%d teams run already (the most there are at once); one has to be removed first", len(teams))
+		return nil, limitError(len(teams))
 	}
 	name, err := teamName(o.Name, goal, teams)
 	if err != nil {
@@ -292,7 +292,21 @@ func Start(o Options) (*Started, error) {
 	}
 	// The record first: an agent's brief is read from it as its MCP server
 	// starts, with the agent.
-	if err := update(func(f *file) (bool, error) { f.Teams = append(f.Teams, rec); return true, nil }); err != nil {
+	beforeRecord()
+	if err := update(func(f *file) (bool, error) {
+		// The limit and the name are checked where the record is added, under
+		// the lock: two starts at once cannot both pass an earlier check.
+		if len(f.Teams) >= MaxTeams {
+			return false, limitError(len(f.Teams))
+		}
+		for _, t := range f.Teams {
+			if t.Name == name {
+				return false, fmt.Errorf("a team called %s exists; pick another name", name)
+			}
+		}
+		f.Teams = append(f.Teams, rec)
+		return true, nil
+	}); err != nil {
 		_ = bus.Archive(name)
 		return nil, err
 	}
@@ -560,7 +574,17 @@ func CheckName(name, goal string) (string, error) {
 		return "", err
 	}
 	if len(teams) >= MaxTeams {
-		return "", fmt.Errorf("%d teams run already (the most there are at once): the team limit is reached, and the person can remove one", len(teams))
+		return "", limitError(len(teams))
 	}
 	return teamName(name, goal, teams)
 }
+
+// limitError says the team limit is reached: for an agent too, so it tells
+// the person's part, not a command.
+func limitError(n int) error {
+	return fmt.Errorf("the team limit is reached (%d teams run; %d is the most): the person can remove one", n, MaxTeams)
+}
+
+// beforeRecord runs between Start's checks and adding the record: a test's
+// place to start another team in that gap.
+var beforeRecord = func() {}

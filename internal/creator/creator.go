@@ -58,7 +58,7 @@ func Settle(id string) {
 	case create.Declined, create.Changes:
 		conclude(r)
 	case create.Allowed:
-		_, _, _ = Run(r)
+		Run(r)
 	}
 }
 
@@ -68,19 +68,25 @@ func Settle(id string) {
 // closed on it). The agent, if there, is told.
 func Sweep(st *state.State) {
 	for _, r := range create.All() {
-		_, asker := st.FindAgent(r.ByID)
-		switch {
-		case r.Status == create.Waiting && (asker == nil || time.Since(r.At) > create.Expiry):
-			end(r, create.Expired, create.Result{})
-		case r.Status == create.Allowed && time.Since(r.AnsweredAt) > create.Interrupted:
-			end(r, create.Failed, create.Result{Reason: "mad was closed while it started"})
-		}
+		sweepOne(r, st)
 	}
 }
 
-// end ends r as status and tells of it.
-func end(r create.Request, status string, res create.Result) {
-	if err := create.Finish(r.ID, status, res); err != nil {
+// sweepOne ends r, as listed, if it is due: only from the status it was
+// listed at, so one answered or claimed meanwhile is left alone.
+func sweepOne(r create.Request, st *state.State) {
+	_, asker := st.FindAgent(r.ByID)
+	switch {
+	case r.Status == create.Waiting && (asker == nil || time.Since(r.At) > create.Expiry):
+		end(r, create.Waiting, create.Expired, create.Result{})
+	case (r.Status == create.Allowed || r.Status == create.Creating) && time.Since(r.AnsweredAt) > create.Interrupted:
+		end(r, r.Status, create.Failed, create.Result{Reason: "mad was closed while it started"})
+	}
+}
+
+// end ends r as status if it still stands at from, and tells of it.
+func end(r create.Request, from, status string, res create.Result) {
+	if ok, _ := create.Finish(r.ID, from, status, res); !ok {
 		return
 	}
 	if got, err := create.Get(r.ID); err == nil && got.Status == status {
@@ -89,53 +95,52 @@ func end(r create.Request, status string, res create.Result) {
 }
 
 // Run starts what request r (allowed) asks for, as the asking agent, and
-// ends it as created or failed. It returns what the tool reports (JSON
-// with an outcome) for a request made without asking, which is not told
-// by DM. An agent that is gone starts nothing.
-func Run(r create.Request) (create.Result, string, error) {
+// ends it as created or failed; the agent is told either way. It claims the
+// request first (Allowed to Creating), so one process starts it and a
+// sweep cannot end it from under the start. An agent that is gone starts
+// nothing.
+func Run(r create.Request) {
+	r, ok := create.Claim(r.ID)
+	if !ok {
+		return
+	}
 	st, err := state.Load()
 	if err != nil {
-		end(r, create.Failed, create.Result{Reason: err.Error()})
-		return create.Result{}, "", err
+		end(r, create.Creating, create.Failed, create.Result{Reason: err.Error()})
+		return
 	}
 	_, a := st.FindAgent(r.ByID)
 	if a == nil {
-		end(r, create.Expired, create.Result{Reason: "the agent that asked is gone"})
-		return create.Result{}, "", fmt.Errorf("the agent that asked is gone: nothing was created")
+		end(r, create.Creating, create.Expired, create.Result{Reason: "the agent that asked is gone"})
+		return
 	}
 	if !bus.SpendOK(time.Now()) { // while it waited
-		end(r, create.Failed, create.Result{Reason: bus.ErrSpent.Error()})
-		return create.Result{}, "", bus.ErrSpent
+		end(r, create.Creating, create.Failed, create.Result{Reason: bus.ErrSpent.Error()})
+		return
 	}
 	by := bus.From{ID: a.ID, Label: drive.Label(a), Kind: a.Kind}
 	var res create.Result
-	var out map[string]any
 	if r.Spec.Type == create.TypeTeam {
-		res, out, err = startTeam(by, r.Spec)
+		res, err = startTeam(by, r.Spec)
 	} else {
-		res, out, err = startAgent(by, r.Spec)
+		res, err = startAgent(by, r.Spec)
 	}
 	if err != nil {
-		end(r, create.Failed, create.Result{Reason: err.Error()})
-		return create.Result{}, "", err
+		end(r, create.Creating, create.Failed, create.Result{Reason: err.Error()})
+		return
 	}
-	end(r, create.Created, res)
-	out["status"] = create.Created
-	out["say"] = created(r.Spec, res)
-	b, _ := json.MarshalIndent(out, "", "  ")
-	return res, string(b), nil
+	end(r, create.Creating, create.Created, res)
 }
 
-func startAgent(by bus.From, spec create.Spec) (create.Result, map[string]any, error) {
+func startAgent(by bus.From, spec create.Spec) (create.Result, error) {
 	a, err := Spawn(drive.Spec{Kind: spec.Kind, Model: spec.Model, Dir: spec.Project, Name: spec.Name}, Kinds())
 	if a == nil {
-		return create.Result{}, nil, err
+		return create.Result{}, err
 	}
 	label := drive.Label(a)
 	res := create.Result{Agent: a.ID}
-	out := map[string]any{"agent": map[string]string{"id": a.ID, "label": label}}
 	if err != nil { // it came up asking something: the person must answer
-		out["note"] = "it came up asking something the person must answer: " + err.Error()
+		res.Note = "it came up asking something the person must answer: " + err.Error()
 	}
 	var perr error
 	if spec.Channel != "" {
@@ -146,23 +151,22 @@ func startAgent(by bus.From, spec create.Spec) (create.Result, map[string]any, e
 	} else {
 		res.Channel, _, perr = bus.DM(by, a.ID, spec.Message)
 	}
-	out["channel"] = res.Channel
 	if perr != nil {
-		out["warning"] = "the agent was started but its first message was not sent: " + perr.Error()
+		res.Note = strings.TrimSpace(res.Note + " The agent was started but its first message was not sent: " + perr.Error())
 	}
-	return res, out, nil
+	return res, nil
 }
 
-func startTeam(by bus.From, spec create.Spec) (create.Result, map[string]any, error) {
+func startTeam(by bus.From, spec create.Spec) (create.Result, error) {
 	got, err := StartTeam(team.Options{Project: spec.Project, Name: spec.Name, Goal: spec.Goal, Custom: Template(spec), By: &by, Kinds: Kinds()})
 	if err != nil {
-		return create.Result{}, nil, err
+		return create.Result{}, err
 	}
-	agents := map[string]string{}
+	res := create.Result{Team: got.Name, Channel: got.Channel, Note: strings.Join(got.Notes, "; ")}
 	for _, r := range got.Roles {
-		agents[r.Role] = r.Agent
+		res.Agents = append(res.Agents, create.RoleAgent{Role: r.Role, Agent: r.Agent})
 	}
-	return create.Result{Team: got.Name, Channel: got.Channel}, map[string]any{"team": got.Name, "channel": got.Channel, "agents": agents, "notes": got.Notes}, nil
+	return res, nil
 }
 
 // Template is the team template a team request names, as the card listed it.
@@ -200,12 +204,11 @@ func created(spec create.Spec, res create.Result) string {
 }
 
 // conclude says how r ended: an event line in the channel it was asked in,
-// and a DM to the agent (not for one made without asking: its tool call
-// had the result).
+// and a DM to the agent, for a request made without asking too.
 func conclude(r create.Request) {
 	ref := "create:" + r.ID
 	data := map[string]string{"type": r.Spec.Type, "name": r.Spec.Name}
-	for k, v := range map[string]string{"agent": r.Result.Agent, "team": r.Result.Team, "channel": r.Result.Channel, "reason": r.Result.Reason, "words": r.Reply} {
+	for k, v := range map[string]string{"agent": r.Result.Agent, "team": r.Result.Team, "channel": r.Result.Channel, "reason": r.Result.Reason, "note": r.Result.Note, "words": r.Reply} {
 		if v != "" {
 			data[k] = v
 		}
@@ -231,9 +234,11 @@ func conclude(r create.Request) {
 	if r.From != "" {
 		_ = bus.Event(r.From, event, ref, line, data)
 	}
-	if !r.Auto {
-		out, _ := json.Marshal(map[string]any{"status": r.Status, "request": r.ID, "say": say, "data": data})
-		_, _ = bus.TellAgent(r.ByID, fmt.Sprintf("[mad] your request %s to create %s: %s\n%s", r.ID, what(r.Spec), say, out))
+	msg := map[string]any{"status": r.Status, "request": r.ID, "say": say, "data": data}
+	if len(r.Result.Agents) > 0 {
+		msg["agents"] = r.Result.Agents
 	}
+	out, _ := json.Marshal(msg)
+	_, _ = bus.TellAgent(r.ByID, fmt.Sprintf("[mad] your request %s to create %s: %s\n%s", r.ID, what(r.Spec), say, out))
 	_ = poke.Send(poke.Poll)
 }

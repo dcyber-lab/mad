@@ -189,7 +189,7 @@ func TestInboxCreateRequest(t *testing.T) {
 		t.Errorf("status %q", got.Status)
 	}
 	// Once it ended, the card is in the snapshot's creates, with its outcome.
-	_ = create.Finish(req.ID, create.Created, create.Result{Agent: "new-agent", Channel: "dm.x"})
+	_, _ = create.Finish(req.ID, create.Allowed, create.Created, create.Result{Agent: "new-agent", Channel: "dm.x"})
 	s.poll.Poll(time.Now())
 	snap = Snapshot{}
 	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {

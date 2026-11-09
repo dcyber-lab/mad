@@ -633,3 +633,37 @@ func TestStartOwnRoles(t *testing.T) {
 		t.Errorf("a taken name is %q", name)
 	}
 }
+
+// Two starts that both passed the limit check cannot make a fourth team:
+// the limit is checked where the record is added, under the lock.
+func TestStartLimitHoldsAgainstAConcurrentStart(t *testing.T) {
+	root, specs, _ := project(t)
+	for i := 0; i < MaxTeams-1; i++ {
+		if _, err := Start(Options{Project: root, Goal: "team " + string(rune('a'+i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := len(*specs)
+	// Another start takes the last place between this one's check and its record.
+	beforeRecord = func() {
+		beforeRecord = func() {}
+		if _, err := Start(Options{Project: root, Goal: "the other one"}); err != nil {
+			t.Errorf("the other start: %v", err)
+		}
+	}
+	t.Cleanup(func() { beforeRecord = func() {} })
+	_, err := Start(Options{Project: root, Goal: "one too many", Name: "too-many"})
+	if err == nil || !strings.Contains(err.Error(), "team limit is reached") || strings.Contains(err.Error(), "mad team rm") {
+		t.Fatalf("err = %v", err)
+	}
+	list, _ := Running(nil)
+	if len(list) != MaxTeams {
+		t.Errorf("%d teams run", len(list))
+	}
+	if c, ok, _ := bus.Find("too-many"); ok && !c.Archived {
+		t.Error("the refused team's channel stays")
+	}
+	if len(*specs)-before != 3 { // only the other start's roles were started
+		t.Errorf("spawned %d for the two", len(*specs)-before)
+	}
+}
