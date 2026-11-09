@@ -55,7 +55,7 @@ struct ChannelComposer: View {
         // no side padding of its own: the column the messages are in gives the edges (the phone's capsule has its own)
         .padding(.top, 8)
         #if os(macOS)
-        .padding(.bottom, 16)
+        .padding(.bottom, 22)
         .onPasteCommand(of: [.image]) { providers in pasteImages(providers) }
         #endif
         // the @ list floats over the messages, its foot 8pt above the composer: the messages keep their size
@@ -79,7 +79,7 @@ struct ChannelComposer: View {
         #if os(iOS)
         24
         #else
-        0
+        18 // inside the capsule's rounded ends
         #endif
     }
 
@@ -87,15 +87,17 @@ struct ChannelComposer: View {
     /// on the phone three pieces.
     @ViewBuilder private var field: some View {
         #if os(macOS)
-        HStack(alignment: .bottom, spacing: 8) {
+        // design v6: a floating capsule (54pt, the float fill, a soft shadow): + at the left, send at the right
+        HStack(alignment: .bottom, spacing: 12) {
             plus
             textField.padding(.vertical, 7)
             sendButton
         }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.chatComposer))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.chatLine))
-        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        .padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 9)
+        .frame(minHeight: Mac.composerHeight)
+        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
+        .macFloat()
         #else
         // Grok's floating capsule: a grey round + at the left, the field, a grey round send at the right
         PhoneComposerCapsule {
@@ -113,7 +115,7 @@ struct ChannelComposer: View {
             #if os(iOS)
             .font(Phone.message)
             #else
-            .font(MadType.message)
+            .font(Mac.composerText)
             #endif
             .focused($focused)
             #if os(macOS)
@@ -135,9 +137,9 @@ struct ChannelComposer: View {
                 .frame(width: 42, height: 42)
                 .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
                 #else
-                .foregroundStyle(.white)
+                .foregroundStyle(canSend ? Color.madPaper : Color.madFg2)
                 .frame(width: 36, height: 36)
-                .background(canSend ? Color.chatBlue : Color.chatBlue.opacity(0.6), in: Circle())
+                .background(canSend ? Color.madFg : Color.madRaise, in: Circle())
                 #endif
         }
         .buttonStyle(.plain)
@@ -202,9 +204,10 @@ struct ChannelComposer: View {
                 .frame(width: 42, height: 42)
                 .background(Color.madRaise, in: Circle())
                 #else
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.madFg)
+                .frame(width: 34, height: 34)
+                .background(Color.madRaise, in: Circle())
                 #endif
         }
         .menuStyle(.button)

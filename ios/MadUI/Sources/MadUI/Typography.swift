@@ -50,12 +50,16 @@ enum MadType {
 /// and a bubble is as wide as its text up to a share of the column.
 enum MadColumn {
     #if os(macOS)
-    static let maxWidth: CGFloat = 960
+    static let maxWidth: CGFloat = 820
     static let side: CGFloat = 32
-    /// No gutter on the Mac: a sender's small character sits by its name above the bubbles.
-    static let gutter: CGFloat = 0
-    /// The most of the column a bubble takes.
-    static let bubbleShare: CGFloat = 0.58
+    /// The 28pt avatar and the 12pt after it (design v6): others' bubbles start after it, mine end at the right edge.
+    static let gutter: CGFloat = 40
+    /// The most of the room beside the gutter a bubble takes: 600 of the 780 a full column has left.
+    static let bubbleShare: CGFloat = 600.0 / 780.0
+    /// An agent's long answer may take 700 of the same 780.
+    static let wideShare: CGFloat = 700.0 / 780.0
+    /// The widest a long answer may be in a column `width` wide.
+    static func wideBubble(in width: CGFloat) -> CGFloat { max(120, (width - gutter) * wideShare) }
     #else
     static let maxWidth: CGFloat = 720
     static let side: CGFloat = 16
