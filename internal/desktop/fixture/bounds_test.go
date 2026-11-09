@@ -175,8 +175,27 @@ func shutdown(cmd *exec.Cmd, port string) {
 	}
 }
 
-// startChrome runs a headless Chrome and returns a session on its first page.
-func startChrome(t *testing.T, bin string) *cdp {
+// serve starts a server for h that is closed with the test, after Chrome is gone, and does not wait for a
+// connection Chrome still holds: a deferred Close ran before the cleanups that shut Chrome down and
+// blocked on its open connection.
+func serve(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(func() {
+		srv.CloseClientConnections()
+		srv.Close()
+	})
+	return srv
+}
+
+// chromeWait is how long a started Chrome has to say where it listens: a cold start on a busy CI runner
+// can take longer than ten seconds.
+const chromeWait = 30 * time.Second
+
+// launchChrome runs a headless Chrome in a fresh profile and waits for the port it listens on. It returns
+// the port, or "" when Chrome did not say in time (it is shut down then). A Chrome that started and
+// may be shut down later is registered with t.
+func launchChrome(t *testing.T, bin string) (cmd *exec.Cmd, port string) {
 	t.Helper()
 	// Not t.TempDir: its removal fails the test when Chrome's helpers are still writing. This runs last.
 	dir, err := os.MkdirTemp("", "mad-chrome-")
@@ -184,14 +203,12 @@ func startChrome(t *testing.T, bin string) *cdp {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { removeProfile(dir) })
-	cmd := exec.Command(bin, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--lang=zh-CN", "--accept-lang=zh-CN",
+	cmd = exec.Command(bin, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--lang=zh-CN", "--accept-lang=zh-CN",
 		"--user-data-dir="+dir, "--remote-debugging-port=0", "--remote-allow-origins=*", "about:blank")
 	if err := cmd.Start(); err != nil {
 		skipOrFail(t, "chrome did not start: %v", err)
 	}
-	var port string
-	t.Cleanup(func() { shutdown(cmd, port) })
-	waitFor(10*time.Second, func() bool {
+	waitFor(chromeWait, func() bool {
 		b, err := os.ReadFile(filepath.Join(dir, "DevToolsActivePort"))
 		if err != nil {
 			return false
@@ -200,12 +217,30 @@ func startChrome(t *testing.T, bin string) *cdp {
 		return port != ""
 	})
 	if port == "" {
+		shutdown(cmd, "") // not listening: nothing to ask, it is killed
+		return cmd, ""
+	}
+	t.Cleanup(func() { shutdown(cmd, port) })
+	return cmd, port
+}
+
+// startChrome runs a headless Chrome and returns a session on its first page. A Chrome that does not say
+// where it listens (a flaky cold start) is tried once more in a fresh profile; one that still does not is
+// a failure on CI and a skip elsewhere, as before.
+func startChrome(t *testing.T, bin string) *cdp {
+	t.Helper()
+	_, port := launchChrome(t, bin)
+	if port == "" {
+		t.Logf("chrome did not say where it listens within %v: trying once more", chromeWait)
+		_, port = launchChrome(t, bin)
+	}
+	if port == "" {
 		skipOrFail(t, "chrome did not say where it listens")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
 	var ws string
-	waitFor(10*time.Second, func() bool {
+	waitFor(20*time.Second, func() bool {
 		var list []struct{ Type, WebSocketDebuggerURL string }
 		if getJSON("http://127.0.0.1:"+port+"/json/list", &list) == nil {
 			for _, p := range list {
@@ -264,8 +299,7 @@ func TestChannelBubblesStayInTheColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(h)
-	defer srv.Close()
+	srv := serve(t, h)
 	c := startChrome(t, bin)
 	if _, err := c.call("Page.enable", nil); err != nil {
 		t.Fatal(err)
@@ -370,8 +404,7 @@ func TestReceiptLineAndCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(h)
-	defer srv.Close()
+	srv := serve(t, h)
 	c := startChrome(t, bin)
 	if _, err := c.call("Page.enable", nil); err != nil {
 		t.Fatal(err)
@@ -571,9 +604,7 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foldSrv, quietSrv := httptest.NewServer(fold), httptest.NewServer(quietH)
-	defer foldSrv.Close()
-	defer quietSrv.Close()
+	foldSrv, quietSrv := serve(t, fold), serve(t, quietH)
 	c := startChrome(t, bin)
 	if _, err := c.call("Page.enable", nil); err != nil {
 		t.Fatal(err)
@@ -754,8 +785,7 @@ func TestQuietKindsAreNotDrawn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	silentSrv := httptest.NewServer(silentH)
-	defer silentSrv.Close()
+	silentSrv := serve(t, silentH)
 	// both empty states are one quiet line: secondary colour, 14px, centred, about a third of the way down
 	for _, c2 := range []struct{ name, base, want, shot string }{
 		{"only hidden messages", quietSrv.URL, "agent 们在后台协作，有事会在这里 @ 你。", "quiet-empty-390-light"},
@@ -833,8 +863,7 @@ func TestAskCardButtonsStayCompact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(h)
-	defer srv.Close()
+	srv := serve(t, h)
 	c := startChrome(t, bin)
 	if _, err := c.call("Page.enable", nil); err != nil {
 		t.Fatal(err)
