@@ -52,8 +52,10 @@ public struct NativeRoot: View {
         let interrupt: (String) -> Void = { id in Task { try? await api.interrupt(agent: id); await store.refresh() } }
         #if os(macOS)
         // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
+        // 新对话 is native on the Mac too: the detail pane shows it, when the server can start agents for the app
+        let newChat: (() -> Void)? = api is NewChatAPI ? { selection = HomeRow.newChatID } : nil
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
-                                act: act, interrupt: interrupt)
+                                newChat: newChat, act: act, interrupt: interrupt)
         #else
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, act: act, interrupt: interrupt)
         #endif
@@ -63,13 +65,15 @@ public struct NativeRoot: View {
     /// and everything that is not native yet (the other ⋯ items, the + items) opens the page on its view. The search
     /// needs nothing of the app: the list filters itself.
     static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
-                            openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil,
+                            openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil, newChat: (() -> Void)? = nil,
                             act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                             interrupt: @escaping (String) -> Void = { _ in }) -> HomeActions {
         HomeActions(
             open: open,
             switchMac: { switchMac?() },
-            create: { item in openWeb?(.view(Self.webView(forNew: item))) },
+            create: { item in
+                if item == .chat, let newChat { newChat() } else { openWeb?(.view(Self.webView(forNew: item))) }
+            },
             menu: { item in
                 if item == .switchMac { switchMac?() }
                 else if item == .usage { open(HomeRow.usageID) }
@@ -197,6 +201,8 @@ struct Detail: View {
         if let id = selection, id != HomeRow.todayID {
             if id == HomeRow.usageID {
                 UsageDetail(api: api, onBack: onBack, open: open)
+            } else if id == HomeRow.newChatID, let starter = api as? NewChatAPI {
+                newChat(starter)
             } else if store.channel(id: id) != nil {
                 ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
                     .id(id) // another channel is another store
@@ -208,6 +214,17 @@ struct Detail: View {
         } else {
             TodayView(model: home, actions: homeActions)
         }
+    }
+
+    @ViewBuilder private func newChat(_ starter: NewChatAPI) -> some View {
+        #if os(macOS)
+        NewChatDetail(api: starter, projects: store.deck?.projects ?? []) { id in
+            await store.refresh() // the new agent is in the deck before its row opens
+            open(id)
+        }
+        #else
+        placeholder(L("新对话"), "")
+        #endif
     }
 
     private func placeholder(_ title: String, _ note: String) -> some View {
