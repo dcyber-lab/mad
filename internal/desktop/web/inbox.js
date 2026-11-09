@@ -295,8 +295,8 @@ function fitRows(root) {
 
 // actButton is act a of item it as a button: an act that takes words
 // opens the reply box, open goes to the item, the rest are sent.
-function actButton(it, a, where) {
-  const cls = a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
+function actButton(it, a, where, chip) {
+  const cls = chip ? `chip${a.input ? " more" : ""}` : a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
   const b = rowButton(actLabel(a), cls, () => {
     if (a.verb === "open") openItem(it);
     else if (a.input) openReply(it, a, where);
@@ -306,7 +306,10 @@ function actButton(it, a, where) {
   if (p && a.verb !== "open") {
     // sent: it stays here, saying so, until the snapshot settles it
     b.disabled = true;
-    if (p.verb === a.verb && p.label === a.label && p.option === (a.option || "")) b.textContent = pendingWord(a);
+    if (p.verb === a.verb && p.label === a.label && p.option === (a.option || "")) {
+      // a chip keeps its words and shows it was the one tapped; a button says what it is doing
+      if (chip) b.classList.add("busy"); else b.textContent = pendingWord(a);
+    }
   }
   return b;
 }

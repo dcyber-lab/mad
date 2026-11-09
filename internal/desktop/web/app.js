@@ -629,11 +629,15 @@ function waitAsk(it, a) {
   age.append(T("等了 ", "Waiting "), tick(it.since));
   head.append(age);
   const body = el("div", "abody");
-  if (it.text) body.append(el("pre", "input", it.mono ? `$ ${it.text}${it.where ? `   in ${it.where}` : ""}` : it.text));
+  if (it.text && it.kind === "question") body.append(el("div", "abtext qtext", it.text));
+  else if (it.text) body.append(el("pre", "input", it.mono ? `$ ${it.text}${it.where ? `   in ${it.where}` : ""}` : it.text));
   if (it.body && it.full) body.append(el("pre", "input screen", it.body));
   else if (it.body) body.append(el("div", "muted abtext", it.body));
   const acts = el("div", "acts");
-  for (const x of it.acts) if (x.verb !== "open") acts.append(actButton(it, x, "wait"));
+  // a question's options are chips that wrap, each one an answer; Reply is the last of them
+  const chips = it.acts.some((x) => x.verb === "answer" && x.option);
+  for (const x of it.acts) if (x.verb !== "open") acts.append(actButton(it, x, "wait", chips));
+  if (chips) acts.classList.add("chips");
   const hint = el("span", "hint");
   hint.append(el("kbd", "", "⏎"), T(" 允许 ", " allow "), el("kbd", "", "esc"), T(" 拒绝", " deny"));
   if (it.acts.some((x) => letsThrough.has(x.verb))) acts.append(hint);

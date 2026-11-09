@@ -35,6 +35,18 @@
             "mode": "window"
           },
           {
+            "id": "ask0001-dddd",
+            "kind": "claude",
+            "status": "waiting",
+            "shown": "waiting",
+            "chat": true,
+            "color": "#d97757",
+            "title": "适配一下谷歌的反重力 cli",
+            "last": "在问你一个问题",
+            "headless": true,
+            "mode": "window"
+          },
+          {
             "id": "stop0001-cccc",
             "kind": "claude",
             "status": "exited",
@@ -266,6 +278,20 @@
     "inbox": {
       "items": [
         {
+          "key": "k-ask",
+          "kind": "question",
+          "agent": "ask0001-dddd",
+          "title": "适配一下谷歌的反重力 cli",
+          "context": "AskUserQuestion",
+          "text": "你说的“谷歌反重力 CLI”具体是哪一个？",
+          "since": "-1m",
+          "acts": [
+            {"verb": "answer", "label": "agentapi（IDE 自带的无界面接口）", "option": "agentapi（IDE 自带的无界面接口）"},
+            {"verb": "answer", "label": "其实是 gemini-cli", "option": "其实是 gemini-cli"},
+            {"verb": "answer", "label": "Reply", "input": true, "row": true, "primary": true}
+          ]
+        },
+        {
           "key": "k-need",
           "kind": "permission",
           "agent": "need0001-bbbb",
@@ -292,6 +318,16 @@
     }
   },
   "chat": {
+    "ask0001-dddd": {
+      "file": "fixture",
+      "offset": 800,
+      "reset": true,
+      "entries": [
+        {"kind": "user", "text": "适配一下谷歌的反重力 cli"},
+        {"kind": "tool", "tool": "WebSearch", "label": "Google Antigravity CLI", "input": "Google Antigravity CLI", "id": "a1"},
+        {"kind": "result", "id": "a1", "text": "three results"}
+      ]
+    },
     "need0001-bbbb": {
       "file": "fixture",
       "offset": 4000,

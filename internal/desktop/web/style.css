@@ -2177,3 +2177,16 @@ html.ptype .chat .wait.asks .ask .acts .hint { display: none; }
 html.ptype .chat .wait.asks { margin: 0; width: 100%; box-sizing: border-box; }
 html.ptype .chat .wait.asks .ask .ah, html.ptype .chat .wait.asks .ask pre.input { padding-left: 14px; padding-right: 14px; }
 html.ptype #details { display: none; }
+
+/* ---- the ask card's options: chips that wrap, at the chat's own size; the tapped one shows it was ---- */
+html .chat .wait.asks .ask .acts.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 14px; }
+html .chat .wait.asks .ask .acts.chips .btn.chip:nth-child(n) {
+  flex: none; max-width: 100%; height: auto; min-height: 36px; padding: 6px 14px; border-radius: 18px; font-size: 14.5px; line-height: 1.35;
+  font-weight: 400; text-align: left; white-space: normal; overflow-wrap: anywhere; border: 1px solid var(--border-2); background: var(--bg); color: var(--text);
+}
+html .chat .wait.asks .ask .acts.chips .btn.chip.more { color: var(--text-2); border-style: dashed; }
+html .chat .wait.asks .ask .acts.chips .btn.chip:hover:not(:disabled) { background: var(--raise); }
+html .chat .wait.asks .ask .acts.chips .btn.chip:disabled { opacity: 0.5; }
+html .chat .wait.asks .ask .acts.chips .btn.chip.busy:disabled { opacity: 1; background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; animation: chipbusy 1.1s ease-in-out infinite alternate; }
+@keyframes chipbusy { from { opacity: 1; } to { opacity: 0.6; } }
+.ask .abody .abtext.qtext { font-size: 15px; line-height: 1.5; padding: 10px 14px; background: none; }
