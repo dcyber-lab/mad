@@ -11,8 +11,9 @@ struct RowMetrics {
     /// The phone's list draws the end (time over a marker) its own way.
     var isPhone = false
 
-    static let mac = RowMetrics(avatar: 32, name: .mad(13.5, weight: .medium), line: .mad(12),
-                                end: .mad(11), spacing: 10)
+    /// Design v6 (docs/design/mac-v6.html): a 34pt picture, a 16pt name and a 14pt grey line, 12pt apart.
+    static let mac = RowMetrics(avatar: 34, name: MadType.rowName, line: MadType.rowLine,
+                                end: .system(size: 13), spacing: 12)
     #if os(iOS)
     /// Grok's measured home list: 50pt avatar, 19pt name, 16pt preview, 14pt time (see `Phone`).
     static let phone = RowMetrics(avatar: Phone.rowAvatar, name: Phone.rowName, line: Phone.rowPreview, end: Phone.rowTime,
@@ -43,7 +44,7 @@ struct HomeRowView: View {
             picture
                 // a stopped character fades itself; a row dimmed for another reason (asleep) is faded here
                 .opacity(row.dimmed && row.state != .stopped ? 0.5 : 1)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: metrics.isPhone ? 1 : 2) {
                 Text(row.title)
                     .font(metrics.name)
                     .foregroundStyle(Color.madFg)

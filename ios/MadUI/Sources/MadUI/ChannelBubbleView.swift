@@ -22,15 +22,24 @@ struct ChannelBubbleView: View {
     var colors: [String: Color] = [:]
 
     var body: some View {
-        Group {
-            if let fold = bubble.fold { folded(fold) } else { whole }
-        }
+        content
         .contextMenu {
             Button { reply() } label: { Label(L("回复"), systemImage: "arrowshape.turn.up.left") }
             if !bubble.text.isEmpty {
                 Button { copy(bubble.text) } label: { Label(L("复制"), systemImage: "doc.on.doc") }
             }
         }
+    }
+
+    @ViewBuilder private var content: some View {
+        #if os(macOS)
+        // hover: reply and a menu with copy, at the bubble's side
+        MacHoverRow(side: mine ? .trailing : .leading, copyText: bubble.text.isEmpty ? nil : bubble.text, reply: reply) {
+            Group { if let fold = bubble.fold { folded(fold) } else { whole } }
+        }
+        #else
+        Group { if let fold = bubble.fold { folded(fold) } else { whole } }
+        #endif
     }
 
     #if os(iOS)
@@ -41,8 +50,8 @@ struct ChannelBubbleView: View {
     #else
     private var bodyFont: Font { MadType.message }
     private var lineSpacing: CGFloat { MadType.messageLineSpacing }
-    private var padding: EdgeInsets { mine ? EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14) : EdgeInsets(top: 8, leading: 13, bottom: 8, trailing: 13) }
-    private var radius: CGFloat { 18 }
+    private var padding: EdgeInsets { Mac.bubblePadding }
+    private var radius: CGFloat { Mac.bubbleRadius }
     #endif
 
     private var picturesOnly: Bool { bubble.text.isEmpty && bubble.quote == nil && !bubble.images.isEmpty }

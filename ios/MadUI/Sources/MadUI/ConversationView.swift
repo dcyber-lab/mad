@@ -19,6 +19,8 @@ public struct ConversationView: View {
     @State private var columnWidth: CGFloat = 0
     #if os(macOS)
     @State private var keeper = BottomKeeper()
+    /// How tall the approval card floating above the composer is (0 when there is none): the list leaves room for it.
+    @State private var askHeight: CGFloat = 0
     #else
     /// The end marker is on screen: new things are followed only then.
     @State private var atEnd = true
@@ -52,9 +54,55 @@ public struct ConversationView: View {
             composer
         }
         #else
+        // the approval floats over the composer's top, as wide as the column (design v6). It is an overlay, not a row: its
+        // text would otherwise make the window's least height as tall as the card at no width. The list keeps clear of it.
         composer
+            .macFootBar()
+            .overlay(alignment: .top) {
+                if let ask = model.ask {
+                    AskCardView(card: ask, agentID: model.agentID, agentKind: model.kind, act: { actions.act(ask.id, $0, $1) })
+                        .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
+                        .macColumn()
+                        .background(GeometryReader { g in
+                            Color.clear
+                                .onAppear { askHeight = g.size.height }
+                                .onChange(of: g.size.height) { _, h in askHeight = h }
+                                .onDisappear { askHeight = 0 }
+                        })
+                        .offset(y: -(askHeight + 12))
+                }
+            }
         #endif
     }
+
+    #if os(macOS)
+    /// The capsule (the avatar with its state ring, the name, `claude · mad / main`) and, in the corner, 对话 | 改动, the
+    /// Details toggle (⌘I) and ⋯.
+    private var macTop: some View {
+        MacTopBar(cornerWidth: 250) {
+            MacTitlePill(title: model.title, sub: macSub) {
+                CharacterView(id: model.agentID, kind: model.kind, state: model.state, size: 26, dot: model.needsYou)
+                    .frame(width: 26, height: 26)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(model.title), \(model.stateLine)")
+            .accessibilityAddTraits(.isHeader)
+        } corner: {
+            ConvTabs(tab: $tab, changes: model.details?.changed ?? 0)
+            MacSymbolButton(symbol: "sidebar.right", label: L("详情"), on: detailsOpen) { detailsOpen.toggle() }
+                .keyboardShortcut("i", modifiers: .command)
+                .help(L("详情 ⌘I"))
+            ConvMoreMenu(actions: actions)
+        }
+    }
+
+    /// `claude · mad / main`; a bad link says so instead.
+    private var macSub: String {
+        if let note = linkNote { return note.text }
+        return [model.kind, model.place].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    @Environment(\.madLinkNote) private var linkNote
+    #endif
 
     public var body: some View {
         #if os(iOS)
@@ -82,7 +130,6 @@ public struct ConversationView: View {
         .environment(\.convImageLoader, actions.loadImage)
         #else
         VStack(spacing: 0) {
-            ConversationHead(model: model, tab: $tab, detailsOpen: $detailsOpen, actions: actions)
             if tab == .chat {
                 messages
                 bottomBar
@@ -91,6 +138,10 @@ public struct ConversationView: View {
             }
         }
         .background(Color.madPaper)
+        // no title bar: the messages scroll under a fade, and the capsule and the round buttons float over it
+        // over the window's top edge even when a panel (the inspector) gives the window a title bar inset
+        .overlay(alignment: .top) { MacTopFade().ignoresSafeArea(.container, edges: .top) }
+        .overlay(alignment: .top) { macTop.ignoresSafeArea(.container, edges: .top) }
         .environment(\.madAvatarBackdrop, Color.madPaper)
         .environment(\.convImageLoader, actions.loadImage)
         .inspector(isPresented: $detailsOpen) {
@@ -114,7 +165,7 @@ public struct ConversationView: View {
         #if os(iOS)
         14
         #else
-        8
+        Mac.messageGap
         #endif
     }
 
@@ -122,32 +173,27 @@ public struct ConversationView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: rowGap) {
-                    #if os(iOS)
                     // consecutive tool calls are one small card
                     ForEach(ConvRow.rows(model.entries)) { row in
                         switch row {
                         case let .entry(entry):
                             EntryView(entry: entry, model: model, avatar: avatar, loadEarlier: actions.loadEarlier).id(entry.id)
                         case let .tools(id, tools):
+                            #if os(iOS)
                             AgentRow(model: model, avatar: avatar, hugs: true, showsAvatar: false) { ToolCard(tools: tools) }.id(id)
+                            #else
+                            AgentRow(model: model, avatar: avatar, hugs: true, showsAvatar: false) { MacToolCard(tools: tools) }.id(id)
+                            #endif
                         }
                     }
-                    #else
-                    ForEach(model.entries) { entry in
-                        EntryView(entry: entry, model: model, avatar: avatar, loadEarlier: actions.loadEarlier)
-                            .id(entry.id)
-                    }
-                    #endif
                     if let live = model.live {
-                        AgentRow(model: model, avatar: avatar, hugs: true) { LiveBubbleView(live: live) }
+                        AgentRow(model: model, avatar: avatar, hugs: true, wide: EntryView.isLong(live.markdown)) { LiveBubbleView(live: live) }
                             .id("live")
                     }
                     #if os(macOS)
-                    if let ask = model.ask {
-                        AskCardView(card: ask, agentID: model.agentID, agentKind: model.kind, act: { actions.act(ask.id, $0, $1) })
-                            .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
-                            .padding(.top, 8)
-                    }
+                    // room for the approval card that floats over the list's foot, above the end mark: following the end
+                    // then shows the last entry above the card, not under it
+                    Color.clear.frame(height: askHeight > 0 ? askHeight + 12 : 0)
                     #endif
                     Color.clear.frame(height: 1).id("end")
                         #if os(macOS)
@@ -172,7 +218,7 @@ public struct ConversationView: View {
                 .padding(.horizontal, MadColumn.side)
                 .frame(maxWidth: .infinity)
                 #if os(macOS)
-                .padding(.top, 22).padding(.bottom, 8)
+                .padding(.top, 76).padding(.bottom, 14)
                 #else
                 .padding(.vertical, 8)
                 #endif
@@ -184,6 +230,8 @@ public struct ConversationView: View {
             .onChange(of: model.live) { _, _ in follow(proxy) }
             .onChange(of: model.ask) { _, _ in follow(proxy) }
             #if os(macOS)
+            // the approval card's height is known only once it is drawn: the list's foot grows by it, so follow again
+            .onChange(of: askHeight) { _, _ in DispatchQueue.main.async { follow(proxy) } }
             .background(GeometryReader { g in
                 Color.clear.onChange(of: g.size) { _, _ in
                     if keeper.resized() { DispatchQueue.main.async { proxy.scrollTo("end") } }
@@ -239,11 +287,8 @@ public struct ConversationView: View {
             #else
             conversationField
             // the message column's edges, exactly
-            .frame(maxWidth: MadColumn.maxWidth)
-            .padding(.horizontal, MadColumn.side)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 6)
-            .padding(.bottom, 16)
+            .macColumn()
+            .padding(.bottom, 22)
             #endif
         } else {
             Text(model.sendHint)
@@ -260,15 +305,17 @@ public struct ConversationView: View {
     /// capsule.
     @ViewBuilder private var conversationField: some View {
         #if os(macOS)
-        HStack(alignment: .bottom, spacing: 8) {
+        // design v6: a floating capsule (54pt, the float fill, a soft shadow): + at the left, send at the right
+        HStack(alignment: .bottom, spacing: 12) {
             attachButton
             composerField.padding(.vertical, 7)
             trailing
         }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.chatComposer))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.chatLine))
-        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        .padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 9)
+        .frame(minHeight: Mac.composerHeight)
+        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Mac.composerHeight / 2, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
+        .macFloat()
         #else
         PhoneComposerCapsule {
             PhoneComposerButton(symbol: "plus", label: "Attach", action: actions.attach)
@@ -281,11 +328,16 @@ public struct ConversationView: View {
     private var attachButton: some View {
         Button(action: actions.attach) {
             Image(systemName: "plus")
+                #if os(iOS)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 36, height: 36)
-                #if os(iOS)
                 .background(Circle().fill(Color.primary.opacity(0.08)))
+                #else
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.madFg)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.madRaise))
                 #endif
         }
         .buttonStyle(.plain)
@@ -299,7 +351,7 @@ public struct ConversationView: View {
             #if os(iOS)
             .font(Phone.message)
             #else
-            .font(MadType.message)
+            .font(Mac.composerText)
             #endif
             .onSubmit(submit)
     }
@@ -338,20 +390,12 @@ public struct ConversationView: View {
     }
 
     private var sendTint: Color {
-        #if os(iOS)
         model.canSubmit(draft: draft) ? Color.madPaper : Color.madFg2
-        #else
-        .white
-        #endif
     }
 
-    /// The Mac's send is blue; the phone's is Grok's grey round button that turns black when there is something to send.
+    /// Grok's grey round button that turns black when there is something to send (the Mac's too, design v6).
     private var sendFill: Color {
-        #if os(iOS)
         model.canSubmit(draft: draft) ? Color.madFg : Color.madRaise
-        #else
-        ConversationStyle.blue.opacity(model.canSubmit(draft: draft) ? 1 : 0.35)
-        #endif
     }
 
     private func submit() {
@@ -375,8 +419,8 @@ struct MineShape: Shape {
         UnevenRoundedRectangle(topLeadingRadius: Phone.bubbleRadius, bottomLeadingRadius: Phone.bubbleRadius, bottomTrailingRadius: 8,
                                topTrailingRadius: Phone.bubbleRadius, style: .continuous).path(in: rect)
         #else
-        UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 4, topTrailingRadius: 16,
-                               style: .continuous).path(in: rect)
+        UnevenRoundedRectangle(topLeadingRadius: Mac.bubbleRadius, bottomLeadingRadius: Mac.bubbleRadius, bottomTrailingRadius: 6,
+                               topTrailingRadius: Mac.bubbleRadius, style: .continuous).path(in: rect)
         #endif
     }
 }
@@ -420,13 +464,14 @@ struct ConvTabs: View {
     private let hPad: CGFloat = 18
     private let vPad: CGFloat = 5
     #else
+    // design v6: a 32pt track, 14pt labels
     private let radiusPad: CGFloat = 2
-    private let outer: CGFloat = 9
-    private let inner: CGFloat = 7
-    private let labelFont = Font.mad(12.5)
-    private let countFont = Font.mad(11)
-    private let hPad: CGFloat = 12
-    private let vPad: CGFloat = 3
+    private let outer: CGFloat = 10
+    private let inner: CGFloat = 8
+    private let labelFont = Font.system(size: 14)
+    private let countFont = Font.system(size: 12.5)
+    private let hPad: CGFloat = 13
+    private let vPad: CGFloat = 5
     #endif
 
     private func item(_ t: ConvTab, _ title: String, count: Int) -> some View {
@@ -452,21 +497,6 @@ struct ConvTabs: View {
     }
 }
 
-/// The head's second line: `claude · mad / main · $0.84`, the place in mono.
-struct HeadLine: View {
-    let model: AgentConversation
-
-    var body: some View {
-        var parts: [Text] = []
-        if !model.kind.isEmpty { parts.append(Text(model.kind)) }
-        if !model.place.isEmpty { parts.append(Text(model.place).font(.mad(11.5, design: .monospaced))) }
-        if !model.cost.isEmpty { parts.append(Text(model.cost)) }
-        var t = parts.first ?? Text(model.stateLine)
-        for p in parts.dropFirst() { t = t + Text(" · ") + p }
-        return t.font(.mad(12)).foregroundColor(.madFg3).lineLimit(1)
-    }
-}
-
 /// ⋯: 在终端打开 (the agent in mad's terminal deck, for the rare case of claude's own menus) and the page.
 struct ConvMoreMenu: View {
     let actions: ConversationActions
@@ -488,9 +518,11 @@ struct ConvMoreMenu: View {
                 .contentShape(Circle())
                 .phoneFloat()
             #else
-            Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(Color.madFg2)
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
+            Image(systemName: "ellipsis").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.madFg)
+                .frame(width: Mac.button, height: Mac.button)
+                .background(Color.macFloatFill, in: Circle())
+                .contentShape(Circle())
+                .macFloat()
             #endif
         }
         .menuStyle(.button)
@@ -500,42 +532,6 @@ struct ConvMoreMenu: View {
         .accessibilityLabel("更多")
     }
 }
-
-#if os(macOS)
-/// The Mac's head bar: the avatar and the name with its second line at the left; the tabs, the Details toggle (⌘I)
-/// and ⋯ at the right; a hairline under it.
-struct ConversationHead: View {
-    let model: AgentConversation
-    @Binding var tab: ConvTab
-    @Binding var detailsOpen: Bool
-    let actions: ConversationActions
-    @Environment(\.madHeadLeading) private var leading
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ConversationIdentity(model: model, expands: false)
-            Spacer(minLength: 8)
-            ConvTabs(tab: $tab, changes: model.details?.changed ?? 0)
-            Button { detailsOpen.toggle() } label: {
-                Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(detailsOpen ? Color.madFg : Color.madFg2)
-                    .frame(width: 30, height: 30)
-                    .background(detailsOpen ? Color.madRaise : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("i", modifiers: .command)
-            .help(L("详情 ⌘I"))
-            .accessibilityLabel(L("详情"))
-            ConvMoreMenu(actions: actions)
-        }
-        .padding(.leading, 20 + leading)
-        .padding(.trailing, 20)
-        .padding(.vertical, 12)
-        .frame(minHeight: 60)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
-    }
-}
-#endif
 
 #if os(iOS)
 /// The phone's head (design v6): the round back button, the capsule with the avatar, the name and `claude · mad / main`,
@@ -571,40 +567,6 @@ struct ConversationHeader: View {
 
 #endif
 
-/// The avatar (with its state ring), the name and the second line, read as one.
-struct ConversationIdentity: View {
-    let model: AgentConversation
-    /// Fills the width it is given (the phone's head); the Mac's hugs its text.
-    var expands = true
-
-    var body: some View {
-        HStack(spacing: 10) {
-            CharacterView(id: model.agentID, kind: model.kind, state: model.state, size: 34, dot: model.needsYou)
-                .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(model.title)
-                    .font(.system(size: titleSize, weight: .semibold))
-                    .foregroundStyle(Color.madFg)
-                    .lineLimit(1)
-                HeadLine(model: model)
-                PillSubline(text: "", onlyProblems: true)
-            }
-            if expands { Spacer(minLength: 0) }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.title), \(model.stateLine)")
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private var titleSize: CGFloat {
-        #if os(iOS)
-        16
-        #else
-        15
-        #endif
-    }
-}
-
 /// The 改动 tab: the branch, how many files changed and commits wait to be pushed, and the ways to finish the branch
 /// (push, push and open a PR, rebase, merge, the person's own). The diff itself is still the page's: 在网页里看改动.
 struct ChangesTab: View {
@@ -616,12 +578,12 @@ struct ChangesTab: View {
             VStack(alignment: .leading, spacing: 16) {
                 FlowLayout(spacing: 8) {
                     if let d = details {
-                        if !d.branch.isEmpty { Text(d.branch).font(.mad(12, design: .monospaced)) }
+                        if !d.branch.isEmpty { Text(d.branch).font(.mad(macOnly: 14, 12, design: .monospaced)) }
                         Text(Lf("%lld 个文件", d.changed))
                         if d.ahead > 0 { Text(Lf("↑%lld 未推送", d.ahead)) }
                     }
                 }
-                .font(.mad(12.5))
+                .font(.mad(macOnly: 14, 12.5))
                 .foregroundStyle(Color.madFg2)
                 FlowLayout(spacing: 8) {
                     if let w = actions.openWeb { Button(L("在网页里看改动"), action: w).buttonStyle(.mad()) }
@@ -632,12 +594,16 @@ struct ChangesTab: View {
                     }
                 }
                 if (details?.changed ?? 0) == 0 {
-                    Text(L("没有未提交的改动")).font(.mad(12.5)).foregroundStyle(Color.madFg3)
+                    Text(L("没有未提交的改动")).font(.mad(macOnly: 14, 12.5)).foregroundStyle(Color.madFg3)
                 }
             }
             .frame(maxWidth: 900, alignment: .leading)
             .padding(.horizontal, 28)
+            #if os(macOS)
+            .padding(.top, 76).padding(.bottom, 22) // under the floating capsule
+            #else
             .padding(.vertical, 22)
+            #endif
             .frame(maxWidth: .infinity)
         }
         .background(Color.madPaper)
@@ -725,6 +691,10 @@ struct AgentRow<Content: View>: View {
     var hugs = false
     /// The phone draws the small character at a bubble's bottom-left; a tool card or a picture keeps the gutter empty.
     var showsAvatar = true
+    /// The Mac: an agent's long answer may take 700 instead of 600.
+    var wide = false
+    /// The Mac: what the hover buttons copy (nil: none, a line of tools or a picture).
+    var copyText: String?
     @ViewBuilder var content: Content
     @Environment(\.madColumnWidth) private var columnWidth
 
@@ -746,11 +716,29 @@ struct AgentRow<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         #else
-        HStack(alignment: .top, spacing: 8) {
+        // Grok's chat: the small character at the bubble's bottom-left (a tool card or a picture keeps the gutter empty)
+        HStack(alignment: .bottom, spacing: MadColumn.gutter - Mac.chatAvatar) {
             Group {
-                if hugs && columnWidth > 0 { content.hugging(maxWidth: MadColumn.bubble(in: columnWidth)) } else { content }
+                if showsAvatar {
+                    CharacterView(id: model.agentID, kind: model.kind, state: .idle, size: Mac.chatAvatar)
+                        .accessibilityHidden(true)
+                } else {
+                    Color.clear
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: Mac.chatAvatar, height: Mac.chatAvatar)
+            let bubble = Group {
+                if hugs && columnWidth > 0 {
+                    content.hugging(maxWidth: wide ? MadColumn.wideBubble(in: columnWidth) : MadColumn.bubble(in: columnWidth))
+                } else {
+                    content
+                }
+            }
+            if let copyText {
+                MacHoverRow(side: .leading, copyText: copyText) { bubble }
+            } else {
+                bubble.frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         #endif
     }
@@ -770,8 +758,13 @@ struct EntryView: View {
     #else
     private var bodyFont: Font { MadType.message }
     private var lineSpacing: CGFloat { MadType.messageLineSpacing }
-    private var minePadding: EdgeInsets { EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14) }
+    private var minePadding: EdgeInsets { Mac.bubblePadding }
     #endif
+
+    /// A long answer (a few paragraphs, or code) takes the wide bubble on the Mac.
+    static func isLong(_ markdown: String) -> Bool {
+        markdown.count > 220 || markdown.contains("```") || markdown.contains("\n\n")
+    }
 
     var body: some View {
         Group {
@@ -782,7 +775,7 @@ struct EntryView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         ForEach(Array(images.enumerated()), id: \.offset) { ImageView(image: $0.element) }
                         if !text.isEmpty {
-                            Text(text)
+                            let mine = Text(text)
                                 .font(bodyFont)
                                 .lineSpacing(lineSpacing)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -790,11 +783,16 @@ struct EntryView: View {
                                 .padding(minePadding)
                                 .hugging(maxWidth: columnWidth > 0 ? MadColumn.bubble(in: columnWidth) : 480)
                                 .background(MineShape().fill(Color.madMine))
+                            #if os(macOS)
+                            MacHoverRow(side: .trailing, copyText: text) { mine }
+                            #else
+                            mine
+                            #endif
                         }
                     }
                 }
             case let .text(markdown):
-                AgentRow(model: model, avatar: avatar, hugs: true) { MarkdownBubble(markdown: markdown) }
+                AgentRow(model: model, avatar: avatar, hugs: true, wide: Self.isLong(markdown), copyText: markdown) { MarkdownBubble(markdown: markdown) }
             case let .tool(tool):
                 AgentRow(model: model, avatar: avatar, hugs: true, showsAvatar: false) { ToolRow(tool: tool) }
             case let .image(image):
@@ -836,7 +834,7 @@ struct MarkdownBubble: View {
     let markdown: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: stackSpacing) {
             ForEach(Array(Markdown.blocks(markdown).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case let .text(s): Text(Self.attributed(s)).font(bodyFont).lineSpacing(lineSpacing)
@@ -849,16 +847,17 @@ struct MarkdownBubble: View {
         .padding(Phone.bubblePadding)
         .background(RoundedRectangle(cornerRadius: Phone.bubbleRadius, style: .continuous).fill(Color.chatBubble))
         #else
-        .padding(.horizontal, 13)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ConversationStyle.bubble))
+        .padding(Mac.bubblePadding)
+        .background(RoundedRectangle(cornerRadius: Mac.bubbleRadius, style: .continuous).fill(Color.chatBubble))
         #endif
     }
 
     #if os(iOS)
+    private var stackSpacing: CGFloat { 8 }
     private var bodyFont: Font { Phone.message }
     private var lineSpacing: CGFloat { Phone.messageLineSpacing }
     #else
+    private var stackSpacing: CGFloat { 10 }
     private var bodyFont: Font { MadType.message }
     private var lineSpacing: CGFloat { MadType.messageLineSpacing }
     #endif
@@ -881,12 +880,17 @@ struct CodeBlock: View {
                 .font(MadType.code)
                 #endif
                 .fixedSize()
+                #if os(iOS)
                 .padding(10)
+                #else
+                .lineSpacing(4)
+                .padding(.horizontal, 13).padding(.vertical, 11)
+                #endif
         }
         #if os(iOS)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.madCode))
         #else
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.07)))
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.07)))
         #endif
     }
 }
@@ -901,8 +905,8 @@ struct LiveBubbleView: View {
                 ProgressView().controlSize(.small).padding(.horizontal, 20).padding(.vertical, 16)
                     .background(RoundedRectangle(cornerRadius: Phone.bubbleRadius, style: .continuous).fill(Color.chatBubble))
                 #else
-                ProgressView().controlSize(.small).padding(.horizontal, 13).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ConversationStyle.bubble))
+                ProgressView().controlSize(.small).padding(.horizontal, 18).padding(.vertical, 16)
+                    .background(RoundedRectangle(cornerRadius: Mac.bubbleRadius, style: .continuous).fill(Color.chatBubble))
                 #endif
             } else {
                 MarkdownBubble(markdown: live.markdown + " ▍")
@@ -1056,6 +1060,7 @@ struct ImageView: View {
 
 // MARK: ask
 
+#if os(iOS)
 /// What waits on the person, at the end of the conversation (the approved design's ask card, v5). A command: an amber
 /// head with the agent's avatar, "想运行一条命令" and how long it has waited; the command in mono; Allow (Return),
 /// Allow for this session and Deny and explain… (Esc denies), with the keys named at the right on the Mac. A question:
@@ -1180,6 +1185,8 @@ struct AskCardView: View {
         text = ""
     }
 }
+
+#endif
 
 #if os(iOS)
 /// The phone's ask (design v6): a floating white card above the composer, 28pt corners and a soft shadow. A command:
@@ -1352,5 +1359,16 @@ struct FlowLayout: Layout {
             maxX = max(maxX, x - spacing)
         }
         return (CGSize(width: maxX, height: y + rowHeight), origins)
+    }
+}
+
+extension Font {
+    /// `size` on the Mac (the v6 scale), `phone` through the usual mapping on the iPhone, which does not change.
+    static func mad(macOnly size: CGFloat, _ phone: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        #if os(macOS)
+        return .system(size: size, weight: weight, design: design)
+        #else
+        return .mad(phone, weight: weight, design: design)
+        #endif
     }
 }

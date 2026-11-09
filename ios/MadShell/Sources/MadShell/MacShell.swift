@@ -18,7 +18,7 @@ struct MacShell<Detail: View>: View {
     let rowOpen: Bool
     @ViewBuilder var detail: Detail
 
-    @AppStorage("mad.sidebarWidth") private var storedWidth = 280.0
+    @AppStorage("mad.sidebarWidth") private var storedWidth = 310.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The resize cursor is pushed while the pointer is on the sidebar's edge; hiding the sidebar under it pops it.
     @State private var onEdge = false
@@ -41,8 +41,8 @@ struct MacShell<Detail: View>: View {
         #endif
     }
 
-    static var leastWidth: Double { 260 }
-    static var mostWidth: Double { 420 }
+    static var leastWidth: Double { 280 }
+    static var mostWidth: Double { 460 }
     private var width: CGFloat { CGFloat(min(Self.mostWidth, max(Self.leastWidth, storedWidth))) }
 
     var body: some View {

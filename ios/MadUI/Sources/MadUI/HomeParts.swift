@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if os(macOS)
 /// What waits on the person, as a compact card of the list's 待处理 section: the agent's avatar (amber ring), its name
 /// and how long it has waited; the command (or the question) in a box of code; Allow and Deny, or Reply for a
 /// question (it opens the agent), and the project at the right. A tap on the card opens the agent.
@@ -11,50 +12,45 @@ struct WaitingCard: View {
     @State private var cut = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
-                CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: 24)
+                CharacterView(id: item.agentID, kind: item.agentKind, state: .needsYou, size: 26)
                 Text(item.name)
-                    .font(Font.mad(13, weight: .medium))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundStyle(Color.madFg)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(item.age).font(.system(size: 11)).monospacedDigit().foregroundStyle(Color.madFg3)
+                Text(item.age).font(.system(size: 13.5)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
             if !item.detail.isEmpty {
-                CommandBox(text: item.detail, font: item.mono
-                           ? Font.system(size: 11.5, design: .monospaced)
-                           : Font.system(size: 11.5), cut: $cut)
+                MacCommandLine(text: item.detail, mono: item.mono, cut: $cut)
             }
             HStack(spacing: 6) {
                 if item.isPermission {
                     if cut && !item.detail.isEmpty {
-                        Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(.mad(.primary, size))
+                        Button(L("查看")) { actions.open(item.agentID) }.buttonStyle(MacPillStyle(primary: true))
                             .help(L("允许之前先看完全部内容"))
                     } else if let allow = item.allow {
-                        Button(allow.label) { actions.act(item.id, allow.id, nil) }.buttonStyle(.mad(.primary, size))
+                        Button(allow.label) { actions.act(item.id, allow.id, nil) }.buttonStyle(MacPillStyle(primary: true))
                     }
                     if let deny = item.deny {
-                        Button(deny.label) { actions.act(item.id, deny.id, nil) }.buttonStyle(.mad(.normal, size))
+                        Button(deny.label) { actions.act(item.id, deny.id, nil) }.buttonStyle(MacPillStyle(primary: false))
                     }
                 } else {
-                    Button(L("回复")) { actions.open(item.agentID) }.buttonStyle(.mad(.normal, size))
+                    Button(L("回复")) { actions.open(item.agentID) }.buttonStyle(MacPillStyle(primary: false))
                 }
                 Spacer(minLength: 0)
-                Text(item.project).font(.system(size: 11)).foregroundStyle(Color.madFg3).lineLimit(1)
+                Text(item.project).font(.system(size: 13.5)).foregroundStyle(Color.madFg3).lineLimit(1)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color.madPaper, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .background(Color.madWaitBg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { actions.open(item.agentID) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(item.name), needs you, \(item.detail)")
     }
-
-    private var size: MadButtonStyle.Size { .small }
 }
 
 /// A section's head in the list: "待处理 2" in amber with its dot, "群聊" with a +, a project with its git and cost.
@@ -67,18 +63,18 @@ struct ListHead<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 6) {
             if attention { StateDot(color: .madWait) }
-            Text(title).fontWeight(.semibold)
+            Text(title).fontWeight(attention ? .semibold : .regular)
             if let count { Text(verbatim: "\(count)").fontWeight(.medium) }
             Spacer(minLength: 8)
             trailing.fontWeight(.medium)
         }
-        .font(.system(size: 11.5))
+        .font(Mac.sectionHead)
         .monospacedDigit()
         .foregroundStyle(attention ? Color.madWait : Color.madFg3)
         .lineLimit(1)
-        .padding(.horizontal, 8)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 10)
+        .padding(.top, 18)
+        .padding(.bottom, 6)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -90,9 +86,10 @@ struct ProjectMetaLine: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if !meta.branch.isEmpty { Text(meta.branch).font(.mad(11.5, design: .monospaced)).lineLimit(1) }
+            if !meta.branch.isEmpty { Text(meta.branch).lineLimit(1) }
             ForEach(meta.parts, id: \.self) { Text($0).fixedSize() }
         }
+        .font(Mac.sectionMeta)
     }
 }
 
@@ -104,11 +101,12 @@ struct TodayRowView: View {
 
     var body: some View {
         HStack(spacing: metrics.spacing) {
-            RoundedRectangle(cornerRadius: metrics.avatar * 0.31, style: .continuous)
-                .fill(Color.madRaise)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.macFloatFill)
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
                 .frame(width: metrics.avatar, height: metrics.avatar)
-                .overlay(Image(systemName: "calendar").font(.system(size: metrics.avatar * 0.5)).foregroundStyle(Color.madFg2))
-            VStack(alignment: .leading, spacing: 1) {
+                .overlay(Image(systemName: "calendar").font(.system(size: metrics.avatar * 0.46)).foregroundStyle(Color.madFg2))
+            VStack(alignment: .leading, spacing: 2) {
                 Text(L("今日")).font(metrics.name).foregroundStyle(Color.madFg).lineLimit(1)
                 Text(Lf("%lld 等你 · %lld 在工作 · %lld 刚完成", waiting, today?.working ?? 0, today?.done ?? 0))
                     .font(metrics.line).foregroundStyle(Color.madFg3).lineLimit(1)
@@ -119,20 +117,4 @@ struct TodayRowView: View {
         .accessibilityElement(children: .combine)
     }
 }
-
-/// How the Mac's sidebar marks the open row: paper with a hairline and a soft shadow, rounded 10.
-struct SelectedRowBackground: ViewModifier {
-    let selected: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.madPaper)
-                        .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-                }
-            }
-    }
-}
+#endif

@@ -1,0 +1,257 @@
+<title>mad Mac v6</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: real-size Mac windows (1200×760pt) drawn to Grok bot's Mac metrics, one per screen, stacked; each sits in its own sideways scroller on narrow screens. */
+:root {
+  --page: #e9ebef; --ink: #15171a; --muted: #6b7280;
+  /* inside the window: light, as Grok's screenshots */
+  --w-bg: #ffffff; --w-side: #f7f7f8; --w-ink: #111114; --w-2: #8b8b92; --w-3: #b0b0b7; --w-line: rgba(17,17,22,.07);
+  --w-bubble: #f1f1f3; --w-mine: #e4ecfd; --w-sel: #e9e9ec; --w-wait: #c26a04; --w-wait-bg: #fff6ea; --w-work: #16a34a; --w-code: #f6f6f8;
+  --w-shadow: 0 4px 16px rgba(15,18,30,.08), 0 1px 2px rgba(15,18,30,.06);
+  --sans: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #111316; --ink: #eceef1; --muted: #9aa1ab; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #111316; --ink: #eceef1; --muted: #9aa1ab; color-scheme: dark }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+header.page { max-width: 1200px; margin: 0 auto 22px; display: grid; gap: 6px; }
+header.page h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+header.page p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; max-width: 72ch; }
+figure { margin: 0 auto 40px; max-width: 1200px; display: grid; gap: 10px; }
+figcaption { font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 90ch; }
+figcaption b { color: var(--ink); margin-right: 6px; }
+.scroller { overflow-x: auto; padding-bottom: 6px; }
+
+/* the window */
+.win { width: 1280px; height: 840px; border-radius: 12px; overflow: hidden; display: grid; grid-template-columns: 310px 1fr; background: var(--w-bg); color: var(--w-ink); box-shadow: 0 24px 60px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.2); font-family: var(--sans); -webkit-font-smoothing: antialiased; position: relative; }
+.side { background: var(--w-side); border-right: 1px solid var(--w-line); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+.side-top { height: 52px; display: flex; align-items: center; padding: 0 14px 0 20px; gap: 8px; }
+.lights { display: flex; gap: 8px } .lights i { width: 12px; height: 12px; border-radius: 50%; display: block }
+.lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+.rb { width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--w-shadow); display: grid; place-items: center; border: 0; color: var(--w-ink); }
+.rb svg { width: 15px; height: 15px }
+.side-top .sp { flex: 1 }
+.list { overflow: hidden; padding: 4px 10px; display: grid; align-content: start; gap: 2px; }
+.machine { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--w-2); padding: 2px 10px 10px; }
+.machine b { color: var(--w-ink); font-weight: 600; font-size: 15px }
+.today { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 10px; }
+.today i { width: 34px; height: 34px; border-radius: 8px; background: #fff; box-shadow: 0 0 0 1px var(--w-line); display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 700; color: var(--w-2) }
+.today .n { font-size: 16px; font-weight: 500 } .today .p { font-size: 14px; color: var(--w-2); margin-top: 2px }
+.wait { margin: 8px 0 6px; background: var(--w-wait-bg); border-radius: 14px; padding: 12px 13px; display: grid; gap: 9px; }
+.wait .h { font-size: 13.5px; font-weight: 600; color: var(--w-wait); display: flex; gap: 6px; align-items: center }
+.wait .h kbd { margin-left: auto; font: 10.5px var(--sans); color: var(--w-2); border: 1px solid rgba(0,0,0,.1); border-radius: 4px; padding: 0 4px }
+.wait .t { display: flex; align-items: center; gap: 8px; font-size: 15.5px; font-weight: 600 }
+.wait .t span { margin-left: auto; font-weight: 400; color: var(--w-2); font-size: 13.5px }
+.wait .c { font: 13.5px var(--mono); background: rgba(255,255,255,.8); border-radius: 7px; padding: 5px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #44444a }
+.wait .a { display: flex; gap: 6px }
+.pbtn { height: 30px; border-radius: 15px; padding: 0 14px; font: 600 14px/1 var(--sans); border: 1px solid rgba(0,0,0,.1); background: #fff; color: var(--w-ink); display: inline-flex; align-items: center; }
+.pbtn.dark { background: #111114; color: #fff; border-color: #111114 }
+.head { font-size: 13.5px; color: var(--w-2); padding: 18px 10px 6px; display: flex; justify-content: space-between; }
+.head code { font: 13px var(--mono) }
+.row { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 12px; height: 42px; }
+.row.sel { background: var(--w-sel) }
+.row .n { font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row .p { font-size: 14px; color: var(--w-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px }
+.row .p b { font-weight: 500; color: #66666d }
+.row.faded { opacity: .5 }
+.foot { display: flex; align-items: center; gap: 10px; padding: 12px 14px 14px 18px; }
+.foot .me { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg,#f59e0b,#ef4444); color: #fff; font: 600 12px var(--sans); display: grid; place-items: center }
+.foot .nm { font-size: 16px; font-weight: 500; flex: 1 }
+
+/* the chat pane */
+.main { position: relative; min-width: 0; overflow: hidden; }
+.title { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); height: 38px; border-radius: 19px; background: #fff; box-shadow: var(--w-shadow); display: flex; align-items: center; gap: 8px; padding: 0 18px 0 9px; font-size: 16px; font-weight: 600; z-index: 2; white-space: nowrap; }
+.title .sub { font-weight: 400; color: var(--w-2); font-size: 13.5px; margin-left: 2px }
+.corner { position: absolute; top: 13px; right: 16px; display: flex; gap: 8px; z-index: 2 }
+.seg { display: flex; background: #f1f1f3; border-radius: 10px; padding: 2px; font-size: 14px; }
+.seg span { padding: 5px 12px; border-radius: 7px; color: var(--w-2) } .seg span.on { background: #fff; color: var(--w-ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+.fade { position: absolute; left: 0; right: 0; top: 0; height: 64px; background: linear-gradient(#fff 55%, rgba(255,255,255,0)); z-index: 1 }
+.col { position: absolute; inset: 0 0 0 0; overflow: hidden; padding: 72px 0 120px; }
+.inner { width: 820px; margin: 0 auto; display: grid; gap: 0; }
+.date { text-align: center; font-size: 13.5px; color: var(--w-2); margin: 8px 0 4px }
+.m { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; margin-top: 22px; align-items: end; }
+.m .who { grid-column: 2; grid-row: 1; font-size: 13.5px; margin: 0 0 6px 3px; }
+.m .av { grid-column: 1; grid-row: 2; }
+.m > .b, .m > .tools { grid-column: 2; grid-row: 2; }
+.b { background: var(--w-bubble); border-radius: 20px; padding: 13px 18px; font-size: 17px; line-height: 1.6; max-width: 600px; width: fit-content; }
+.b.wide { max-width: 700px }
+.b p { margin: 0 } .b p + p { margin-top: 10px }
+.b h4 { margin: 12px 0 4px; font-size: 17px } .b h4:first-child { margin-top: 0 }
+.b code { font: 15px var(--mono); background: rgba(0,0,0,.05); border-radius: 5px; padding: 1px 4px }
+.b pre { margin: 10px 0; background: #e8e8eb; border-radius: 11px; padding: 11px 13px; font: 15px/1.55 var(--mono); white-space: pre-wrap; }
+.b a { color: #1d6ef5; text-decoration: none }
+.mine { display: flex; justify-content: flex-end; margin-top: 20px }
+.mine .b { background: var(--w-mine); border-bottom-right-radius: 6px }
+.at { font-weight: 600 }
+.tools { border: 1px solid var(--w-line); border-radius: 14px; padding: 4px 0; width: fit-content; min-width: 300px; }
+.tool { display: flex; gap: 10px; align-items: center; padding: 8px 15px; font-size: 15px; color: #5a5a61; white-space: nowrap }
+.tool b { color: var(--w-ink); font-weight: 600 }
+.tool .d { width: 7px; height: 7px; border-radius: 50%; background: var(--w-work); flex: none }
+.tool .d.bad { background: #dc2626 } .tool .d.run { background: none; border: 1.5px solid #c5c5cb; border-top-color: #111; width: 6px; height: 6px }
+.tool .chev { margin-left: auto; color: var(--w-3) }
+.hover { display: flex; gap: 12px; align-items: center; color: var(--w-2); margin-left: 10px; align-self: center }
+.hover svg { width: 19px; height: 19px }
+.wdot { width: 7px; height: 7px; border-radius: 50%; background: var(--w-wait); display: inline-block }
+.machine .chev { width: 12px; height: 12px; color: var(--w-2) }
+.head .plus-s { width: 14px; height: 14px; color: var(--w-2) }
+.composer { position: absolute; left: 50%; transform: translateX(-50%); bottom: 22px; width: 820px; height: 54px; border-radius: 27px; background: #fff; box-shadow: var(--w-shadow), 0 0 0 1px var(--w-line); display: flex; align-items: center; gap: 12px; padding: 0 8px 0 10px; z-index: 2; }
+.composer .plus { width: 34px; height: 34px; border-radius: 50%; background: #f1f1f3; display: grid; place-items: center } .composer .plus svg { width: 13px; height: 13px }
+.composer .ph { flex: 1; font-size: 16.5px; color: var(--w-3) }
+.composer .send { width: 36px; height: 36px; border-radius: 50%; background: #111114; color: #fff; display: grid; place-items: center } .composer .send svg { width: 14px; height: 14px }
+.approve { position: absolute; left: 50%; transform: translateX(-50%); bottom: 90px; width: 820px; background: #fff; border-radius: 18px; box-shadow: 0 10px 34px rgba(15,18,30,.12), 0 0 0 1px var(--w-line); padding: 16px 18px 14px; z-index: 2; display: grid; gap: 12px; box-sizing: border-box; }
+.approve .h { display: flex; justify-content: space-between; font-size: 16px } .approve .h b { color: var(--w-wait) } .approve .h span { color: var(--w-2); font-size: 14px }
+.approve .cmd { font: 15px/1.55 var(--mono); background: var(--w-code); border-radius: 11px; padding: 10px 13px; white-space: pre-wrap; overflow-wrap: anywhere }
+.approve .r { display: flex; gap: 8px; align-items: center }
+.approve .r .pbtn { height: 38px; border-radius: 19px; padding: 0 18px; font-size: 14px }
+.approve .r .keys { margin-left: auto; font-size: 13.5px; color: var(--w-2) }
+.approve .r .keys kbd { font: 10.5px var(--sans); border: 1px solid rgba(0,0,0,.12); border-radius: 4px; padding: 0 4px; margin-right: 3px }
+.approve .r .link { font-size: 14.5px; color: var(--w-2); margin-left: 6px }
+.menu { position: absolute; left: 12px; bottom: 60px; width: 286px; background: #fff; border-radius: 14px; box-shadow: 0 12px 36px rgba(15,18,30,.16), 0 0 0 1px var(--w-line); padding: 6px; z-index: 3; font-size: 15px; }
+.menu .i { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px }
+.menu .i span { margin-left: auto; color: var(--w-2); font-size: 14px }
+.menu hr { border: 0; border-top: 1px solid var(--w-line); margin: 5px 6px }
+.menu svg { width: 16px; height: 16px; color: #55555c }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin 1.4s linear infinite; transform-origin: 50% 50% } }
+@keyframes spin { to { transform: rotate(360deg) } }
+</style>
+
+<header class="page">
+  <h1>mad 的 Mac 版：照 Grok bot 调排版</h1>
+  <p>按你发的 Grok 截图换算（以红绿灯 12pt 为尺）：侧栏 310 宽、行高 58、头像 34、名字 16、预览 14；顶部没有标题栏，只有居中的浮动胶囊；消息在居中的 820 宽一栏里，气泡 17 号字、行距 1.6、最宽 600，消息之间留 22；发言人名字在气泡上方用成员色，小头像在左下；输入框是居中的浮动胶囊。数据是示例。</p>
+</header>
+
+<figure>
+  <div class="scroller"><div class="win">
+    <aside class="side">
+      <div class="side-top"><div class="lights"><i></i><i></i><i></i></div><span class="sp"></span>
+        <button class="rb" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button>
+        <button class="rb" aria-label="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div class="list">
+        <div class="machine"><b>heng 的 MacBook Pro</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></div>
+        <div class="today"><i>9</i><div><div class="n">今日</div><div class="p">1 等你 · 2 在工作 · 2 刚完成</div></div></div>
+        <div class="wait">
+          <div class="h"><i class="wdot"></i>待处理 1 <kbd>⌥N</kbd></div>
+          <div class="t"><span data-av="need0001-bbbb" data-ring="wait" data-size="22" style="margin:0"></span>给我绘制一个表格 <span>1 分钟</span></div>
+          <div class="c">$ python3 make_table.py --out report.xlsx</div>
+          <div class="a"><span class="pbtn dark">允许</span><span class="pbtn">拒绝</span></div>
+        </div>
+        <div class="head"><span>群聊</span><svg class="plus-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+        <div class="row sel"><span data-group="ios" data-size="34"></span><div style="min-width:0"><div class="n">ios</div><div class="p">architect: 第 3 条也上线了</div></div></div>
+        <div class="row"><span data-group="five" data-size="34"></span><div style="min-width:0"><div class="n">five</div><div class="p">kim: 五个成员的群</div></div></div>
+        <div class="head"><span>mad</span><code>main · $689</code></div>
+        <div class="row"><span data-av="work0001-aaaa" data-ring="work" data-size="34"></span><div style="min-width:0"><div class="n">Sidebar token 统计</div><div class="p"><b>Bash</b> go test ./internal/...</div></div></div>
+        <div class="row"><span data-av="need0001-bbbb" data-ring="wait" data-size="34"></span><div style="min-width:0"><div class="n">给我绘制一个表格</div><div class="p">想运行一条命令，等你确认</div></div></div>
+        <div class="row"><span data-av="idle0001-dddd" data-ring="done" data-size="34"></span><div style="min-width:0"><div class="n">notes</div><div class="p">整理好了，写在 NOTES.md</div></div></div>
+        <div class="row faded"><span data-av="stop0001-cccc" data-ring="stop" data-size="34"></span><div style="min-width:0"><div class="n">Mad ideas</div><div class="p">已停止</div></div></div>
+      </div>
+      <div class="foot"><span class="me">H</span><span class="nm">Heng Du</span>
+        <button class="rb" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 13.5v6.5M13.5 16.75H20" stroke-linecap="round"/></svg></button></div>
+    </aside>
+    <section class="main">
+      <div class="fade"></div>
+      <div class="title"><span data-group="ios" data-size="20"></span>ios<span class="sub">3 个成员 · 1 个在工作</span></div>
+      <div class="corner"><button class="rb" aria-label="群信息"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M14.5 5v14"/></svg></button></div>
+      <div class="col"><div class="inner">
+        <div class="date">今天 15:26</div>
+        <div class="mine"><div class="b"><span class="at" style="color:#1f66ff">@architect</span> 把三条修复排一下，<span class="at" style="color:#ff5a1f">@builder</span> 来做</div></div>
+        <div class="m"><span class="who" style="color:#1f66ff">architect</span><span class="av" data-av="team0001-arch" data-size="28"></span><div class="b">好。第 1 条是登录页的回退按钮，第 2 条是列表到底部不跟随，第 3 条是图片发送失败没有提示。<span class="at" style="color:#ff5a1f">@builder</span> 先做第 1 条。</div></div>
+        <div class="m"><span class="who" style="color:#ff5a1f">builder</span><span class="av" data-av="team0001-bld0" data-ring="work" data-size="28"></span><div class="b">收到，先做第 1 条，提好 PR 发群里。</div></div>
+        <div class="m"><span class="who" style="color:#1fbf75">reviewer</span><span class="av" data-av="team0001-rev0" data-size="28"></span><div class="b">第 1 条看过了，回退时没清掉输入框的草稿，改一下就能合。</div></div>
+        <div class="m"><span class="who" style="color:#1f66ff">architect</span><span class="av" data-av="team0001-arch" data-size="28"></span><div style="grid-column:2;grid-row:2;display:flex;align-items:center"><div class="b">第 3 条也上线了，三条全部完成。</div><div class="hover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.2c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/><path d="M9.3 9.8h.01M14.7 9.8h.01" stroke-width="2.6"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 7 4.5 12l5 5"/><path d="M4.5 12H14a5.5 5.5 0 0 1 5.5 5.5V19"/></svg><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></div></div></div>
+      </div></div>
+      <div class="composer"><span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息到 ios，@ 叫一个成员</span><span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </section>
+  </div></div>
+  <figcaption><b>群聊</b>顶部没有标题栏，只有居中的胶囊（群头像、名字、成员和在工作的人数），右上角一颗圆钮打开群信息。消息在居中一栏：名字用成员色写在气泡上方，小头像在气泡左下，我的消息浅蓝靠右；鼠标移到一条上出现表情、回复、更多。侧栏右上角是搜索和 +，底部是你和菜单钮。</figcaption>
+</figure>
+
+<figure>
+  <div class="scroller"><div class="win">
+    <aside class="side">
+      <div class="side-top"><div class="lights"><i></i><i></i><i></i></div><span class="sp"></span>
+        <button class="rb" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button>
+        <button class="rb" aria-label="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div class="list">
+        <div class="machine"><b>heng 的 MacBook Pro</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></div>
+        <div class="today"><i>9</i><div><div class="n">今日</div><div class="p">1 等你 · 2 在工作 · 2 刚完成</div></div></div>
+        <div class="head"><span>群聊</span><svg class="plus-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+        <div class="row"><span data-group="ios" data-size="34"></span><div style="min-width:0"><div class="n">ios</div><div class="p">architect: 第 3 条也上线了</div></div></div>
+        <div class="row"><span data-group="five" data-size="34"></span><div style="min-width:0"><div class="n">five</div><div class="p">kim: 五个成员的群</div></div></div>
+        <div class="head"><span>mad</span><code>main · $689</code></div>
+        <div class="row"><span data-av="work0001-aaaa" data-ring="work" data-size="34"></span><div style="min-width:0"><div class="n">Sidebar token 统计</div><div class="p"><b>Bash</b> go test ./internal/...</div></div></div>
+        <div class="row sel"><span data-av="need0001-bbbb" data-ring="wait" data-size="34"></span><div style="min-width:0"><div class="n">给我绘制一个表格</div><div class="p">想运行一条命令，等你确认</div></div></div>
+        <div class="row"><span data-av="idle0001-dddd" data-ring="done" data-size="34"></span><div style="min-width:0"><div class="n">notes</div><div class="p">整理好了，写在 NOTES.md</div></div></div>
+        <div class="row faded"><span data-av="stop0001-cccc" data-ring="stop" data-size="34"></span><div style="min-width:0"><div class="n">Mad ideas</div><div class="p">已停止</div></div></div>
+      </div>
+      <div class="foot"><span class="me">H</span><span class="nm">Heng Du</span>
+        <button class="rb" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 13.5v6.5M13.5 16.75H20" stroke-linecap="round"/></svg></button></div>
+      <div class="menu">
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg>用量<span>今天 $15.86 ›</span></div>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="4.5" height="16" rx="1.2"/><rect x="10" y="4" width="4.5" height="11" rx="1.2"/><rect x="16" y="4" width="4.5" height="7" rx="1.2"/></svg>看板</div>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5 14.4 9l5.6.5-4.3 3.7 1.3 5.6L12 15.9 7 18.8l1.3-5.6L4 9.5 9.6 9z"/></svg>技能</div>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2" stroke-linecap="round"/></svg>手机和已配对设备<span>›</span></div>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg>通知</div>
+        <hr>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 7.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>添加项目</div>
+        <div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7.5"/><path d="M12 4.5v15" /></svg>主题<span>跟随系统</span></div>
+      </div>
+    </aside>
+    <section class="main">
+      <div class="fade"></div>
+      <div class="title"><span data-av="need0001-bbbb" data-ring="wait" data-size="20"></span>给我绘制一个表格<span class="sub">claude · mad / main</span></div>
+      <div class="corner"><div class="seg"><span class="on">对话</span><span>改动 · 2</span></div><button class="rb" aria-label="详情"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M14.5 5v14"/></svg></button><button class="rb" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg></button></div>
+      <div class="col"><div class="inner">
+        <div class="date">今天 16:48</div>
+        <div class="mine"><div class="b">给我绘制一个表格，按负责人分组，存成 report.xlsx</div></div>
+        <div class="m"><span class="av" data-av="need0001-bbbb" data-size="28"></span><div class="b wide"><p>好的，我先读一下任务板，再生成表格：</p><p>· 读 <code>board.json</code><br>· 按负责人分组<br>· 写成 <b>report.xlsx</b></p></div></div>
+        <div class="m"><span></span><div class="tools">
+          <div class="tool"><span class="d"></span><b>读取</b> board.json<span class="chev">›</span></div>
+          <div class="tool"><span class="d bad"></span><b>运行</b> go test ./internal/board<span class="chev">›</span></div>
+        </div></div>
+        <div class="m"><span class="av" data-av="need0001-bbbb" data-size="28"></span><div class="b wide"><h4>测试没过，少了一条任务</h4><p>循环从第二条开始，所以第一条任务被漏掉了：</p><pre>for _, t := range tasks[1:] { // 漏了第一条
+    out[t.Owner] = append(out[t.Owner], t)
+}</pre><p>改成 <code>range tasks</code> 后测试通过，现在生成表格。</p></div></div>
+        <div class="m"><span></span><div class="tools"><div class="tool"><span class="d run spin"></span><b>运行</b> python3 make_table.py --out report.xlsx</div></div></div>
+      </div></div>
+      <section class="approve" aria-label="批准">
+        <div class="h"><b>想运行一条命令</b><span>等了 1 分钟</span></div>
+        <div class="cmd">$ python3 make_table.py --out report.xlsx</div>
+        <div class="r"><span class="pbtn dark">允许</span><span class="pbtn">拒绝</span><span class="link">本次会话都允许</span><span class="keys"><kbd>⏎</kbd>允许　<kbd>esc</kbd>拒绝</span></div>
+      </section>
+      <div class="composer"><span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">发消息给「给我绘制一个表格」</span><span class="send" style="background:#e4e4e8;color:#9a9aa1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+    </section>
+  </div></div>
+  <figcaption><b>agent 对话和菜单</b>标题胶囊带状态环和 claude · mad / main；右上角是对话 / 改动、详情、更多。AI 的回复是一块宽气泡（最宽 700），标题加粗、代码块圆角；工具调用合成一张小清单。批准卡片浮在输入框上方，命令完整显示，⏎ 允许、esc 拒绝。左下角的菜单钮弹出用量、看板、技能、手机、通知、添加项目、主题（这里画的是打开的样子）。</figcaption>
+</figure>
+
+<script>
+const COLORS = ["#8a3ffc", "#ff5a1f", "#1f66ff", "#ff4d8d", "#1fbf75", "#12b5d6", "#f5b324", "#6a5cff"];
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function body(id, stopped) {
+  const h = hash(id), col = COLORS[h % 8], round = (h >> 3) % 2 === 0;
+  const shape = round ? `<circle cx="50" cy="50" r="40" fill="${col}"/>` : `<rect x="12" y="12" width="76" height="76" rx="26" fill="${col}" transform="rotate(-12 50 50)"/>`;
+  const eyes = stopped ? [36, 60].map(x => `<rect x="${x - 7}" y="44" width="14" height="5" rx="2.5" fill="rgba(0,0,0,.75)"/>`).join("")
+    : [36, 60].map(x => `<rect x="-3.5" y="-9" width="7" height="18" rx="3.5" fill="rgba(0,0,0,.78)" transform="translate(${x} 43) rotate(-16)"/>`).join("");
+  return shape + eyes;
+}
+function avatar(id, size, ring) {
+  const inner = ring === "wait" || ring === "work" ? `<g transform="translate(9 9) scale(.82)">${body(id, false)}</g>` : body(id, ring === "stop");
+  let r = "";
+  if (ring === "wait") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e8890c" stroke-width="6"/>`;
+  if (ring === "work") r = `<circle cx="50" cy="50" r="46.5" fill="none" stroke="#e5e5ea" stroke-width="5"/><g class="spin"><circle cx="50" cy="50" r="46.5" fill="none" stroke="#16a34a" stroke-width="6" stroke-linecap="round" stroke-dasharray="78 300"/></g>`;
+  if (ring === "done") r = `<circle cx="86" cy="86" r="12" fill="#2563eb" stroke="#f7f7f8" stroke-width="6"/>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="display:block;overflow:visible">${inner}${r}</svg>`;
+}
+const MEMBERS = { ios: ["team0001-arch", "team0001-bld0", "team0001-rev0"], five: ["kim-0001", "lee-0002", "park-0003", "five-04", "five-05"] };
+function groupTile(name, size) {
+  const m = MEMBERS[name] || [], s = size * .58;
+  const spots = [[0, 0], [size - s, size * .05], [size * .2, size - s]];
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:none">` + m.slice(0, 3).map((id, i) =>
+    `<div style="position:absolute;left:${spots[i][0]}px;top:${spots[i][1]}px">${avatar(id, s)}</div>`).join("") + `</div>`;
+}
+document.querySelectorAll("[data-av]").forEach(el => { el.innerHTML = avatar(el.dataset.av, +(el.dataset.size || 26), el.dataset.ring); });
+document.querySelectorAll("[data-group]").forEach(el => { el.innerHTML = groupTile(el.dataset.group, +(el.dataset.size || 26)); });
+</script>

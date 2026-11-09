@@ -5,29 +5,30 @@ import SwiftUI
 /// stay as they were (and grow with Dynamic Type).
 enum MadType {
     #if os(macOS)
+    // Design v6 for the Mac (docs/design/mac-v6.html): Grok bot's layout, a step larger, as the person asked.
     /// A row's or an agent's name.
-    static let rowName = Font.system(size: 15, weight: .medium)
+    static let rowName = Font.system(size: 16, weight: .medium)
     /// A row's last line.
-    static let rowLine = Font.mad(13)
+    static let rowLine = Font.system(size: 14)
     /// What is said: a message, what the person types.
-    static let message = Font.system(size: 15)
+    static let message = Font.system(size: 17)
     /// The opened text of a folded line, a card's body.
-    static let detail = Font.system(size: 15)
+    static let detail = Font.system(size: 16)
     /// The handoff / done line.
-    static let pill = Font.mad(14)
+    static let pill = Font.system(size: 15)
     /// A head's title.
-    static let title = Font.system(size: 17, weight: .semibold)
+    static let title = Font.system(size: 16, weight: .semibold)
     /// Sender names, the head's sub line, times, section titles.
-    static let label = Font.mad(13)
+    static let label = Font.system(size: 13.5)
     /// Quotes, notes, a row's small line.
-    static let small = Font.mad(13)
+    static let small = Font.system(size: 14)
     /// The smallest: a tag.
-    static let tag = Font.mad(12)
-    /// The extra space between the lines of what is said (15pt text on a 22 to 23pt pitch).
-    static let messageLineSpacing: CGFloat = 4
+    static let tag = Font.system(size: 13)
+    /// The extra space between the lines of what is said (17pt text on a 27pt pitch, the mockup's 1.6).
+    static let messageLineSpacing: CGFloat = 7
     /// Code in a bubble, and in a tool's input and result.
-    static let code = Font.mad(13, design: .monospaced)
-    static let codeSmall = Font.mad(12, design: .monospaced)
+    static let code = Font.system(size: 15, design: .monospaced)
+    static let codeSmall = Font.system(size: 14, design: .monospaced)
     #else
     static let rowName = Font.body.weight(.semibold)
     static let rowLine = Font.subheadline
@@ -49,12 +50,16 @@ enum MadType {
 /// and a bubble is as wide as its text up to a share of the column.
 enum MadColumn {
     #if os(macOS)
-    static let maxWidth: CGFloat = 960
+    static let maxWidth: CGFloat = 820
     static let side: CGFloat = 32
-    /// No gutter on the Mac: a sender's small character sits by its name above the bubbles.
-    static let gutter: CGFloat = 0
-    /// The most of the column a bubble takes.
-    static let bubbleShare: CGFloat = 0.58
+    /// The 28pt avatar and the 12pt after it (design v6): others' bubbles start after it, mine end at the right edge.
+    static let gutter: CGFloat = 40
+    /// The most of the room beside the gutter a bubble takes: 600 of the 780 a full column has left.
+    static let bubbleShare: CGFloat = 600.0 / 780.0
+    /// An agent's long answer may take 700 of the same 780.
+    static let wideShare: CGFloat = 700.0 / 780.0
+    /// The widest a long answer may be in a column `width` wide.
+    static func wideBubble(in width: CGFloat) -> CGFloat { max(120, (width - gutter) * wideShare) }
     #else
     static let maxWidth: CGFloat = 720
     static let side: CGFloat = 16
