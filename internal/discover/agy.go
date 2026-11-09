@@ -213,12 +213,17 @@ var agyStartFinish = func(sid, transcript string, stopped time.Time) {
 
 // agyFinish reports the turn that ended at stopped: idle, with the reply
 // read from the transcript once agy has written it there (or as it stands
-// after wait).
+// after wait). agy writes it around the Stop hook, before or after: the
+// turn is over once the transcript ends in the model's reply, or was
+// written since the stop.
 func agyFinish(sid, transcript string, stopped time.Time, wait time.Duration) Report {
 	if transcript == "" {
 		transcript = agyTranscript(sid)
 	}
 	for end := time.Now().Add(wait); ; time.Sleep(200 * time.Millisecond) {
+		if _, done := agyLastReply(transcript); done {
+			break
+		}
 		info, err := os.Stat(transcript)
 		if err == nil && !info.ModTime().Before(stopped) || time.Now().After(end) {
 			break
@@ -244,12 +249,18 @@ type agyStep struct {
 
 // agyReply is what the model said last in the transcript's last turn.
 func agyReply(transcript string) string {
+	reply, _ := agyLastReply(transcript)
+	return reply
+}
+
+// agyLastReply is agyReply, and whether the transcript ends in it: the
+// model's last step said something and called no tool.
+func agyLastReply(transcript string) (reply string, final bool) {
 	f, err := os.Open(transcript)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer f.Close()
-	reply := ""
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	for sc.Scan() {
@@ -257,14 +268,16 @@ func agyReply(transcript string) string {
 		if json.Unmarshal(sc.Bytes(), &s) != nil {
 			continue
 		}
+		final = false
 		switch {
 		case s.Type == "USER_INPUT":
 			reply = ""
 		case s.Type == "PLANNER_RESPONSE" && strings.TrimSpace(s.Content) != "":
 			reply = strings.TrimSpace(s.Content)
+			final = len(s.ToolCalls) == 0
 		}
 	}
-	return reply
+	return reply, final
 }
 
 func agyTranscript(sid string) string {

@@ -179,6 +179,14 @@ func TestAgyFinish(t *testing.T) {
 		t.Errorf("turn = %+v", r.Turn)
 	}
 
+	// agy may write the reply before the Stop hook runs: a transcript that
+	// ends in it is read at once, however old.
+	start := time.Now()
+	r = agyFinish("ec33ebf9", path, time.Now().Add(time.Hour), 5*time.Second)
+	if time.Since(start) > time.Second || r.Turn == nil || r.Turn.Reply != "It says hello." {
+		t.Errorf("finish waited on a written reply: %v %+v", time.Since(start), r.Turn)
+	}
+
 	// A later question with no answer yet: no reply, not the old one.
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	f.WriteString(`{"step_index":5,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\nmore\n</USER_REQUEST>"}` + "\n")
@@ -189,7 +197,7 @@ func TestAgyFinish(t *testing.T) {
 
 	// A transcript not written since the stop is waited for, then read as
 	// it is.
-	start := time.Now()
+	start = time.Now()
 	r = agyFinish("ec33ebf9", path, time.Now().Add(time.Hour), 300*time.Millisecond)
 	if time.Since(start) < 300*time.Millisecond || r.Turn == nil {
 		t.Errorf("finish did not wait: %v %+v", time.Since(start), r.Turn)
