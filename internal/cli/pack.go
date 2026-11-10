@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -93,7 +94,10 @@ func packCmd(args []string, stdio IO) error {
 		fs := flags("pack eject", stdio.Err)
 		project := fs.Bool("p", false, "to this project's .mad/packs/")
 		fs.Usage = func() { fmt.Fprint(stdio.Err, packUsage) }
+		// -p before the name or after it.
+		sort.SliceStable(args, func(i, j int) bool { return strings.HasPrefix(args[i], "-") && !strings.HasPrefix(args[j], "-") })
 		if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
+			fmt.Fprint(stdio.Err, packUsage)
 			return errUsage
 		}
 		list, _ := pack.List(root)

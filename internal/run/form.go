@@ -94,16 +94,24 @@ func NewForm(dir string) error {
 	return err
 }
 
-// resetAgents puts the flow's own agents in its roles.
+// resetAgents puts the flow's own agents in its roles. One the choices
+// lack (a model a pack names that mad does not list) joins them: the
+// form starts the run with the agents its flow says.
 func (f *form) resetAgents() {
 	roles := f.flows[f.flow].Roles
 	f.agents, f.efforts = make([]int, len(roles)), make([]int, len(roles))
 	for i, r := range roles {
+		at := -1
 		for j, c := range f.choices {
 			if c.Kind == r.Kind && c.Model == r.Model {
-				f.agents[i] = j
+				at = j
 			}
 		}
+		if at < 0 {
+			f.choices = append(f.choices, Choice{Kind: r.Kind, Model: r.Model})
+			at = len(f.choices) - 1
+		}
+		f.agents[i] = at
 		for j, l := range Efforts(f.choices[f.agents[i]]) {
 			if l == r.Effort {
 				f.efforts[i] = j

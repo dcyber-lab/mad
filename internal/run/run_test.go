@@ -921,6 +921,26 @@ func TestRoleArgs(t *testing.T) {
 	}
 }
 
+// The form starts a run with the agents its flow names, also one its
+// list does not offer, such as a model a pack names.
+func TestFormKeepsTheFlowsAgents(t *testing.T) {
+	fl, err := Parse([]byte(`{"name":"x","roles":[{"name":"a","agent":"claude:fable@high"},{"name":"b","agent":"codex"},{"name":"c","agent":"claude:sonnet"}],
+		"steps":[{"name":"s","role":"a","prompt":"p"},{"name":"r","role":"b","prompt":"q","review":true,"back":"s"},{"name":"t","role":"c","prompt":"p"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &form{flows: []Flow{fl}, choices: []Choice{{Kind: "claude", Model: "opus"}, {Kind: "claude", Model: "sonnet"}, {Kind: "codex"}}}
+	f.resetAgents()
+	if got := f.chosen(); got["a"] != "claude:fable@high" || got["b"] != "codex" || got["c"] != "claude:sonnet" {
+		t.Errorf("chosen = %v", got)
+	}
+	// It is one of the choices from then on, once.
+	f.resetAgents()
+	if len(f.choices) != 4 || f.choices[3].Model != "fable" {
+		t.Errorf("choices = %v", f.choices)
+	}
+}
+
 func TestPanel(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("MAD_SOCKET", "")

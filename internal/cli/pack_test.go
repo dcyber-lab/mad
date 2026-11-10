@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -98,6 +99,41 @@ func TestPackCmd(t *testing.T) {
 	}
 	if code, _, errOut := run(t, "", "pack", "frob"); code != 2 || !strings.Contains(errOut, "mad pack ls") {
 		t.Errorf("unknown = %d %q", code, errOut)
+	}
+	if code, _, errOut := run(t, "", "pack", "eject"); code != 2 || !strings.Contains(errOut, "mad pack eject") {
+		t.Errorf("eject of nothing = %d %q", code, errOut)
+	}
+}
+
+// A project's copy goes in its .mad/packs/, -p before the name or after.
+func TestPackEjectToTheProject(t *testing.T) {
+	home := isolate(t)
+	repo, _ := filepath.EvalSymlinks(home)
+	repo = filepath.Join(repo, "repo")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	t.Chdir(repo)
+	if code, _, errOut := run(t, "", "pack", "eject", "mad", "-p"); code != 0 {
+		t.Fatalf("eject mad -p = %d %q", code, errOut)
+	}
+	if code, _, errOut := run(t, "", "pack", "eject", "-p", "pstack"); code != 0 {
+		t.Fatalf("eject -p pstack = %d %q", code, errOut)
+	}
+	for _, name := range []string{"mad/flows/design-impl-review.json", "pstack/skills/lead/SKILL.md", "pstack/LICENSE"} {
+		if _, err := os.Stat(filepath.Join(repo, ".mad", "packs", filepath.FromSlash(name))); err != nil {
+			t.Errorf("the project lacks %s", name)
+		}
+	}
+	if code, out, _ := run(t, "", "pack", "ls"); code != 0 || strings.Count(out, "(in place of built in") != 2 {
+		t.Errorf("pack ls = %d %q", code, out)
+	}
+	if code, out, errOut := run(t, "", "pack", "check"); code != 0 || !strings.Contains(out, "pack pstack 0.1.0 is good") {
+		t.Errorf("check of the copies = %d %q %q", code, out, errOut)
+	}
+	t.Chdir(home)
+	if code, _, errOut := run(t, "", "pack", "eject", "-p", "mad"); code != 1 || !strings.Contains(errOut, "not in a git repository") {
+		t.Errorf("eject -p outside a repository = %d %q", code, errOut)
 	}
 }
 
