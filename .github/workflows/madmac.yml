@@ -2,7 +2,10 @@ name: madmac
 
 on:
   push:
-    branches: [ci/madmac-build, mac-native-new-group]
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/madmac.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/madmac.yml"]
   workflow_dispatch:
 
 jobs:
