@@ -774,7 +774,7 @@ func TestFlowFiles(t *testing.T) {
 	for _, f := range flows {
 		names = append(names, f.Name+"@"+filepath.Base(f.Source))
 	}
-	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json pstack@built in tdd@tdd.json" {
+	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json pstack@built in pstack-bugfix@built in pstack-refactor@built in pstack-docs@built in tdd@tdd.json" {
 		t.Errorf("flows = %s", got)
 	}
 	tdd, ok := FlowByName(root, "tdd")

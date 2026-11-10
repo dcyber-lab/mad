@@ -104,7 +104,7 @@ var builtin struct {
 // Builtin are the templates mad comes with, the default first.
 func Builtin() []Template {
 	builtin.once.Do(func() {
-		for _, name := range []string{"dev", "pstack"} {
+		for _, name := range []string{"dev", "pstack", "pstack-research", "pstack-docs"} {
 			data, err := builtinFS.ReadFile("teams/" + name + ".json")
 			if err != nil {
 				panic(err)

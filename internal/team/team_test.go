@@ -101,7 +101,7 @@ func TestTemplatesLoadedLikeFlows(t *testing.T) {
 	for _, tp := range list {
 		names = append(names, tp.Name)
 	}
-	if strings.Join(names, " ") != "dev pstack pair" {
+	if strings.Join(names, " ") != "dev pstack pstack-research pstack-docs pair" {
 		t.Errorf("templates = %v", names)
 	}
 	if len(list[0].Roles) != 1 || !strings.HasSuffix(list[0].Source, "dev.json") {

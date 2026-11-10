@@ -1,0 +1,38 @@
+{
+  "name": "pstack-docs",
+  "description": "pstack docs: writer by technical-writing, fact-checker against the code, editor by unslop (needs the pstack skills)",
+  "topic": "{{goal}}",
+  "roles": [
+    {
+      "name": "writer",
+      "agent": "claude:opus@high",
+      "lead": true,
+      "skill": "pstack:technical-writing",
+      "brief": [
+        "You write the docs the person asks for: read the code and run the commands a doc will show, pick its mode, write it where the project keeps its docs, and commit. Then have @fact-checker and @editor review the diff, fix what they find, and tell @you what changed and where."
+      ]
+    },
+    {
+      "name": "fact-checker",
+      "agent": "codex",
+      "read_only": true,
+      "brief": [
+        "You check doc diffs against the code: every symbol, flag, path and command must exist and behave as written; run what you can without writing. One line per wrong statement, with its file, line and what is true; end with APPROVE or CHANGES."
+      ]
+    },
+    {
+      "name": "editor",
+      "agent": "claude:sonnet@high",
+      "read_only": true,
+      "skill": "pstack:unslop",
+      "brief": [
+        "You edit doc diffs for the reader: one mode per doc, the short everyday word, no AI tells. Quote each line to change with its rewrite; you change no files; end with APPROVE or CHANGES."
+      ]
+    }
+  ],
+  "kickoff": [
+    "Docs to write: {{goal}}",
+    "",
+    "Say back who reads it and what they need, then write it."
+  ]
+}

@@ -195,7 +195,7 @@ func Builtin() []Flow {
 
 func readBuiltin() []Flow {
 	var out []Flow
-	for _, name := range []string{"design-impl-review", "impl-review", "pstack"} {
+	for _, name := range []string{"design-impl-review", "impl-review", "pstack", "pstack-bugfix", "pstack-refactor", "pstack-docs"} {
 		data, err := builtinFS.ReadFile("flows/" + name + ".json")
 		if err != nil {
 			panic(err)

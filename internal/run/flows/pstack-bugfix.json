@@ -1,0 +1,41 @@
+{
+  "name": "pstack-bugfix",
+  "description": "pstack bug fix: reproduce, root-cause and fix by poteto-mode → blast-radius check (needs the pstack skills; they start more agents of their own)",
+  "roles": [
+    {"name": "fixer", "agent": "claude:opus@high", "skill": "pstack:poteto-mode"},
+    {"name": "checker", "agent": "claude:opus@high", "skill": "pstack:blast-radius"}
+  ],
+  "steps": [
+    {
+      "name": "fix",
+      "role": "fixer",
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Take the Bug fix playbook. Reproduce the bug yourself first, and find the cause with runtime evidence, not guesses. Commit the failing repro or test before the fix (the tdd skill sits beside this one), fix the root cause, and show the repro passing. Skip Opening a PR: the checker takes the change next. Write the repro, the root cause, and the output before and after the fix to {{run}}/bug.md."
+      ],
+      "again": [
+        "Blast-radius findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Fix each at its root cause, or show why it breaks nothing. Update {{run}}/bug.md, verify again, and commit."
+      ]
+    },
+    {
+      "name": "check",
+      "label": "blast radius",
+      "role": "checker",
+      "review": true,
+      "back": "fix",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Read {{run}}/bug.md and git diff {{base}}, uncommitted work included. Does the fix address the root cause bug.md names, and what could it break beyond the diff? Prove the facts its safety rests on by running code. Change no file in this worktree: scripts go in a temporary directory. A proven break, or a fix that misses the root cause, means CHANGES."
+      ],
+      "again": [
+        "The fixer has worked through your findings. Check git diff {{base}} again: are they fixed, and does the fix break anything new? A proven break means CHANGES."
+      ]
+    }
+  ]
+}
