@@ -148,6 +148,10 @@ final class ChannelMappingTests: XCTestCase {
         XCTAssertFalse(folded(msg(1, "builder", long, mentions: ["you"])))
         XCTAssertTrue(folded(msg(1, "builder", "write to me@you.com " + long)), "an address is not an @you")
         XCTAssertTrue(folded(msg(1, "builder", "@younger " + long)), "nor @younger")
+        // an answer to one of the person's messages is addressed to them: whole
+        func foldedAfter(_ first: BusMessage, _ m: BusMessage) -> Bool { bubbles(screen([first, m])).first { $0.id == m.seq }?.fold != nil }
+        XCTAssertFalse(foldedAfter(msg(1, "you", "@builder done yet?"), msg(2, "builder", long, replyTo: 1)), "a reply to the person")
+        XCTAssertTrue(foldedAfter(msg(1, "architect", "status?"), msg(2, "builder", long, replyTo: 1)), "a reply to another agent folds")
     }
 
     func testAnAgentsMessagesInADMWithThePersonStayWhole() throws {
