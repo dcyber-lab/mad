@@ -8,8 +8,8 @@ package bus
 // Receipt states of one target, each implying the ones before it.
 const (
 	RcWaiting   = "waiting"   // not yet delivered to the agent
-	RcDelivered = "delivered" // in a digest sent to it
-	RcRead      = "read"      // it read the channel past the message
+	RcDelivered = "delivered" // kept for older readers; Receipts no longer says it (see RcRead)
+	RcRead      = "read"      // it read the channel past the message, or got the message whole in a digest
 	RcReplied   = "replied"   // it answered the message, or mentioned the person after it
 )
 
@@ -73,10 +73,10 @@ func Receipts(channel string, n int) ([]Receipt, error) {
 			switch {
 			case ans.answered(i, m, id):
 				st = RcReplied
-			case cu.Read >= m.Seq:
+			// A digest carries a message that wakes the agent in full, and is
+			// typed in as its turn: delivered is read.
+			case cu.Read >= m.Seq, cu.Delivered >= m.Seq:
 				st = RcRead
-			case cu.Delivered >= m.Seq:
-				st = RcDelivered
 			}
 			r.Targets = append(r.Targets, Target{id, st})
 		}

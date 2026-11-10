@@ -263,6 +263,26 @@ final class WebMenuTests: XCTestCase {
         XCTAssertEqual(asked, [.view(.newchannel), .view(.newteam)])
     }
 
+    /// 新群聊 and 新团队 are native too when the app can make them: each calls its own, and none opens the page.
+    func testNewChannelAndNewTeamOpenNativelyWhenTheAppCanMakeThem() {
+        var asked: [WebTarget] = []
+        var called: [String] = []
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: nil, openWeb: { asked.append($0) },
+                                             newChat: { called.append("chat") }, newChannel: { called.append("channel") },
+                                             newTeam: { called.append("team") })
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(called, ["chat", "channel", "team"])
+        XCTAssertEqual(asked, [])
+    }
+
+    /// Each one falls back to the page alone: the app that cannot make a team still makes a group.
+    func testEachNativePageFallsBackToItsOwnPage() {
+        var asked: [WebTarget] = []
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: nil, openWeb: { asked.append($0) }, newChannel: {})
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(asked, [.view(.newchat), .view(.newteam)])
+    }
+
     func testThePlusMenuHasNewChatChannelAndTeam() {
         XCTAssertEqual(HomeNewItem.allCases.map(\.title), ["新对话", "新群聊", "新团队"])
     }

@@ -291,4 +291,24 @@ final class AgentMappingTests: XCTestCase {
         XCTAssertEqual(late.state, .stopped, "still working long after the start")
         XCTAssertEqual(late.entries.count, 1, "the person's message stays")
     }
+
+    private func item(_ json: String) throws -> InboxItem {
+        try JSONDecoder().decode(InboxItem.self, from: Data(json.utf8))
+    }
+
+    /// The card's head says what is asked in words, never the server's code name (AskUserQuestion, Bash, needs you).
+    func testTheAskCardsHeadIsInWordsNeverACodeName() throws {
+        let question = try item(#"{"key":"k","kind":"question","agent":"a","title":"t","context":"AskUserQuestion","text":"Which?","acts":[{"verb":"answer","label":"A","option":"A"}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(question), "想问你")
+        let bash = try item(#"{"key":"k","kind":"permission","agent":"a","title":"t","context":"Bash","text":"ls","mono":true,"acts":[{"verb":"allow","label":"Allow","row":true}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(bash), "想运行一条命令")
+        let tui = try item(#"{"key":"k","kind":"permission","agent":"a","title":"t","context":"Bash","text":"Do you want to proceed?","body":"rm -rf build/","full":true,"acts":[{"verb":"allow","label":"Yes","option":"Yes"}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(tui), "想运行一条命令")
+        let edit = try item(#"{"key":"k","kind":"permission","agent":"a","title":"t","context":"Edit","acts":[{"verb":"allow","label":"Allow","row":true}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(edit), "想用 Edit")
+        let needs = try item(#"{"key":"k","kind":"plan","agent":"a","title":"t","context":"needs you","acts":[{"verb":"allow","label":"Approve","row":true}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(needs), "在等你")
+        let bare = try item(#"{"key":"k","kind":"","agent":"a","title":"t","acts":[{"verb":"seen","label":"x"}]}"#)
+        XCTAssertEqual(AgentMapping.askTitle(bare), "在等你")
+    }
 }

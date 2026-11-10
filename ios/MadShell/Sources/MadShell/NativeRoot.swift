@@ -52,6 +52,9 @@ public struct NativeRoot: View {
     /// 新对话 is native: the detail shows it (the Mac's pane, the iPhone's screen over the list), when the server can
     /// start agents for the app.
     private var newChat: (() -> Void)? { api is NewChatAPI ? { selection = HomeRow.newChatID } : nil }
+    /// 新群聊 and 新团队 are native the same way.
+    private var newChannel: (() -> Void)? { api is NewChannelAPI ? { selection = HomeRow.newChannelID } : nil }
+    private var newTeam: (() -> Void)? { api is NewTeamAPI ? { selection = HomeRow.newTeamID } : nil }
 
     private var actions: HomeActions {
         let act: (String, String, String?) -> Void = { item, act, text in Task { await self.act(item: item, act: act, text: text) } }
@@ -59,10 +62,10 @@ public struct NativeRoot: View {
         #if os(macOS)
         // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
-                                newChat: newChat, act: act, interrupt: interrupt)
+                                newChat: newChat, newChannel: newChannel, newTeam: newTeam, act: act, interrupt: interrupt)
         #else
-        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, newChat: newChat, act: act,
-                                interrupt: interrupt)
+        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, newChat: newChat, newChannel: newChannel,
+                                newTeam: newTeam, act: act, interrupt: interrupt)
         #endif
     }
 
@@ -71,13 +74,20 @@ public struct NativeRoot: View {
     /// needs nothing of the app: the list filters itself.
     static func homeActions(open: @escaping (HomeRow.ID) -> Void, switchMac: (() -> Void)?,
                             openWeb: ((WebTarget) -> Void)?, openPhone: (() -> Void)? = nil, newChat: (() -> Void)? = nil,
+                            newChannel: (() -> Void)? = nil, newTeam: (() -> Void)? = nil,
                             act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                             interrupt: @escaping (String) -> Void = { _ in }) -> HomeActions {
         HomeActions(
             open: open,
             switchMac: { switchMac?() },
             create: { item in
-                if item == .chat, let newChat { newChat() } else { openWeb?(.view(Self.webView(forNew: item))) }
+                // the native page when the app has one, else the page's dialog
+                let native: (() -> Void)? = switch item {
+                case .chat: newChat
+                case .channel: newChannel
+                case .team: newTeam
+                }
+                if let native { native() } else { openWeb?(.view(Self.webView(forNew: item))) }
             },
             menu: { item in
                 if item == .switchMac { switchMac?() }
@@ -96,6 +106,15 @@ public struct NativeRoot: View {
         await store.refresh()
         handovers.add(chat)
         selection = chat.id
+    }
+
+    /// A team was started from 新团队: the deck has it before its channel opens; what went not quite right is said in the
+    /// notice.
+    @MainActor
+    private func newTeamStarted(_ team: StartedTeam) async {
+        await store.refresh()
+        notice = team.notes.isEmpty ? nil : team.notes.joined(separator: "\n")
+        selection = team.channel
     }
 
     /// An act on what waits, from the list or Today: the item as the deck says now (one answered meanwhile sends
@@ -161,7 +180,7 @@ public struct NativeRoot: View {
 
     /// Whether the row's own view draws its head and way back (a channel, an agent, Usage): the iPhone's bar stays out of it.
     private func drawsOwnHead(_ id: HomeRow.ID) -> Bool {
-        id == HomeRow.usageID || id == HomeRow.newChatID || store.channel(id: id) != nil || store.agent(id: id) != nil
+        id == HomeRow.usageID || id == HomeRow.newChatID || id == HomeRow.newChannelID || id == HomeRow.newTeamID || store.channel(id: id) != nil || store.agent(id: id) != nil
     }
 
     /// On the Mac: whether a channel's or an agent's head is on screen (the link's note then goes in it).
@@ -172,7 +191,8 @@ public struct NativeRoot: View {
         MacShell(model: model, selection: $selection, actions: actions, link: store.link,
                  rowOpen: selection.map { rowOpen($0) } ?? false) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb, home: model, homeActions: actions,
-                   handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted)
+                   handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted,
+                   newTeamStarted: newTeamStarted)
         }
         // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
         .environment(\.madLinkNote, LinkNote.message(for: store.link))
@@ -186,7 +206,8 @@ public struct NativeRoot: View {
         if let id = selection {
             NavigationStack {
                 Detail(selection: id, api: api, onBack: { selection = nil }, open: { selection = $0 }, openWeb: openWeb, home: model,
-                       homeActions: actions, handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted)
+                       homeActions: actions, handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted,
+                       newTeamStarted: newTeamStarted)
                     // a channel and an agent draw their own head, with their own way back
                     .toolbar(drawsOwnHead(id) ? .hidden : .automatic, for: .navigationBar)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { if !drawsOwnHead(id) { Button { selection = nil } label: { Image(systemName: "chevron.backward") } } } }
@@ -215,6 +236,7 @@ struct Detail: View {
     var handovers = Handovers()
     var tookHandover: (String) -> Void = { _ in }
     var newChatStarted: ((StartedChat) async -> Void)?
+    var newTeamStarted: ((StartedTeam) async -> Void)?
 
     var body: some View {
         if let id = selection, id != HomeRow.todayID {
@@ -222,6 +244,10 @@ struct Detail: View {
                 UsageDetail(api: api, onBack: onBack, open: open)
             } else if id == HomeRow.newChatID, let starter = api as? NewChatAPI {
                 newChat(starter)
+            } else if id == HomeRow.newChannelID, let maker = api as? NewChannelAPI {
+                newChannel(maker)
+            } else if id == HomeRow.newTeamID, let starter = api as? NewTeamAPI {
+                newTeam(starter)
             } else if store.channel(id: id) != nil {
                 ChannelDetail(id: id, api: api, onBack: onBack, openAgent: open)
                     .id(id) // another channel is another store
@@ -240,6 +266,26 @@ struct Detail: View {
     @ViewBuilder private func newChat(_ starter: NewChatAPI) -> some View {
         NewChatDetail(api: starter, projects: store.deck?.projects ?? [], started: { chat in
             if let newChatStarted { await newChatStarted(chat) } else { open(chat.id) }
+        }, onBack: onBack)
+        #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+        #endif
+    }
+
+    /// The deck has the new channel before it opens.
+    @ViewBuilder private func newChannel(_ maker: NewChannelAPI) -> some View {
+        NewChannelDetail(api: maker, candidates: store.deck?.groupCandidates ?? [], created: { id in
+            await store.refresh()
+            open(id)
+        }, onBack: onBack)
+        #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+        #endif
+    }
+
+    @ViewBuilder private func newTeam(_ starter: NewTeamAPI) -> some View {
+        NewTeamDetail(api: starter, projects: store.deck?.projects ?? [], started: { team in
+            if let newTeamStarted { await newTeamStarted(team) } else { await store.refresh(); open(team.channel) }
         }, onBack: onBack)
         #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
