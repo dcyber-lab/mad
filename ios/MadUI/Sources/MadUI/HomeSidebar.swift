@@ -62,7 +62,7 @@ public struct HomeSidebar: View {
             .onChange(of: selection) { _, id in if let id { actions.open(id) } }
             .confirmationDialog(Lf("删除“%@”？", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                                 titleVisibility: .visible, presenting: deleting) { row in
-                Button(L("删除"), role: .destructive) { actions.remove?(row.id) }
+                Button(L("删除"), role: .destructive) { if let id = row.removableAgentID { actions.remove?(id) } }
                 Button(L("取消"), role: .cancel) {}
             } message: { _ in
                 Text(L("它会停止，并从 mad 里移除。"))
@@ -77,7 +77,7 @@ public struct HomeSidebar: View {
         // a stopped session stays when it is the one open
         let shown = section.rows.filter { !(hideStopped && $0.kind == .agent && $0.state == .stopped && $0.id != selection) }
         return ForEach(shown) { row in
-            SidebarRow(row: row, menu: actions.remove == nil || row.kind != .agent ? nil : { deleting = row })
+            SidebarRow(row: row, menu: actions.remove == nil || row.removableAgentID == nil ? nil : { deleting = row })
                 .tag(row.id)
                 .listRowSeparator(.hidden)
         }
