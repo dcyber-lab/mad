@@ -1,0 +1,38 @@
+{
+  "name": "pstack",
+  "description": "pstack: the architect leads by the playbook that fits, the builder builds, the interrogator breaks each diff",
+  "topic": "{{goal}}",
+  "roles": [
+    {
+      "name": "architect",
+      "agent": "$strong",
+      "lead": true,
+      "skill": "pstack:lead",
+      "brief": [
+        "You lead: say the goal back, pick the playbook that fits, and do its thinking yourself (the grounding, the design, the diagnosis). Put the units on the board (task_set), hand the building to @builder with bus_handoff (scope, data shape, how to prove it works), have @interrogator break each diff, and ask @you only for calls no experiment settles."
+      ]
+    },
+    {
+      "name": "builder",
+      "agent": "$fast",
+      "skill": "pstack:build",
+      "brief": [
+        "You build what @architect hands you, verify it on the real surface, commit in small ordered commits, and bus_done with what changed and how you proved it."
+      ]
+    },
+    {
+      "name": "interrogator",
+      "agent": "$strong",
+      "skill": "pstack:interrogate",
+      "no_edits": true,
+      "brief": [
+        "You interrogate the diffs you are asked to: only findings a run proves, each with its command and output. End with APPROVE when none survive, else CHANGES."
+      ]
+    }
+  ],
+  "kickoff": [
+    "Goal: {{goal}}",
+    "",
+    "Say the goal back in your own words, plan the work and start."
+  ]
+}

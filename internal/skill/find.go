@@ -15,8 +15,10 @@ import (
 
 // A role in a run or a team can work by a skill: its message tells the
 // agent where the skill's SKILL.md is, and to read and follow it. A
-// skill is named as claude names it, "name" or "plugin:name" for a
-// plugin's; codex has the plugin's skills copied, by their own name.
+// pack's skill, "pack:name", is found by package pack and copied for the
+// run or the team. Any other is one the agent has itself, found here: it
+// is named as claude names it, "name" or "plugin:name" for a plugin's;
+// codex has the plugin's skills copied, by their own name.
 
 var refRe = sync.OnceValue(func() *regexp.Regexp {
 	return regexp.MustCompile(`^([a-z0-9][a-z0-9-]*:)?[a-z0-9][a-z0-9-]*$`)
@@ -25,7 +27,7 @@ var refRe = sync.OnceValue(func() *regexp.Regexp {
 // CheckRef says what is wrong with a skill's name in a template, or nil.
 func CheckRef(ref string) error {
 	if !refRe().MatchString(ref) {
-		return fmt.Errorf("skill %q: a skill's name, or plugin:name for a claude plugin's", ref)
+		return fmt.Errorf("skill %q: a skill's name, pack:name for a pack's, or plugin:name for a claude plugin's", ref)
 	}
 	return nil
 }

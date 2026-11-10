@@ -2,6 +2,7 @@ package run
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -78,6 +79,9 @@ func NewForm(dir string) error {
 	f.task.Focus()
 	f.checks = precheck(root)
 	flows, err := Flows(root)
+	if len(flows) == 0 {
+		return errors.Join(errors.New("no flow to run by here (mad pack ls)"), err)
+	}
 	f.flows = flows
 	if err != nil {
 		for _, line := range strings.Split(err.Error(), "\n") {
@@ -285,11 +289,12 @@ func (f *form) View() string {
 	add(" " + head + strings.Repeat(" ", max(w-lipgloss.Width(head)-12, 1)) + fDim.Render("esc cancel"))
 	add(" " + rule)
 	fl := f.flows[f.flow]
+	// A flow or a pack kept in the project's .mad/ or in mad's config.
 	where := ""
 	switch {
-	case strings.HasPrefix(fl.Source, ProjectFlows(f.root)):
+	case strings.HasPrefix(fl.Source, filepath.Join(f.root, ".mad")+string(filepath.Separator)):
 		where = " (the project's)"
-	case strings.HasPrefix(fl.Source, UserFlows()):
+	case strings.HasPrefix(fl.Source, paths.ConfigDir()+string(filepath.Separator)):
 		where = " (yours)"
 	}
 	add(" " + label(fieldFlow, "flow") + textutil.PadRight(choice(fieldFlow, fl.Name), 34) + fDim.Render(fl.Description+where))

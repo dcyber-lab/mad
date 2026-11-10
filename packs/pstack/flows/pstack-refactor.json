@@ -1,0 +1,65 @@
+{
+  "name": "pstack-refactor",
+  "description": "pstack refactor: pin today's behavior → name the target shape → reshape in small steps → blast radius",
+  "roles": [
+    {"name": "architect", "agent": "$strong", "skill": "pstack:refactor"},
+    {"name": "builder", "label": "refactorer", "agent": "$fast", "skill": "pstack:refactor"},
+    {"name": "checker", "agent": "$strong", "skill": "pstack:blast-radius", "no_edits": true}
+  ],
+  "steps": [
+    {
+      "name": "pin",
+      "role": "architect",
+      "expect": {"files": ["{{run}}/pin.md"], "commit": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Pin part: learn the contract of the code this task reshapes, pin today's behavior with characterization tests, snapshots or an equivalence harness, and commit the pin alone. Write {{run}}/pin.md: what is pinned and what is not, the command that runs the pin, and its output now. Move no structure."
+      ]
+    },
+    {
+      "name": "shape",
+      "role": "architect",
+      "gate": true,
+      "expect": {"files": ["{{run}}/shape.md"], "unchanged": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Shape part: write {{run}}/shape.md in its sections (Today, Missing structure, Target, What goes, Steps, Reader load). The refactorer reads only that file and {{run}}/pin.md, so leave nothing to guess. Move no structure."
+      ]
+    },
+    {
+      "name": "reshape",
+      "role": "builder",
+      "ask": ["architect"],
+      "expect": {"commit": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Reshape part toward {{run}}/shape.md: subtract first, then move in small steps, running the pin ({{run}}/pin.md has its command) after each. Do not touch the pin's tests or {{run}}/. Commit in order: the subtraction, the reshape, the cleanup."
+      ],
+      "again": [
+        "Blast-radius findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Rerun each finding's command first. Fix each real one, or show why behavior is unchanged. Keep the pin green, and commit."
+      ]
+    },
+    {
+      "name": "check",
+      "label": "blast radius",
+      "role": "checker",
+      "review": true,
+      "back": "reshape",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "This change must not change behavior. Read {{run}}/pin.md, {{run}}/shape.md and git diff {{base}}, uncommitted work included. Its own claim first: run the pin, and see that its tests are as the architect committed them. Then find what the pin does not cover and the change could break: callers named in strings, docs, config, other packages. Say too whether reader load went down. A change in behavior that a run proves means CHANGES."
+      ],
+      "again": [
+        "The refactorer has worked through your findings. Rerun each one's command and the pin, then check git diff {{base}} again: is behavior still unchanged? A change that a run proves means CHANGES."
+      ]
+    }
+  ]
+}

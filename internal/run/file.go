@@ -35,9 +35,16 @@ func RelDir(r *state.Run) string { return filepath.Join(".mad", "runs", r.Name) 
 // Dir is where run r keeps its files.
 func Dir(r *state.Run) string { return filepath.Join(r.Dir, RelDir(r)) }
 
+// skillsDir is where a run whose directory is dir keeps the skills of
+// the packs its roles work by, as they were when it started.
+func skillsDir(dir string) string { return filepath.Join(dir, "skills") }
+
 // Spec is what a run was asked to do.
 type Spec struct {
 	Flow string `json:"flow"`
+	// Pack is the pack the flow is from, with its version, for the
+	// record: "pstack 0.1.0".
+	Pack string `json:"pack,omitempty"`
 	// Definition is the flow as it was when the run started, which the
 	// run follows whatever becomes of its file.
 	Definition *Flow  `json:"definition,omitempty"`

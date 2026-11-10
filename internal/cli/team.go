@@ -30,7 +30,8 @@ const teamUsage = `usage:
   mad team rm NAME         end the team: agents removed, channel archived
   mad team check [FILE…]   check template files (default: every template here)
 Templates are JSON files in .mad/teams/ (the project's) and ~/.config/mad/teams/
-(yours); "mad team ls" shows the built in one to start from.
+(yours), and in packs (mad pack ls); "mad team ls" shows the built in ones to
+start from.
 `
 
 // teamCmd is `mad team ...`.

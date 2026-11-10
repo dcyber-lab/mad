@@ -19,6 +19,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -87,6 +88,23 @@ func fakeRole() {
 		case strings.Contains(msg, "· no one to ask]"):
 			_ = os.WriteFile("made.txt", []byte("probed\n"), 0o644)
 			reply = "Probed it.\nVERDICT: APPROVE"
+		// TestRunByAPack's flow: the scout leaves a file behind that it must
+		// not, and takes it away when told; the vetter wants one round more.
+		case strings.Contains(msg, "· scout · not finished]"):
+			_ = os.Remove("stray.txt")
+			reply = "Took it away.\nDONE"
+		case strings.Contains(msg, "· scout]") && strings.Contains(msg, "Review findings"):
+			reply = "Looked again.\nDONE"
+		case strings.Contains(msg, "· scout]"):
+			name := strings.Fields(strings.TrimPrefix(msg, "[mad run "))[0]
+			_ = os.MkdirAll(filepath.Join(".mad", "runs", name), 0o755)
+			_ = os.WriteFile(filepath.Join(".mad", "runs", name, "found.md"), []byte("found\n"), 0o644)
+			_ = os.WriteFile("stray.txt", []byte("left behind\n"), 0o644)
+			reply = "Found it.\nDONE"
+		case strings.Contains(msg, "· vet]") && strings.Contains(msg, "after your last review"):
+			reply = "Fine now.\nVERDICT: APPROVE"
+		case strings.Contains(msg, "· vet]"):
+			reply = "- found.md is thin\nVERDICT: CHANGES"
 		case strings.Contains(msg, "· question]"):
 			reply = "Yes, keep the old format.\nDONE"
 		case strings.Contains(msg, "· design]"):
@@ -395,6 +413,109 @@ func TestRunChecks(t *testing.T) {
 	}
 }
 
+// A run by a flow of a pack, on a real tmux server with fake roles: the
+// run keeps the pack's skills and tells its roles where; a step that must
+// leave the worktree as it found it is sent back when it does not; a
+// review's gate holds when it lets the work through, not when it sends
+// the work back.
+func TestRunByAPack(t *testing.T) {
+	repo := fakeDeck(t)
+	dir := filepath.Join(pack.UserDir(), "house")
+	for name, body := range map[string]string{
+		"pack.json":            `{"name": "house", "version": "2", "agents": {"main": "claude:sonnet"}}`,
+		"skills/look/SKILL.md": "Look before you leap; `./more.md` says how.\n",
+		"skills/look/more.md":  "Closely.\n",
+		"flows/scouting.json": `{"name": "scouting",
+			"roles": [{"name": "scout", "agent": "$main", "skill": "house:look"}, {"name": "vetter", "agent": "$main"}],
+			"steps": [
+				{"name": "scout", "role": "scout", "prompt": "Find it: {{task}}", "expect": {"files": ["{{run}}/found.md"], "unchanged": true}},
+				{"name": "vet", "role": "vetter", "prompt": "Vet {{run}}/found.md.", "review": true, "back": "scout", "gate": true}
+			]}`,
+	} {
+		if err := paths.WriteFileAtomic(filepath.Join(dir, filepath.FromSlash(name)), []byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := Create(Options{Project: repo, Flow: "scouting", Task: "find the thing", Gate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"SKILL.md", "more.md"} {
+		if _, err := os.Stat(filepath.Join(Dir(r), "skills", "house", "look", name)); err != nil {
+			t.Errorf("the run did not keep the skill's %s", name)
+		}
+	}
+	if out, _ := exec.Command("git", "-C", r.Dir, "status", "--porcelain").Output(); len(out) != 0 {
+		t.Errorf("the run's skills show in git status: %s", out)
+	}
+	done := make(chan error, 1)
+	go func() { done <- Exec(r.ID, io.Discard) }()
+	// The only stop is the gate of the review that approves.
+	for end := time.Now().Add(3 * time.Minute); ; time.Sleep(100 * time.Millisecond) {
+		if f, err := Load(Dir(r)); err == nil && f.Progress.Status == Waiting {
+			if !strings.Contains(f.Progress.Waiting, "the vet is done: look it over") {
+				t.Fatalf("waiting for %q", f.Progress.Waiting)
+			}
+			if n := len(f.Progress.Entries); n != 4 {
+				t.Fatalf("the gate held after %d steps: %+v", n, f.Progress.Entries)
+			}
+			break
+		}
+		if time.Now().After(end) {
+			f, _ := Load(Dir(r))
+			t.Fatalf("never stopped at the review's gate: %+v", f.Progress)
+		}
+	}
+	if err := Command(r, Continue); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Minute):
+		f, _ := Load(Dir(r))
+		t.Fatalf("run never ended: %+v", f.Progress)
+	}
+
+	f, _ := Load(Dir(r))
+	var got []string
+	for _, e := range f.Progress.Entries {
+		got = append(got, fmt.Sprintf("%s/%d/%s", e.Step, e.Round, e.Status))
+	}
+	if f.Progress.Status != Done || strings.Join(got, " ") != "scout/1/done vet/1/changes scout/2/done vet/2/approve" {
+		t.Fatalf("status %s, steps %v", f.Progress.Status, got)
+	}
+	if f.Spec.Pack != "house 2" {
+		t.Errorf("the run's pack = %q", f.Spec.Pack)
+	}
+	if _, err := os.Stat(filepath.Join(r.Dir, "stray.txt")); err == nil {
+		t.Error("what the scout left behind is still there")
+	}
+	sent, _ := os.ReadFile(filepath.Join(os.Getenv("XDG_STATE_HOME"), "fake-messages"))
+	for _, want := range []string{
+		"Work by the skill house:look: read .mad/runs/find-the-thing/skills/house/look/SKILL.md in full before you start",
+		"When you end, mad checks that the worktree is as you found it (what you make goes in .mad/runs/find-the-thing/), .mad/runs/find-the-thing/found.md is written.",
+		"The scout is not finished:\n- the worktree is not as this step found it (changed files: stray.txt): undo that",
+		"Keep working by the skill house:look (.mad/runs/find-the-thing/skills/house/look/SKILL.md)",
+	} {
+		if !strings.Contains(string(sent), want) {
+			t.Errorf("no message says %q:\n%s", want, sent)
+		}
+	}
+	if n := strings.Count(string(sent), "in full before you start"); n != 1 {
+		t.Errorf("the scout was told to read its skill in full %d times", n)
+	}
+	log, _ := os.ReadFile(logPath(Dir(r)))
+	if !strings.Contains(string(log), "run created, by the flow scouting of pack house 2: find the thing") {
+		t.Errorf("log:\n%s", log)
+	}
+	if n := strings.Count(string(log), "waiting for you: the vet is done"); n != 1 {
+		t.Errorf("the review's gate held %d times:\n%s", n, log)
+	}
+}
+
 // A runner stopped after it sent a step but before it noted so (killed,
 // the machine down): the one started again sees the agent took the step,
 // and waits for its reply instead of sending it a second time.
@@ -563,8 +684,8 @@ func TestCommands(t *testing.T) {
 	}
 }
 
-// A role that works by a skill is told where its agent finds it, and a
-// run refuses to start when it is not there.
+// A role that works by a skill its agent has is told where the agent
+// finds it, and a run refuses to start when it is nowhere.
 func TestSkill(t *testing.T) {
 	home, _ := filepath.EvalSymlinks(t.TempDir())
 	t.Setenv("HOME", home)
@@ -577,12 +698,23 @@ func TestSkill(t *testing.T) {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
-	f, ok := FlowByName("", "pstack")
-	if !ok {
-		t.Fatal("no built-in pstack flow")
+	// The plugin pstack's skills, which the pack pstack does not have: the
+	// agent's own are looked for.
+	if err := paths.WriteFileAtomic(filepath.Join(UserFlows(), "plugin.json"), []byte(`{"name": "plugin",
+		"roles": [{"name": "architect", "agent": "claude:opus", "skill": "pstack:poteto-help"},
+		          {"name": "builder", "agent": "claude:sonnet", "skill": "pstack:poteto-mode"},
+		          {"name": "interrogator", "agent": "claude:opus", "skill": "pstack:ketchup", "no_edits": true}],
+		"steps": [{"name": "design", "role": "architect", "prompt": "Design {{task}}."},
+		          {"name": "implement", "role": "builder", "prompt": "Build it."},
+		          {"name": "review", "role": "interrogator", "prompt": "Break it.", "review": true, "back": "implement"}]}`)); err != nil {
+		t.Fatal(err)
 	}
-	_, err := Create(Options{Project: repo, Flow: "pstack", Task: "add an audit log"})
-	if err == nil || !strings.Contains(err.Error(), "role builder works by the skill pstack:poteto-mode, which claude does not find here") {
+	f, ok := FlowByName(repo, "plugin")
+	if !ok {
+		t.Fatal("no plugin flow")
+	}
+	_, err := Create(Options{Project: repo, Flow: "plugin", Task: "add an audit log"})
+	if err == nil || !strings.Contains(err.Error(), "role builder works by the skill pstack:poteto-mode, which no pack here has and claude does not find") {
 		t.Fatalf("started without its skills: %v", err)
 	}
 	if out, _ := exec.Command("git", "-C", repo, "worktree", "list").Output(); strings.Count(string(out), "\n") != 1 {
@@ -590,7 +722,7 @@ func TestSkill(t *testing.T) {
 	}
 
 	plugin := filepath.Join(home, ".claude/plugins/cache/m/pstack/1")
-	for _, name := range []string{"architect", "poteto-mode", "interrogate"} {
+	for _, name := range []string{"poteto-help", "poteto-mode", "ketchup"} {
 		p := filepath.Join(plugin, "skills", name, "SKILL.md")
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -607,7 +739,7 @@ func TestSkill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := CheckSkills(f.WithAgents(map[string]string{"interrogator": "codex"}).Roles, repo); err == nil ||
-		!strings.Contains(err.Error(), "role interrogator works by the skill pstack:interrogate, which codex does not find here") {
+		!strings.Contains(err.Error(), "role interrogator works by the skill pstack:ketchup, which no pack here has and codex does not find") {
 		t.Errorf("codex has no copy: %v", err)
 	}
 
@@ -615,7 +747,7 @@ func TestSkill(t *testing.T) {
 		f: &File{Spec: Spec{Task: "add an audit log", Base: "abc123"}, Progress: Progress{Round: 1}}}
 	role := func(name string) Role { r, _ := f.Role(name); return r }
 	design := x.prompt(f.Steps[0], role("architect"))
-	if want := "Work by the skill pstack:architect: read " + filepath.Join(plugin, "skills/architect/SKILL.md") + " in full"; !strings.Contains(design, want) {
+	if want := "Work by the skill pstack:poteto-help: read " + filepath.Join(plugin, "skills/poteto-help/SKILL.md") + " in full"; !strings.Contains(design, want) {
 		t.Errorf("design prompt lacks %q:\n%s", want, design)
 	}
 	x.f.Progress.Rounds = map[string]int{"review": 2}
@@ -632,13 +764,69 @@ func TestSkill(t *testing.T) {
 	if p := x.prompt(f.Steps[0], role("architect")); strings.Contains(p, "Work by the skill") {
 		t.Errorf("a skill that is gone:\n%s", p)
 	}
-	if log, _ := os.ReadFile(filepath.Join(x.dir, "log")); !strings.Contains(string(log), "the architect works by the skill pstack:architect, which is no longer found") {
+	if log, _ := os.ReadFile(filepath.Join(x.dir, "log")); !strings.Contains(string(log), "the architect works by the skill pstack:poteto-help, which is no longer found") {
 		t.Errorf("log: %s", log)
 	}
 
 	if _, err := Parse([]byte(`{"name":"x","roles":[{"name":"a","agent":"claude","skill":"Poteto Mode"}],"steps":[{"name":"s","role":"a","prompt":"p"}]}`)); err == nil ||
 		!strings.Contains(err.Error(), `role a: skill "Poteto Mode"`) {
 		t.Errorf("a bad skill name: %v", err)
+	}
+}
+
+// A role that works by a pack's skill needs nothing installed: the run
+// keeps the pack's skills in its directory, whoever plays the role reads
+// its skill there, and reads it in full once.
+func TestPackSkill(t *testing.T) {
+	home, _ := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	repo := filepath.Join(home, "repo")
+	f, ok := FlowByName("", "pstack-bugfix")
+	if !ok || f.Pack != "pstack 0.1.0" || f.Source != "built in" {
+		t.Fatalf("pstack-bugfix = %+v %v", f, ok)
+	}
+	if err := CheckSkills(f.WithAgents(map[string]string{"fixer": "codex"}).Roles, repo); err != nil {
+		t.Fatalf("a pack's skills are there for any agent: %v", err)
+	}
+	r := &state.Run{Name: "audit", Dir: repo}
+	if err := KeepSkills(f.Roles, repo, skillsDir(Dir(r))); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"bugfix/SKILL.md", "blast-radius/SKILL.md", "principles/fix-root-causes.md"} {
+		if _, err := os.Stat(filepath.Join(Dir(r), "skills", "pstack", name)); err != nil {
+			t.Errorf("the run did not keep %s", name)
+		}
+	}
+	x := &runner{run: r, flow: f, dir: Dir(r),
+		f: &File{Spec: Spec{Task: "the total is off by one", Base: "abc123"}, Progress: Progress{Round: 1}}}
+	role := func(name string) Role { r, _ := f.Role(name); return r }
+	x.f.Progress.Entries = []Entry{{Step: "reproduce", Role: "fixer", Round: 1, Status: "running"}}
+	first := x.prompt(f.Steps[0], role("fixer"))
+	for _, want := range []string{
+		"Work by the skill pstack:bugfix: read .mad/runs/audit/skills/pstack/bugfix/SKILL.md in full before you start",
+		"Do the skill's Reproduce part.",
+		"When you end, mad checks that .mad/runs/audit/bug.md is written.",
+	} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the first step's message lacks %q:\n%s", want, first)
+		}
+	}
+	// Its second step: the skill is read, and the worktree stays as it is.
+	x.f.Progress.Entries = []Entry{{Step: "reproduce", Role: "fixer", Round: 1, Status: "done", Sent: true}, {Step: "diagnose", Role: "fixer", Round: 1, Status: "running"}}
+	second := x.prompt(f.Steps[1], role("fixer"))
+	if !strings.Contains(second, "Keep working by the skill pstack:bugfix (.mad/runs/audit/skills/pstack/bugfix/SKILL.md)") || strings.Contains(second, "in full") {
+		t.Errorf("the second step's message:\n%s", second)
+	}
+	if want := "When you end, mad checks that the worktree is as you found it (what you make goes in .mad/runs/audit/), .mad/runs/audit/bug.md is written."; !strings.Contains(second, want) {
+		t.Errorf("the second step's message lacks %q:\n%s", want, second)
+	}
+	// The skeptic's first step is its own first.
+	x.f.Progress.Entries = append(x.f.Progress.Entries, Entry{Step: "challenge", Role: "skeptic", Round: 1, Status: "running"})
+	if p := x.prompt(f.Steps[2], role("skeptic")); !strings.Contains(p, "Work by the skill pstack:bugfix: read .mad/runs/audit/skills/pstack/bugfix/SKILL.md in full") {
+		t.Errorf("the skeptic's message:\n%s", p)
 	}
 }
 
@@ -864,7 +1052,7 @@ func TestFlowFiles(t *testing.T) {
 	for _, f := range flows {
 		names = append(names, f.Name+"@"+filepath.Base(f.Source))
 	}
-	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json pstack@built in pstack-bugfix@built in pstack-refactor@built in pstack-docs@built in tdd@tdd.json" {
+	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json pstack-bugfix@built in pstack-docs@built in pstack-feature@built in pstack-perf@built in pstack-refactor@built in tdd@tdd.json" {
 		t.Errorf("flows = %s", got)
 	}
 	tdd, ok := FlowByName(root, "tdd")
@@ -885,6 +1073,68 @@ func TestFlowFiles(t *testing.T) {
 	again, err := Parse(data)
 	if err != nil || again.Steps[0].Prompt != tdd.Steps[0].Prompt || strings.Contains(string(data), `"label"`) {
 		t.Errorf("round trip: %v\n%s", err, data)
+	}
+}
+
+// A pack's flows are listed with mad's own: its roles played by the
+// agents the pack names, one of a built-in flow's name in its place, and
+// a flow file of the user's over both.
+func TestPackFlows(t *testing.T) {
+	home, _ := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	root := filepath.Join(home, "proj")
+	write := func(path, body string) {
+		t.Helper()
+		if err := paths.WriteFileAtomic(path, []byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := filepath.Join(pack.ProjectDir(root), "house")
+	write(filepath.Join(dir, "pack.json"), `{"name": "house", "version": "2", "agents": {"main": "claude:sonnet@high", "second": "codex"}}`)
+	write(filepath.Join(dir, "skills", "care", "SKILL.md"), "Take care.")
+	solo := func(name, agent string) string {
+		return `{"name": "` + name + `", "roles": [{"name": "solo", "agent": "` + agent + `", "skill": "house:care"}], "steps": [{"name": "do", "role": "solo", "prompt": "{{task}}"}]}`
+	}
+	write(filepath.Join(dir, "flows", "z.json"), solo("house-b", "$second"))
+	write(filepath.Join(dir, "flows", "a.json"), solo("house-a", "$main"))
+	write(filepath.Join(dir, "flows", "own.json"), solo("impl-review", "claude:haiku"))
+	write(filepath.Join(dir, "flows", "lost.json"), solo("house-lost", "$third"))
+	write(filepath.Join(UserFlows(), "house-b.json"), solo("house-b", "claude"))
+
+	flows, err := Flows(root)
+	if err == nil || !strings.Contains(err.Error(), "~/proj/.mad/packs/house/flows/lost.json: role solo: agent $third: pack house names no such agent (it names $main, $second)") {
+		t.Errorf("the flow with an agent the pack does not name: %v", err)
+	}
+	var names []string
+	for _, f := range flows {
+		names = append(names, f.Name+"@"+filepath.Base(f.Source)+"@"+f.Pack)
+	}
+	want := "design-impl-review@built in@mad 1 impl-review@own.json@house 2 pstack-bugfix@built in@pstack 0.1.0 pstack-docs@built in@pstack 0.1.0 " +
+		"pstack-feature@built in@pstack 0.1.0 pstack-perf@built in@pstack 0.1.0 pstack-refactor@built in@pstack 0.1.0 house-a@a.json@house 2 house-b@house-b.json@"
+	if got := strings.Join(names, " "); got != want {
+		t.Errorf("flows = %s\nwant    %s", got, want)
+	}
+	a, _ := FlowByName(root, "house-a")
+	if r := a.Roles[0]; r.Agent != "claude:sonnet@high" || r.Kind != "claude" || r.Model != "sonnet" || r.Effort != "high" {
+		t.Errorf("a role played by an agent the pack names: %+v", r)
+	}
+	if err := CheckSkills(a.Roles, root); err != nil {
+		t.Errorf("the pack's own skill: %v", err)
+	}
+	if err := CheckSkills(a.Roles, ""); err == nil || !strings.Contains(err.Error(), "house:care, which no pack here has") {
+		t.Errorf("the project's pack, from outside the project: %v", err)
+	}
+	// As a file by itself: checked as its pack's, and shown with the
+	// agent said, so that a copy works anywhere.
+	if f, err := ReadFile(filepath.Join(dir, "flows", "a.json")); err != nil || f.Pack != "house 2" {
+		t.Errorf("a pack's flow read as a file: %+v, %v", f, err)
+	}
+	if data, _ := Marshal(a); !strings.Contains(string(data), `"agent": "claude:sonnet@high"`) || strings.Contains(string(data), "$main") {
+		t.Errorf("shown as:\n%s", data)
+	}
+	if _, err := Parse([]byte(solo("x", "$main"))); err == nil || !strings.Contains(err.Error(), "agent $main is a name a pack gives an agent, and this flow is in no pack") {
+		t.Errorf("a pack's name for an agent in a flow of no pack: %v", err)
 	}
 }
 

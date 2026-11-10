@@ -10,7 +10,9 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -101,7 +103,7 @@ func TestTemplatesLoadedLikeFlows(t *testing.T) {
 	for _, tp := range list {
 		names = append(names, tp.Name)
 	}
-	if strings.Join(names, " ") != "dev pstack pstack-research pstack-docs pair" {
+	if strings.Join(names, " ") != "dev pstack pstack-docs pstack-research pair" {
 		t.Errorf("templates = %v", names)
 	}
 	if len(list[0].Roles) != 1 || !strings.HasSuffix(list[0].Source, "dev.json") {
@@ -368,14 +370,20 @@ func TestBrief(t *testing.T) {
 	}
 }
 
-// The pstack team needs its skills to start, and each role's brief says
-// where its agent finds its skill.
+// A team whose roles work by skills their agents have needs them to
+// start, and each role's brief says where its agent finds its skill.
 func TestSkill(t *testing.T) {
 	root, spawned, _ := project(t)
 	home := filepath.Dir(root)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	if _, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g"}); err == nil ||
-		!strings.Contains(err.Error(), "role architect works by the skill pstack:poteto-mode, which claude does not find here") {
+	// The plugin pstack's skills, which the pack pstack does not have: the
+	// agent's own are looked for.
+	writeTemplate(t, root, "plugin", `{"name":"plugin","roles":[
+		{"name":"architect","agent":"claude:opus","lead":true,"skill":"pstack:poteto-mode"},
+		{"name":"builder","agent":"claude:sonnet","skill":"pstack:poteto-mode"},
+		{"name":"interrogator","agent":"claude:opus","skill":"pstack:ketchup"}]}`)
+	if _, err := Start(Options{Project: root, Template: "plugin", Name: "alpha", Goal: "g"}); err == nil ||
+		!strings.Contains(err.Error(), "role architect works by the skill pstack:poteto-mode, which no pack here has and claude does not find") {
 		t.Fatalf("started without its skills: %v", err)
 	}
 	if len(*spawned) != 0 {
@@ -383,7 +391,7 @@ func TestSkill(t *testing.T) {
 	}
 
 	plugin := filepath.Join(home, ".claude/plugins/cache/m/pstack/1")
-	for _, name := range []string{"poteto-mode", "interrogate"} {
+	for _, name := range []string{"poteto-mode", "ketchup"} {
 		p := filepath.Join(plugin, "skills", name, "SKILL.md")
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -396,13 +404,18 @@ func TestSkill(t *testing.T) {
 		fmt.Appendf(nil, `{"version":2,"plugins":{"pstack@m":[{"scope":"user","installPath":%q}]}}`, plugin)); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g"})
+	s, err := Start(Options{Project: root, Template: "plugin", Name: "alpha", Goal: "g"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, spec := range *spawned {
+		if strings.Contains(strings.Join(spec.Args, " "), "--add-dir") {
+			t.Errorf("%s reads its own skill, yet was given a directory: %v", spec.Role, spec.Args)
+		}
+	}
 	st, _ := state.Load()
 	got := Brief(st, s.Roles[2].Agent)
-	if want := "Work by the skill pstack:interrogate: read " + filepath.Join(plugin, "skills/interrogate/SKILL.md") + " in full before your first task"; !strings.Contains(got, want) {
+	if want := "Work by the skill pstack:ketchup: read " + filepath.Join(plugin, "skills/ketchup/SKILL.md") + " in full before your first task"; !strings.Contains(got, want) {
 		t.Errorf("interrogator's brief lacks %q:\n%s", want, got)
 	}
 	if err := os.RemoveAll(plugin); err != nil {
@@ -415,10 +428,114 @@ func TestSkill(t *testing.T) {
 		!strings.Contains(err.Error(), `role a: skill "a/b"`) {
 		t.Errorf("a bad skill name: %v", err)
 	}
-	// no_edits is a run's: nothing holds a team's role to it.
-	if err := Check(Template{Name: "x", Roles: []Role{{Role: run.Role{Name: "a", Agent: "claude"}, Lead: true}, {Role: run.Role{Name: "b", Agent: "claude", NoEdits: true}}}}); err == nil ||
-		!strings.Contains(err.Error(), "no_edits holds in runs only") {
-		t.Errorf("no_edits in a team: %v", err)
+}
+
+// The pstack team works by the pack's skills, with nothing to install:
+// the team keeps them, each brief names the copy its role works by, and
+// they go when the team does. Its interrogator edits nothing: mad's hook
+// refuses its edits where the team works.
+func TestPackSkill(t *testing.T) {
+	root, spawned, _ := project(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	s, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g", Agents: map[string]string{"builder": "codex"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := filepath.Join(paths.StateDir(), "bus", "teams", "alpha", "skills")
+	for _, name := range []string{"lead/SKILL.md", "build/SKILL.md", "interrogate/SKILL.md", "principles/prove-it-works.md"} {
+		if _, err := os.Stat(filepath.Join(kept, "pstack", name)); err != nil {
+			t.Errorf("the team did not keep %s", name)
+		}
+	}
+	// A claude reads the copy unasked; codex reads where it likes.
+	for _, spec := range *spawned {
+		args := strings.Join(spec.Args, " ")
+		if has := strings.HasSuffix(args, "--add-dir "+kept); has != (spec.Kind == "claude") {
+			t.Errorf("%s (%s) args = %v", spec.Role, spec.Kind, spec.Args)
+		}
+	}
+	st, _ := state.Load()
+	lead, build, breaker := s.Roles[0].Agent, s.Roles[1].Agent, s.Roles[2].Agent
+	if b, want := Brief(st, lead), "Work by the skill pstack:lead: read "+filepath.Join(kept, "pstack/lead/SKILL.md")+" in full before your first task"; !strings.Contains(b, want) {
+		t.Errorf("the lead's brief lacks %q:\n%s", want, b)
+	}
+	if b := Brief(st, build); !strings.Contains(b, filepath.Join(kept, "pstack/build/SKILL.md")) ||
+		!strings.Contains(b, "interrogator (@interrogator, claude opus at high, edits nothing): You interrogate the diffs") {
+		t.Errorf("the builder's brief:\n%s", b)
+	}
+	if b, want := Brief(st, breaker), "You edit no file in "+root+": mad refuses it. Scratch files go in "+os.TempDir()+"."; !strings.Contains(b, want) {
+		t.Errorf("the interrogator's brief lacks %q:\n%s", want, b)
+	}
+
+	agent := func(id string) *state.Agent { _, a := st.FindAgent(id); return a }
+	in := &discover.Tool{Name: "Write", Path: filepath.Join(root, "a.go")}
+	if why := Refused(agent(breaker), in); !strings.Contains(why, "the interrogator edits no file in the team's directory") {
+		t.Errorf("the interrogator's edit: %q", why)
+	}
+	for _, c := range []struct {
+		id   string
+		tool *discover.Tool
+	}{
+		{breaker, &discover.Tool{Name: "Write", Path: filepath.Join(os.TempDir(), "repro.go")}},
+		{breaker, &discover.Tool{Name: "Bash", Command: "go test ./..."}},
+		{build, in},
+		{lead, in},
+	} {
+		if why := Refused(agent(c.id), c.tool); why != "" {
+			t.Errorf("%s %s%s refused: %q", c.id, c.tool.Path, c.tool.Command, why)
+		}
+	}
+	if why := Refused(&state.Agent{ID: "x", Team: "gone", Role: "interrogator"}, in); why != "" {
+		t.Errorf("an agent of no team: %q", why)
+	}
+
+	if err := Remove("alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(kept)); err == nil {
+		t.Error("the team's skills outlived it")
+	}
+	if err := Check(Template{Name: "x", Roles: []Role{{Role: run.Role{Name: "a", Agent: "claude"}, Lead: true}, {Role: run.Role{Name: "b", Agent: "claude", ReadOnly: true, NoEdits: true}}}}); err == nil ||
+		!strings.Contains(err.Error(), "role b: read_only or no_edits, not both") {
+		t.Errorf("read only and no edits: %v", err)
+	}
+}
+
+// A pack's templates are listed with mad's own, their roles played by
+// the agents the pack names.
+func TestPackTemplates(t *testing.T) {
+	root, _, _ := project(t)
+	dir := filepath.Join(pack.UserDir(), "house")
+	for name, body := range map[string]string{
+		"pack.json":       `{"name": "house", "agents": {"main": "claude:sonnet@high"}}`,
+		"teams/duo.json":  `{"name":"duo","roles":[{"name":"a","agent":"$main","lead":true},{"name":"b","agent":"codex"}]}`,
+		"teams/lost.json": `{"name":"lost","roles":[{"name":"a","agent":"$nobody","lead":true}]}`,
+	} {
+		if err := paths.WriteFileAtomic(filepath.Join(dir, filepath.FromSlash(name)), []byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := Templates(root)
+	if err == nil || !strings.Contains(err.Error(), "teams/lost.json: role a: agent $nobody: pack house names no such agent (it names $main)") {
+		t.Errorf("err = %v", err)
+	}
+	var names []string
+	for _, tp := range list {
+		names = append(names, tp.Name)
+	}
+	if strings.Join(names, " ") != "dev pstack pstack-docs pstack-research duo" {
+		t.Errorf("templates = %v", names)
+	}
+	duo, ok := ByName(root, "duo")
+	if !ok || duo.Roles[0].Agent != "claude:sonnet@high" || duo.Roles[0].Effort != "high" || !strings.HasSuffix(duo.Source, filepath.Join("house", "teams", "duo.json")) {
+		t.Errorf("duo = %+v", duo)
+	}
+	if tp, err := ReadFile(filepath.Join(dir, "teams", "duo.json")); err != nil || tp.Roles[0].Model != "sonnet" {
+		t.Errorf("a pack's template read as a file: %+v, %v", tp, err)
+	}
+	if _, err := Parse([]byte(`{"name":"t","roles":[{"name":"a","agent":"$main","lead":true}]}`)); err == nil ||
+		!strings.Contains(err.Error(), "agent $main is a name a pack gives an agent, and this template is in no pack") {
+		t.Errorf("a pack's name for an agent in a template of no pack: %v", err)
 	}
 }
 

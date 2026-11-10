@@ -1,0 +1,51 @@
+{
+  "name": "pstack-perf",
+  "description": "pstack perf: baseline you can trust → one hypothesis at a time → someone else measures again",
+  "roles": [
+    {"name": "optimizer", "agent": "$strong", "skill": "pstack:perf"},
+    {"name": "measurer", "agent": "$strong", "skill": "pstack:perf", "no_edits": true}
+  ],
+  "steps": [
+    {
+      "name": "baseline",
+      "role": "optimizer",
+      "gate": true,
+      "expect": {"files": ["{{run}}/perf.md"]},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Baseline part: the claim you expect to make, a harness that is one command, at least five runs, and the limiter. Commit the harness when the project keeps such things; otherwise keep it in {{run}}/. Write {{run}}/perf.md: the claim, the command, the runs with median and range, the limiter and how you found it. Change no behavior yet."
+      ]
+    },
+    {
+      "name": "improve",
+      "role": "optimizer",
+      "expect": {"commit": true},
+      "prompt": [
+        "Do the skill's Improve part against the baseline in {{run}}/perf.md: one hypothesis at a time, measured before and after with the same harness, kept only when the number moves past the noise and the tests stay green, one commit per kept change. Add every attempt to {{run}}/perf.md, kept or reverted."
+      ],
+      "again": [
+        "The second measurement disagrees (round {{round}}):",
+        "{{review}}",
+        "",
+        "Rerun what it ran. Fix what is real: revert a change whose gain does not reproduce, repair what broke. Update {{run}}/perf.md, and commit."
+      ]
+    },
+    {
+      "name": "measure",
+      "label": "second measurement",
+      "role": "measurer",
+      "review": true,
+      "back": "improve",
+      "max_rounds": 2,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Check part: run the harness in {{run}}/perf.md yourself on the code at {{base}} (in a temporary directory) and on the code now, alternating, and answer the seven questions from your own runs. A gain you cannot reproduce, a number that measures something else, or a broken test means CHANGES."
+      ],
+      "again": [
+        "The optimizer has worked through your findings. Measure again as before: does the claim in {{run}}/perf.md hold on your runs now? A gain you cannot reproduce, or a broken test, means CHANGES."
+      ]
+    }
+  ]
+}

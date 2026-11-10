@@ -187,10 +187,21 @@ func Refused(dir, root, runDir string, role Role, t *discover.Tool) string {
 			return fmt.Sprintf("mad: a run's roles do not %s: the person does that from the sidebar once the run is done. Commit, and say what is ready.", what)
 		}
 	}
-	if role.NoEdits && t.Path != "" && within(t.Path, dir) && !within(t.Path, runDir) && !nested(t.Path, dir) {
-		return fmt.Sprintf("mad: the %s edits no file in the run's worktree. Put scratch files in %s, and say in your reply what should change.", role.Label, os.TempDir())
+	if role.NoEdits {
+		return NoEdits(dir, runDir, role.Label, "the run's worktree", t)
 	}
 	return ""
+}
+
+// NoEdits says why tool call t of a role that edits nothing in dir is
+// refused, or "": it writes a file there. label names the role and where
+// the place, for the agent to read. A file in own (a run's directory;
+// "" for none) or in a checkout nested in dir is not dir's.
+func NoEdits(dir, own, label, where string, t *discover.Tool) string {
+	if t.Path == "" || !within(t.Path, dir) || own != "" && within(t.Path, own) || nested(t.Path, dir) {
+		return ""
+	}
+	return fmt.Sprintf("mad: the %s edits no file in %s. Put scratch files in %s, and say in your reply what should change.", label, where, os.TempDir())
 }
 
 // nested reports whether path is in a git checkout of its own below dir.

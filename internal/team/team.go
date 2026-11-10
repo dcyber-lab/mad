@@ -18,6 +18,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/queue"
 	"github.com/dcyber-lab/mad/internal/run"
@@ -34,6 +35,7 @@ type RoleRec struct {
 	Spec     string `json:"spec"`  // claude:opus@high, codex
 	Lead     bool   `json:"lead,omitempty"`
 	ReadOnly bool   `json:"read_only,omitempty"`
+	NoEdits  bool   `json:"no_edits,omitempty"`
 	Brief    string `json:"brief,omitempty"`
 	Skill    string `json:"skill,omitempty"`
 }
@@ -73,6 +75,12 @@ type file struct {
 }
 
 func recordsFile() string { return filepath.Join(paths.StateDir(), "bus", "teams.json") }
+
+// skillsDir is where team name keeps the skills of the packs its roles
+// work by, as they were when it started.
+func skillsDir(name string) string {
+	return filepath.Join(paths.StateDir(), "bus", "teams", name, "skills")
+}
 
 // update runs fn on the records under a lock, saving them when fn says
 // to (returns true).
@@ -136,6 +144,7 @@ func Running(st *state.State) ([]Record, error) {
 			if len(roles) == 0 && len(r.Roles) > 0 {
 				changed = true
 				emptied = append(emptied, r.Channel)
+				_ = os.RemoveAll(filepath.Dir(skillsDir(r.Name)))
 				continue
 			}
 			r.Roles = roles
@@ -288,7 +297,7 @@ func Start(o Options) (*Started, error) {
 
 	rec := Record{Name: name, Template: tpl.Name, Channel: name, Project: root, Branch: branch, Permission: perm, CreatedAt: now()}
 	for _, r := range tpl.Roles {
-		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief)), Skill: r.Skill})
+		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, NoEdits: r.NoEdits, Brief: strings.TrimSpace(string(r.Brief)), Skill: r.Skill})
 	}
 	topic := strings.TrimSpace(render(string(tpl.Topic), goal))
 	by := bus.From{ID: bus.You, Label: bus.You}
@@ -323,6 +332,10 @@ func Start(o Options) (*Started, error) {
 		_ = Remove(name)
 		return nil, err
 	}
+	// Before the agents: a brief names the copy its role works by.
+	if err := run.KeepSkills(roles, root, skillsDir(name)); err != nil {
+		return fail(err)
+	}
 
 	taken := map[string]bool{}
 	// Messages name agents across the whole deck, not per project.
@@ -339,6 +352,10 @@ func Start(o Options) (*Started, error) {
 			agentName = r.Name + "-" + agentSuffix(name)
 		}
 		args := append(r.Args(perm), r.WorktreeArgs(branchDir(branch, dir))...)
+		if r.Kind == "claude" && pack.SkillFile(skillsDir(name), r.Skill) != "" {
+			// The copy is outside where it works: reading it asks nothing.
+			args = append(args, "--add-dir", skillsDir(name))
+		}
 		a, err := spawn(drive.Spec{Kind: r.Kind, Model: r.Model, Name: agentName, Dir: dir, Args: args, Role: r.Name, Team: name}, o.Kinds)
 		if a == nil {
 			return fail(fmt.Errorf("starting the %s: %w", r.Name, err))
@@ -531,6 +548,7 @@ func Remove(name string) error {
 	if !ok {
 		// A record that never got its first agent is still there to clear.
 		_ = update(func(f *file) (bool, error) { return dropRecord(f, name), nil })
+		_ = os.RemoveAll(filepath.Dir(skillsDir(name)))
 		return fmt.Errorf("no team %q (mad team ls)", name)
 	}
 	var errs []error
@@ -557,6 +575,7 @@ func Remove(name string) error {
 	if err := update(func(f *file) (bool, error) { return dropRecord(f, name), nil }); err != nil {
 		errs = append(errs, err)
 	}
+	_ = os.RemoveAll(filepath.Dir(skillsDir(name)))
 	return errors.Join(errs...)
 }
 

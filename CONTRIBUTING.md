@@ -40,6 +40,8 @@ with dependencies pointing downwards in this list:
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
 | `internal/desktop`   | `mad desktop`: the deck in a window (web sidebar, conversations drawn from transcripts and hosts) |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
+| `internal/team`      | Teams: agents in roles started together in a channel, from a template |
+| `internal/run`       | Runs: a task handed through agents in roles by a flow (steps, reviews, questions, gates, what a step must leave behind) |
 | `internal/queue`     | Messages waiting for an agent's turn to end (the sidebar sends them) |
 | `internal/host`      | `mad host`: an agent run headless in its pane for the desktop window to draw (window mode) |
 | `internal/phone`     | `mad phone`: the window served to the user's phone over Tailscale (`tailscale serve`), its token and QR code |
@@ -56,9 +58,27 @@ with dependencies pointing downwards in this list:
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/git`       | Checkout info for the sidebar; worktrees for agents               |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
+| `internal/pack`      | Packs: the flows, team templates and skills that runs and teams work by, read from `packs/` (built in), the user's and the project's directories |
 | `internal/state`     | Persistent project/agent tree                                    |
 | `internal/paths`     | Config/state locations, path and shell helpers                   |
 | `internal/textutil`  | Width-aware truncation/padding for the terminal                  |
+
+### Packs: how work is done is not code
+
+`internal/run` and `internal/team` know steps, roles, reviews, gates,
+checks and channels, and nothing of any particular way of working. That
+is in `packs/`: flows and team templates as JSON, the skills their roles
+work by as markdown, built into the binary and replaceable from
+`~/.config/mad/packs/` or a project's `.mad/packs/`.
+
+- A change to how a flow works (a step, a prompt, a skill, who plays a
+  role) is a change to a pack's files. `mad pack check packs/pstack`
+  checks it, `go test ./internal/cli` checks the built-in ones, and
+  `ln -s $PWD/packs/pstack ~/.config/mad/packs/pstack` tries it in your
+  deck without a build.
+- A change to what any flow can say (a new field of a step, a new check)
+  is a change to `internal/run`, with a test there, and is described in
+  `skills/mad-flow/SKILL.md` so that agents can write flows that use it.
 
 ### Adding an agent
 

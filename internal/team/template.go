@@ -6,14 +6,14 @@
 // agent's part is told to it through mad's MCP server instructions
 // (Brief), so it holds across sleep, restarts and rebuilds.
 //
-// Templates are JSON files: mad's own (built in, see teams/), the user's
-// in ~/.config/mad/teams/ and a project's in .mad/teams/, a later one
-// taking the place of an earlier one of the same name. The teams that
-// run are kept in bus/teams.json.
+// Templates are JSON files, and no part of this package: those of the
+// packs (package pack: mad's own built in, the user's, the project's),
+// then the user's in ~/.config/mad/teams/ and a project's in .mad/teams/,
+// a later one taking the place of an earlier one of the same name. The
+// teams that run are kept in bus/teams.json.
 package team
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/skill"
@@ -35,8 +36,8 @@ const (
 	MaxTeams = 3
 )
 
-// Role is a part in a team: a run's role (name, agent, read_only), who
-// leads, and what it is told about its part.
+// Role is a part in a team: a run's role (name, agent, read_only,
+// no_edits, skill), who leads, and what it is told about its part.
 type Role struct {
 	run.Role
 	Lead  bool     `json:"lead,omitempty"`
@@ -93,31 +94,41 @@ func (t Template) WithAgents(agents map[string]string) Template {
 	return out
 }
 
-//go:embed teams/*.json
-var builtinFS embed.FS
-
-var builtin struct {
-	once      sync.Once
-	templates []Template
-}
+var builtin = sync.OnceValue(func() []Template {
+	var out []Template
+	for _, p := range pack.Builtin() {
+		list, err := packTemplates(p)
+		if err != nil {
+			panic(fmt.Sprintf("built-in pack %s: %v", p.Name, err))
+		}
+		out = append(out, list...)
+	}
+	return out
+})
 
 // Builtin are the templates mad comes with, the default first.
-func Builtin() []Template {
-	builtin.once.Do(func() {
-		for _, name := range []string{"dev", "pstack", "pstack-research", "pstack-docs"} {
-			data, err := builtinFS.ReadFile("teams/" + name + ".json")
-			if err != nil {
-				panic(err)
-			}
-			t, err := Parse(data)
-			if err != nil {
-				panic(fmt.Sprintf("built-in team %s: %v", name, err))
-			}
-			t.Source = "built in"
-			builtin.templates = append(builtin.templates, t)
+func Builtin() []Template { return append([]Template(nil), builtin()...) }
+
+// packTemplates are the templates of pack p, by name. A file that doesn't
+// read or check is left out, and said so in the error.
+func packTemplates(p pack.Pack) ([]Template, error) {
+	files, err := p.Files("teams")
+	if err != nil {
+		return nil, err
+	}
+	var out []Template
+	var errs []error
+	for _, file := range files {
+		t, err := ParseIn(file.Data, p)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p.Label(file.Name), err))
+			continue
 		}
-	})
-	return append([]Template(nil), builtin.templates...)
+		t.Source = p.Where(file.Name)
+		out = append(out, t)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, errors.Join(errs...)
 }
 
 // UserDir is where a user keeps templates of their own.
@@ -126,16 +137,39 @@ func UserDir() string { return filepath.Join(paths.ConfigDir(), "teams") }
 // ProjectDir is where a project keeps its templates.
 func ProjectDir(root string) string { return filepath.Join(root, ".mad", "teams") }
 
-// Templates are the templates a team in project root can follow: mad's
-// own, the user's, the project's. A file that doesn't read or check is
-// left out, and said so in the error.
+// Templates are the templates a team in project root can follow: those
+// of the packs there (mad's own, the user's, the project's), then the
+// user's and the project's own template files. A file that doesn't read
+// or check is left out, and said so in the error.
 func Templates(root string) ([]Template, error) {
-	list := Builtin()
+	var list []Template
+	var errs []error
+	add := func(t Template) {
+		for i := range list {
+			if list[i].Name == t.Name {
+				list[i] = t
+				return
+			}
+		}
+		list = append(list, t)
+	}
+	packs, err := pack.List(root)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, p := range packs {
+		of, err := packTemplates(p)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for _, t := range of {
+			add(t)
+		}
+	}
 	dirs := []string{UserDir()}
 	if root != "" {
 		dirs = append(dirs, ProjectDir(root))
 	}
-	var errs []error
 	for _, dir := range dirs {
 		files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
 		sort.Strings(files)
@@ -145,24 +179,21 @@ func Templates(root string) ([]Template, error) {
 				errs = append(errs, err)
 				continue
 			}
-			replaced := false
-			for i := range list {
-				if list[i].Name == t.Name {
-					list[i], replaced = t, true
-				}
-			}
-			if !replaced {
-				list = append(list, t)
-			}
+			add(t)
 		}
 	}
 	return list, errors.Join(errs...)
 }
 
-// ByName finds a template for project root; "" is the default one.
+// ByName finds a template for project root; "" is the default one, the
+// first there is.
 func ByName(root, name string) (Template, bool) {
 	list, _ := Templates(root)
 	if name == "" {
+		// None at all: packs of the built-in ones' names, without templates.
+		if len(list) == 0 {
+			return Template{}, false
+		}
 		return list[0], true
 	}
 	for _, t := range list {
@@ -173,13 +204,19 @@ func ByName(root, name string) (Template, bool) {
 	return Template{}, false
 }
 
-// ReadFile reads and checks a template file.
+// ReadFile reads and checks a template file: one in a pack's teams/ as
+// that pack's.
 func ReadFile(path string) (Template, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Template{}, err
 	}
-	t, err := Parse(data)
+	var t Template
+	if p, ok := pack.Enclosing(path); ok {
+		t, err = ParseIn(data, p)
+	} else {
+		t, err = Parse(data)
+	}
 	if err != nil {
 		return Template{}, fmt.Errorf("%s: %w", paths.Short(path), err)
 	}
@@ -188,12 +225,31 @@ func ReadFile(path string) (Template, error) {
 }
 
 // Parse reads a template and checks it.
-func Parse(data []byte) (Template, error) {
+func Parse(data []byte) (Template, error) { return parse(data, nil) }
+
+// ParseIn reads a template of pack p, whose roles may be played by the
+// agents the pack names ("$strong"), and checks it.
+func ParseIn(data []byte, p pack.Pack) (Template, error) { return parse(data, &p) }
+
+func parse(data []byte, p *pack.Pack) (Template, error) {
 	var t Template
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&t); err != nil {
 		return Template{}, fmt.Errorf("not a team: %v", strings.TrimPrefix(err.Error(), "json: "))
+	}
+	if p != nil {
+		var errs []error
+		for i, r := range t.Roles {
+			a, err := run.PackAgent(*p, r.Agent)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("role %s: %w", r.Name, err))
+			}
+			t.Roles[i].Agent = a
+		}
+		if err := errors.Join(errs...); err != nil {
+			return Template{}, err
+		}
 	}
 	t = t.resolved()
 	if err := Check(t); err != nil {
@@ -246,13 +302,17 @@ func Check(t Template) error {
 		case "":
 			bad("role %s: no agent (claude:opus, claude:sonnet, codex, codex:<model>, …)", r.Name)
 		default:
+			if strings.HasPrefix(r.Agent, "$") {
+				bad("role %s: agent %s is a name a pack gives an agent, and this template is in no pack: say the agent itself", r.Name, r.Agent)
+				break
+			}
 			bad("role %s: agent %q: a team works with claude and codex", r.Name, r.Agent)
 		}
 		if r.Lead && r.ReadOnly {
 			bad("role %s: the lead can't be read only", r.Name)
 		}
-		if r.NoEdits {
-			bad("role %s: no_edits holds in runs only; a team's role is read_only or not", r.Name)
+		if r.ReadOnly && r.NoEdits {
+			bad("role %s: read_only or no_edits, not both", r.Name)
 		}
 	}
 	switch {

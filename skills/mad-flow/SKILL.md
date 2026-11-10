@@ -21,9 +21,9 @@ and write the file; mad checks it and runs it.
    Where they leave something open, take the defaults below and say so.
 2. **See what is there.** `mad run flow ls` lists the flows this project
    can use; `mad run flow show design-impl-review` prints the default
-   one, a good start; `mad run flow show pstack` one whose roles work by
-   pstack's skills. `mad run flow agents` lists the agents this machine
-   can run, with their efforts.
+   one, a good start; `mad run flow show pstack-bugfix` one whose roles
+   work by a pack's skills and whose steps are checked. `mad run flow
+   agents` lists the agents this machine can run, with their efforts.
 3. **Write the file**: `.mad/flows/<name>.json` at the repository's root
    for the project (and the team: it can be committed), or
    `~/.config/mad/flows/<name>.json` for the user alone. A file named as
@@ -77,7 +77,7 @@ use the one they use.
 | `roles[].agent` | `claude:opus`, `claude:sonnet`, `claude:haiku`, `codex` (the model its config sets), `codex:<model>`; add `@effort`: `claude:opus@high`, `codex:gpt-6-sol@xhigh` |
 | `roles[].read_only` | looks and changes nothing: it can only review |
 | `roles[].no_edits` | runs commands (tests, a repro in a temporary directory) but edits no file in the worktree outside `{{run}}/` and makes no commit: a reviewer that proves what it finds. mad refuses its edits there and checks the worktree after its steps. Runs only; a codex gets its read-only sandbox |
-| `roles[].skill` | a skill the role works by: `pstack:poteto-mode` (`plugin:name` for a claude plugin's, else the skill's name). The run does not start when the role's agent lacks it |
+| `roles[].skill` | a skill the role works by. `pstack:bugfix` is the skill `bugfix` of the pack `pstack` (`mad pack show pstack` lists them): the run keeps a copy, and any agent can play the role. A name no pack has is one the role's agent has itself (`plugin:name` for a claude plugin's, else the skill's name). The run does not start when the skill is nowhere |
 | `steps[].name`, `label`, `role` | the step, what to call it, who does it |
 | `steps[].prompt` | what the step is to do: a string, or a list of lines |
 | `steps[].again` | the prompt when the step runs again after a review asked for changes (mad has a default) |
@@ -85,8 +85,9 @@ use the one they use.
 | `steps[].back` | for a review: the earlier step its changes go back to |
 | `steps[].max_rounds` | for a review: how often it may send work back (default 3; then the run waits for the user) |
 | `steps[].ask` | roles the step may put a question to; the answer comes back to it |
-| `steps[].gate` | the run may stop after this step for the user (they tick "gate" when they start it) |
+| `steps[].gate` | the run may stop after this step for the user (they tick "gate" when they start it); after a review, when it lets the work through |
 | `steps[].expect` | what the step must leave behind the first time it runs: `files` (exist, not empty; `{{run}}/bug.md`), `commit` (at least one new commit), `tests_first` (a commit of tests alone before the first commit of anything else). mad tells the role, checks when it ends, sends what is missing back once, then waits for the user |
+| `steps[].expect.unchanged` | the step leaves the worktree as it found it, whatever it did meanwhile: for a step that reads, measures or designs, whose work goes in `{{run}}/`. Checked every time the step runs. Not with `commit`, and not for a `read_only` or `no_edits` role, which changes nothing as it is |
 
 Placeholders in prompts: `{{task}}` the task, `{{run}}` the run's
 directory (relative to the worktree), `{{base}}` the commit the run
@@ -105,10 +106,11 @@ round (both for `again`).
   step asks only the roles in its `ask`; a question to anyone else is
   turned back ("decide, say what you assumed"). A step's `expect` and a
   `no_edits` role's untouched worktree are checked when the step ends.
-- For a role with a `skill`: where its agent finds the skill's SKILL.md,
-  to read and follow it, and that the run wins where they differ (the
-  worktree alone, no push or pull request, how to end). A prompt names
-  the skill's parts to use or skip, not its path.
+- For a role with a `skill`: where the skill's SKILL.md is, to read it
+  in full before the role's first step and follow it, and that the run
+  wins where they differ (the worktree alone, no push or pull request,
+  how to end). A prompt names the skill's part to do ("Do the skill's
+  Diagnose part"), not its path.
 - Sending a review's findings back, waiting for the user (permission
   prompts, gates, budget, the five-hour window), notifications, cost, and
   compacting a role whose context passed 150k tokens.
@@ -131,6 +133,33 @@ round (both for `again`).
 
 When the user wants one of these, say so plainly, and offer the closest
 flow that works.
+
+## Several flows that belong together: a pack
+
+When the user wants a way of working, not one flow (flows and team
+templates that share skills, and the same agents in the same kinds of
+role), make it a pack: a directory in `.mad/packs/<name>/` (the
+project's) or `~/.config/mad/packs/<name>/` (the user's).
+
+```
+pack.json         {"name": "house", "version": "1", "description": "…",
+                   "agents": {"strong": "claude:opus@high", "other": "codex"}}
+flows/*.json      flows, as above; a role's agent may be "$strong"
+teams/*.json      team templates (mad team check)
+skills/<name>/    SKILL.md: what a role works by, named "house:<name>"
+```
+
+- `mad pack ls` lists the packs here, `mad pack show pstack` what one
+  has. `mad pack eject pstack` copies a built-in pack to change it; the
+  copy takes its place.
+- `"agents"` says once who plays what across the pack; a role refers to
+  one as `"$strong"`.
+- A skill is written for the role that reads it: what to do in each part
+  of its work, and what to hand back. It names files beside it by path
+  (`./checklist.md`, `../principles/prove-it-works.md`).
+- `mad pack check` until it says the pack is good: every flow and
+  template reads, every skill a role names is there, and no skill points
+  at a file that is not.
 
 ## Writing good prompts
 

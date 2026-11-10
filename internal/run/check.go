@@ -9,9 +9,10 @@ import (
 )
 
 // A step is checked when its reply comes: against what it must leave
-// behind (its Expect, the first time it runs), and for a role that edits
-// nothing, against the worktree it was given. Both read the worktree's
-// state when the step began, kept in its Entry.
+// behind (its Expect: files and commits the first time it runs, an
+// unchanged worktree every time), and for a role that edits nothing,
+// against the worktree it was given. Both read the worktree's state when
+// the step began, kept in its Entry.
 
 // worktreeState is the commit a worktree is on and the tree its files
 // would make if all were added: ignored files, the run's own directory
@@ -67,10 +68,18 @@ func worktreeState(dir string) (head, tree string) {
 // the worktree's state when it began (e).
 func (x *runner) unmet(s Step, round int, e Entry) []string {
 	ex := s.Expect
-	if ex == nil || round > 1 || e.Head == "" {
+	if ex == nil || e.Head == "" {
 		return nil
 	}
 	var out []string
+	if ex.Unchanged {
+		if what := changedBy(x.run.Dir, e); what != "" {
+			out = append(out, fmt.Sprintf("the worktree is not as this step found it (%s): undo that; what the step makes goes in %s/", what, RelDir(x.run)))
+		}
+	}
+	if round > 1 {
+		return out
+	}
 	for _, f := range ex.Files {
 		name := render(f, map[string]string{"run": RelDir(x.run)})
 		if fi, err := os.Stat(filepath.Join(x.run.Dir, name)); err != nil || fi.IsDir() || fi.Size() == 0 {
