@@ -26,6 +26,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/run"
+	"github.com/dcyber-lab/mad/internal/skill"
 )
 
 // Limits: how many roles a team has, and how many teams run at once.
@@ -103,7 +104,7 @@ var builtin struct {
 // Builtin are the templates mad comes with, the default first.
 func Builtin() []Template {
 	builtin.once.Do(func() {
-		for _, name := range []string{"dev"} {
+		for _, name := range []string{"dev", "pstack"} {
 			data, err := builtinFS.ReadFile("teams/" + name + ".json")
 			if err != nil {
 				panic(err)
@@ -230,6 +231,11 @@ func Check(t Template) error {
 		names[r.Name] = true
 		if r.Lead {
 			leads++
+		}
+		if r.Skill != "" {
+			if err := skill.CheckRef(r.Skill); err != nil {
+				bad("role %s: %v", r.Name, err)
+			}
 		}
 		c := run.ParseChoice(r.Agent)
 		switch c.Kind {

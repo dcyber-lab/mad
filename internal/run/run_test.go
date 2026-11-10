@@ -473,6 +473,85 @@ func TestCommands(t *testing.T) {
 	}
 }
 
+// A role that works by a skill is told where its agent finds it, and a
+// run refuses to start when it is not there.
+func TestSkill(t *testing.T) {
+	home, _ := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	repo := filepath.Join(home, "repo")
+	for _, args := range [][]string{{"init", "-q", repo}, {"-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	f, ok := FlowByName("", "pstack")
+	if !ok {
+		t.Fatal("no built-in pstack flow")
+	}
+	_, err := Create(Options{Project: repo, Flow: "pstack", Task: "add an audit log"})
+	if err == nil || !strings.Contains(err.Error(), "role builder works by the skill pstack:poteto-mode, which claude does not find here") {
+		t.Fatalf("started without its skills: %v", err)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "worktree", "list").Output(); strings.Count(string(out), "\n") != 1 {
+		t.Errorf("a refused run left a worktree:\n%s", out)
+	}
+
+	plugin := filepath.Join(home, ".claude/plugins/cache/m/pstack/1")
+	for _, name := range []string{"architect", "poteto-mode", "interrogate"} {
+		p := filepath.Join(plugin, "skills", name, "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := paths.WriteFileAtomic(filepath.Join(home, ".claude/plugins/installed_plugins.json"),
+		fmt.Appendf(nil, `{"version":2,"plugins":{"pstack@m":[{"scope":"user","installPath":%q}]}}`, plugin)); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckSkills(f.Roles, repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckSkills(f.WithAgents(map[string]string{"interrogator": "codex"}).Roles, repo); err == nil ||
+		!strings.Contains(err.Error(), "role interrogator works by the skill pstack:interrogate, which codex does not find here") {
+		t.Errorf("codex has no copy: %v", err)
+	}
+
+	x := &runner{run: &state.Run{Name: "audit", Dir: repo}, flow: f, dir: t.TempDir(),
+		f: &File{Spec: Spec{Task: "add an audit log", Base: "abc123"}, Progress: Progress{Round: 1}}}
+	role := func(name string) Role { r, _ := f.Role(name); return r }
+	design := x.prompt(f.Steps[0], role("architect"))
+	if want := "Work by the skill pstack:architect: read " + filepath.Join(plugin, "skills/architect/SKILL.md") + " in full"; !strings.Contains(design, want) {
+		t.Errorf("design prompt lacks %q:\n%s", want, design)
+	}
+	x.f.Progress.Rounds = map[string]int{"review": 2}
+	x.f.Progress.Reviews = map[string]string{"review": "- a.go breaks"}
+	x.f.Progress.BackFrom = "review"
+	fix := x.prompt(f.Steps[1], role("builder"))
+	if !strings.Contains(fix, "Keep working by the skill pstack:poteto-mode (") || strings.Contains(fix, "in full") {
+		t.Errorf("fix prompt:\n%s", fix)
+	}
+	// Gone during the run: the message goes without it, and the log says so.
+	if err := os.RemoveAll(plugin); err != nil {
+		t.Fatal(err)
+	}
+	if p := x.prompt(f.Steps[0], role("architect")); strings.Contains(p, "Work by the skill") {
+		t.Errorf("a skill that is gone:\n%s", p)
+	}
+	if log, _ := os.ReadFile(filepath.Join(x.dir, "log")); !strings.Contains(string(log), "the architect works by the skill pstack:architect, which is no longer found") {
+		t.Errorf("log: %s", log)
+	}
+
+	if _, err := Parse([]byte(`{"name":"x","roles":[{"name":"a","agent":"claude","skill":"Poteto Mode"}],"steps":[{"name":"s","role":"a","prompt":"p"}]}`)); err == nil ||
+		!strings.Contains(err.Error(), `role a: skill "Poteto Mode"`) {
+		t.Errorf("a bad skill name: %v", err)
+	}
+}
+
 func TestPrompt(t *testing.T) {
 	f, _ := FlowByName("", "")
 	x := &runner{run: &state.Run{Name: "audit"}, flow: f,
@@ -695,7 +774,7 @@ func TestFlowFiles(t *testing.T) {
 	for _, f := range flows {
 		names = append(names, f.Name+"@"+filepath.Base(f.Source))
 	}
-	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json tdd@tdd.json" {
+	if got := strings.Join(names, " "); got != "design-impl-review@built in impl-review@impl-review.json pstack@built in tdd@tdd.json" {
 		t.Errorf("flows = %s", got)
 	}
 	tdd, ok := FlowByName(root, "tdd")

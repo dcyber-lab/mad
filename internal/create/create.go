@@ -66,6 +66,8 @@ type Role struct {
 	ReadOnly bool   `json:"read_only,omitempty"`
 	// Brief is what the role is told about its part.
 	Brief string `json:"brief,omitempty"`
+	// Skill is the skill it works by.
+	Skill string `json:"skill,omitempty"`
 }
 
 // Spec is what would be created, in the words a card lists it with.

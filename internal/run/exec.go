@@ -24,6 +24,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/poke"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
@@ -422,10 +423,28 @@ func (x *runner) prompt(s Step, role Role) string {
 	head += " Write in the language the task is written in.\n\n"
 	x.takeNotes()
 	head += x.newNotes(role.Name)
+	head += x.skillLine(role, round > 1)
 	return head + render(string(tpl), map[string]string{
 		"task": x.f.Spec.Task, "run": RelDir(x.run), "base": x.f.Spec.Base,
 		"review": review, "round": strconv.Itoa(round - 1),
 	}) + x.flow.ending(s)
+}
+
+// skillLine tells role to work by its skill, where its agent finds it:
+// to read it first, or, coming round again, to keep to it.
+func (x *runner) skillLine(role Role, again bool) string {
+	if role.Skill == "" {
+		return ""
+	}
+	path := skill.Find(role.Kind, x.run.Dir, role.Skill)
+	if path == "" {
+		x.logf("the %s works by the skill %s, which is no longer found: its message goes without it", role.Label, role.Skill)
+		return ""
+	}
+	if again {
+		return fmt.Sprintf("Keep working by the skill %s (%s); read it again if it has left your context.\n\n", role.Skill, path)
+	}
+	return fmt.Sprintf("Work by the skill %s: read %s in full before you start, and follow it. Where the skill and this run differ, the run wins: work in this worktree alone, push nothing and open no pull request, and end your reply as this message asks.\n\n", role.Skill, path)
 }
 
 // roundOf is the round step s is in and the findings it works from: a

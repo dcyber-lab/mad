@@ -183,6 +183,9 @@ func teamShow(name string, stdio IO) error {
 		if x.Lead {
 			lead = ", lead"
 		}
+		if x.Skill != "" {
+			lead += ", skill " + x.Skill
+		}
 		fmt.Fprintf(stdio.Out, "\n%s (%s%s): %s\n", x.Role, x.Spec, lead, who)
 		if x.Brief != "" {
 			fmt.Fprintf(stdio.Out, "  %s\n", strings.ReplaceAll(x.Brief, "\n", "\n  "))

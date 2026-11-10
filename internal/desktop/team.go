@@ -49,6 +49,7 @@ type teamRole struct {
 	Lead     bool   `json:"lead,omitempty"`
 	ReadOnly bool   `json:"read_only,omitempty"`
 	Brief    string `json:"brief,omitempty"` // its first line
+	Skill    string `json:"skill,omitempty"`
 }
 
 type teamTemplate struct {
@@ -86,7 +87,7 @@ func (s *Server) teamTemplates(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, x := range t.Roles {
 			first, _, _ := strings.Cut(strings.TrimSpace(string(x.Brief)), "\n")
-			tt.Roles = append(tt.Roles, teamRole{Name: x.Name, Agent: x.Agent, Lead: x.Lead, ReadOnly: x.ReadOnly, Brief: first})
+			tt.Roles = append(tt.Roles, teamRole{Name: x.Name, Agent: x.Agent, Lead: x.Lead, ReadOnly: x.ReadOnly, Brief: first, Skill: x.Skill})
 		}
 		out.Templates = append(out.Templates, tt)
 	}

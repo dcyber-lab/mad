@@ -103,6 +103,9 @@ func Create(o Options) (*state.Run, error) {
 			return nil, fmt.Errorf("%s: unknown agent %q", role, s)
 		}
 	}
+	if err := CheckSkills(flow.WithAgents(o.Agents).Roles, root); err != nil {
+		return nil, err
+	}
 	branch := strings.TrimSpace(o.Branch)
 	if branch == "" {
 		branch = BranchFor(task, time.Now())

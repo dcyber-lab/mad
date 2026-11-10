@@ -35,6 +35,7 @@ type RoleRec struct {
 	Lead     bool   `json:"lead,omitempty"`
 	ReadOnly bool   `json:"read_only,omitempty"`
 	Brief    string `json:"brief,omitempty"`
+	Skill    string `json:"skill,omitempty"`
 }
 
 // Record is a team that runs: bus/teams.json lists them.
@@ -241,6 +242,13 @@ func Start(o Options) (*Started, error) {
 	if err := Check(tpl); err != nil {
 		return nil, err
 	}
+	var roles []run.Role
+	for _, r := range tpl.Roles {
+		roles = append(roles, r.Role)
+	}
+	if err := run.CheckSkills(roles, root); err != nil {
+		return nil, err
+	}
 	perm := o.Permission
 	switch {
 	case perm == "":
@@ -280,7 +288,7 @@ func Start(o Options) (*Started, error) {
 
 	rec := Record{Name: name, Template: tpl.Name, Channel: name, Project: root, Branch: branch, Permission: perm, CreatedAt: now()}
 	for _, r := range tpl.Roles {
-		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief))})
+		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief)), Skill: r.Skill})
 	}
 	topic := strings.TrimSpace(render(string(tpl.Topic), goal))
 	by := bus.From{ID: bus.You, Label: bus.You}

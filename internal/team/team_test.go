@@ -1,6 +1,7 @@
 package team
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,7 +101,7 @@ func TestTemplatesLoadedLikeFlows(t *testing.T) {
 	for _, tp := range list {
 		names = append(names, tp.Name)
 	}
-	if strings.Join(names, " ") != "dev pair" {
+	if strings.Join(names, " ") != "dev pstack pair" {
 		t.Errorf("templates = %v", names)
 	}
 	if len(list[0].Roles) != 1 || !strings.HasSuffix(list[0].Source, "dev.json") {
@@ -364,6 +365,55 @@ func TestBrief(t *testing.T) {
 	}
 	if Brief(st, lead) != "" {
 		t.Error("a brief without a record")
+	}
+}
+
+// The pstack team needs its skills to start, and each role's brief says
+// where its agent finds its skill.
+func TestSkill(t *testing.T) {
+	root, spawned, _ := project(t)
+	home := filepath.Dir(root)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	if _, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g"}); err == nil ||
+		!strings.Contains(err.Error(), "role architect works by the skill pstack:poteto-mode, which claude does not find here") {
+		t.Fatalf("started without its skills: %v", err)
+	}
+	if len(*spawned) != 0 {
+		t.Errorf("a refused team spawned %d agents", len(*spawned))
+	}
+
+	plugin := filepath.Join(home, ".claude/plugins/cache/m/pstack/1")
+	for _, name := range []string{"poteto-mode", "interrogate"} {
+		p := filepath.Join(plugin, "skills", name, "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := paths.WriteFileAtomic(filepath.Join(home, ".claude/plugins/installed_plugins.json"),
+		fmt.Appendf(nil, `{"version":2,"plugins":{"pstack@m":[{"scope":"user","installPath":%q}]}}`, plugin)); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := state.Load()
+	got := Brief(st, s.Roles[2].Agent)
+	if want := "Work by the skill pstack:interrogate: read " + filepath.Join(plugin, "skills/interrogate/SKILL.md") + " in full before your first task"; !strings.Contains(got, want) {
+		t.Errorf("interrogator's brief lacks %q:\n%s", want, got)
+	}
+	if err := os.RemoveAll(plugin); err != nil {
+		t.Fatal(err)
+	}
+	if got := Brief(st, s.Roles[1].Agent); !strings.Contains(got, "names the skill pstack:poteto-mode, which is not on this machine any more") {
+		t.Errorf("builder's brief with the skill gone:\n%s", got)
+	}
+	if err := Check(Template{Name: "x", Roles: []Role{{Role: run.Role{Name: "a", Agent: "claude", Skill: "a/b"}, Lead: true}}}); err == nil ||
+		!strings.Contains(err.Error(), `role a: skill "a/b"`) {
+		t.Errorf("a bad skill name: %v", err)
 	}
 }
 
