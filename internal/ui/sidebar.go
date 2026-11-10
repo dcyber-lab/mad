@@ -224,6 +224,9 @@ type model struct {
 	runnerStarted map[string]time.Time    // run id → when its runner was last started here
 	runnerMissing map[string]int          // run id → polls in a row without its runner
 
+	bin          binStamp  // the sidebar's own binary as it started (rebuilt.go)
+	lastBinCheck time.Time // when it was last looked at
+
 	day        *transcript.Day // only the day command touches it
 	dayCost    float64         // what today cost so far, every session on the machine
 	dayReading bool
@@ -240,6 +243,7 @@ func Run() error {
 	}
 	m := newModel(st, agent.Builtin())
 	m.reloadConfig() // config.json, agents.json
+	m.bin, _ = stampOf(paths.Self())
 	defer func() {
 		if r := recover(); r != nil {
 			if f, ferr := os.OpenFile(paths.SidebarLog(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
@@ -327,6 +331,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tickMsg:
 		m.frame++
+		// a rebuilt mad: leave for it, between sends (one cut short would lose its message)
+		if now := time.Now(); now.Sub(m.lastBinCheck) >= binCheckEvery {
+			m.lastBinCheck = now
+			if !m.dispatching && m.bin.rebuilt(now) {
+				return m, tea.Quit
+			}
+		}
 		cmds := []tea.Cmd{tick()}
 		if !m.polling {
 			if m.fullDue || time.Since(m.lastFull) >= fullPollEvery {
