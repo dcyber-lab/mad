@@ -23,7 +23,7 @@ struct WaitingCard: View {
                 Text(item.age).font(.system(size: 13.5)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
             if item.mustOpen, !item.detail.isEmpty {
-                Text(item.macLine.isEmpty ? item.detail : item.macLine).font(.system(size: 14)).foregroundStyle(Color.madFg2).lineLimit(1)
+                Text(item.macLine.isEmpty ? item.detail : item.macLine).font(.system(size: 14)).foregroundStyle(Color.madFg2).lineLimit(item.macLine.isEmpty ? 1 : 2)
             } else if !item.detail.isEmpty {
                 MacCommandLine(text: item.detail, mono: item.mono, cut: $cut)
             }

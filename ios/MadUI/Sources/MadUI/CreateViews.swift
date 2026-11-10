@@ -214,9 +214,16 @@ struct CreateCardView: View {
     let card: CreateCard
     let act: (String, String?) -> Void
     @State private var sending: CreateSending?
-    @State private var changing = false
+    @State private var changing: Bool
     @State private var words = ""
     @FocusState private var focused: Bool
+
+    /// `opensChange` shows the card with its change field already open (for a picture of that state).
+    init(card: CreateCard, act: @escaping (String, String?) -> Void, opensChange: Bool = false) {
+        self.card = card
+        self.act = act
+        _changing = State(initialValue: opensChange)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
