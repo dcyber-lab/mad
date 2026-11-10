@@ -16,6 +16,8 @@ public struct NativeRoot: View {
     @State private var notice: String?
     /// What the pages of agents started from 新对话 are handed when they open.
     @State private var handovers = Handovers()
+    /// The project a 新群聊 was opened from (its name): its agents lead the member list. Empty from the plain +.
+    @State private var channelProject = ""
     #if os(macOS)
     @State private var showPhone = false
     #endif
@@ -51,18 +53,53 @@ public struct NativeRoot: View {
 
     /// 新对话 is native: the detail shows it (the Mac's pane, the iPhone's screen over the list), when the server can
     /// start agents for the app.
-    private var newChat: (() -> Void)? { api is NewChatAPI ? { selection = HomeRow.newChatID } : nil }
+    private var newChat: (() -> Void)? { api is NewChatAPI ? { channelProject = ""; selection = HomeRow.newChatID } : nil }
     /// 新群聊 and 新团队 are native the same way.
-    private var newChannel: (() -> Void)? { api is NewChannelAPI ? { selection = HomeRow.newChannelID } : nil }
+    private var newChannel: (() -> Void)? { api is NewChannelAPI ? { channelProject = ""; selection = HomeRow.newChannelID } : nil }
     private var newTeam: (() -> Void)? { api is NewTeamAPI ? { selection = HomeRow.newTeamID } : nil }
+
+    /// A project's + chose an item: the form opens with that project chosen. 新对话 and 新团队 read the project from
+    /// the same default they keep the last one in; 新群聊 has no project, so its list puts the project's agents first.
+    private func create(_ item: HomeNewItem, inProject id: String) {
+        guard let project = store.deck?.projects.first(where: { $0.id == id }) else { return }
+        switch item {
+        case .chat where api is NewChatAPI, .team where api is NewTeamAPI:
+            UserDefaults.standard.set(project.path, forKey: NewProject.key)
+            selection = item == .chat ? HomeRow.newChatID : HomeRow.newTeamID
+        case .channel where api is NewChannelAPI:
+            channelProject = project.name
+            selection = HomeRow.newChannelID
+        default:
+            Self.homeActions(open: { _ in }, switchMac: nil, openWeb: openWeb).create(item)
+        }
+    }
+
+    /// 删除 on an agent's row, confirmed: the Mac ends it and drops it; the deck is looked at again, and what was open
+    /// on it closes.
+    @MainActor
+    private func remove(agent id: String) async {
+        guard let api = api as? AgentRemoveAPI else { return }
+        do {
+            try await api.removeAgent(id: id)
+            notice = nil
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        if selection == id { selection = nil }
+        await store.refresh()
+    }
 
     private var actions: HomeActions {
         let act: (String, String, String?) -> Void = { item, act, text in Task { await self.act(item: item, act: act, text: text) } }
         let interrupt: (String) -> Void = { id in Task { try? await api.interrupt(agent: id); await store.refresh() } }
         #if os(macOS)
         // 手机设备 is native on the Mac: a sheet over the window, not the page in a window of its own
-        return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
-                                newChat: newChat, newChannel: newChannel, newTeam: newTeam, act: act, interrupt: interrupt)
+        var home = Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, openPhone: { showPhone = true },
+                                       newChat: newChat, newChannel: newChannel, newTeam: newTeam, act: act, interrupt: interrupt)
+        // the sidebar's project + and row 删除 are the Mac's (the phone's list has neither)
+        home.createIn = { item, id in create(item, inProject: id) }
+        if api is AgentRemoveAPI { home.remove = { id in Task { await remove(agent: id) } } }
+        return home
         #else
         return Self.homeActions(open: { selection = $0 }, switchMac: onSwitchMac, openWeb: openWeb, newChat: newChat, newChannel: newChannel,
                                 newTeam: newTeam, act: act, interrupt: interrupt)
@@ -191,7 +228,7 @@ public struct NativeRoot: View {
         MacShell(model: model, selection: $selection, actions: actions, link: store.link,
                  rowOpen: selection.map { rowOpen($0) } ?? false) {
             Detail(selection: selection, api: api, onBack: nil, open: { selection = $0 }, openWeb: openWeb, home: model, homeActions: actions,
-                   handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted,
+                   channelProject: channelProject, handovers: handovers, tookHandover: { handovers.took($0) }, newChatStarted: newChatStarted,
                    newTeamStarted: newTeamStarted)
         }
         // a channel's or an agent's name pill says it in place of its state line (see MacShell for no row open)
@@ -232,6 +269,8 @@ struct Detail: View {
     /// The list's model and actions: Today is drawn from them.
     var home = HomeModel(machine: "", sections: [])
     var homeActions = HomeActions()
+    /// The project 新群聊 was opened from (its name), so its agents come first; empty for none.
+    var channelProject = ""
     /// First messages that did not go out, by agent; 新对话's way to say an agent was started.
     var handovers = Handovers()
     var tookHandover: (String) -> Void = { _ in }
@@ -274,7 +313,7 @@ struct Detail: View {
 
     /// The deck has the new channel before it opens.
     @ViewBuilder private func newChannel(_ maker: NewChannelAPI) -> some View {
-        NewChannelDetail(api: maker, candidates: store.deck?.groupCandidates ?? [], created: { id in
+        NewChannelDetail(api: maker, candidates: store.deck?.groupCandidates ?? [], firstProject: channelProject, created: { id in
             await store.refresh()
             open(id)
         }, onBack: onBack)

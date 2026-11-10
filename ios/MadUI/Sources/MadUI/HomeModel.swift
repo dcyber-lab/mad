@@ -338,12 +338,20 @@ public struct HomeActions {
     public var act: (_ itemID: String, _ actID: String, _ text: String?) -> Void
     /// Today's 打断 on a working agent.
     public var interrupt: (_ agentID: String) -> Void
+    /// A project's + chose an item: what to start, and the project's section id (its path). Nil where the app cannot,
+    /// and the + is not drawn.
+    public var createIn: ((HomeNewItem, String) -> Void)?
+    /// An agent's row was deleted (after the person confirmed): its id. Nil where the app cannot, and the row has no 删除.
+    public var remove: ((_ agentID: String) -> Void)?
 
     public init(open: @escaping (HomeRow.ID) -> Void = { _ in }, switchMac: @escaping () -> Void = {},
                 create: @escaping (HomeNewItem) -> Void = { _ in }, search: @escaping (String) -> Void = { _ in },
                 menu: @escaping (HomeMenuItem) -> Void = { _ in },
                 act: @escaping (String, String, String?) -> Void = { _, _, _ in },
-                interrupt: @escaping (String) -> Void = { _ in }) {
+                interrupt: @escaping (String) -> Void = { _ in },
+                createIn: ((HomeNewItem, String) -> Void)? = nil, remove: ((String) -> Void)? = nil) {
+        self.createIn = createIn
+        self.remove = remove
         self.act = act
         self.interrupt = interrupt
         self.open = open
@@ -414,5 +422,29 @@ public enum HomeFresh {
         // old keys are not worth keeping: the list stays short
         if shown.count > 200 { shown = Set(shown.suffix(100)) }
         UserDefaults.standard.set(Array(shown), forKey: key)
+    }
+}
+
+/// Which project sections the person folded in the sidebar: their ids (paths), kept as one JSON string in the
+/// defaults so it survives a launch. The deck has a collapsed flag for the terminal's list, but no way to set it
+/// over the API, so this one is the app's own.
+public enum HomeCollapsed {
+    public static let key = "mad.home.collapsed"
+
+    public static func ids(_ raw: String) -> Set<String> {
+        guard let data = raw.data(using: .utf8), let list = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return Set(list)
+    }
+
+    public static func raw(_ ids: Set<String>) -> String {
+        guard let data = try? JSONEncoder().encode(ids.sorted()), let s = String(data: data, encoding: .utf8) else { return "[]" }
+        return s
+    }
+
+    /// `raw` with `id` folded (`folded` true) or open.
+    public static func setting(_ id: String, folded: Bool, in raw: String) -> String {
+        var s = ids(raw)
+        if folded { s.insert(id) } else { s.remove(id) }
+        return Self.raw(s)
     }
 }
