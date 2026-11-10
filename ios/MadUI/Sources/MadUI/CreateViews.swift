@@ -218,7 +218,8 @@ struct CreateCardView: View {
     @State private var words = ""
     @FocusState private var focused: Bool
     /// A text field outside the card (the composer, a search) has the keyboard: the card has no keys then.
-    @State private var textFocused = false
+    /// True until the watcher's first report: a card that appears while the composer has the keyboard has no keys.
+    @State private var textFocused = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

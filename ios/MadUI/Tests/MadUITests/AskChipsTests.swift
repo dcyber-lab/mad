@@ -24,8 +24,6 @@ final class AskChipsTests: XCTestCase {
         XCTAssertEqual(AskChips.words(AskAct(id: "a", label: "允许", kind: .allow), sending: false), "允许")
     }
 
-    /// The sending words are looked up in MadUI's own catalog: each has an English entry there, or it would stay Chinese
-    /// in English. SwiftPM does not compile the catalog for a test, so the file itself is read.
     /// Every word MadUI's create card and ask chips look up with L("…") has an English entry in MadUI's catalog (one that is
     /// missing reads in Chinese in English, as 发送 did).
     func testEveryWordOfTheCreateCardAndTheChipsHasAnEnglishEntry() throws {
@@ -45,6 +43,8 @@ final class AskChipsTests: XCTestCase {
         }
     }
 
+    /// The sending words are looked up in MadUI's own catalog: each has an English entry there, or it would stay Chinese
+    /// in English. SwiftPM does not compile the catalog for a test, so the file itself is read.
     func testTheSendingWordsHaveEnglishEntriesInMadUIsCatalog() throws {
         let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MadUI/Resources/Localizable.xcstrings")

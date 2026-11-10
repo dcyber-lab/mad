@@ -250,7 +250,8 @@ struct AskCardView: View {
     /// The act sent and waiting for the Mac, by a tap or by Return / Esc (AskChips draws it).
     @State private var sent: String?
     /// A text field outside the card (the composer, a search) has the keyboard: the card has no keys then.
-    @State private var textFocused = false
+    /// True until the watcher's first report: a card that appears while the composer has the keyboard has no keys.
+    @State private var textFocused = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
