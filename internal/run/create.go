@@ -141,10 +141,13 @@ func Create(o Options) (*state.Run, error) {
 			Permission: o.Permission, Agents: o.Agents},
 		Progress: Progress{Status: Starting, Round: 1},
 	}
-	if err := f.Save(rd); err != nil {
+	// Before the run's file: a run that can't keep its skills is none,
+	// and leaves nothing in the way of starting it again.
+	if err := KeepSkills(flow.Roles, root, skillsDir(rd)); err != nil {
+		_ = os.RemoveAll(rd)
 		return nil, err
 	}
-	if err := KeepSkills(flow.Roles, root, skillsDir(rd)); err != nil {
+	if err := f.Save(rd); err != nil {
 		return nil, err
 	}
 	created := "run created: " + task

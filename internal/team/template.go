@@ -113,11 +113,8 @@ func Builtin() []Template { return append([]Template(nil), builtin()...) }
 // read or check is left out, and said so in the error.
 func packTemplates(p pack.Pack) ([]Template, error) {
 	files, err := p.Files("teams")
-	if err != nil {
-		return nil, err
-	}
 	var out []Template
-	var errs []error
+	errs := []error{err}
 	for _, file := range files {
 		t, err := ParseIn(file.Data, p)
 		if err != nil {

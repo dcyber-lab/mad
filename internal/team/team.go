@@ -82,6 +82,14 @@ func skillsDir(name string) string {
 	return filepath.Join(paths.StateDir(), "bus", "teams", name, "skills")
 }
 
+// dropSkills removes what team name kept. Only for a name a team can
+// have: any other would be a path to somewhere else.
+func dropSkills(name string) {
+	if validName(name) {
+		_ = os.RemoveAll(filepath.Dir(skillsDir(name)))
+	}
+}
+
 // update runs fn on the records under a lock, saving them when fn says
 // to (returns true).
 func update(fn func(*file) (bool, error)) error {
@@ -144,7 +152,7 @@ func Running(st *state.State) ([]Record, error) {
 			if len(roles) == 0 && len(r.Roles) > 0 {
 				changed = true
 				emptied = append(emptied, r.Channel)
-				_ = os.RemoveAll(filepath.Dir(skillsDir(r.Name)))
+				dropSkills(r.Name)
 				continue
 			}
 			r.Roles = roles
@@ -548,7 +556,6 @@ func Remove(name string) error {
 	if !ok {
 		// A record that never got its first agent is still there to clear.
 		_ = update(func(f *file) (bool, error) { return dropRecord(f, name), nil })
-		_ = os.RemoveAll(filepath.Dir(skillsDir(name)))
 		return fmt.Errorf("no team %q (mad team ls)", name)
 	}
 	var errs []error
@@ -575,7 +582,7 @@ func Remove(name string) error {
 	if err := update(func(f *file) (bool, error) { return dropRecord(f, name), nil }); err != nil {
 		errs = append(errs, err)
 	}
-	_ = os.RemoveAll(filepath.Dir(skillsDir(name)))
+	dropSkills(rec.Name)
 	return errors.Join(errs...)
 }
 

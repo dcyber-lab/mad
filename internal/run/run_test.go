@@ -1158,6 +1158,74 @@ func TestPackFlows(t *testing.T) {
 	}
 }
 
+// A file a pack can't read costs that file alone: the pack's other flows
+// stay, and the default with them.
+func TestPackWithAFileItCantRead(t *testing.T) {
+	home, _ := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	mine := filepath.Join(pack.UserDir(), "mad")
+	madPack, _ := pack.Find(pack.Builtin(), "mad")
+	if err := madPack.CopyTo(mine); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(mine, "nowhere.json"), filepath.Join(mine, "flows", "old.json")); err != nil {
+		t.Fatal(err)
+	}
+	flows, err := Flows(filepath.Join(home, "proj"))
+	if err == nil || !strings.Contains(err.Error(), "flows/old.json") {
+		t.Errorf("err = %v, want the file named", err)
+	}
+	if len(flows) != 7 || flows[0].Name != "design-impl-review" || flows[1].Name != "impl-review" {
+		t.Errorf("flows = %d, the first %s", len(flows), flows[0].Name)
+	}
+	if f, ok := FlowByName(filepath.Join(home, "proj"), ""); !ok || f.Name != "design-impl-review" {
+		t.Errorf("the default flow = %s %v", f.Name, ok)
+	}
+}
+
+// A run whose skills can't be copied does not start, and leaves nothing
+// in the way of starting it again.
+func TestCreateWithoutItsSkills(t *testing.T) {
+	repo := fakeDeck(t)
+	dir := filepath.Join(pack.UserDir(), "house")
+	for name, body := range map[string]string{
+		"pack.json":             `{"name": "house"}`,
+		"skills/look/SKILL.md":  "Look.\n",
+		"skills/look/secret.md": "Not for reading.\n",
+		"flows/looking.json": `{"name": "looking", "roles": [{"name": "scout", "agent": "claude", "skill": "house:look"}],
+			"steps": [{"name": "scout", "role": "scout", "prompt": "{{task}}"}]}`,
+	} {
+		if err := paths.WriteFileAtomic(filepath.Join(dir, filepath.FromSlash(name)), []byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	secret := filepath.Join(dir, "skills", "look", "secret.md")
+	if err := os.Chmod(secret, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(secret); err == nil {
+		t.Skip("this user reads what it may not (root?)")
+	}
+	_, err := Create(Options{Project: repo, Flow: "looking", Task: "find the thing"})
+	if err == nil || !strings.Contains(err.Error(), "the skills of pack house") {
+		t.Fatalf("started without its skills: %v", err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(repo, ".claude", "worktrees", "*", ".mad", "runs", "*", "*")); len(left) != 0 {
+		t.Errorf("the run that did not start left %v", left)
+	}
+	if err := os.Chmod(secret, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Create(Options{Project: repo, Flow: "looking", Task: "find the thing"})
+	if err != nil {
+		t.Fatalf("started again, its pack readable: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(Dir(r), "skills", "house", "look", "secret.md")); err != nil {
+		t.Errorf("the run lacks its skill's file: %v", err)
+	}
+}
+
 func TestCheck(t *testing.T) {
 	for body, want := range map[string]string{
 		`{"name": "X", "roles": [{"name": "a", "agent": "claude"}], "steps": [{"name": "s", "role": "a", "prompt": "p"}]}`:                                                                         `name "X"`,

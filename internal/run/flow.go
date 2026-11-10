@@ -234,11 +234,8 @@ func Builtin() []Flow { return append([]Flow(nil), builtin()...) }
 // check is left out, and said so in the error.
 func packFlows(p pack.Pack) ([]Flow, error) {
 	files, err := p.Files("flows")
-	if err != nil {
-		return nil, err
-	}
 	var out []Flow
-	var errs []error
+	errs := []error{err}
 	for _, file := range files {
 		f, err := ParseIn(file.Data, p)
 		if err != nil {

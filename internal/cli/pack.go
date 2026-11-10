@@ -106,11 +106,15 @@ func packCmd(args []string, stdio IO) error {
 			return fmt.Errorf("no pack %q (mad pack ls)", fs.Arg(0))
 		}
 		dst := filepath.Join(pack.UserDir(), p.Name)
-		if *project {
-			if root == "" {
-				return errors.New("not in a git repository: -p copies to a project's .mad/packs/")
-			}
+		switch {
+		case *project && root == "":
+			return errors.New("not in a git repository: -p copies to a project's .mad/packs/")
+		case *project:
 			dst = filepath.Join(pack.ProjectDir(root), p.Name)
+		case root != "" && strings.HasPrefix(p.Source, pack.ProjectDir(root)+string(filepath.Separator)):
+			// A copy among your own packs would not take its place here,
+			// and would in every other project.
+			return fmt.Errorf("pack %s is this project's (%s): change it there", p.Name, paths.Short(p.Source))
 		}
 		if _, err := os.Stat(dst); err == nil {
 			return fmt.Errorf("%s is there already: change it, or remove it to copy anew", paths.Short(dst))
@@ -140,39 +144,44 @@ func packShow(p pack.Pack, stdio IO) error {
 	}
 	tw := tabwriter.NewWriter(stdio.Out, 0, 0, 2, ' ', 0)
 	var errs []error
-	if files, _ := p.Files("flows"); len(files) > 0 {
-		fmt.Fprintln(tw, "\nflows:")
-		for _, file := range files {
-			f, err := madrun.ParseIn(file.Data, p)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", p.Label(file.Name), err))
-				continue
-			}
-			var steps []string
-			for _, s := range f.Steps {
-				steps = append(steps, s.Name)
-			}
-			fmt.Fprintf(tw, "  %s\t%s\n", f.Name, strings.Join(steps, " → "))
+	// By name, as mad run flow ls and mad team ls list them.
+	var lines []string
+	files, _ := p.Files("flows")
+	for _, file := range files {
+		f, err := madrun.ParseIn(file.Data, p)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p.Label(file.Name), err))
+			continue
 		}
+		var steps []string
+		for _, s := range f.Steps {
+			steps = append(steps, s.Name)
+		}
+		lines = append(lines, fmt.Sprintf("  %s\t%s", f.Name, strings.Join(steps, " → ")))
 	}
-	if files, _ := p.Files("teams"); len(files) > 0 {
-		fmt.Fprintln(tw, "\nteams:")
-		for _, file := range files {
-			t, err := team.ParseIn(file.Data, p)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", p.Label(file.Name), err))
-				continue
-			}
-			var roles []string
-			for _, r := range t.Roles {
-				s := r.Name
-				if r.Lead {
-					s += " (lead)"
-				}
-				roles = append(roles, s)
-			}
-			fmt.Fprintf(tw, "  %s\t%s\n", t.Name, strings.Join(roles, ", "))
+	if sort.Strings(lines); len(lines) > 0 {
+		fmt.Fprintln(tw, "\nflows:\n"+strings.Join(lines, "\n"))
+	}
+	lines = nil
+	files, _ = p.Files("teams")
+	for _, file := range files {
+		t, err := team.ParseIn(file.Data, p)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p.Label(file.Name), err))
+			continue
 		}
+		var roles []string
+		for _, r := range t.Roles {
+			s := r.Name
+			if r.Lead {
+				s += " (lead)"
+			}
+			roles = append(roles, s)
+		}
+		lines = append(lines, fmt.Sprintf("  %s\t%s", t.Name, strings.Join(roles, ", ")))
+	}
+	if sort.Strings(lines); len(lines) > 0 {
+		fmt.Fprintln(tw, "\nteams:\n"+strings.Join(lines, "\n"))
 	}
 	tw.Flush()
 	if skills := p.Skills(); len(skills) > 0 {

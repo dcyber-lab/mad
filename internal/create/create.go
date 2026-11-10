@@ -64,6 +64,7 @@ type Role struct {
 	Effort   string `json:"effort,omitempty"`
 	Lead     bool   `json:"lead,omitempty"`
 	ReadOnly bool   `json:"read_only,omitempty"`
+	NoEdits  bool   `json:"no_edits,omitempty"`
 	// Brief is what the role is told about its part.
 	Brief string `json:"brief,omitempty"`
 	// Skill is the skill it works by.

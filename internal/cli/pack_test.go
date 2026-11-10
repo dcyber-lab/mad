@@ -7,10 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/team"
 )
 
 // The packs mad comes with are good as `mad pack check` has it: every
@@ -165,5 +168,55 @@ func TestTeamHookRefuses(t *testing.T) {
 	}
 	if why := outsideRun(breaker, &discover.Tool{Name: "Bash", Command: "git push"}); why != "" {
 		t.Errorf("a team's push is its lead's to decide: %q", why)
+	}
+}
+
+// A project's own pack is changed where it is: copying it to the user's
+// packs would leave the project's in place, and put it over that pack in
+// every other project.
+func TestPackEjectOfTheProjectsOwn(t *testing.T) {
+	home := isolate(t)
+	repo, _ := filepath.EvalSymlinks(home)
+	repo = filepath.Join(repo, "repo")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	t.Chdir(repo)
+	if code, _, errOut := run(t, "", "pack", "eject", "-p", "pstack"); code != 0 {
+		t.Fatalf("eject -p pstack = %d %q", code, errOut)
+	}
+	code, out, errOut := run(t, "", "pack", "eject", "pstack")
+	if code != 1 || !strings.Contains(errOut, "is this project's") {
+		t.Errorf("eject of the project's pack = %d %q %q", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(home, "config", "mad", "packs", "pstack")); err == nil {
+		t.Error("the project's pack was copied to the user's packs")
+	}
+}
+
+// A team an agent asks for starts as its template says, a role that
+// edits nothing included.
+func TestRequestedTeamKeepsNoEdits(t *testing.T) {
+	isolate(t)
+	tpl, ok := team.ByName("", "pstack")
+	if !ok {
+		t.Fatal("no pstack template")
+	}
+	back := creator.Template(create.Spec{Type: create.TypeTeam, Template: tpl.Name, Roles: specRoles(tpl)})
+	if len(back.Roles) != len(tpl.Roles) {
+		t.Fatalf("roles = %d, want %d", len(back.Roles), len(tpl.Roles))
+	}
+	edits := 0
+	for i, r := range tpl.Roles {
+		got := back.Roles[i]
+		if got.NoEdits != r.NoEdits || got.ReadOnly != r.ReadOnly || got.Skill != r.Skill || got.Lead != r.Lead {
+			t.Errorf("role %s: asked for %+v, starts as %+v", r.Name, r.Role, got.Role)
+		}
+		if r.NoEdits {
+			edits++
+		}
+	}
+	if edits == 0 {
+		t.Error("the pstack team has no role that edits nothing: the test tests nothing")
 	}
 }

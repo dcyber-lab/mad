@@ -501,6 +501,26 @@ func TestPackSkill(t *testing.T) {
 	}
 }
 
+// Removing a team that is not there removes nothing, whatever it is
+// called: a name is no path.
+func TestRemoveOfNoTeamRemovesNothing(t *testing.T) {
+	root, _, _ := project(t)
+	if _, err := Start(Options{Project: root, Template: "pstack", Name: "alpha", Goal: "g"}); err != nil {
+		t.Fatal(err)
+	}
+	kept := filepath.Join(paths.StateDir(), "bus", "teams", "alpha", "skills", "pstack", "lead", "SKILL.md")
+	for _, name := range []string{"", ".", "..", "../..", "alpha/..", "nobody"} {
+		if err := Remove(name); err == nil {
+			t.Errorf("Remove(%q) of no team said nothing", name)
+		}
+		for _, file := range []string{kept, recordsFile(), filepath.Join(paths.StateDir(), "state.json")} {
+			if _, err := os.Stat(file); err != nil {
+				t.Fatalf("Remove(%q) took %s", name, file)
+			}
+		}
+	}
+}
+
 // A pack's templates are listed with mad's own, their roles played by
 // the agents the pack names.
 func TestPackTemplates(t *testing.T) {

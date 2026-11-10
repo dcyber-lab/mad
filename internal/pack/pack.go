@@ -135,12 +135,16 @@ func (p Pack) check() error {
 	}
 	ents, _ := fs.ReadDir(p.fsys, "skills")
 	for _, e := range ents {
-		if e.IsDir() && !p.HasSkill(e.Name()) {
+		// Stat, not the entry: a skill may be a link to where it is kept.
+		if fi, err := fs.Stat(p.fsys, path.Join("skills", e.Name())); err == nil && fi.IsDir() && !hidden(e.Name()) && !p.HasSkill(e.Name()) {
 			bad("skills/%s has no SKILL.md", e.Name())
 		}
 	}
 	return errors.Join(errs...)
 }
+
+// hidden: a file that is not the pack's but its keeper's (.git, .DS_Store).
+func hidden(name string) bool { return strings.HasPrefix(name, ".") }
 
 var builtin = sync.OnceValue(func() []Pack {
 	var out []Pack
@@ -225,7 +229,9 @@ func Enclosing(file string) (Pack, bool) {
 	return p, err == nil
 }
 
-// Files are the pack's JSON files in dir ("flows", "teams"), by name.
+// Files are the pack's JSON files in dir ("flows", "teams"), by name. One
+// that can't be read is left out, and said so in the error: the others
+// are still the pack's.
 func (p Pack) Files(dir string) ([]File, error) {
 	names, err := fs.Glob(p.fsys, dir+"/*.json")
 	if err != nil {
@@ -233,14 +239,20 @@ func (p Pack) Files(dir string) ([]File, error) {
 	}
 	sort.Strings(names)
 	var out []File
+	var errs []error
 	for _, name := range names {
 		data, err := fs.ReadFile(p.fsys, name)
 		if err != nil {
-			return nil, err
+			var pe *fs.PathError
+			if errors.As(err, &pe) {
+				err = pe.Err
+			}
+			errs = append(errs, fmt.Errorf("%s: %w", p.Label(name), err))
+			continue
 		}
 		out = append(out, File{Name: name, Data: data})
 	}
-	return out, nil
+	return out, errors.Join(errs...)
 }
 
 // Agent is the agent the pack names name.
@@ -273,11 +285,47 @@ func (p Pack) Skills() []string {
 	ents, _ := fs.ReadDir(p.fsys, "skills")
 	var out []string
 	for _, e := range ents {
-		if e.IsDir() && p.HasSkill(e.Name()) {
+		if p.HasSkill(e.Name()) {
 			out = append(out, e.Name())
 		}
 	}
 	return out
+}
+
+// maxDepth is how deep a pack's files are looked for: a link that leads
+// back into its own directory would go on for ever.
+const maxDepth = 12
+
+// walk calls fn for every file below dir in fsys, by name. Links are
+// followed, to a file or to a directory: a pack, or a part of one, may be
+// a link to where it is kept. Hidden files are not the pack's.
+func walk(fsys fs.FS, dir string, depth int, fn func(name string, info fs.FileInfo) error) error {
+	if depth > maxDepth {
+		return fmt.Errorf("%s: too deep (a link into its own directory?)", dir)
+	}
+	ents, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range ents {
+		if hidden(e.Name()) {
+			continue
+		}
+		name := path.Join(dir, e.Name())
+		info, err := fs.Stat(fsys, name)
+		switch {
+		case err != nil:
+			return err
+		case info.IsDir():
+			err = walk(fsys, name, depth+1, fn)
+		case info.Mode().IsRegular():
+			err = fn(name, info)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // linkRe finds a path a skill's file points its reader at: one that
@@ -295,9 +343,9 @@ func (p Pack) CheckLinks() error {
 		return nil
 	}
 	var errs []error
-	err := fs.WalkDir(p.fsys, "skills", func(name string, d fs.DirEntry, err error) error {
-		if err != nil || !d.Type().IsRegular() || path.Ext(name) != ".md" {
-			return err
+	err := walk(p.fsys, "skills", 0, func(name string, _ fs.FileInfo) error {
+		if path.Ext(name) != ".md" {
+			return nil
 		}
 		data, err := fs.ReadFile(p.fsys, name)
 		if err != nil {
@@ -362,15 +410,13 @@ func (p Pack) CopyTo(dst string) error {
 }
 
 // copyTree copies the files below from in fsys to dst; nothing when from
-// is not there.
+// is not there. A copy may do what its file may (a script stays one) and
+// is its owner's to change, which a file of a built-in pack is nobody's.
 func copyTree(fsys fs.FS, from, dst string) error {
 	if _, err := fs.Stat(fsys, from); err != nil {
 		return nil
 	}
-	return fs.WalkDir(fsys, from, func(name string, d fs.DirEntry, err error) error {
-		if err != nil || !d.Type().IsRegular() {
-			return err
-		}
+	return walk(fsys, from, 0, func(name string, info fs.FileInfo) error {
 		rel, err := filepath.Rel(filepath.FromSlash(from), filepath.FromSlash(name))
 		if err != nil {
 			return err
@@ -379,6 +425,10 @@ func copyTree(fsys fs.FS, from, dst string) error {
 		if err != nil {
 			return err
 		}
-		return paths.WriteFileAtomic(filepath.Join(dst, rel), data)
+		to := filepath.Join(dst, rel)
+		if err := paths.WriteFileAtomic(to, data); err != nil {
+			return err
+		}
+		return os.Chmod(to, info.Mode().Perm()|0o600)
 	})
 }
