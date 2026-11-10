@@ -863,6 +863,7 @@ struct MarkdownBubble: View {
                 switch block {
                 case let .text(s): Text(Self.attributed(s)).font(bodyFont).lineSpacing(lineSpacing)
                 case let .code(s): CodeBlock(code: s)
+                case let .table(header, rows): TableBlock(header: header, rows: rows) { Self.attributed($0) }
                 }
             }
         }
@@ -888,6 +889,38 @@ struct MarkdownBubble: View {
 
     static func attributed(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+}
+
+/// A pipe table: a bold header over a rule, a line between rows, columns as wide as their widest cell; a wide one
+/// scrolls sideways inside the bubble. `cell` reads a cell's inline markdown.
+struct TableBlock: View {
+    let header: [String]
+    let rows: [[String]]
+    let cell: (String) -> AttributedString
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
+                GridRow {
+                    ForEach(Array(header.enumerated()), id: \.offset) { _, h in Text(cell(h)).bold() }
+                }
+                Divider().gridCellUnsizedAxes(.horizontal)
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                    if i > 0 { Divider().opacity(0.5).gridCellUnsizedAxes(.horizontal) }
+                    GridRow {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, c in Text(cell(c)) }
+                    }
+                }
+            }
+            #if os(iOS)
+            .font(Phone.message)
+            #else
+            .font(MadType.message)
+            #endif
+            .fixedSize()
+            .padding(.vertical, 2)
+        }
     }
 }
 
