@@ -27,8 +27,8 @@
 //
 // /api/bus/image?id= answers a small PNG whose color is the id's.
 //
-// Scenarios (testdata/): edge-home, empty, create-confirm (two waiting "create" items, an agent and a team an agent asks to start, one from #fold, with event lines there, and five ended ones in deck.creates: created, declined, expired, failed), many-channels, channel-fold, channel-quiet, team-members, long-title,
-// usage and pairing; the files say what is in each.
+// Scenarios (testdata/): edge-home, empty, create-confirm (two waiting "create" items, an agent and a team an agent asks to start, one from #fold, with event lines there, and five ended ones in deck.creates: created, declined, expired, failed), many-channels, channel-fold, channel-open-long (260 messages, long ones and
+// pictures: the shape of a busy channel), channel-quiet, team-members, long-title, usage and pairing; the files say what is in each.
 //
 // What the page gives a test to find (web/): a list row is a button
 // (role="button") labeled with its name; a character is role="img" labeled

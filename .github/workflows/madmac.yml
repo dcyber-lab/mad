@@ -1,0 +1,23 @@
+name: madmac
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/madmac.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/madmac.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate
+      - run: xcodebuild -project ios/mad.xcodeproj -scheme madmac -configuration Release -destination 'platform=macOS' -derivedDataPath ios/build/mac-release build
+      - run: cd ios/build/mac-release/Build/Products/Release && ditto -c -k --keepParent madmac.app $GITHUB_WORKSPACE/madmac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: madmac
+          path: madmac.zip

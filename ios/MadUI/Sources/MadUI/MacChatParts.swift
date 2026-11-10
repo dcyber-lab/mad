@@ -309,26 +309,13 @@ struct AskCardView: View {
                         .keyboardShortcut(.cancelAction)
                 }
             }
-        } else if card.permission {
-            HStack(alignment: .center, spacing: 8) {
-                if let allow = card.acts.first(where: { $0.kind == .allow }) {
-                    Button(allow.label) { choose(allow) }.buttonStyle(MacAskPill(filled: true))
-                }
-                if let deny = escapeAct {
-                    Button(L("拒绝")) { choose(deny) }.buttonStyle(MacAskPill(filled: false))
-                }
-                ForEach(card.acts.filter { $0.kind == .other }) { a in
-                    Button(a.label) { choose(a) }.buttonStyle(MacAskPill(filled: false))
-                }
-                if let session = card.acts.first(where: { $0.kind == .allowSession }) {
-                    Button { choose(session) } label: {
-                        Text(session.label).font(.system(size: 14.5)).foregroundStyle(Color.madFg3)
-                            .padding(.horizontal, 6).frame(minHeight: 38).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer(minLength: 8)
-                if returnAct != nil || escapeAct != nil {
+        } else if !card.questions.isEmpty {
+            AskForm(questions: card.questions) { answers in act("send", answers.joined(separator: "\n")) }
+        } else {
+            HStack(alignment: .top, spacing: 8) {
+                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 })
+                if card.permission, returnAct != nil || escapeAct != nil {
+                    Spacer(minLength: 8)
                     HStack(spacing: 14) {
                         if returnAct != nil { hint("⏎", L("允许")) }
                         if escapeAct != nil { hint("esc", L("拒绝")) }
@@ -336,22 +323,17 @@ struct AskCardView: View {
                     .font(.system(size: 13.5))
                     .foregroundStyle(Color.madFg3)
                     .fixedSize()
+                    .frame(minHeight: 36)
                     .accessibilityHidden(true)
                 }
             }
             .background {
                 // Return allows and Esc denies, as the hint says (a focused field takes its own Return first)
                 if let a = returnAct {
-                    Button("") { choose(a) }.keyboardShortcut(.defaultAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+                    Button("") { act(a.id, nil) }.keyboardShortcut(.defaultAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 }
                 if let a = escapeAct {
-                    Button("") { choose(a) }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
-                }
-            }
-        } else {
-            FlowLayout(spacing: 8) {
-                ForEach(card.acts) { a in
-                    Button(a.label) { choose(a) }.buttonStyle(MacAskPill(filled: a.primary || a.kind == .allow))
+                    Button("") { act(a.id, nil) }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 }
             }
         }
