@@ -1340,6 +1340,17 @@
           }
         }
       }
+    },
+    "想问你": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asks you"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
