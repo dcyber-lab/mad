@@ -483,3 +483,19 @@ final class MentionTests: XCTestCase {
         XCTAssertEqual(ChannelMention.completing("plain", with: "architect"), "plain")
     }
 }
+
+final class HomeCollapsedTests: XCTestCase {
+    func testFoldingAndOpeningAProjectKeepsTheOthers() {
+        var raw = "[]"
+        raw = HomeCollapsed.setting("/p/mad", folded: true, in: raw)
+        raw = HomeCollapsed.setting("/p/web", folded: true, in: raw)
+        XCTAssertEqual(HomeCollapsed.ids(raw), ["/p/mad", "/p/web"])
+        raw = HomeCollapsed.setting("/p/mad", folded: false, in: raw)
+        XCTAssertEqual(HomeCollapsed.ids(raw), ["/p/web"])
+    }
+
+    func testNothingReadableIsNothingFolded() {
+        XCTAssertEqual(HomeCollapsed.ids(""), [])
+        XCTAssertEqual(HomeCollapsed.ids("nope"), [])
+    }
+}

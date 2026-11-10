@@ -7,6 +7,8 @@ import SwiftUI
 struct NewChannelDetail: View {
     let api: NewChannelAPI
     let candidates: [(agent: Agent, project: String)]
+    /// The project the form was opened from: its agents are listed first (the list is of every project's); empty for none.
+    var firstProject = ""
     /// Opens the channel that was made (after the deck has it).
     let created: (String) async -> Void
     var onBack: (() -> Void)?
@@ -16,6 +18,11 @@ struct NewChannelDetail: View {
     @State private var chosen: Set<String> = []
     @State private var sending = false
     @State private var error: String?
+
+    /// The candidates, those of `firstProject` first (a stable order otherwise).
+    private var ordered: [(agent: Agent, project: String)] {
+        firstProject.isEmpty ? candidates : candidates.filter { $0.project == firstProject } + candidates.filter { $0.project != firstProject }
+    }
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -30,7 +37,7 @@ struct NewChannelDetail: View {
                 if candidates.isEmpty {
                     Text(L("还没有可以拉进群的 agent。")).font(.system(size: 14)).foregroundStyle(Color.madFg3)
                 } else {
-                    VStack(spacing: 2) { ForEach(candidates, id: \.agent.id) { row($0.agent, $0.project) } }
+                    VStack(spacing: 2) { ForEach(ordered, id: \.agent.id) { row($0.agent, $0.project) } }
                 }
             }
             FormError(text: error)

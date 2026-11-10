@@ -10,6 +10,9 @@ public struct HomeSidebar: View {
     @State private var query = ""
     @State private var searching = false
     @FocusState private var searchFocused: Bool
+    @AppStorage(HomeCollapsed.key) private var collapsedRaw = "[]"
+    /// The agent row 删除 was chosen on, until the person confirms or cancels.
+    @State private var deleting: HomeRow?
 
     public init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions = HomeActions(),
                 menu: [[HomeMenuItem]] = HomeMenuItem.sidebar) {
@@ -35,23 +38,56 @@ public struct HomeSidebar: View {
             }
             List(selection: $selection) {
                 ForEach(model.filtered(by: query).sections) { section in
-                    Section {
-                        ForEach(section.rows) { row in
-                            HomeRowView(row: row, metrics: .mac)
-                                .tag(row.id)
-                                .listRowSeparator(.hidden)
+                    if case .project = section.kind {
+                        Section(isExpanded: expanded(section)) {
+                            rows(section)
+                        } header: {
+                            ProjectHeader(title: section.title, create: actions.createIn.map { create in
+                                { item in create(item, section.id) }
+                            })
                         }
-                    } header: {
-                        Text(section.title).font(MadType.label).foregroundStyle(.secondary)
+                    } else {
+                        Section {
+                            rows(section)
+                        } header: {
+                            Text(section.title).font(MadType.label).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
             .listStyle(.sidebar)
             .onChange(of: selection) { _, id in if let id { actions.open(id) } }
+            .confirmationDialog(Lf("删除“%@”？", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible, presenting: deleting) { row in
+                Button(L("删除"), role: .destructive) { actions.remove?(row.id) }
+                Button(L("取消"), role: .cancel) {}
+            } message: { _ in
+                Text(L("它会停止，并从 mad 里移除。"))
+            }
         }
         #if os(macOS)
         .ignoresSafeArea(.container, edges: .top) // the header takes the title bar's band
         #endif
+    }
+
+    private func rows(_ section: HomeSection) -> some View {
+        ForEach(section.rows) { row in
+            HomeRowView(row: row, metrics: .mac)
+                .tag(row.id)
+                .listRowSeparator(.hidden)
+                .contextMenu {
+                    if row.kind == .agent, actions.remove != nil {
+                        Button(role: .destructive) { deleting = row } label: { Label(L("删除"), systemImage: "trash") }
+                    }
+                }
+        }
+    }
+
+    /// A project's fold. A search shows what matched, folded or not.
+    private func expanded(_ section: HomeSection) -> Binding<Bool> {
+        Binding(
+            get: { !query.isEmpty || !HomeCollapsed.ids(collapsedRaw).contains(section.id) },
+            set: { collapsedRaw = HomeCollapsed.setting(section.id, folded: !$0, in: collapsedRaw) })
     }
 
     private var header: some View {
@@ -93,5 +129,36 @@ public struct HomeSidebar: View {
                 .fixedSize()
                 #endif
         }
+    }
+}
+
+/// A project's header: its name, and a + at the right (on the Mac it shows when the pointer is over the header) that
+/// offers 新对话, 新群聊 and 新团队 for it.
+private struct ProjectHeader: View {
+    let title: String
+    let create: ((HomeNewItem) -> Void)?
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title).font(MadType.label).foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: 0)
+            if let create {
+                Menu {
+                    ForEach(HomeNewItem.allCases, id: \.self) { item in
+                        Button { create(item) } label: { Label(item.title, systemImage: item.symbol) }
+                    }
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .opacity(hovering ? 1 : 0)
+                .accessibilityLabel(L("在这个项目里新建"))
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }
