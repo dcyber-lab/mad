@@ -256,7 +256,7 @@ public enum ChannelMapping {
 
     static func bubble(_ m: BusMessage, by bySeq: [Int: BusMessage], channel: Channel?, deck: Deck?) -> ChannelBubble {
         ChannelBubble(id: m.seq, text: m.text, images: m.images.map(\.id), quote: quote(of: m, by: bySeq),
-                      fold: fold(m, channel: channel, deck: deck))
+                      fold: fold(m, by: bySeq, channel: channel, deck: deck))
     }
 
     /// What a message of the person's reached: each agent it woke at the furthest step it got to. `kind` says what
@@ -297,11 +297,13 @@ public enum ChannelMapping {
     }
 
     /// The fold of a long message of an agent, nil when it is shown whole: the person's, mad's own, any that asks
-    /// the person, and whatever an agent says in a DM with the person (all of it is addressed to them).
-    static func fold(_ m: BusMessage, channel: Channel?, deck: Deck?) -> ChannelBubble.Fold? {
+    /// the person or answers one of theirs (a reply to it), and whatever an agent says in a DM with the person (all
+    /// of it is addressed to them).
+    static func fold(_ m: BusMessage, by bySeq: [Int: BusMessage] = [:], channel: Channel?, deck: Deck?) -> ChannelBubble.Fold? {
         if m.from.isYou || m.from.id == "mad" || m.kind == "system" { return nil }
         if let c = channel, c.dm, c.yours { return nil }
         if asksYou(m) { return nil }
+        if m.replyTo > 0, bySeq[m.replyTo]?.from.isYou == true { return nil }
         let lines = m.text.split(separator: "\n", omittingEmptySubsequences: true).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count > foldLines || m.text.count > foldChars else { return nil }
         return ChannelBubble.Fold(summary: firstSentence(String(lines.first ?? "")))
