@@ -12,7 +12,7 @@ struct NewTeamDetail: View {
     let started: (StartedTeam) async -> Void
     var onBack: (() -> Void)?
 
-    @AppStorage("mad.newchat.project") private var projectPath = ""
+    @AppStorage(NewProject.key) private var projectPath = ""
     @State private var info: TeamTemplates?
     @State private var loadError: String?
     @State private var templateName = ""

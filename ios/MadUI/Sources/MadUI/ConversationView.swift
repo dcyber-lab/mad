@@ -1,4 +1,8 @@
+import PhotosUI
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// An agent's page, as the approved design (v5) draws it: a head with the avatar, the name and `kind · project / branch
 /// · $cost`, two tabs (对话 and 改动) and ⋯ (在终端打开); the conversation, with what waits on the person as a card at
@@ -10,6 +14,12 @@ public struct ConversationView: View {
     /// The phone shows a back button; the Mac's detail pane does not.
     public var showsBack: Bool
     @State private var draft = ""
+    /// Pictures waiting to go with the message, and the picker's state.
+    @State private var images: [ChannelDraftImage] = []
+    @State private var picking = false
+    @State private var picked: [PhotosPickerItem] = []
+    @State private var pictureNote: String?
+    @FocusState private var composerFocused: Bool
     @State private var tab = ConvTab.chat
     @State private var detailsOpen = false
     @State private var renaming = false
@@ -302,9 +312,9 @@ public struct ConversationView: View {
     @ViewBuilder private var composer: some View {
         if model.canSend {
             #if os(iOS)
-            conversationField // the floating capsule has its own edges
+            composerWithPictures // the floating capsule has its own edges
             #else
-            conversationField
+            composerWithPictures
             // the message column's edges, exactly
             .macColumn()
             .padding(.bottom, 22)
@@ -318,6 +328,18 @@ public struct ConversationView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
         }
+    }
+
+    /// The pictures and a note above the field, then the field.
+    private var composerWithPictures: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !images.isEmpty { DraftImageStrip(images: $images).padding(.horizontal, 18) }
+            conversationField
+            if let pictureNote { Text(pictureNote).font(MadType.small).foregroundStyle(Color.madDanger).padding(.horizontal, 18) }
+        }
+        .pastesPictures(focused: composerFocused) { addPicture($0) }
+        .photosPicker(isPresented: $picking, selection: $picked, maxSelectionCount: max(1, ChannelLimits.images - images.count), matching: .images)
+        .onChange(of: picked) { _, items in loadPicked(items) }
     }
 
     /// ＋, the field and send: on the Mac one rounded bar with a hairline and a soft shadow, on the phone Grok's floating
@@ -337,7 +359,7 @@ public struct ConversationView: View {
         .macFloat()
         #else
         PhoneComposerCapsule {
-            PhoneComposerButton(symbol: "plus", label: "Attach", action: actions.attach)
+            attachButton
             composerField.padding(.vertical, 8)
             trailing
         }
@@ -345,13 +367,18 @@ public struct ConversationView: View {
     }
 
     private var attachButton: some View {
-        Button(action: actions.attach) {
+        Menu {
+            Button { picking = true } label: { Label(L("照片"), systemImage: "photo") }
+            #if os(iOS)
+            Button { pasteFromPasteboard() } label: { Label(L("粘贴图片"), systemImage: "doc.on.clipboard") }
+            #endif
+        } label: {
             Image(systemName: "plus")
                 #if os(iOS)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.primary.opacity(0.08)))
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(Color.madFg)
+                .frame(width: 42, height: 42)
+                .background(Color.madFg.opacity(0.07), in: Circle())
                 #else
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.madFg)
@@ -359,9 +386,37 @@ public struct ConversationView: View {
                 .background(Circle().fill(Color.madRaise))
                 #endif
         }
+        .menuStyle(.button)
         .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .disabled(images.count >= ChannelLimits.images)
         .accessibilityLabel("Attach")
     }
+
+    /// Takes a picture's bytes: made a type the server keeps, and refused past the limit or too large.
+    private func addPicture(_ data: Data) {
+        guard images.count < ChannelLimits.images else { pictureNote = Lf("一条消息最多 %lld 张图片。", ChannelLimits.images); return }
+        guard let d = ChannelImage.draft(from: data) else { pictureNote = L("这张图片放不进去（不是图片，或太大）。"); return }
+        pictureNote = nil
+        images.append(d)
+    }
+
+    private func loadPicked(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task { @MainActor in
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self) { addPicture(data) }
+            }
+            picked = []
+        }
+    }
+
+    #if os(iOS)
+    private func pasteFromPasteboard() {
+        guard let image = UIPasteboard.general.image, let data = image.pngData() else { pictureNote = L("剪贴板里没有图片。"); return }
+        addPicture(data)
+    }
+    #endif
 
     private var composerField: some View {
         TextField(model.composerPrompt, text: $draft, axis: .vertical)
@@ -372,11 +427,12 @@ public struct ConversationView: View {
             #else
             .font(Mac.composerText)
             #endif
+            .focused($composerFocused)
             .onSubmit(submit)
     }
 
     @ViewBuilder private var trailing: some View {
-        if model.showsInterrupt(draft: draft) {
+        if model.showsInterrupt(draft: draft, hasImages: !images.isEmpty) {
             Button(action: actions.interrupt) {
                 Image(systemName: "stop.fill")
                     .font(.mad(14, weight: .bold))
@@ -395,7 +451,7 @@ public struct ConversationView: View {
                     .background(Circle().fill(sendFill))
             }
             .buttonStyle(.plain)
-            .disabled(!model.canSubmit(draft: draft))
+            .disabled(!model.canSubmit(draft: draft, hasImages: !images.isEmpty))
             .accessibilityLabel("Send")
         }
     }
@@ -409,18 +465,21 @@ public struct ConversationView: View {
     }
 
     private var sendTint: Color {
-        model.canSubmit(draft: draft) ? Color.madPaper : Color.madFg2
+        model.canSubmit(draft: draft, hasImages: !images.isEmpty) ? Color.madPaper : Color.madFg2
     }
 
     /// Grok's grey round button that turns black when there is something to send (the Mac's too, design v6).
     private var sendFill: Color {
-        model.canSubmit(draft: draft) ? Color.madFg : Color.madRaise
+        model.canSubmit(draft: draft, hasImages: !images.isEmpty) ? Color.madFg : Color.madRaise
     }
 
     private func submit() {
-        guard model.canSubmit(draft: draft) else { return }
-        actions.send(draft.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard model.canSubmit(draft: draft, hasImages: !images.isEmpty) else { return }
+        actions.send(draft.trimmingCharacters(in: .whitespacesAndNewlines), images)
         draft = ""
+        images = []
+        picked = []
+        pictureNote = nil
     }
 }
 
@@ -616,7 +675,7 @@ struct ChangesTab: View {
                     Text(L("没有未提交的改动")).font(.mad(macOnly: 14, 12.5)).foregroundStyle(Color.madFg3)
                 }
             }
-            .frame(maxWidth: 900, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 28)
             #if os(macOS)
             .padding(.top, 76).padding(.bottom, 22) // under the floating capsule
@@ -863,6 +922,7 @@ struct MarkdownBubble: View {
                 switch block {
                 case let .text(s): Text(Self.attributed(s)).font(bodyFont).lineSpacing(lineSpacing)
                 case let .code(s): CodeBlock(code: s)
+                case let .table(header, rows): TableBlock(header: header, rows: rows) { Self.attributed($0) }
                 }
             }
         }
@@ -888,6 +948,38 @@ struct MarkdownBubble: View {
 
     static func attributed(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+}
+
+/// A pipe table: a bold header over a rule, a line between rows, columns as wide as their widest cell; a wide one
+/// scrolls sideways inside the bubble. `cell` reads a cell's inline markdown.
+struct TableBlock: View {
+    let header: [String]
+    let rows: [[String]]
+    let cell: (String) -> AttributedString
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
+                GridRow {
+                    ForEach(Array(header.enumerated()), id: \.offset) { _, h in Text(cell(h)).bold() }
+                }
+                Divider().gridCellUnsizedAxes(.horizontal)
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                    if i > 0 { Divider().opacity(0.5).gridCellUnsizedAxes(.horizontal) }
+                    GridRow {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, c in Text(cell(c)) }
+                    }
+                }
+            }
+            #if os(iOS)
+            .font(Phone.message)
+            #else
+            .font(MadType.message)
+            #endif
+            .fixedSize()
+            .padding(.vertical, 2)
+        }
     }
 }
 
@@ -1220,6 +1312,8 @@ struct AskSheet: View {
     let card: AskCard
     let act: (String, String?) -> Void
     @State private var asking: AskAct?
+    /// The act sent and waiting for the Mac (AskChips draws it).
+    @State private var sent: String?
     @State private var text = ""
     @State private var contentHeight: CGFloat = 0
     static let maxHeight: CGFloat = 420
@@ -1284,16 +1378,10 @@ struct AskSheet: View {
                     }
                     .buttonStyle(AskPill(filled: true))
                 }
-            } else if !card.questions.isEmpty {
-                AskForm(questions: card.questions) { answers in act("send", answers.joined(separator: "\n")) }
             } else {
-                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 })
+                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 }, sent: $sent)
             }
         }
-    }
-
-    private func choose(_ a: AskAct) {
-        if a.input { asking = a } else { act(a.id, nil) }
     }
 }
 

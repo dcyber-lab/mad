@@ -5,7 +5,10 @@ import (
 	"strings"
 
 	"github.com/dcyber-lab/mad/internal/drive"
+	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/run"
+	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 )
 
@@ -70,8 +73,25 @@ func (rec Record) brief(st *state.State, role string) string {
 	if me.Brief != "" {
 		b.WriteString("\nYour part: " + me.Brief)
 	}
+	if me.Skill != "" {
+		kind := run.ParseChoice(me.Spec).Kind
+		if path := skill.Find(kind, rec.dir(), me.Skill); path != "" {
+			fmt.Fprintf(&b, "\nWork by the skill %s: read %s in full before your first task, and follow it. Where the skill and your part here differ, your part wins: hand work over on the bus, and push nothing and open no pull request unless the lead or the person asks for it.", me.Skill, path)
+		} else {
+			fmt.Fprintf(&b, "\nYour part names the skill %s, which is not on this machine any more: work without it.", me.Skill)
+		}
+	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// dir is where the team's agents work: its branch's worktree, or the
+// project.
+func (rec Record) dir() string {
+	if rec.Branch != "" {
+		return git.WorktreeDir(rec.Project, rec.Branch)
+	}
+	return rec.Project
 }
 
 // describe says what plays a role: claude opus, codex (read only).

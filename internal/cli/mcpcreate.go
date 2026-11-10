@@ -230,7 +230,7 @@ func specRoles(t team.Template) []create.Role {
 	var out []create.Role
 	for _, r := range t.Roles {
 		c := madrun.ParseChoice(r.Agent)
-		out = append(out, create.Role{Role: r.Name, Kind: c.Kind, Model: c.Model, Effort: c.Effort, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief))})
+		out = append(out, create.Role{Role: r.Name, Kind: c.Kind, Model: c.Model, Effort: c.Effort, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief)), Skill: r.Skill})
 	}
 	return out
 }

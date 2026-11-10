@@ -266,6 +266,8 @@ public final class AgentStore {
     public private(set) var sending = false
     /// What the Mac said when a send or an interrupt failed; `dismissNotice()` clears it.
     public private(set) var notice: String?
+    /// What the person sent that the transcript does not show yet (ChatSession.outgoing).
+    public private(set) var outgoing: [Outgoing] = []
 
     @ObservationIgnored private let session: ChatSession
     @ObservationIgnored private var subscriptions: Set<AnyCancellable> = []
@@ -279,6 +281,7 @@ public final class AgentStore {
         session.$problem.sink { [weak self] in self?.problem = $0 }.store(in: &subscriptions)
         session.$sending.sink { [weak self] in self?.sending = $0 }.store(in: &subscriptions)
         session.$notice.sink { [weak self] in self?.notice = $0 }.store(in: &subscriptions)
+        session.$outgoing.sink { [weak self] in self?.outgoing = $0 }.store(in: &subscriptions)
     }
 
     public func dismissNotice() { session.notice = nil }
@@ -287,7 +290,7 @@ public final class AgentStore {
     public func run() async { await session.run() }
     /// One look at the transcript.
     public func look() async { await session.look() }
-    /// Sends `text`; true when the Mac took it.
-    public func send(_ text: String) async -> Bool { await session.send(text) }
+    /// Sends `text` and pictures; true when the Mac took it.
+    public func send(_ text: String, images: [OutgoingImage] = []) async -> Bool { await session.send(text, images: images) }
     public func interrupt() async { await session.interrupt() }
 }

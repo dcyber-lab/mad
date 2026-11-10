@@ -17,6 +17,10 @@ public struct MacSidebar: View {
     /// The search field is under the top while it is used (the round button or ⌘K opens it).
     @State private var searching = false
     @FocusState private var searchFocused: Bool
+    /// The projects folded (HomeCollapsed), the filter's choice, and the row 删除 was chosen on until it is answered.
+    @AppStorage(HomeCollapsed.key) private var collapsedRaw = "[]"
+    @AppStorage("mad.home.hideStopped") private var hideStopped = false
+    @State private var deleting: HomeRow?
 
     public init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions = HomeActions(),
                 menu: [[HomeMenuItem]] = HomeMenuItem.sidebar, toggle: @escaping () -> Void = {}) {
@@ -37,14 +41,16 @@ public struct MacSidebar: View {
                     if query.isEmpty { todayRow; waitingSection }
                     ForEach(model.filtered(by: query).sections) { section in
                         head(section)
-                        ForEach(section.rows) { row in
-                            Button { selection = row.id; actions.open(row.id) } label: {
-                                HomeRowView(row: row, metrics: .mac)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: Mac.rowHeight)
-                                    .modifier(SelectedRowBackground(selected: selection == row.id))
+                        if isOpen(section) {
+                            ForEach(shown(section)) { row in
+                                Button { selection = row.id; actions.open(row.id) } label: {
+                                    SidebarRow(row: row, menu: actions.remove == nil || row.removableAgentID == nil ? nil : { deleting = row })
+                                        .padding(.horizontal, 10)
+                                        .frame(height: Mac.rowHeight)
+                                        .modifier(SelectedRowBackground(selected: selection == row.id))
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -56,6 +62,16 @@ public struct MacSidebar: View {
         }
         .background(Color.madSide)
         .environment(\.madAvatarBackdrop, Color.madSide)
+        .confirmationDialog(Lf("删除“%@”？", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible, presenting: deleting) { row in
+            Button(L("删除"), role: .destructive) {
+                if selection == row.id { selection = nil }
+                if let id = row.removableAgentID { actions.remove?(id) }
+            }
+            Button(L("取消"), role: .cancel) {}
+        } message: { _ in
+            Text(L("它会停止，并从 mad 里移除。"))
+        }
         .background {
             // ⌘K goes to the search field
             Button("") { openSearch() }.keyboardShortcut("k", modifiers: .command).opacity(0).frame(width: 0, height: 0)
@@ -161,8 +177,28 @@ public struct MacSidebar: View {
                 MacSmallNewMenu(action: actions.create)
             }
         case .project:
-            ListHead(title: section.title) { if let meta = section.meta { ProjectMetaLine(meta: meta) } }
+            ProjectHeader(title: section.title, open: isOpen(section), toggle: { toggle(section) }, hideStopped: $hideStopped,
+                          create: actions.createIn.map { create in { item in create(item, section.id) } })
+                .font(Mac.sectionHead)
+                .padding(.horizontal, 10)
+                .padding(.top, 18)
+                .padding(.bottom, 6)
         }
+    }
+
+    /// A project's fold; a search shows what matched, folded or not.
+    private func isOpen(_ section: HomeSection) -> Bool {
+        guard case .project = section.kind else { return true }
+        return !query.isEmpty || !HomeCollapsed.ids(collapsedRaw).contains(section.id)
+    }
+
+    private func toggle(_ section: HomeSection) {
+        collapsedRaw = HomeCollapsed.setting(section.id, folded: isOpen(section), in: collapsedRaw)
+    }
+
+    /// The rows drawn: with the filter on, a stopped session is left out unless it is the one open.
+    private func shown(_ section: HomeSection) -> [HomeRow] {
+        section.rows.filter { !(hideStopped && $0.kind == .agent && $0.state == .stopped && $0.id != selection) }
     }
 
     /// The person: their picture and name (a click opens Usage, a right click offers the menu), and the round grid

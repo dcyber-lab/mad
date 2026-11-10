@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/skill"
 )
 
 // Text is a prompt in a flow file: one string, or its lines in a list.
@@ -61,6 +62,9 @@ type Role struct {
 	Agent string `json:"agent"`
 	// ReadOnly: the role looks and changes nothing (a reviewer).
 	ReadOnly bool `json:"read_only,omitempty"`
+	// Skill is the skill the role works by ("pstack:poteto-mode"): its
+	// messages tell the agent to read the skill's SKILL.md and follow it.
+	Skill string `json:"skill,omitempty"`
 
 	// Kind, Model and Effort are Agent read.
 	Kind   string `json:"-"`
@@ -191,7 +195,7 @@ func Builtin() []Flow {
 
 func readBuiltin() []Flow {
 	var out []Flow
-	for _, name := range []string{"design-impl-review", "impl-review"} {
+	for _, name := range []string{"design-impl-review", "impl-review", "pstack"} {
 		data, err := builtinFS.ReadFile("flows/" + name + ".json")
 		if err != nil {
 			panic(err)
@@ -317,6 +321,11 @@ func Check(f Flow) error {
 			bad("role %s: twice", r.Name)
 		}
 		roles[r.Name] = true
+		if r.Skill != "" {
+			if err := skill.CheckRef(r.Skill); err != nil {
+				bad("role %s: %v", r.Name, err)
+			}
+		}
 		c := ParseChoice(r.Agent)
 		switch c.Kind {
 		case "claude":
@@ -374,6 +383,18 @@ func Check(f Flow) error {
 		}
 		if r, ok := f.Role(s.Role); ok && r.ReadOnly && !s.Review {
 			bad("%s: its role %s is read only, so it can only review", at, s.Role)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// CheckSkills says which roles' agents, working in dir, find no skill by
+// the name their role gives, or nil.
+func CheckSkills(roles []Role, dir string) error {
+	var errs []error
+	for _, r := range roles {
+		if r.Skill != "" && skill.Find(r.Kind, dir, r.Skill) == "" {
+			errs = append(errs, fmt.Errorf("role %s works by the skill %s, which %s does not find here: install it for %s, or choose another agent or template", r.Name, r.Skill, r.Kind, r.Kind))
 		}
 	}
 	return errors.Join(errs...)

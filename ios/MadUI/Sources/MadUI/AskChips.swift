@@ -10,8 +10,8 @@ struct AskChips: View {
     let send: (AskAct) -> Void
     let input: (AskAct) -> Void
     /// The act sent and waiting for the Mac's answer; the card goes when it has answered. It is let go of after a while,
-    /// so a card the Mac refused is not left dead.
-    @State private var sent: String?
+    /// so a card the Mac refused is not left dead. The card holds it: an answer by a key (Return, Esc) is a sent act too.
+    @Binding var sent: String?
 
     static let font: Font = {
         #if os(iOS)
@@ -100,35 +100,4 @@ struct AskChipLabel: View {
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { dim = true }
             }
     }
-}
-
-/// A form of several questions: each has its own chips to pick one from; 发送 is on once every question has a pick.
-struct AskForm: View {
-    let questions: [AskQuestion]
-    let submit: ([String]) -> Void
-    @State private var picks: [String: String] = [:]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(questions) { q in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(q.text).font(AskChips.font).foregroundStyle(Color.madFg)
-                    FlowLayout(spacing: 8) {
-                        ForEach(q.options, id: \.self) { o in
-                            Button { picks[q.id] = o } label: { AskChipLabel(text: o, filled: picks[q.id] == o) }
-                                .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            Button { submit(questions.compactMap { picks[$0.id] }) } label: {
-                AskChipLabel(text: L("发送"), filled: complete)
-            }
-            .buttonStyle(.plain)
-            .disabled(!complete)
-            .opacity(complete ? 1 : 0.45)
-        }
-    }
-
-    var complete: Bool { questions.allSatisfy { picks[$0.id] != nil } }
 }

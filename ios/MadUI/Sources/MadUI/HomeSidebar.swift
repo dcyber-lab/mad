@@ -10,6 +10,11 @@ public struct HomeSidebar: View {
     @State private var query = ""
     @State private var searching = false
     @FocusState private var searchFocused: Bool
+    @AppStorage(HomeCollapsed.key) private var collapsedRaw = "[]"
+    /// The agent row 删除 was chosen on, until the person confirms or cancels.
+    /// Hide the sessions that are stopped (a project's filter button).
+    @AppStorage("mad.home.hideStopped") private var hideStopped = false
+    @State private var deleting: HomeRow?
 
     public init(model: HomeModel, selection: Binding<HomeRow.ID?>, actions: HomeActions = HomeActions(),
                 menu: [[HomeMenuItem]] = HomeMenuItem.sidebar) {
@@ -35,23 +40,56 @@ public struct HomeSidebar: View {
             }
             List(selection: $selection) {
                 ForEach(model.filtered(by: query).sections) { section in
-                    Section {
-                        ForEach(section.rows) { row in
-                            HomeRowView(row: row, metrics: .mac)
-                                .tag(row.id)
-                                .listRowSeparator(.hidden)
+                    if case .project = section.kind {
+                        Section {
+                            if isOpen(section) { rows(section) }
+                        } header: {
+                            ProjectHeader(title: section.title, open: isOpen(section), toggle: { toggle(section) },
+                                          hideStopped: $hideStopped,
+                                          create: actions.createIn.map { create in { item in create(item, section.id) } })
+                                .font(MadType.label)
                         }
-                    } header: {
-                        Text(section.title).font(MadType.label).foregroundStyle(.secondary)
+                    } else {
+                        Section {
+                            rows(section)
+                        } header: {
+                            Text(section.title).font(MadType.label).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
             .listStyle(.sidebar)
             .onChange(of: selection) { _, id in if let id { actions.open(id) } }
+            .confirmationDialog(Lf("删除“%@”？", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible, presenting: deleting) { row in
+                Button(L("删除"), role: .destructive) { if let id = row.removableAgentID { actions.remove?(id) } }
+                Button(L("取消"), role: .cancel) {}
+            } message: { _ in
+                Text(L("它会停止，并从 mad 里移除。"))
+            }
         }
         #if os(macOS)
         .ignoresSafeArea(.container, edges: .top) // the header takes the title bar's band
         #endif
+    }
+
+    private func rows(_ section: HomeSection) -> some View {
+        // a stopped session stays when it is the one open
+        let shown = section.rows.filter { !(hideStopped && $0.kind == .agent && $0.state == .stopped && $0.id != selection) }
+        return ForEach(shown) { row in
+            SidebarRow(row: row, menu: actions.remove == nil || row.removableAgentID == nil ? nil : { deleting = row })
+                .tag(row.id)
+                .listRowSeparator(.hidden)
+        }
+    }
+
+    /// A project's fold. A search shows what matched, folded or not.
+    private func isOpen(_ section: HomeSection) -> Bool {
+        !query.isEmpty || !HomeCollapsed.ids(collapsedRaw).contains(section.id)
+    }
+
+    private func toggle(_ section: HomeSection) {
+        collapsedRaw = HomeCollapsed.setting(section.id, folded: isOpen(section), in: collapsedRaw)
     }
 
     private var header: some View {
@@ -93,5 +131,91 @@ public struct HomeSidebar: View {
                 .fixedSize()
                 #endif
         }
+    }
+}
+
+/// An agent's row, with a … at the right (on the Mac when the pointer is over the row) that opens the row's menu,
+/// the same as a right-click: 删除, which asks first.
+struct SidebarRow: View {
+    let row: HomeRow
+    /// Asks to delete the row; nil for a row that has no menu.
+    let menu: (() -> Void)?
+    @State private var hovering = false
+
+    var body: some View {
+        HomeRowView(row: row, metrics: .mac)
+            .overlay(alignment: .trailing) {
+                if hovering, let menu {
+                    Menu { items(menu) } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(Color.madPaper))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .accessibilityLabel(L("更多"))
+                }
+            }
+            .onHover { hovering = $0 }
+            .contextMenu { if let menu { items(menu) } }
+    }
+
+    @ViewBuilder private func items(_ delete: @escaping () -> Void) -> some View {
+        Button(role: .destructive, action: delete) { Label(L("删除"), systemImage: "trash") }
+    }
+}
+
+/// A project's header, as Claude Code's: its name and a small chevron (the name folds and opens the project), and at
+/// the right a filter button and a + (新对话, 新群聊, 新团队 for the project); the buttons show when the pointer is
+/// over the header. Its font is the list's (MacSidebar, HomeSidebar).
+struct ProjectHeader: View {
+    let title: String
+    let open: Bool
+    let toggle: () -> Void
+    @Binding var hideStopped: Bool
+    let create: ((HomeNewItem) -> Void)?
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: toggle) {
+                HStack(spacing: 4) {
+                    Text(title).lineLimit(1)
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(Color.madFg3)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(open ? L("已展开") : L("已折叠"))
+            Spacer(minLength: 0)
+            Menu {
+                Toggle(L("隐藏已停止的会话"), isOn: $hideStopped)
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease").foregroundStyle(hideStopped ? Color.madAccent : .secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .opacity(hovering || hideStopped ? 1 : 0)
+            .accessibilityLabel(L("筛选"))
+            if let create {
+                Menu {
+                    ForEach(HomeNewItem.allCases, id: \.self) { item in
+                        Button { create(item) } label: { Label(item.title, systemImage: item.symbol) }
+                    }
+                } label: {
+                    Image(systemName: "plus").foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .opacity(hovering ? 1 : 0)
+                .accessibilityLabel(L("在这个项目里新建"))
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }

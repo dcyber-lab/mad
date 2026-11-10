@@ -29,6 +29,10 @@ private final class FakeAPI: ChatAPI {
         }
         if let e = await MainActor.run(body: { self.sendError }) { throw e }
     }
+    nonisolated func send(agent: String, text: String, images: [OutgoingImage]) async throws {
+        await MainActor.run { self.calls.append("send:\(text):\(images.count)") }
+        if let e = await MainActor.run(body: { self.sendError }) { throw e }
+    }
     nonisolated func setMode(agent: String, mode: String) async throws {
         await MainActor.run { self.calls.append("mode:\(mode)") }
         if let e = await MainActor.run(body: { self.modeError }) { throw e }
@@ -133,6 +137,17 @@ final class ChatSessionTests: XCTestCase {
         XCTAssertFalse(s.sending)
     }
 
+    func testASendWithPicturesGoesWithThemEvenWithoutText() async {
+        let api = FakeAPI()
+        let s = ChatSession(agentID: "a", api: api)
+        let pic = OutgoingImage(mime: "image/png", data: Data([1]))
+        let ok = await s.send("  ", images: [pic])
+        XCTAssertTrue(ok)
+        XCTAssertEqual(api.calls.filter { $0.hasPrefix("send") }, ["send::1"])
+        let none = await s.send("  ")
+        XCTAssertFalse(none, "no text and no picture sends nothing")
+    }
+
     func testAFailedSendKeepsTheDraftAndSaysWhy() async {
         let api = FakeAPI()
         api.sendError = ConnectionError.conflict("its host is not running")
@@ -140,6 +155,29 @@ final class ChatSessionTests: XCTestCase {
         let ok = await s.send("keep me")
         XCTAssertFalse(ok)
         XCTAssertEqual(s.notice, "its host is not running")
+    }
+
+    func testASentMessageShowsAtOnceUntilTheTranscriptHasIt() {
+        var t = ChatTranscript()
+        t.apply(ChatPage(file: "f", offset: 1, entries: [ChatEntry(kind: "user", text: "earlier")], reset: true))
+        let sent = Date()
+        let o = Outgoing(text: "hi there", after: 1, at: sent)
+        XCTAssertEqual(Outgoing.pending([o], in: t, now: sent), [o], "nothing new yet: it shows")
+        t.apply(ChatPage(file: "f", offset: 2, entries: [ChatEntry(kind: "user", text: "hi there\n")]))
+        XCTAssertEqual(Outgoing.pending([o], in: t, now: sent), [], "the transcript has it: gone")
+        var other = ChatTranscript()
+        other.apply(ChatPage(file: "f", offset: 2, entries: [ChatEntry(kind: "user", text: "earlier"), ChatEntry(kind: "user", text: "[mad bus] …")], reset: true))
+        XCTAssertEqual(Outgoing.pending([o], in: other, now: sent.addingTimeInterval(1)), [o], "another entry, just after: still shown")
+        XCTAssertEqual(Outgoing.pending([o], in: other, now: sent.addingTimeInterval(6)), [], "written a little changed: gone after a few seconds")
+        XCTAssertEqual(Outgoing.pending([o], in: ChatTranscript(), now: sent.addingTimeInterval(Outgoing.lasts + 1)), [], "never for good")
+    }
+
+    func testAFailedSendTakesItsBubbleBack() async {
+        let api = FakeAPI()
+        api.sendError = URLError(.notConnectedToInternet)
+        let s = ChatSession(agentID: "a", api: api)
+        _ = await s.send("hello")
+        XCTAssertTrue(s.outgoing.isEmpty)
     }
 
     func testTheDraftIsClearedOnlyIfItIsStillWhatWasSent() {

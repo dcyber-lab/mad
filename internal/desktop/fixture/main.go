@@ -184,6 +184,8 @@ func newHandler(name, web string) (http.Handler, error) {
 
 type fixture struct {
 	scn *scenario
+	// deckMu holds a look at the deck: relative changes the scenario's own maps, which another look reads at the same time.
+	deckMu sync.Mutex
 	// spend: the day's budget after the person raised or lifted it (/api/budget); nil until then.
 	spendMu sync.Mutex
 	spend   map[string]any
@@ -220,6 +222,8 @@ func reply(w http.ResponseWriter, v any) {
 
 // deck is the snapshot: defaults, then the scenario's deck over them.
 func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
+	f.deckMu.Lock()
+	defer f.deckMu.Unlock()
 	now := time.Now()
 	d := map[string]any{
 		"projects": []any{}, "bus": []any{}, "board": []any{}, "timers": []any{}, "teams": []any{},

@@ -128,7 +128,7 @@ public struct UsageView: View {
                         }
                     }
                 }
-                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading) // fills the pane, as the chats do
                 .padding(.horizontal, padding)
                 .padding(.top, 22)
                 .padding(.bottom, 28)
