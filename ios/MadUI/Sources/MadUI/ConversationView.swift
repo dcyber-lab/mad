@@ -616,7 +616,7 @@ struct ChangesTab: View {
                     Text(L("没有未提交的改动")).font(.mad(macOnly: 14, 12.5)).foregroundStyle(Color.madFg3)
                 }
             }
-            .frame(maxWidth: 900, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 28)
             #if os(macOS)
             .padding(.top, 76).padding(.bottom, 22) // under the floating capsule
