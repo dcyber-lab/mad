@@ -1713,6 +1713,17 @@
           }
         }
       }
+    },
+    "显示更早的消息": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show earlier messages"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

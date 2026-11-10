@@ -227,13 +227,19 @@ public struct ChannelView: View {
                     // new message) leaves the other rows alone.
                     // The top of what is held, for the scroll to ask for older rows when it comes near. Its frame is read, not
                     // its appearing: a plain stack makes every row at once, so nothing appears or leaves as the scroll moves.
-                    Color.clear.frame(height: 1)
+                    Color.clear.frame(height: PlaceMemory.sentinel)
+                        .accessibilityIdentifier("channel.heldTop")
                         .background(GeometryReader { g in
                             Color.clear.onAppear { nearTop(g.frame(in: .named(Self.space)).minY, proxy) }
                                 .onChange(of: g.frame(in: .named(Self.space)).minY) { _, y in nearTop(y, proxy) }
                         })
+                    // Before iOS 18 nothing loads by itself (no way to tell a rest, no way to hold the place): a chip does.
+                    if #unavailable(iOS 18, macOS 15), !window.holdsAll(screen.items.map(\.id)) {
+                        EarlierChip { takeOlder(proxy, tapped: true) }
+                    }
                     ForEach(held) { item in
                         DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
+                            .background { if place.anchorID == item.id { anchorReader(item.id) } }
                             #if os(macOS)
                             .onAppear { realized.count += 1 }
                             .onDisappear { realized.count -= 1 }
@@ -256,6 +262,7 @@ public struct ChannelView: View {
                         })
                         #endif
                 }
+                .coordinateSpace(name: PlaceMemory.space)
                 .frame(maxWidth: MadColumn.maxWidth)
                 .background(GeometryReader { g in
                     Color.clear.onAppear { columnWidth = g.size.width }.onChange(of: g.size.width) { _, w in columnWidth = w }
@@ -336,6 +343,8 @@ public struct ChannelView: View {
             #if os(macOS)
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: createHeight > 0 ? createHeight + 12 : 0) }
             #endif
+            .onAppear { pinWindow() }
+            .onChange(of: screen.items.count) { _, _ in pinWindow() }
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
@@ -353,29 +362,46 @@ public struct ChannelView: View {
 
     private var held: ArraySlice<ChannelItem> { window.items(screen.items) }
 
-    /// The top of the held rows is `y` (in the list's own space; 0 is the viewport's top): within two screens above it, the
-    /// next older rows are held, once the scroll is at rest. The rows go in above what is read, which the list keeps where it
-    /// is (`KeepsReadingPlace`); older systems put the first row at the top.
+    /// The top of the held rows is `y` (in the list's own space; 0 is the viewport's top): within five screens above it (a flick
+    /// of the finger goes 1500 to 3000 points), the next older rows are held, once the scroll is at rest. The rows go in above
+    /// what is read, which the list keeps where it is (`KeepsReadingPlace`). Before iOS 18 this does nothing: the chip does.
     private func nearTop(_ y: CGFloat, _ proxy: ScrollViewProxy) {
         top.y = y
-        guard wantsOlder else { return }
+        guard #available(iOS 18, macOS 15, *), wantsOlder else { return }
         olderWanted = true
         if scrollIdle { takeOlder(proxy) }
     }
 
     private var wantsOlder: Bool {
-        !window.holdsAll(screen.items.map(\.id)) && viewport.height > 0 && top.y > -viewport.height * 2 && Date().timeIntervalSince(tookAt) > 0.3
+        canTakeOlder && viewport.height > 0 && top.y > -viewport.height * ChannelView.lookAhead
     }
 
-    private func takeOlder(_ proxy: ScrollViewProxy) {
+    private var canTakeOlder: Bool { !window.holdsAll(screen.items.map(\.id)) && Date().timeIntervalSince(tookAt) > 0.3 }
+
+    /// How many screens above the viewport the held top may be before older rows are held.
+    static let lookAhead: CGFloat = 5
+
+    private func takeOlder(_ proxy: ScrollViewProxy, tapped: Bool = false) {
         olderWanted = false
-        guard wantsOlder else { return }
+        guard tapped ? canTakeOlder : wantsOlder else { return }
         tookAt = Date()
         let readingAt = held.first?.id
-        place.expectRows(atEnd: nearBottom)
+        place.expectRows(above: readingAt, atEnd: nearBottom)
         window.earlier(in: screen.items.map(\.id))
-        if #unavailable(iOS 18, macOS 15), let readingAt { DispatchQueue.main.async { proxy.scrollTo(readingAt, anchor: .top) } }
+        // the chip's reader is at the top of the held rows, just under the chip: the old first row goes back to the top
+        if tapped, let readingAt { DispatchQueue.main.async { proxy.scrollTo(readingAt, anchor: .top) } }
     }
+
+    /// Reads the top of the row that was the first, in the stack's space, once the older rows are in above it.
+    private func anchorReader(_ id: String) -> some View {
+        GeometryReader { g in
+            Color.clear.onAppear { place.anchorMeasured(id, top: g.frame(in: .named(PlaceMemory.space)).minY) }
+                .onChange(of: g.frame(in: .named(PlaceMemory.space)).minY) { _, y in place.anchorMeasured(id, top: y) }
+        }
+    }
+
+    /// The window names its first row once it is first shown, and again if that row is gone.
+    private func pinWindow() { window.pin(in: screen.items.map(\.id), atEnd: nearBottom) }
 
     #if os(macOS)
     /// The marker's foot is at `y`: in view or not. Out of view for a person who scrolled; a message that arrives pushes it

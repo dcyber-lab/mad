@@ -60,4 +60,46 @@ final class ChannelWindowTests: MadUITestCase {
         }
         shot("further up")
     }
+
+    /// Waits until two snapshots 0.3s apart show the same rows in the same places: the list is at rest.
+    private func waitForRest(_ step: Int) -> [String: CGFloat] {
+        var last = visible()
+        for _ in 0..<40 {
+            Thread.sleep(forTimeInterval: 0.3)
+            let now = visible()
+            if now == last { return now }
+            last = now
+        }
+        XCTFail("flick \(step): the list never came to rest")
+        return last
+    }
+
+    /// Flicks up the history, as a person reads back: each one fast, the list comes to rest, and what loads at rest moves
+    /// nothing. The held top must stay far above, so no flick runs into it and stops dead.
+    func testFlicksUpTheHistoryNeverRunIntoTheHeldTop() {
+        launch(native: true, extra: ["-nativeOpen", "fold"])
+        wait("the channel's messages did not come", timeout: 40) { self.visible().count >= 2 }
+        sleep(2)
+        let heldTop = app.descendants(matching: .any)["channel.heldTop"].firstMatch
+        var previous = visible()
+        var moved = 0
+        for flick in 1...10 {
+            app.swipeDown(velocity: .fast)
+            let atRest = waitForRest(flick)
+            XCTAssertTrue(heldTop.exists, "flick \(flick): the held top is not in the accessibility tree, so the look-ahead is not measured")
+            if heldTop.exists {
+                // the held top is more than a screen above the list's top: nothing to run into (the load took more when it came near)
+                XCTAssertLessThan(heldTop.frame.minY, -screenFrame.height, "flick \(flick): the held top is only \(Int(heldTop.frame.minY))pt from the list's top, within a flick's reach")
+            }
+            Thread.sleep(forTimeInterval: 1)
+            let later = visible()
+            let common = Set(atRest.keys).intersection(later.keys)
+            XCTAssertFalse(common.isEmpty, "flick \(flick): the rows on screen at rest are not the ones a second later (a load moved them)")
+            for key in common { XCTAssertEqual(later[key]!, atRest[key]!, accuracy: 2, "flick \(flick): a load at rest moved a row") }
+            if atRest != previous { moved += 1 }
+            previous = later
+            if flick == 5 { shot("after five flicks") }
+        }
+        XCTAssertEqual(moved, 10, "a flick moved nothing: the list was stopped at the held top")
+    }
 }
