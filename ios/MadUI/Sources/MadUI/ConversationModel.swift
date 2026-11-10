@@ -324,9 +324,11 @@ public enum Markdown {
     public enum Block: Equatable, Sendable {
         case text(String)
         case code(String)
+        /// A pipe table: its header cells and its rows' cells (a short row is padded to the header's width).
+        case table(header: [String], rows: [[String]])
     }
 
-    /// Splits on ``` fences. An unclosed fence is code to the end (the message is still being written).
+    /// Splits on ``` fences and pipe tables. An unclosed fence is code to the end (the message is still being written).
     /// Heading marks are dropped and bullets become "•", so no bare marks show.
     public static func blocks(_ source: String) -> [Block] {
         var out: [Block] = []
@@ -338,17 +340,72 @@ public enum Markdown {
             if !s.isEmpty { out.append(.text(s)) }
             text = []
         }
-        for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
             if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
                 if inCode { out.append(.code(code.joined(separator: "\n"))); code = [] } else { flushText() }
                 inCode.toggle()
             } else if inCode {
                 code.append(line)
+            } else if i + 1 < lines.count, isRow(line), isRule(lines[i + 1]) {
+                // a header row, its rule, and the rows under it
+                flushText()
+                let header = cells(line)
+                var rows: [[String]] = []
+                i += 2
+                while i < lines.count, isRow(lines[i]) {
+                    var r = cells(lines[i])
+                    if r.count < header.count { r += Array(repeating: "", count: header.count - r.count) }
+                    rows.append(Array(r.prefix(header.count)))
+                    i += 1
+                }
+                out.append(.table(header: header, rows: rows))
+                continue
             } else {
                 text.append(listLine(line))
             }
+            i += 1
         }
         if inCode { out.append(.code(code.joined(separator: "\n"))) } else { flushText() }
+        return out
+    }
+
+    static func isRow(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        return t.hasPrefix("|") && t.count > 1
+    }
+
+    /// `|---|:--:|` under a header row.
+    static func isRule(_ line: String) -> Bool {
+        guard isRow(line) else { return false }
+        let parts = cells(line)
+        return !parts.isEmpty && parts.allSatisfy { p in
+            let core = p.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+            return !core.isEmpty && core.allSatisfy { $0 == "-" }
+        }
+    }
+
+    /// A row's cells, trimmed; `\|` is a pipe inside a cell.
+    static func cells(_ line: String) -> [String] {
+        var t = line.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("|") { t.removeFirst() }
+        if t.hasSuffix("|"), !t.hasSuffix("\\|") { t.removeLast() }
+        var out: [String] = []
+        var cur = ""
+        for ch in t {
+            if ch == "|", cur.hasSuffix("\\") {
+                cur.removeLast()
+                cur.append(ch)
+            } else if ch == "|" {
+                out.append(cur.trimmingCharacters(in: .whitespaces))
+                cur = ""
+            } else {
+                cur.append(ch)
+            }
+        }
+        out.append(cur.trimmingCharacters(in: .whitespaces))
         return out
     }
 
@@ -371,6 +428,8 @@ public enum Markdown {
                 return (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
                     .map { String($0.characters) } ?? s
             case .code: return "code block"
+            case let .table(header, rows):
+                return ([header] + rows).map { $0.joined(separator: ", ") }.joined(separator: "; ")
             }
         }.joined(separator: " ").replacingOccurrences(of: "\n", with: " ")
     }
