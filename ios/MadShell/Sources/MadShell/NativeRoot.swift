@@ -484,7 +484,10 @@ struct AgentDetail: View {
 
     private var actions: ConversationActions {
         ConversationActions(
-            send: { text in Task { _ = await store.send(text) } },
+            send: { text, images in
+                let pictures = images.map { OutgoingImage(mime: $0.mime, data: $0.data) }
+                Task { _ = await store.send(text, images: pictures) }
+            },
             act: { cardID, actID, text in Task { await answer(cardID, actID, text) } },
             interrupt: { Task { await store.interrupt() } },
             loadImage: { image in try? await api.pictureData(url: image.source) },

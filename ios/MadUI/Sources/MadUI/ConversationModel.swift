@@ -64,9 +64,9 @@ public struct AgentConversation: Equatable, Sendable {
     }
 
     /// The interrupt button shows while the agent works, and only when nothing is typed (typing turns it into send).
-    public func showsInterrupt(draft: String) -> Bool { state == .working && Self.isBlank(draft) }
+    public func showsInterrupt(draft: String, hasImages: Bool = false) -> Bool { state == .working && Self.isBlank(draft) && !hasImages }
 
-    public func canSubmit(draft: String) -> Bool { canSend && !Self.isBlank(draft) }
+    public func canSubmit(draft: String, hasImages: Bool = false) -> Bool { canSend && (!Self.isBlank(draft) || hasImages) }
 
     static func isBlank(_ s: String) -> Bool { s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
@@ -273,7 +273,7 @@ public struct FinishButton: Identifiable, Equatable, Sendable {
 
 /// What the screen does; each is a closure the app fills in.
 public struct ConversationActions {
-    public var send: (String) -> Void
+    public var send: (String, [ChannelDraftImage]) -> Void
     /// An ask's act: the card it was made on (its `id`), the act, and the words typed for an input act.
     public var act: (_ cardID: String, _ actID: String, _ text: String?) -> Void
     public var interrupt: () -> Void
@@ -296,7 +296,7 @@ public struct ConversationActions {
     /// 打开 on a create result line: the team's channel or the made agent.
     public var openCreated: (CreateLine.Target) -> Void
 
-    public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
+    public init(send: @escaping (String, [ChannelDraftImage]) -> Void = { _, _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {},
