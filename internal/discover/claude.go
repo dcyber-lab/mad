@@ -128,7 +128,7 @@ func parseClaudeHook(r io.Reader) Report {
 		h.State = status.Running
 		r := Report{Hook: h}
 		if ev.Prompt != "" {
-			r.Prompts = []string{ev.Prompt}
+			r.Prompts = []string{unpasted(ev.Prompt)}
 		}
 		return r
 	case "PostToolUse":
