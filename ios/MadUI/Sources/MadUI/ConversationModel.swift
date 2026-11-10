@@ -13,6 +13,8 @@ public struct AgentConversation: Equatable, Sendable {
     public var live: LiveBubble?
     /// What waits on the person (a permission, a question); pinned above the composer.
     public var ask: AskCard?
+    /// A request to create an agent or a team waiting on the person (the confirm card, in the ask's place).
+    public var create: CreateCard?
     /// False when the agent can't take messages now (stopped, not on this Mac); `sendHint` says why.
     public var canSend: Bool
     public var sendHint: String
@@ -23,7 +25,7 @@ public struct AgentConversation: Equatable, Sendable {
     public var details: AgentDetails?
 
     public init(title: String, agentID: String, kind: String = "", state: CharacterState = .idle,
-                entries: [ConvEntry] = [], live: LiveBubble? = nil, ask: AskCard? = nil,
+                entries: [ConvEntry] = [], live: LiveBubble? = nil, ask: AskCard? = nil, create: CreateCard? = nil,
                 canSend: Bool = true, sendHint: String = "", place: String = "", cost: String = "", details: AgentDetails? = nil) {
         self.place = place
         self.cost = cost
@@ -35,13 +37,14 @@ public struct AgentConversation: Equatable, Sendable {
         self.entries = entries
         self.live = live
         self.ask = ask
+        self.create = create
         self.canSend = canSend
         self.sendHint = sendHint
     }
 
     /// How it stands, in words: for VoiceOver, and the Details pane.
     public var stateLine: String {
-        if ask != nil { return L("在等你处理") }
+        if ask != nil || create != nil { return L("在等你处理") }
         return state.title
     }
 
@@ -51,7 +54,7 @@ public struct AgentConversation: Equatable, Sendable {
     }
 
     /// The waiting ring shows while something waits on the person.
-    public var needsYou: Bool { ask != nil || state == .needsYou }
+    public var needsYou: Bool { ask != nil || create != nil || state == .needsYou }
 
     /// What the empty composer says. The title is quoted, as an agent's title is often its task ("给我绘制一个表格"),
     /// which read as a second 给 bare. A long title is cut: the hint stays one line, as the bar is.
@@ -77,6 +80,8 @@ public struct ConvEntry: Identifiable, Equatable, Sendable {
         case image(ConvImage)
         /// A line saying there is more above ("earlier messages"); tapping it loads them.
         case earlier(String)
+        /// mad's own line in place of the bot's agent_new / team_start step.
+        case create(CreateLine)
     }
 
     public var id: String
@@ -104,6 +109,7 @@ public struct ConvEntry: Identifiable, Equatable, Sendable {
         case let .tool(tool): return "\(agent), \(tool.accessibilityLabel)"
         case let .image(image): return "\(agent), \(image.alt.isEmpty ? "image" : "image, \(image.alt)")"
         case let .earlier(note): return note
+        case let .create(line): return line.accessibilityLabel
         }
     }
 
@@ -287,13 +293,17 @@ public struct ConversationActions {
     /// The Details pane's buttons; nil leaves a button out.
     public var rename: ((String) -> Void)?
     public var sleep: (() -> Void)?
+    /// 打开 on a create result line: the team's channel or the made agent.
+    public var openCreated: (CreateLine.Target) -> Void
 
     public init(send: @escaping (String) -> Void = { _ in }, act: @escaping (String, String, String?) -> Void = { _, _, _ in },
                 interrupt: @escaping () -> Void = {}, loadEarlier: (() -> Void)? = nil,
                 loadImage: ((ConvImage) async -> Data?)? = nil,
                 back: @escaping () -> Void = {}, attach: @escaping () -> Void = {},
                 openWeb: (() -> Void)? = nil, openTerminal: (() -> Void)? = nil, finish: ((FinishButton) -> Void)? = nil,
-                rename: ((String) -> Void)? = nil, sleep: (() -> Void)? = nil) {
+                rename: ((String) -> Void)? = nil, sleep: (() -> Void)? = nil,
+                openCreated: @escaping (CreateLine.Target) -> Void = { _ in }) {
+        self.openCreated = openCreated
         self.openTerminal = openTerminal
         self.finish = finish
         self.rename = rename

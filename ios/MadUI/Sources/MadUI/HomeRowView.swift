@@ -28,6 +28,8 @@ struct HomeRowView: View {
     let metrics: RowMetrics
     /// The avatar's size at the default text size; it grows with Dynamic Type on the phone.
     @ScaledMetric private var size: CGFloat
+    @State private var lit = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(row: HomeRow, metrics: RowMetrics) {
         self.row = row
@@ -59,6 +61,18 @@ struct HomeRowView: View {
             .opacity(row.dimmed ? 0.55 : 1)
             Spacer(minLength: 0)
             end
+        }
+        .background {
+            // the soft highlight of a row a bot's request just made: madAccent at 7% fading to nothing in 1.2s, once
+            // (none with Reduce Motion)
+            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.madAccent.opacity(lit ? 0.07 : 0))
+        }
+        .task {
+            guard row.fresh, !HomeFresh.isShown(row.id) else { return }
+            HomeFresh.markShown(row.id)
+            guard !reduceMotion else { return }
+            lit = true
+            withAnimation(.easeOut(duration: 1.2)) { lit = false }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore) // one label, built by the row: the character's own would repeat it

@@ -48,7 +48,11 @@ public struct ConversationView: View {
         #if os(iOS)
         // the approval floats above the composer (design v6); the composer stays under it
         VStack(spacing: 10) {
-            if let ask = model.ask {
+            if let create = model.create {
+                CreateSheet(card: create, act: { actions.act(create.id, $0, $1) })
+                    .id(create.id)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let ask = model.ask {
                 AskSheet(card: ask, act: { actions.act(ask.id, $0, $1) })
                     .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -61,7 +65,18 @@ public struct ConversationView: View {
         composer
             .macFootBar()
             .overlay(alignment: .top) {
-                if let ask = model.ask {
+                if let create = model.create {
+                    CreateCardView(card: create, act: { actions.act(create.id, $0, $1) })
+                        .id(create.id)
+                        .macColumn()
+                        .background(GeometryReader { g in
+                            Color.clear
+                                .onAppear { askHeight = g.size.height }
+                                .onChange(of: g.size.height) { _, h in askHeight = h }
+                                .onDisappear { askHeight = 0 }
+                        })
+                        .offset(y: -(askHeight + 12))
+                } else if let ask = model.ask {
                     AskCardView(card: ask, agentID: model.agentID, agentKind: model.kind, act: { actions.act(ask.id, $0, $1) })
                         .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
                         .macColumn()
@@ -130,6 +145,7 @@ public struct ConversationView: View {
         .background(Color.madPaper)
         .environment(\.madAvatarBackdrop, Color.madPaper)
         .environment(\.convImageLoader, actions.loadImage)
+        .environment(\.madOpenCreated, actions.openCreated)
         #else
         VStack(spacing: 0) {
             if tab == .chat {
@@ -146,6 +162,7 @@ public struct ConversationView: View {
         .overlay(alignment: .top) { macTop.ignoresSafeArea(.container, edges: .top) }
         .environment(\.madAvatarBackdrop, Color.madPaper)
         .environment(\.convImageLoader, actions.loadImage)
+        .environment(\.madOpenCreated, actions.openCreated)
         .inspector(isPresented: $detailsOpen) {
             AgentDetailsPane(model: model, actions: actions, rename: { newName = model.title; renaming = true })
                 .inspectorColumnWidth(min: 240, ideal: 272, max: 340)
@@ -752,6 +769,7 @@ struct EntryView: View {
     let avatar: CGFloat
     let loadEarlier: (() -> Void)?
     @Environment(\.madColumnWidth) private var columnWidth
+    @Environment(\.madOpenCreated) private var openCreated
 
     #if os(iOS)
     private var bodyFont: Font { Phone.message }
@@ -799,6 +817,8 @@ struct EntryView: View {
                 AgentRow(model: model, avatar: avatar, hugs: true, showsAvatar: false) { ToolRow(tool: tool) }
             case let .image(image):
                 AgentRow(model: model, avatar: avatar, showsAvatar: false) { ImageView(image: image) }
+            case let .create(line):
+                CreateLineView(line: line, open: openCreated)
             case let .earlier(note):
                 let label = Text(note)
                     .font(MadType.label)
@@ -824,6 +844,8 @@ private struct EntryAccessibility: ViewModifier {
     func body(content: Content) -> some View {
         if case .tool = entry.content {
             content
+        } else if case .create = entry.content {
+            content // its own elements: a result line is one button, a note is its text
         } else {
             content
                 .accessibilityElement(children: .ignore)

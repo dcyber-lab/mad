@@ -49,7 +49,7 @@ struct ChannelDetail: View {
     }
 
     private var actions: ChannelActions {
-        let store = store, api = api, cache = pictures, open = openAgent
+        let store = store, api = api, cache = pictures, open = openAgent, deck = deck
         return ChannelActions(
             send: { text, images, replyTo in
                 do {
@@ -59,7 +59,22 @@ struct ChannelDetail: View {
             },
             openAgent: { open($0) },
             loadPicture: { id in await cache.data(for: id) { try await api.imageData(id: id) } },
-            back: onBack.map { back in { back() } })
+            back: onBack.map { back in { back() } },
+            act: { key, actID, text in
+                Task { @MainActor in
+                    // the item as the deck says now: a card that is not it any more sends nothing
+                    if let item = deck.deck?.inbox.waiting.first(where: { $0.key == key }), let a = item.acts.first(where: { $0.id == actID }) {
+                        try? await api.act(key: item.key, verb: a.verb, option: a.option, text: text.flatMap { $0.isEmpty ? nil : $0 })
+                    }
+                    await deck.refresh()
+                }
+            },
+            openCreated: { target in
+                switch target {
+                case .channel(let c): open(c)
+                case .agent(let a): open(a)
+                }
+            })
     }
 }
 
@@ -116,6 +131,8 @@ final class ScreenMemo {
     private struct Key: Equatable {
         var count: Int, last: Int, paused: Bool, loaded: Bool, receipts: [BusReceipt]
         var channel: Channel?, agents: [Agent]
+        /// the create requests waiting and the ones that were answered: the card and the result lines read them
+        var waitingCreates: [InboxItem], creates: [InboxItem]
         /// the minute: the screen reads the clock for its time lines
         var minute: Int
     }
@@ -125,6 +142,7 @@ final class ScreenMemo {
     func screen(channel id: String, store: ChannelStore, deck: Deck?) -> ChannelScreen {
         let k = Key(count: store.messages.count, last: store.last, paused: store.paused, loaded: store.loaded || store.fromCache,
                     receipts: store.receipts, channel: deck?.channel(id: id), agents: deck?.agents ?? [],
+                    waitingCreates: deck?.inbox.waiting.filter { $0.kind == "create" } ?? [], creates: deck?.creates ?? [],
                     minute: Int(Date().timeIntervalSince1970 / 60))
         if let screen, k == key { return screen }
         let s = ChannelMapping.screen(channel: id, messages: store.messages, deck: deck, paused: k.paused, loaded: k.loaded, receipts: k.receipts)

@@ -36,6 +36,12 @@ public enum ChannelMapping {
             else if loaded { items = [.note(id: emptyID.none, text: channel?.dm == true ? noneNoteDM : noneNote)] }
         }
         if let trimmed { items.insert(.note(id: "trimmed", text: noteText(trimmed)), at: 0) }
+        // a request from this channel that mad is starting now: its line, until the event line replaces it
+        if let deck {
+            for item in deck.creates where item.from == id && item.outcome?.status == "creating" {
+                if let line = CreateMapping.line(item, deck: deck) { items.append(.create(line)) }
+            }
+        }
         let pictures = visible.reduce(0) { $0 + $1.images.count }
         // what is going on counts everyone; how many there are counts the team only
         let everyone = members + split.helpers
@@ -54,7 +60,8 @@ public enum ChannelMapping {
             title: title, members: members, helpers: split.helpers, stateLine: line, items: items,
             panel: ChannelPanel(name: title, topic: channel?.topic ?? "", members: members, helpers: split.helpers, sectioned: split.sectioned,
                                 pictureCount: pictures, paused: isPaused),
-            placeholder: Lf("发消息给 %@", title), readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false))
+            placeholder: Lf("发消息给 %@", title), readOnly: (channel?.dm ?? false) && !(channel?.yours ?? false),
+            create: deck.flatMap { d in CreateMapping.waiting(channel: id, deck: d).flatMap { CreateMapping.card($0, deck: d, inChannel: true, now: now) } })
     }
 
     /// What an empty-looking channel says when everything in it is hidden, and when nobody has said anything.
@@ -168,6 +175,13 @@ public enum ChannelMapping {
         var openRun = false // the last item is a run a message may join
         for m in messages {
             if m.kind == "system" {
+                if let line = CreateMapping.line(event: m, deck: deck) {
+                    // mad's own line about a create request, across the column
+                    out.append(.create(line))
+                    openRun = false
+                    previous = m
+                    continue
+                }
                 out.append(.note(id: String(m.seq), text: noteText(m)))
                 openRun = false
                 previous = m

@@ -31,8 +31,10 @@ final class HomeMappingTests: XCTestCase {
         XCTAssertEqual(cards.count, 1, "both are the same agent's: its card shows one")
         for card in cards {
             XCTAssertTrue(card.mustOpen)
-            XCTAssertTrue(card.acts.isEmpty, "no Allow, no Deny: \(card.acts)")
-            XCTAssertNil(card.allow)
+            XCTAssertNil(card.allow, "no Allow on a one-line card")
+            XCTAssertNotNil(card.deny, "拒绝 is safe to offer without the whole spec")
+            XCTAssertEqual(card.acts.count, 1)
+            XCTAssertEqual(card.viewID, "fold", "查看 opens the channel the request came from")
             XCTAssertFalse(card.isPermission)
             XCTAssertFalse(card.agentID.isEmpty, "查看 opens the agent")
         }

@@ -44,6 +44,10 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
     /// What a system note of mad's own says happened, for the apps to word: "paused" or "resumed"; empty on older
     /// notes and on every other message.
     public var event: String
+    /// What an event line says, for a view to draw its words from (`type`, `name`, `team`, `reason`, `words` ...),
+    /// and the item it is about ("create:c-1"). Empty on every other message.
+    public var data: [String: String]
+    public var ref: String
     public var id: Int { seq }
 
     public struct Sender: Equatable, Decodable, Sendable {
@@ -81,7 +85,7 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
         }
     }
 
-    enum CodingKeys: String, CodingKey { case seq, at, from, kind, text, mentions, replyTo = "reply_to", handoff, images, event }
+    enum CodingKeys: String, CodingKey { case seq, at, from, kind, text, mentions, replyTo = "reply_to", handoff, images, event, data, ref }
 
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -95,10 +99,14 @@ public struct BusMessage: Equatable, Decodable, Identifiable, Sendable {
         handoff = try c.decodeIfPresent(Handoff.self, forKey: .handoff)
         images = try c.decodeIfPresent([BusImage].self, forKey: .images) ?? []
         event = try c.decodeIfPresent(String.self, forKey: .event) ?? ""
+        data = (try? c.decodeIfPresent([String: String].self, forKey: .data)) ?? [:]
+        ref = try c.decodeIfPresent(String.self, forKey: .ref) ?? ""
     }
 
     public init(seq: Int, at: Date? = nil, from: Sender, kind: String = "text", text: String = "", mentions: [String] = [],
-                replyTo: Int = 0, handoff: Handoff? = nil, images: [BusImage] = [], event: String = "") {
+                replyTo: Int = 0, handoff: Handoff? = nil, images: [BusImage] = [], event: String = "",
+                data: [String: String] = [:], ref: String = "") {
+        self.data = data; self.ref = ref
         self.seq = seq; self.at = at; self.from = from; self.kind = kind; self.text = text; self.mentions = mentions
         self.replyTo = replyTo; self.handoff = handoff; self.images = images; self.event = event
     }

@@ -26,6 +26,8 @@ public struct ChannelView: View {
     @State private var judgedInset: CGFloat = -1
     #endif
     #if os(macOS)
+    /// How tall the create card floating over the composer is (0 for none).
+    @State private var createHeight: CGFloat = 0
     // The Mac's window is resized by the person and keeps its list at the bottom through that (see `BottomWatch`).
     @State private var keeper = BottomKeeper()
     @State private var watch = BottomWatch()
@@ -62,6 +64,7 @@ public struct ChannelView: View {
     public var body: some View {
         #if os(macOS)
         chat
+            .environment(\.madOpenCreated, actions.openCreated)
             .ignoresSafeArea(.container, edges: .top) // the head bar starts at the window's top, as the conversation's
             .environment(\.madAvatarBackdrop, Color.madPaper)
             .inspector(isPresented: $panelOpen) { panelView.inspectorColumnWidth(min: 260, ideal: 300, max: 380) }
@@ -71,6 +74,7 @@ public struct ChannelView: View {
             }
         #else
         chat
+            .environment(\.madOpenCreated, actions.openCreated)
             // While the panel is open it is the page: the chat is out of the VoiceOver tree.
             .accessibilityHidden(panelOpen)
             .overlay { phonePanel }
@@ -84,6 +88,19 @@ public struct ChannelView: View {
     private struct Picked: Identifiable { let id: String }
 
     // MARK: the chat
+
+    /// A bot's create request that came from this channel: the confirm card, above the composer.
+    #if os(iOS)
+    @ViewBuilder private var createCard: some View {
+        if let create = screen.create {
+            #if os(iOS)
+            CreateSheet(card: create, act: { actions.act(create.id, $0, $1) })
+                .id(create.id)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            #endif
+        }
+    }
+    #endif
 
     private var composerRow: some View {
         // the composer has the message column's edges, exactly
@@ -103,7 +120,9 @@ public struct ChannelView: View {
         // what scrolls under the head is blurred by its material, not cut.
         messages
             .safeAreaInset(edge: .top, spacing: 0) { head.background(alignment: .top) { PhoneHeadFade() } }
-            .safeAreaInset(edge: .bottom, spacing: 0) { composerRow.background(alignment: .bottom) { PhoneFootFade() } }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 10) { createCard; composerRow }.background(alignment: .bottom) { PhoneFootFade() }
+            }
             .background(Color.madPaper)
         #else
         // no title bar (design v6): the list scrolls under a fade, the capsule and the round button float over it, and the
@@ -111,6 +130,23 @@ public struct ChannelView: View {
         VStack(spacing: 0) {
             messages
             composerRow.macFootBar()
+                // the card floats over the composer's top, as the conversation's ask does; the list keeps clear of it
+                .overlay(alignment: .top) {
+                    if let create = screen.create {
+                        CreateCardView(card: create, act: { actions.act(create.id, $0, $1) })
+                            .id(create.id)
+                            .frame(maxWidth: MadColumn.maxWidth)
+                            .padding(.horizontal, MadColumn.side)
+                            .frame(maxWidth: .infinity)
+                            .background(GeometryReader { g in
+                                Color.clear
+                                    .onAppear { createHeight = g.size.height }
+                                    .onChange(of: g.size.height) { _, h in createHeight = h }
+                                    .onDisappear { createHeight = 0 }
+                            })
+                            .offset(y: -(createHeight + 12))
+                    }
+                }
         }
         .background(Color.madPaper)
         // over the window's top edge even when a panel (the inspector) gives the window a title bar inset
@@ -310,6 +346,9 @@ public struct ChannelView: View {
             .defaultScrollAnchor(.bottom)
             .pinnedToBottomThroughResizes() // iOS 18 and the Mac: the system keeps the bottom through size changes
             .scrollDismissesKeyboard(.interactively)
+            #if os(macOS)
+            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: createHeight > 0 ? createHeight + 12 : 0) }
+            #endif
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
@@ -405,6 +444,8 @@ public struct ChannelView: View {
             Color.clear.frame(height: 1) // drawn over the list area (see `emptyLine`)
         case .note(_, let text):
             Text(text).font(MadType.label).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 8)
+        case .create(let line):
+            CreateLineView(line: line, open: actions.openCreated)
         case .mine(let b):
             // against the column's right edge, as wide as its text; under the latest one, the word for how far it got
             VStack(alignment: .trailing, spacing: 4) {
