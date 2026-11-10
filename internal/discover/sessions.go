@@ -30,9 +30,25 @@ type Session struct {
 const MaxSessions = 40
 
 var (
-	reminderRe   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`) })
+	reminderRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`) })
+	// pastedRe matches the tags claude puts around what was pasted into
+	// its prompt: <pasted_content id="9c97">, </pasted_content id="9c97">,
+	// each on a line of its own.
+	pastedRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`<pasted_content[^<>\n]*>\n?|\n?</pasted_content[^<>\n]*>`)
+	})
 	sessionCache sync.Map // path → cachedFile
 )
+
+// unpasted is a prompt of claude's without the tags claude puts around
+// the parts of it that were pasted in: the words stay. mad types its own
+// messages in as a paste, so every one of them comes in such tags.
+func unpasted(text string) string {
+	if !strings.Contains(text, "pasted_content") {
+		return text
+	}
+	return strings.TrimSpace(pastedRe().ReplaceAllString(text, ""))
+}
 
 // ProjectSessions lists resumable sessions of kind for a project root,
 // newest first, including sessions that ran in its agent worktrees.
@@ -112,7 +128,7 @@ func UserText(raw json.RawMessage) string {
 	default:
 		return ""
 	}
-	text = strings.TrimSpace(reminderRe().ReplaceAllString(text, ""))
+	text = strings.TrimSpace(reminderRe().ReplaceAllString(unpasted(text), ""))
 	if text == "" || strings.HasPrefix(text, "<") || strings.HasPrefix(text, "# AGENTS.md") ||
 		strings.HasPrefix(text, "Caveat:") {
 		return ""

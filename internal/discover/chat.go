@@ -257,7 +257,7 @@ func withSent(out []Entry, imgs []Image, at time.Time) []Entry {
 // user ran, and their output, as tagged text; other tagged text (a
 // notification, a hook's output) is not the user's.
 func claudeUserChat(text string, at time.Time) []Entry {
-	text = strings.TrimSpace(reminderRe().ReplaceAllString(text, ""))
+	text = strings.TrimSpace(reminderRe().ReplaceAllString(unpasted(text), ""))
 	if text == "" || strings.HasPrefix(text, "Caveat:") {
 		return nil
 	}

@@ -51,6 +51,12 @@ func TestClaudeHook(t *testing.T) {
 	if p := parseClaudeHook(strings.NewReader(`{"hook_event_name":"UserPromptSubmit","prompt":"F2 is fine"}`)).Prompts; len(p) != 1 || p[0] != "F2 is fine" {
 		t.Errorf("prompt = %q", p)
 	}
+	// What was pasted into the prompt, as mad types its messages, comes
+	// in claude's tags: the prompt is the words in them.
+	pasted := `{"hook_event_name":"UserPromptSubmit","prompt":"\n\n<pasted_content id=\"9c97\">\n[mad run audit · design] You are the designer.\nDesign it.\n</pasted_content id=\"9c97\">"}`
+	if p := parseClaudeHook(strings.NewReader(pasted)).Prompts; len(p) != 1 || p[0] != "[mad run audit · design] You are the designer.\nDesign it." {
+		t.Errorf("pasted prompt = %q", p)
+	}
 	// What a tool is about to write or run, and how claude is told no.
 	tool := parseClaudeHook(strings.NewReader(`{"hook_event_name":"PreToolUse","cwd":"/w","tool_name":"Write","tool_input":{"file_path":"a/b.go"}}`)).Tool
 	if tool == nil || tool.Name != "Write" || tool.Path != "/w/a/b.go" {

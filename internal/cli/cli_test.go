@@ -426,6 +426,8 @@ func TestHookNotesTyped(t *testing.T) {
 	os.MkdirAll(filepath.Join(home, ".mad", "runs", "audit"), 0o755)
 	t.Setenv("MAD_AGENT_ID", "a1")
 	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"[mad run audit · triage] You are the judge"}`, "hook", "claude")
+	// As claude hands it on now: what was pasted in, in its tags.
+	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"\n\n<pasted_content id=\"9c97\">\n[mad run audit · triage] You are the judge\nof this run.\n</pasted_content id=\"9c97\">"}`, "hook", "claude")
 	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"F2 is not a real issue"}`, "hook", "claude")
 	t.Setenv("MAD_AGENT_ID", "a2") // in no run
 	run(t, `{"hook_event_name":"UserPromptSubmit","prompt":"unrelated"}`, "hook", "claude")
