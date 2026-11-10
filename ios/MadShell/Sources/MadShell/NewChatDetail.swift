@@ -36,6 +36,11 @@ struct Handovers: Equatable {
     }
 }
 
+/// Where 新对话 and 新团队 keep the project last chosen (a project's + sets it before opening them).
+enum NewProject {
+    static let key = "mad.newchat.project"
+}
+
 struct NewChatDetail: View {
     let api: NewChatAPI
     let projects: [Project]
@@ -52,7 +57,7 @@ struct NewChatDetail: View {
 
     static let kinds: [(id: String, name: String)] = [("claude", "Claude"), ("codex", "Codex"), ("pi", "Pi")]
 
-    @AppStorage("mad.newchat.project") private var projectPath = ""
+    @AppStorage(NewProject.key) private var projectPath = ""
     @AppStorage("mad.kind") private var kind = "claude"
     @State private var model = ""
     @State private var models: [ModelChoice] = []
