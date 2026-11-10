@@ -437,3 +437,75 @@ func TestStartedAgentWhoseFirstMessageFailsSaysWhy(t *testing.T) {
 		t.Errorf("answer %+v, want an id and an error", got)
 	}
 }
+
+// An act on a create request of create-confirm moves its card out of the inbox into the deck's creates with an outcome:
+// allow (creating, then created), deny (declined), deny with words (changes), and a request that came from a channel
+// leaves mad's event line there.
+func TestCreateRequestsAreAnswered(t *testing.T) {
+	h, err := newHandler("create-confirm", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	act := func(key, verb, text string) {
+		body := fmt.Sprintf(`{"key":%q,"verb":%q,"text":%q}`, key, verb, text)
+		r, err := http.Post(srv.URL+"/api/inbox", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+	}
+	outcome := func(key string) map[string]any {
+		r, err := http.Get(srv.URL + "/api/deck")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		var d struct {
+			Inbox   struct{ Items []struct{ Key string } }
+			Creates []struct {
+				Key     string
+				Outcome map[string]any
+			}
+		}
+		_ = json.NewDecoder(r.Body).Decode(&d)
+		for _, it := range d.Inbox.Items {
+			if it.Key == key {
+				return nil
+			}
+		}
+		for _, c := range d.Creates {
+			if c.Key == key {
+				return c.Outcome
+			}
+		}
+		t.Fatalf("%s is neither waiting nor ended", key)
+		return nil
+	}
+	if outcome("create:c-00000001") != nil || outcome("create:c-00000002") != nil {
+		t.Fatal("a waiting request has an outcome")
+	}
+	act("create:c-00000002", "deny", "use two roles")
+	if o := outcome("create:c-00000002"); o["status"] != "changes" || o["reply"] != "use two roles" {
+		t.Fatalf("deny with words: %v", o)
+	}
+	act("create:c-00000001", "allow", "")
+	if o := outcome("create:c-00000001"); o["status"] != "creating" {
+		t.Fatalf("allow: %v", o)
+	}
+	time.Sleep(createCreatingFor + 100*time.Millisecond)
+	if o := outcome("create:c-00000001"); o["status"] != "created" || o["agent"] == nil {
+		t.Fatalf("after a moment: %v", o)
+	}
+	// the request from #fold left its event line there
+	r, err := http.Get(srv.URL + "/api/bus/messages?channel=fold&since=0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	if !strings.Contains(string(b), `"ref":"create:c-00000001"`) || !strings.Contains(string(b), `"agent":"made-scout"`) {
+		t.Fatalf("no event line for the allowed request in #fold: %s", b)
+	}
+}

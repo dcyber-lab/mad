@@ -32,7 +32,7 @@ public enum AgentMapping {
         let place = project.map { p in [p.name, p.branch ?? ""].filter { !$0.isEmpty }.joined(separator: " / ") } ?? ""
         let cost = (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : ""
         var state = agent.map { CharacterState(status: $0.state) } ?? .stopped
-        var shown = entries(transcript)
+        var shown = entries(transcript, deck: deck)
         if let first = pendingEntry(pending, transcript: transcript) {
             shown.insert(first, at: 0)
         }
@@ -50,6 +50,7 @@ public enum AgentMapping {
             entries: shown,
             live: liveBubble(live, transcript: transcript, now: now),
             ask: ask(for: id, deck: deck, now: now),
+            create: CreateMapping.waiting(agent: id, deck: deck).flatMap { CreateMapping.card($0, deck: deck, now: now) },
             canSend: canSend,
             sendHint: hint,
             place: place,
@@ -127,18 +128,26 @@ public enum AgentMapping {
     /// The transcript's rows: a tool call with its result under it (paired by id), user and agent text;
     /// commands, thinking and a result with no call are left out, as the page leaves them. Ids are
     /// positions among the rows, which only grow while the transcript does not reset.
-    static func entries(_ transcript: ChatTranscript) -> [ConvEntry] {
+    static func entries(_ transcript: ChatTranscript, deck: Deck? = nil) -> [ConvEntry] {
         var out: [ConvEntry] = []
         if transcript.earlier { out.append(.earlier("earlier", L("更早的消息不在这里显示"))) }
         for (i, row) in transcript.rows.enumerated() {
             switch row {
             case let .user(e):
+                // mad's outcome message to the bot is plumbing: the result line says it
+                if CreateMapping.isOutcomeDM(e.text ?? "") { continue }
                 out.append(.user("r\(i)", e.text ?? "", images: images(e)))
             case let .text(e):
                 out.append(.text("r\(i)", e.text ?? ""))
                 // pictures an agent's message carries follow it
                 out += images(e).enumerated().map { ConvEntry(id: "r\(i).\($0.offset)", .image($0.element)) }
             case let .tool(call, result):
+                // agent_new / team_start: mad's own line from the request's outcome, never the tool's text. Nothing while there
+                // is no outcome (the card is the place) or the item is gone without one; an error stays an error step.
+                if CreateMapping.isCreateTool(call.tool ?? ""), let result, !(result.error ?? false), let deck {
+                    if let line = CreateMapping.line(toolResult: result.text ?? "", step: "r\(i)", deck: deck) { out.append(ConvEntry(id: "r\(i)", .create(line))) }
+                    continue
+                }
                 out.append(.tool("r\(i)", ConvTool(
                     name: call.tool ?? "tool", label: call.label ?? "", input: call.input ?? "",
                     result: result?.text ?? (result == nil ? nil : ""), error: result?.error ?? call.error)))
@@ -174,7 +183,8 @@ public enum AgentMapping {
 
     /// The agent's top blocking item among what waits on the person (the inbox lists blocking first, oldest first).
     static func item(for id: String, deck: Deck) -> InboxItem? {
-        let mine = deck.inbox.waiting.filter { $0.agent == id }
+        // a create request has its own card
+        let mine = deck.inbox.waiting.filter { $0.agent == id && $0.kind != "create" }
         return mine.first { $0.blocks } ?? mine.first
     }
 
@@ -207,7 +217,8 @@ public enum AgentMapping {
     /// prompt must not take a stale card's Allow).
     public static func answer(cardID: String, actID: String, text: String?, agent id: String, deck: Deck)
         -> (key: String, verb: String, option: String?, text: String?)? {
-        guard let item = item(for: id, deck: deck), item.key == cardID, let act = item.acts.first(where: { $0.id == actID }) else { return nil }
+        let waiting = deck.inbox.waiting.first { $0.agent == id && $0.key == cardID && $0.kind == "create" }
+        guard let item = waiting ?? item(for: id, deck: deck), item.key == cardID, let act = item.acts.first(where: { $0.id == actID }) else { return nil }
         return (item.key, act.verb, act.option, text.flatMap { $0.isEmpty ? nil : $0 })
     }
 }

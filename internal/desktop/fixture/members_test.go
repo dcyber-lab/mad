@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -138,9 +137,7 @@ func TestPanelSplitsTheTeamFromItsHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	teamSrv, foldSrv := httptest.NewServer(team), httptest.NewServer(fold)
-	defer teamSrv.Close()
-	defer foldSrv.Close()
+	teamSrv, foldSrv := serve(t, team), serve(t, fold)
 	c := startChrome(t, bin)
 	if _, err := c.call("Page.enable", nil); err != nil {
 		t.Fatal(err)

@@ -171,7 +171,10 @@ struct WaitingTask: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 FlowLayout(spacing: 6) {
-                    if item.isPermission {
+                    if item.mustOpen {
+                        Button(L("查看")) { actions.open(item.viewID) }.buttonStyle(.mad(.primary))
+                        if let a = item.deny { Button(a.label) { actions.act(item.id, a.id, nil) }.buttonStyle(.mad()) }
+                    } else if item.isPermission {
                         if let a = item.allow { Button(a.label) { actions.act(item.id, a.id, nil) }.buttonStyle(.mad(.primary)) }
                         if let a = item.allowSession { Button(a.label) { actions.act(item.id, a.id, nil) }.buttonStyle(.mad()) }
                         if let a = item.deny { Button(a.label) { actions.act(item.id, a.id, nil) }.buttonStyle(.mad()) }

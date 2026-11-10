@@ -148,9 +148,12 @@ public enum ChannelItem: Identifiable, Equatable, Sendable {
     case run(ChannelRun)
     /// The person's own message: blue, always whole.
     case mine(ChannelBubble)
+    /// mad's own line about a create request (made, creating, or a grey line), drawn across the column.
+    case create(CreateLine)
 
     public var id: String {
         switch self {
+        case .create(let l): "c" + l.id
         case .time(let id, _): "t" + id
         case .note(let id, _): "n" + id
         case .run(let r): "r\(r.id)"
@@ -194,9 +197,12 @@ public struct ChannelScreen: Equatable, Sendable {
     public var placeholder: String
     /// The person may not write here (a DM between two agents).
     public var readOnly: Bool
+    /// A bot's request to create an agent or a team that came from this channel, waiting on the person.
+    public var create: CreateCard?
 
     public init(title: String, members: [ChannelMember], helpers: [ChannelMember] = [], stateLine: String, items: [ChannelItem], panel: ChannelPanel,
-                placeholder: String, readOnly: Bool = false) {
+                placeholder: String, readOnly: Bool = false, create: CreateCard? = nil) {
+        self.create = create
         self.title = title; self.members = members; self.helpers = helpers; self.stateLine = stateLine; self.items = items
         self.panel = panel; self.placeholder = placeholder; self.readOnly = readOnly
     }
@@ -238,6 +244,10 @@ public struct ChannelActions: Sendable {
     public var loadPicture: @Sendable (_ id: String) async -> Data?
     /// The way back to the list (the iPhone's); nil where there is none.
     public var back: (@MainActor @Sendable () -> Void)?
+    /// An act of the create card: the item's key, the act's id, the words typed for 改一下….
+    public var act: @MainActor @Sendable (_ cardID: String, _ actID: String, _ text: String?) -> Void
+    /// 打开 on a result line.
+    public var openCreated: @MainActor @Sendable (_ target: CreateLine.Target) -> Void
 
     public init(send: @escaping @MainActor @Sendable (String, [ChannelDraftImage], Int?) async -> Bool,
                 reply: @escaping @MainActor @Sendable (Int) -> Void = { _ in },
@@ -246,7 +256,10 @@ public struct ChannelActions: Sendable {
                 openPictures: (@MainActor @Sendable () -> Void)? = nil,
                 resume: (@MainActor @Sendable () -> Void)? = nil,
                 loadPicture: @escaping @Sendable (String) async -> Data? = { _ in nil },
-                back: (@MainActor @Sendable () -> Void)? = nil) {
+                back: (@MainActor @Sendable () -> Void)? = nil,
+                act: @escaping @MainActor @Sendable (String, String, String?) -> Void = { _, _, _ in },
+                openCreated: @escaping @MainActor @Sendable (CreateLine.Target) -> Void = { _ in }) {
+        self.act = act; self.openCreated = openCreated
         self.send = send; self.reply = reply; self.openAgent = openAgent; self.openBoard = openBoard
         self.openPictures = openPictures; self.resume = resume; self.loadPicture = loadPicture; self.back = back
     }
