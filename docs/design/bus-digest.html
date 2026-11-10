@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>收到的消息</title>
+<style>
+/* Real-size iPhone screens (393pt) that wrap to one column on a phone, then a Mac pane and the page at phone width.
+   The screens use the app's light tokens (MadUI ChannelStyle; the page's style.css has the same values). */
+:root {
+  --page: #eef0f3; --ink: #15171a; --muted: #5f6672; --rule: #d9dde3; --frame: #0d0e10; --card: #ffffff;
+  --s-bg: #ffffff; --s-ink: #111114; --s-2: #6b6b76; --s-3: #a8a8b0; --s-bubble: #f0f0f3; --s-line: rgba(17,17,22,.08); --s-line2: rgba(15,15,22,.14);
+  --s-mine: #e9f0fe; --s-mine-fg: #0f2a66; --s-blue: #1f6bff; --s-wait: #c26a04; --s-work: #15803d;
+  --s-code: #f6f6f8; --s-raise: #efeff2;
+  --s-shadow: 0 6px 24px rgba(15,18,30,.10), 0 1px 3px rgba(15,18,30,.06);
+  --sans: -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; --card: #1a1d21; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #121417; --ink: #eceef1; --muted: #9aa1ab; --rule: #2a2e34; --frame: #000; --card: #1a1d21; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+header.page { max-width: 1280px; margin: 0 auto 26px; display: grid; gap: 8px; }
+header.page h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+header.page p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 72ch; }
+.board { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, min(100%, 393px)); gap: 40px 28px; justify-content: center; }
+figure { margin: 0; display: grid; gap: 12px; align-content: start; min-width: 0; }
+figcaption { font-size: 14px; color: var(--muted); line-height: 1.6; }
+figcaption b { display: block; color: var(--ink); font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+h2.part { max-width: 1280px; margin: 56px auto 14px; font-size: 18px; }
+p.under { max-width: 1280px; margin: 12px auto 0; font-size: 14px; color: var(--muted); line-height: 1.6 }
+
+/* the phone */
+.phone { width: 393px; height: 852px; border-radius: 52px; background: var(--frame); padding: 9px; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
+.scr { position: relative; height: 100%; border-radius: 44px; overflow: hidden; background: var(--s-bg); color: var(--s-ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; }
+.status { flex: none; height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 38px; font-weight: 600; font-size: 16px; position: relative; z-index: 4; }
+.island { position: absolute; left: 50%; top: 11px; transform: translateX(-50%); width: 122px; height: 35px; border-radius: 20px; background: #000; }
+.status .bat { width: 25px; height: 12px; border: 1.5px solid currentColor; border-radius: 4px; position: relative; opacity: .9 }
+.status .bat::after { content: ""; position: absolute; inset: 1.5px 6px 1.5px 1.5px; background: currentColor; border-radius: 1.5px }
+.fab { width: 44px; height: 44px; border-radius: 50%; background: var(--s-bg); box-shadow: var(--s-shadow); display: grid; place-items: center; flex: none; border: 0; color: var(--s-ink); padding: 0 }
+.fab svg { width: 20px; height: 20px }
+.overlay-top { position: absolute; left: 0; right: 0; top: 54px; z-index: 3; }
+.fade-top { position: absolute; left: 0; right: 0; top: 0; height: 150px; background: linear-gradient(rgba(255,255,255,.97) 62%, rgba(255,255,255,0)); z-index: 2; pointer-events: none }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 0; gap: 10px; }
+.pill { height: 44px; border-radius: 22px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 8px; padding: 0 18px 0 6px; min-width: 0; }
+.pill .stack { display: grid; line-height: 1.18; min-width: 0 }
+.pill .t { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill .sub { font-size: 12px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.seg { display: flex; justify-content: center; margin-top: 10px; }
+.seg div { display: flex; background: var(--s-raise); border-radius: 16px; padding: 3px; font-size: 14px; }
+.seg span { padding: 5px 18px; border-radius: 13px; color: var(--s-2) }
+.seg span.on { background: var(--s-bg); color: var(--s-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08) }
+
+/* the conversation, sitting on the composer; what overflows goes up under the fade */
+.msgs { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 14px; }
+.foot { flex: none; display: grid; gap: 10px; padding-bottom: 34px; position: relative; z-index: 3 }
+.msg { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0 10px; padding: 0 16px; margin-top: 14px; align-items: end; }
+.msg .av { grid-column: 1; grid-row: 1; }
+.msg > .bubble { grid-column: 2; grid-row: 1; }
+.bubble { background: var(--s-bubble); border-radius: 24px; padding: 13px 17px; font-size: 19px; line-height: 1.42; max-width: 86%; width: fit-content; letter-spacing: -.005em; }
+.mine { display: flex; justify-content: flex-end; padding: 0 16px; margin-top: 18px; }
+.mine .bubble { background: var(--s-mine); color: var(--s-mine-fg); border-bottom-right-radius: 8px }
+.mine .bubble.plumb { font-size: 19px; overflow-wrap: anywhere; white-space: pre-wrap }
+.at { font-weight: 600; color: var(--s-blue) }
+.steps { display: grid; gap: 8px; padding: 0 16px 0 52px; margin-top: 12px }
+.step { border: 1px solid var(--s-line2); border-radius: 20px; height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 10px; font-size: 16px; color: #55555b; width: fit-content; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.step b { color: var(--s-ink); font-weight: 600 }
+.step .x { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; flex: none }
+.step span { overflow: hidden; text-overflow: ellipsis }
+.composer { margin: 0 16px; height: 58px; border-radius: 29px; background: var(--s-bg); box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.composer .ic { width: 42px; height: 42px; border-radius: 50%; background: var(--s-raise); display: grid; place-items: center; flex: none }
+.composer .ic.send { background: #f8f8f9; color: var(--s-3) }
+.composer .ic svg { width: 20px; height: 20px }
+.composer .ph { flex: 1; font-size: 18px; color: var(--s-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.made { margin: 16px 16px 0; border: 1px solid var(--s-line2); border-radius: 20px; padding: 12px 12px 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--s-bg) }
+.made .t { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.made .s { font-size: 14px; color: var(--s-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.open { height: 34px; border-radius: 17px; border: 1px solid var(--s-line2); background: var(--s-bg); padding: 0 10px 0 14px; display: inline-flex; align-items: center; gap: 2px; font: 600 15px/1 var(--sans); color: var(--s-ink) }
+.open svg { width: 16px; height: 16px; color: var(--s-2) }
+
+/* What mad delivered to this agent: who said it, where, and their words. A 2px rule on the left holds one delivery
+   together; it is nobody's bubble (the agent's words are grey bubbles, the person's are blue). */
+.inc { margin: 18px 16px 0; padding: 1px 0 1px 13px; border-left: 2px solid var(--s-line2); display: grid; gap: 16px; }
+.e { display: grid; gap: 5px; min-width: 0 }
+.eh { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--s-2); white-space: nowrap; min-width: 0; line-height: 20px }
+.eh b { color: var(--s-ink); font-weight: 600; font-size: 15px }
+.eh .w { overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.eh .tm { color: var(--s-3) }
+.eh .st { margin-left: auto; padding-left: 8px; font-size: 13px; color: var(--s-2) }
+.et { font-size: 16px; line-height: 1.45; color: var(--s-ink); overflow-wrap: anywhere }
+.et.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden }
+.et code { font: 14px var(--mono); background: var(--s-code); border-radius: 5px; padding: 1px 4px }
+.ref { font-size: 14px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.lk { font-size: 15px; color: var(--s-2); justify-self: start; border: 0; background: none; padding: 0; font-family: var(--sans) }
+.youav { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg,#f59e0b,#ef4444); color: #fff; display: grid; place-items: center; font: 600 10.5px/1 var(--sans); flex: none }
+.clock { width: 20px; height: 20px; border-radius: 50%; background: var(--s-raise); color: var(--s-2); display: grid; place-items: center; flex: none }
+.clock svg { width: 13px; height: 13px }
+/* a note on the mockup itself, not part of the app */
+.anno { margin: 14px 16px 0; border: 1.5px dashed #c3c8d0; border-radius: 14px; padding: 9px 12px; font-size: 13px; color: #7a808a; line-height: 1.5 }
+
+/* the Mac pane */
+.scroller { max-width: 1280px; margin: 0 auto; overflow-x: auto; padding-bottom: 8px; }
+.mac { width: 1000px; height: 640px; border-radius: 12px; overflow: hidden; position: relative; background: #fff; color: var(--s-ink); box-shadow: 0 24px 60px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.2); font-family: var(--sans); -webkit-font-smoothing: antialiased; display: grid; grid-template-columns: 260px 1fr; }
+.mac .side { background: #f7f7f8; border-right: 1px solid var(--s-line); padding: 16px 10px; display: grid; align-content: start; gap: 2px }
+.mac .lights { display: flex; gap: 8px; padding: 2px 8px 18px } .mac .lights i { width: 12px; height: 12px; border-radius: 50%; display: block }
+.mac .lights i:nth-child(1) { background: #ff5f57 } .mac .lights i:nth-child(2) { background: #febc2e } .mac .lights i:nth-child(3) { background: #28c840 }
+.mac .hd { font-size: 13px; color: var(--s-2); padding: 12px 10px 4px }
+.mac .mr { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 10px; }
+.mac .mr.sel { background: #e9e9ec }
+.mac .mr .n { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mac .mr .p { font-size: 13px; color: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mac .pane { position: relative; min-width: 0 }
+.mac .title { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); height: 38px; border-radius: 19px; background: #fff; box-shadow: var(--s-shadow); display: flex; align-items: center; gap: 8px; padding: 0 18px 0 8px; font-size: 15px; font-weight: 600; white-space: nowrap; z-index: 2 }
+.mac .title span { font-weight: 400; color: var(--s-2); font-size: 13px }
+.mac .colm { position: absolute; inset: 64px 0 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 32px 20px; }
+.mac .inner { width: 100%; max-width: 660px; margin: 0 auto; display: grid; gap: 14px }
+.mac .bm { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: end }
+.mac .bm .b { background: var(--s-bubble); border-radius: 18px; padding: 10px 15px; font-size: 15px; line-height: 1.55; width: fit-content; max-width: 70% }
+.mac .msteps { display: grid; gap: 6px; padding-left: 34px }
+.mac .mstep { border: 1px solid var(--s-line2); border-radius: 16px; height: 32px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #55555b; width: fit-content; white-space: nowrap }
+.mac .mstep b { color: var(--s-ink); font-weight: 600 } .mac .mstep .x { width: 7px; height: 7px; border-radius: 50%; background: #16a34a }
+.mac .inc { margin: 0; padding-left: 12px; gap: 14px }
+.mac .eh { font-size: 13px; line-height: 18px; gap: 6px } .mac .eh b { font-size: 14px }
+.mac .et { font-size: 15px; line-height: 1.55 }
+.mac .ref { font-size: 13px } .mac .lk { font-size: 13.5px }
+.mac .e.hover { background: var(--s-raise); border-radius: 10px; margin: -6px -8px; padding: 6px 8px }
+.mac .goto { margin-left: auto; font-size: 13px; color: var(--s-ink); display: inline-flex; align-items: center; gap: 1px }
+.mac .goto svg { width: 13px; height: 13px; color: var(--s-2) }
+.mac .comp { height: 46px; border-radius: 23px; box-shadow: var(--s-shadow); display: flex; align-items: center; padding: 0 18px; font-size: 15px; color: var(--s-3); background: #fff }
+
+/* the page at phone width (the person's iPhone shows it in English) */
+.web .scr { background: #fff }
+.web .wbar { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--s-line); margin-top: 0 }
+.web .wbar svg { width: 20px; height: 20px }
+.web .wbar .t { font-size: 16px; font-weight: 600 } .web .wbar .sub { font-size: 12px; color: var(--s-2) }
+.web .msgs { padding-bottom: 12px }
+.web .wcomp { margin: 0 12px; height: 48px; border-radius: 24px; border: 1px solid var(--s-line2); display: flex; align-items: center; padding: 0 16px; font-size: 16px; color: var(--s-3) }
+.web .bubble { font-size: 16px; padding: 10px 14px; border-radius: 18px }
+.web .msg { grid-template-columns: 22px minmax(0,1fr); padding: 0 12px }
+.web .inc { margin: 16px 12px 0; padding-left: 11px; gap: 14px }
+.web .et { font-size: 15px } .web .eh { font-size: 13px } .web .eh b { font-size: 14px }
+.web .steps { padding: 0 12px 0 44px }
+.web .step { height: 34px; font-size: 14px; border-radius: 17px }
+
+/* decisions and words */
+.notes { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.notes section { background: var(--card); border: 1px solid var(--rule); border-radius: 16px; padding: 16px 18px; }
+.notes h3 { margin: 0 0 6px; font-size: 15px }
+.notes p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted) }
+.words { max-width: 1280px; margin: 0 auto; overflow-x: auto }
+.words table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--card); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; font-size: 14px }
+.words th, .words td { text-align: left; padding: 9px 14px; border-top: 1px solid var(--rule); vertical-align: top; line-height: 1.5 }
+.words th { border-top: 0; color: var(--muted); font-weight: 500 }
+.words td:first-child { color: var(--muted); width: 32% }
+:focus-visible { outline: 2px solid var(--s-blue); outline-offset: 2px }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>agent 对话里收到的消息</h1>
+  <p>别的 agent（或者你在群里 @ 它）给一个 agent 发消息时，mad 会把消息送进它的对话。现在这一段被画成你自己发的蓝色气泡，里面是给 agent 看的英文说明，建 agent 的结果还带着一段 JSON。下面是新的画法：只留谁、在哪儿、说了什么，左边一道细线把一次送达的消息归在一起。iPhone 6 屏、Mac 一屏、网页一屏（英文），内容都是示例。</p>
+</header>
+
+<main class="board">
+
+<!-- 0 · today -->
+<figure id="now">
+  <div class="phone"><div class="scr" data-agent="team0001-arch" data-name="architect" data-time="21:58">
+    <div class="msgs">
+      <div class="mine"><div class="bubble plumb">[mad bus] 1 message for you (architect). Act on what asks you something; reply with bus_post(channel, text) in the channel or bus_dm(agent, text) privately, @mentioning who should read it. Say nothing on the bus if nothing is asked of you.
+Your name on the bus is architect (the deck's name for this session). Who wrote reads only the bus: an answer written here reaches no one.
+
+#ios · builder · #74 · 21:57 — h-0000a1b2 done
+登录页的深色模式改好了，新的 head 是 3f2a9c1。</div></div>
+      <div class="mine"><div class="bubble plumb">{"data":{"agent":"scout001-aaaa","name":"scout","type":"agent"},"request":"c-00000007","say":"agent scout was created","status":"created"}</div></div>
+    </div>
+  </div></div>
+  <figcaption><b>0 · 现在</b>每次收到消息，都画成你发的蓝色气泡：一大段写给 agent 的英文说明，真正的内容只有最后一行。建 agent 的结果还会多一个 JSON 气泡。你没写过这些，而且什么都点不了。</figcaption>
+</figure>
+
+<!-- 1 · one message from a channel -->
+<figure id="one">
+  <div class="phone"><div class="scr" data-agent="team0001-bld0" data-name="builder" data-time="21:41">
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="26"></span><div class="bubble">设置页改好了，测试都过了。</div></div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-arch" data-size="20"></span><b>architect</b><span class="w">#ios</span><span class="tm">21:40</span></div>
+          <div class="et"><span class="at">@builder</span> 深色模式下登录按钮几乎看不见，先修这个，设置页的事可以放一放。</div>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="x"></span><b>发到 #ios</b><span>收到，先修登录按钮</span></div>
+        <div class="step"><span class="x"></span><b>Read</b><span>LoginView.swift</span></div>
+      </div>
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="26"></span><div class="bubble">按钮用的是固定的黑色，我改成跟着深浅色走。</div></div>
+    </div>
+  </div></div>
+  <figcaption><b>1 · 群里来了一条</b>左边一道细线，上面是谁、在哪个群、几点，下面是原话。它不是你的气泡，也不是 agent 的气泡。点这一条就打开 #ios，停在这条消息上。agent 回群里的那一步也用话写：「发到 #ios」。</figcaption>
+</figure>
+
+<!-- 2 · several -->
+<figure id="several">
+  <div class="phone"><div class="scr" data-agent="team0001-bld0" data-name="builder" data-time="21:44">
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="26"></span><div class="bubble">设置页改好了，测试都过了。</div></div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-arch" data-size="20"></span><b>architect</b><span class="w">#ios</span><span class="tm">21:40</span></div>
+          <div class="et"><span class="at">@builder</span> 深色模式下登录按钮几乎看不见，先修这个。</div>
+        </div>
+        <div class="e">
+          <div class="eh"><span class="youav">我</span><b>你</b><span class="w">#ios</span><span class="tm">21:41</span></div>
+          <div class="et"><span class="at">@builder</span> 顺便看看设置页的开关是不是也一样</div>
+        </div>
+        <div class="e">
+          <div class="eh"><span data-av="team0001-rev0" data-size="20"></span><b>reviewer</b><span class="w">私信</span><span class="tm">21:43</span></div>
+          <div class="et clamp">网页这边我也改了按钮的颜色，用的是 <code>--primary-bg</code>。你那边原生如果用 <code>madFg</code>，两边就一致了。设置页的开关我没碰，留给你。还有，深色模式下输入框的边框也偏淡，要不要一起调？</div>
+          <button class="lk">展开</button>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="x"></span><b>发到 #ios</b><span>两处都修，先登录按钮</span></div>
+        <div class="step"><span class="x"></span><b>私信 reviewer</b><span>好，原生用 madFg</span></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>2 · 一次来了几条</b>同一次送达的放在同一道线里，按时间排。你在群里 @ 它的话写「你」。长的只显示四行，「展开」看全文。超过三条时先显示前两条，下面一行「还有 4 条」。</figcaption>
+</figure>
+
+<!-- 3 · create outcome -->
+<figure id="made">
+  <div class="phone"><div class="scr" data-agent="team0001-arch" data-name="architect" data-time="21:52">
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">我起一个 agent 专门查这个时好时坏的测试。</div></div>
+      <div class="made">
+        <span data-av="scout001-aaaa" data-size="40"></span>
+        <div style="min-width:0"><div class="t">「scout」建好了</div><div class="s">Claude Sonnet · 在工作</div></div>
+        <button class="open">打开<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 5 7 7-7 7"/></svg></button>
+      </div>
+      <div class="anno">示意：mad 告诉 architect「建好了」的那条消息（英文和 JSON）在这里，不画出来。上面这一行已经说了结果。</div>
+      <div class="msg"><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">scout 起好了，我把失败的日志发给它。</div></div>
+      <div class="steps"><div class="step"><span class="x"></span><b>私信 scout</b><span>先看 internal/bus 的这三次失败</span></div></div>
+    </div>
+  </div></div>
+  <figcaption><b>3 · 建好 agent 之后</b>结果只出现一次，就是确认卡片原地留下的那一行。mad 发给 agent 的通知只是给它看的，对话里不画。要是同一次送达里还有别人的消息，只画别人的。</figcaption>
+</figure>
+
+<!-- 4 · a handoff -->
+<figure id="handoff">
+  <div class="phone"><div class="scr" data-agent="team0001-bld0" data-name="builder" data-time="21:13">
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="26"></span><div class="bubble">设置页改好了，等评审。</div></div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-arch" data-size="20"></span><b>architect</b><span class="w">交给它一件事 · #ios</span><span class="st">进行中</span></div>
+          <div class="et clamp">给登录页加跟随系统的深色模式，再加一个测试，在深浅两种模式下各取一次按钮的颜色。推到同一个分支，不要强推。</div>
+          <button class="lk">背景和 2 个文件</button>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="x"></span><b>Read</b><span>LoginView.swift</span></div>
+        <div class="step"><span class="x"></span><b>Edit</b><span>LoginView.swift</span></div>
+      </div>
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="26"></span><div class="bubble">改完了，正在跑测试。</div></div>
+    </div>
+  </div></div>
+  <figcaption><b>4 · 交给它一件事</b>头上写「交给它一件事」，右边是这件事现在的状态：进行中、已完成、没接、没做完。正文是要做的事；背景和文件收在「背景和 2 个文件」里。「做完用 bus_done 回复」这类写给 agent 的话、看板编号都不显示。</figcaption>
+</figure>
+
+<!-- 5 · a handoff's result -->
+<figure id="result">
+  <div class="phone"><div class="scr" data-agent="team0001-arch" data-name="architect" data-time="21:58">
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">先等 builder 改完再合。</div></div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-bld0" data-size="20"></span><b>builder</b><span class="w">完成了交接 · #ios</span><span class="tm">21:57</span></div>
+          <div class="ref">交接：给登录页加跟随系统的深色模式</div>
+          <div class="et clamp">改好了，新的 head 是 3f2a9c1。按钮和输入框都跟着系统的深浅色走；新测试在两种模式下各取一次按钮的颜色，都过了。设置页的开关没动，留给下一次。</div>
+          <button class="lk">展开</button>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="x"></span><b>发到 #ios</b><span>@designer 请看新的 head</span></div>
+      </div>
+      <div class="msg"><span class="av" data-av="team0001-arch" data-size="26"></span><div class="bubble">已经请设计师看了，看完再合。</div></div>
+    </div>
+  </div></div>
+  <figcaption><b>5 · 交回来的结果</b>「完成了交接」，下面一行灰字是当初交出去的那件事，再下面是对方写的结果。对方没接时写「没接这件事」，后面是理由；中途停下写「没做完」。点它打开当初交接所在的群。</figcaption>
+</figure>
+
+</main>
+
+<h2 class="part">Mac 上</h2>
+<div class="scroller">
+  <div class="mac">
+    <div class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="hd">群聊</div>
+      <div class="mr"><span data-team="ios" data-size="30"></span><div style="min-width:0"><div class="n">ios</div><div class="p">architect: 已经请设计师看了</div></div></div>
+      <div class="hd">mad</div>
+      <div class="mr sel"><span data-av="team0001-arch" data-size="30"></span><div style="min-width:0"><div class="n">architect</div><div class="p">CI 过了，我来合并。</div></div></div>
+      <div class="mr"><span data-av="team0001-rev0" data-size="30"></span><div style="min-width:0"><div class="n">reviewer</div><div class="p">Read LoginView.swift</div></div></div>
+      <div class="mr"><span data-av="team0001-bld0" data-size="30"></span><div style="min-width:0"><div class="n">builder</div><div class="p">发到 #ios：收到，先修登录按钮</div></div></div>
+    </div>
+    <div class="pane">
+      <div class="title"><span data-av="team0001-arch" data-size="24"></span>architect <span>claude · mad / main</span></div>
+      <div class="colm"><div class="inner">
+        <div class="inc">
+          <div class="e hover">
+            <div class="eh"><span data-av="team0001-bld0" data-size="18"></span><b>builder</b><span class="w">完成了交接 · #ios</span><span class="tm">21:57</span><span class="goto">在 #ios 里看<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 5 7 7-7 7"/></svg></span></div>
+            <div class="ref">交接：给登录页加跟随系统的深色模式</div>
+            <div class="et">改好了，新的 head 是 3f2a9c1。按钮和输入框都跟着系统的深浅色走；新测试在两种模式下各取一次按钮的颜色，都过了。</div>
+          </div>
+        </div>
+        <div class="msteps"><div class="mstep"><span class="x"></span><b>发到 #ios</b> @designer 请看新的 head</div></div>
+        <div class="inc">
+          <div class="e">
+            <div class="eh"><span class="clock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><b>提醒</b><span class="w">21:06 订的</span><span class="tm">22:06</span></div>
+            <div class="et">PR 的 CI 跑完了就合并，然后装到电脑和手机上，告诉你一声。</div>
+          </div>
+        </div>
+        <div class="bm"><span data-av="team0001-arch" data-size="24"></span><div class="b">CI 过了，我来合并。</div></div>
+        <div class="comp">发消息给「architect」</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+<p class="under">Mac 上一样：一道细线、谁、在哪、原话。鼠标移上去整条变浅灰，右边出现「在 #ios 里看」。agent 自己订的提醒到点时也这样画：时钟、「提醒」、几点订的，下面是它写给自己的话。</p>
+
+<h2 class="part">网页（你的 iPhone 上是英文）</h2>
+<main class="board">
+<figure id="web">
+  <div class="phone web"><div class="scr">
+    <div class="status"><span>9:58 PM</span><div class="island"></div><span class="bat"></span></div>
+    <div class="wbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg><span data-av="team0001-bld0" data-size="28"></span><div style="display:grid;line-height:1.2"><span class="t">builder</span><span class="sub">claude · mad / main</span></div></div>
+    <div class="msgs">
+      <div class="msg"><span class="av" data-av="team0001-bld0" data-size="22"></span><div class="bubble">Settings are done and the tests pass.</div></div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-arch" data-size="20"></span><b>architect</b><span class="w">#ios</span><span class="tm">9:40 PM</span></div>
+          <div class="et"><span class="at">@builder</span> The sign-in button is nearly invisible in dark mode. Fix that first.</div>
+        </div>
+        <div class="e">
+          <div class="eh"><span class="youav"></span><b>You</b><span class="w">#ios</span><span class="tm">9:41 PM</span></div>
+          <div class="et"><span class="at">@builder</span> Check the switches on Settings too</div>
+        </div>
+        <div class="e">
+          <div class="eh"><span data-av="team0001-arch" data-size="20"></span><b>architect</b><span class="w">Handed it a task · #ios</span><span class="st">In progress</span></div>
+          <div class="et clamp">Give the sign-in screen a dark mode that follows the system, and add a test that samples the button in both modes.</div>
+          <button class="lk">Context and 2 files</button>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="x"></span><b>Posted to #ios</b><span>On it, the button first</span></div>
+      </div>
+      <div class="inc">
+        <div class="e">
+          <div class="eh"><span data-av="team0001-rev0" data-size="20"></span><b>reviewer</b><span class="w">Finished the handoff · DM</span><span class="tm">9:57 PM</span></div>
+          <div class="ref">Handoff: Match the page's button colour</div>
+          <div class="et clamp">The page uses --primary-bg now, so both match.</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot" style="padding-bottom:30px"><div class="wcomp">Message builder</div></div>
+  </div></div>
+  <figcaption><b>网页 · 英文</b>网页用同样的画法和同样的数据，字按 T() 走两种语言。这里是你 iPhone 上的样子（英文）：几条消息、一件交接、一条交回的结果。</figcaption>
+</figure>
+</main>
+
+<h2 class="part">几个决定</h2>
+<div class="notes">
+  <section><h3>不再是你的气泡</h3><p>mad 送消息时就在这一段上做标记，并带上每条消息的数据：谁、哪个群、第几条、几点、是什么（消息、交接、交接结果、提醒）。三端都照这份数据画，不去猜英文。网页在 #170 已经去掉了按文字猜的做法，这次也不会加回来。</p></section>
+  <section><h3>只留谁说了什么</h3><p>开头那段写给 agent 的说明、「做完用 bus_done 回复」、看板编号、「还有几条没 @ 你的」这些都是给 agent 的，不画。agent 照样收到全文，变的只是你看到的样子。</p></section>
+  <section><h3>结果只说一次</h3><p>建 agent、建团队的结果由确认卡片原地那一行来说，mad 发给 agent 的通知不再画。一次送达里只有这种通知时，这里什么都不出现。</p></section>
+  <section><h3>点一下回到原处</h3><p>点一条消息就打开它所在的群或私信，停在那条上，前后文都在。长按复制原话。展开、收起只在这一处，不跳走。</p></section>
+  <section><h3>agent 发出去的也用话写</h3><p>agent 回群、私信、交接、交回结果，现在是一行 mcp__mad__bus_post 之类的工具名。改成「发到 #ios」「私信 reviewer」「交给 builder」「交回结果」，后面跟它说的第一句。用的还是现有的工具行，只是换字。</p></section>
+  <section><h3>考虑过、没选的</h3><p>完全不画：看不出 agent 为什么突然去做一件事。收成一行「收到 2 条消息」：每次都得点开才知道。画成别人发的气泡：左边本来是 agent 自己，对话会像群聊，分不清谁是谁。</p></section>
+</div>
+
+<h2 class="part">用到的字</h2>
+<div class="words">
+  <table>
+    <tr><th>在哪</th><th>中文</th><th>English</th></tr>
+    <tr><td>私信里来的</td><td>私信</td><td>DM</td></tr>
+    <tr><td>你在群里说的</td><td>你</td><td>You</td></tr>
+    <tr><td>交接</td><td>交给它一件事</td><td>Handed it a task</td></tr>
+    <tr><td>交接的状态</td><td>进行中 · 已完成 · 没接 · 没做完</td><td>In progress · Done · Declined · Not finished</td></tr>
+    <tr><td>交接的附带</td><td>背景和 %lld 个文件 · 背景</td><td>Context and %lld files · Context</td></tr>
+    <tr><td>交回的结果</td><td>完成了交接 · 没接这件事 · 没做完</td><td>Finished the handoff · Declined the handoff · Didn't finish</td></tr>
+    <tr><td>结果上面那行</td><td>交接：%@</td><td>Handoff: %@</td></tr>
+    <tr><td>提醒</td><td>提醒 · %@ 订的</td><td>Reminder · booked %@</td></tr>
+    <tr><td>长的</td><td>展开 · 收起 · 还有 %lld 条</td><td>More · Less · %lld more</td></tr>
+    <tr><td>Mac 鼠标移上去</td><td>在 #%@ 里看</td><td>View in #%@</td></tr>
+    <tr><td>agent 发出去的</td><td>发到 #%@ · 私信 %@ · 交给 %@ · 交回结果</td><td>Posted to #%@ · DM to %@ · Handed to %@ · Reported back</td></tr>
+  </table>
+</div>
+
+<script>
+// mad's avatar (GrokAvatar): a circle or a tilted rounded square with two slanted eyes, colour and shape from a hash of the id.
+const COLORS = ["#8a3ffc", "#ff5a1f", "#1f66ff", "#ff4d8d", "#1fbf75", "#12b5d6", "#f5b324", "#6a5cff"];
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function body(id) {
+  const h = hash(id), col = COLORS[h % 8], round = (h >> 3) % 2 === 0;
+  const shape = round ? `<circle cx="50" cy="50" r="40" fill="${col}"/>`
+    : `<rect x="12" y="12" width="76" height="76" rx="26" fill="${col}" transform="rotate(-12 50 50)"/>`;
+  const eyes = [36, 60].map(x => `<rect x="-3.5" y="-9" width="7" height="18" rx="3.5" fill="rgba(0,0,0,.78)" transform="translate(${x} 43) rotate(-16)"/>`).join("");
+  return shape + eyes;
+}
+function avatar(id, size) { return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="display:block;flex:none">${body(id)}</svg>`; }
+const TEAMS = { ios: ["team0001-arch", "team0001-bld0", "team0001-rev0"] };
+function tile(name, size) {
+  const m = TEAMS[name] || [], s = size * .56, spots = [[0, size * .1], [size - s, 0], [size * .26, size - s]];
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:none">` + m.slice(0, 3).map((id, i) =>
+    `<div style="position:absolute;left:${spots[i][0]}px;top:${spots[i][1]}px">${avatar(id, s)}</div>`).join("") + `</div>`;
+}
+// the phone's chrome around a conversation: the status bar, the back button, the name pill, 对话/改动, the composer
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5-7 7 7 7"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+};
+document.querySelectorAll(".scr[data-agent]").forEach(scr => {
+  const { agent, name, time } = scr.dataset;
+  scr.insertAdjacentHTML("afterbegin", `<div class="status"><span>${time}</span><div class="island"></div><span class="bat"></span></div><div class="fade-top"></div>
+    <div class="overlay-top"><div class="topbar"><button class="fab" aria-label="返回">${ICON.back}</button>
+    <div class="pill"><span data-av="${agent}" data-size="32"></span><div class="stack"><span class="t">${name}</span><span class="sub">claude · mad / main</span></div></div>
+    <button class="fab" aria-label="更多">${ICON.more}</button></div><div class="seg"><div><span class="on">对话</span><span>改动</span></div></div></div>`);
+  scr.insertAdjacentHTML("beforeend", `<div class="foot"><div class="composer"><span class="ic">${ICON.plus}</span><span class="ph">发消息给「${name}」</span><span class="ic send">${ICON.up}</span></div></div>`);
+});
+document.querySelectorAll("[data-av]").forEach(el => { el.innerHTML = avatar(el.dataset.av, +(el.dataset.size || 50)); });
+document.querySelectorAll("[data-team]").forEach(el => { el.innerHTML = tile(el.dataset.team, +(el.dataset.size || 50)); });
+// narrower than a screen: draw the screens smaller rather than squeeze them
+function fit() { for (const ph of document.querySelectorAll(".phone")) { const room = ph.parentElement.clientWidth; ph.style.zoom = room < 393 ? String(room / 393) : ""; } }
+fit(); addEventListener("resize", fit);
+</script>
+</body>
+</html>
