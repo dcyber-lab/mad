@@ -311,4 +311,18 @@ final class AgentMappingTests: XCTestCase {
         let bare = try item(#"{"key":"k","kind":"","agent":"a","title":"t","acts":[{"verb":"seen","label":"x"}]}"#)
         XCTAssertEqual(AgentMapping.askTitle(bare), "在等你")
     }
+
+    /// MadShell's heads are looked up in MadShell's own catalog (each package's L reads its own bundle): every word the
+    /// head can say has an English entry there, or the head would stay Chinese in English. SwiftPM does not compile the
+    /// catalog for a test, so the file itself is read.
+    func testEveryWordOfTheAskCardsHeadHasAnEnglishEntryInMadShellsCatalog() throws {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MadShell/Resources/Localizable.xcstrings")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
+        for key in ["想问你", "想运行一条命令", "想用 %@", "在等你"] {
+            let en = ((strings[key]?["localizations"] as? [String: Any])?["en"] as? [String: Any])?["stringUnit"] as? [String: Any]
+            XCTAssertNotNil(en?["value"], "“\(key)” has no English entry in MadShell's catalog")
+        }
+    }
 }

@@ -247,6 +247,8 @@ struct AskCardView: View {
     let act: (String, String?) -> Void
     @State private var asking: AskAct?
     @State private var text = ""
+    /// The act sent and waiting for the Mac, by a tap or by Return / Esc (AskChips draws it).
+    @State private var sent: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -309,11 +311,9 @@ struct AskCardView: View {
                         .keyboardShortcut(.cancelAction)
                 }
             }
-        } else if !card.questions.isEmpty {
-            AskForm(questions: card.questions) { answers in act("send", answers.joined(separator: "\n")) }
         } else {
             HStack(alignment: .top, spacing: 8) {
-                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 })
+                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 }, sent: $sent)
                 if card.permission, returnAct != nil || escapeAct != nil {
                     Spacer(minLength: 8)
                     HStack(spacing: 14) {
@@ -356,8 +356,10 @@ struct AskCardView: View {
         card.permission ? (card.acts.first { $0.kind == .deny } ?? card.acts.first { $0.kind == .denyWhy }) : nil
     }
 
+    /// An answer by a key: sent like a tap, once (a second Return, or a tap, while it waits does nothing).
     private func choose(_ a: AskAct) {
-        if a.input { asking = a } else { act(a.id, nil) }
+        guard sent == nil else { return }
+        if a.input { asking = a } else { sent = a.id; act(a.id, nil) }
     }
 
     private func sendWords() {

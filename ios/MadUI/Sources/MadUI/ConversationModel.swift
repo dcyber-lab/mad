@@ -180,13 +180,8 @@ public struct AskCard: Equatable, Sendable {
     public var waited: String
     /// A command to allow (the card's head says "想运行一条命令"), rather than a question.
     public var permission: Bool
-    /// A form of several questions, each with its own options to pick from; 发送 answers them all once each has a pick.
-    /// Empty for a card of one question or a permission (its `acts` are the answers).
-    public var questions: [AskQuestion]
 
-    public init(id: String, title: String, detail: String = "", mono: Bool = false, acts: [AskAct], waited: String = "", permission: Bool = false,
-                questions: [AskQuestion] = []) {
-        self.questions = questions
+    public init(id: String, title: String, detail: String = "", mono: Bool = false, acts: [AskAct], waited: String = "", permission: Bool = false) {
         self.waited = waited
         self.permission = permission
         self.id = id
@@ -199,14 +194,6 @@ public struct AskCard: Equatable, Sendable {
     public var accessibilityLabel: String {
         detail.isEmpty ? "needs you, \(title)" : "needs you, \(title), \(detail)"
     }
-}
-
-/// One question of a form: what it asks, and the options to pick one from.
-public struct AskQuestion: Identifiable, Equatable, Sendable {
-    public var id: String
-    public var text: String
-    public var options: [String]
-    public init(id: String, text: String, options: [String]) { self.id = id; self.text = text; self.options = options }
 }
 
 public struct AskAct: Identifiable, Equatable, Sendable {
