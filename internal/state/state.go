@@ -95,6 +95,9 @@ func (s *State) Save() error {
 	if err != nil {
 		return err
 	}
+	if disk, err := os.ReadFile(paths.StateFile()); err == nil {
+		data = keepUnknown(disk, data) // a newer mad's fields survive this one
+	}
 	return paths.WriteFileAtomic(paths.StateFile(), data)
 }
 
