@@ -263,6 +263,9 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public static let usageID = "mad:usage"
     /// The Mac's 新对话 page in the detail pane (no row of its own).
     public static let newChatID = "mad:newchat"
+    /// The Mac's 新群聊 and 新团队 pages in the detail pane (no row of their own).
+    public static let newChannelID = "mad:newchannel"
+    public static let newTeamID = "mad:newteam"
 
     /// What the row is called: its name, else "codex 32d23a28" for an untitled agent.
     public var title: String {
