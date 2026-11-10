@@ -32,6 +32,9 @@ public final class ChatSession: ObservableObject {
     @Published public private(set) var sending = false
     /// A message for the person: the server's reason a send or interrupt failed.
     @Published public var notice: String?
+    /// What the person sent that the transcript does not show yet: drawn as their bubble at once, not after the
+    /// round trips and the agent writing it down.
+    @Published public private(set) var outgoing: [Outgoing] = []
 
     private let api: ChatAPI
     private let fixture: Bool
@@ -107,6 +110,7 @@ public final class ChatSession: ObservableObject {
             // Only what was read from where the transcript still stands.
             guard transcript.file == file, transcript.offset == offset else { return }
             transcript.apply(page)
+            outgoing = Outgoing.pending(outgoing, in: transcript)
             loaded = true
             problem = nil
         } catch {
@@ -144,10 +148,13 @@ public final class ChatSession: ObservableObject {
         }
         sending = true
         defer { sending = false }
+        let out = Outgoing(text: t, after: Outgoing.userCount(transcript))
+        outgoing.append(out)
         do {
             try await api.setMode(agent: agentID, mode: "window")
             try await api.send(agent: agentID, text: t)
         } catch {
+            outgoing.removeAll { $0.id == out.id }
             notice = (error as? ConnectionError)?.localizedDescription ?? error.localizedDescription
             return false
         }
@@ -164,6 +171,43 @@ public final class ChatSession: ObservableObject {
             try await api.interrupt(agent: agentID)
         } catch {
             notice = (error as? ConnectionError)?.localizedDescription ?? error.localizedDescription
+        }
+    }
+}
+
+/// A message the person sent, until the transcript has it.
+public struct Outgoing: Equatable, Sendable, Identifiable {
+    public let id = UUID()
+    public let text: String
+    /// How many of the person's entries the transcript had when it was sent.
+    let after: Int
+    let at: Date
+
+    public init(text: String, after: Int, at: Date = Date()) {
+        self.text = text
+        self.after = after
+        self.at = at
+    }
+
+    /// Past this it is dropped whatever the transcript says: a bubble never stays for good.
+    static let lasts: TimeInterval = 120
+
+    /// The person's entries (a slash command is written as a command).
+    static func userCount(_ t: ChatTranscript) -> Int {
+        t.entries.filter { $0.kind == "user" || $0.kind == "command" }.count
+    }
+
+    /// Those of `list` the transcript does not show yet: one goes once an entry of the person's with its text
+    /// comes after where the transcript stood when it was sent (the agent may write it a little changed, so any new
+    /// entry of theirs does too after a few seconds), or once it is old.
+    public static func pending(_ list: [Outgoing], in t: ChatTranscript, now: Date = Date()) -> [Outgoing] {
+        guard !list.isEmpty else { return list }
+        let users = t.entries.filter { $0.kind == "user" || $0.kind == "command" }
+        return list.filter { o in
+            if now.timeIntervalSince(o.at) > lasts { return false }
+            let newer = users.count > o.after ? users[o.after...] : []
+            if newer.contains(where: { ($0.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines) == o.text }) { return false }
+            return newer.isEmpty || now.timeIntervalSince(o.at) < 5
         }
     }
 }
