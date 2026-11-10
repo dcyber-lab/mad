@@ -4,13 +4,14 @@
   "roles": [
     {"name": "architect", "agent": "claude:opus@high", "skill": "pstack:architect"},
     {"name": "builder", "label": "implementer", "agent": "claude:sonnet@high", "skill": "pstack:poteto-mode"},
-    {"name": "interrogator", "agent": "claude:opus@high", "skill": "pstack:interrogate"}
+    {"name": "interrogator", "agent": "claude:opus@high", "skill": "pstack:interrogate", "no_edits": true}
   ],
   "steps": [
     {
       "name": "design",
       "role": "architect",
       "gate": true,
+      "expect": {"files": ["{{run}}/design.md"], "commit": true},
       "prompt": [
         "Task: {{task}}",
         "",
@@ -22,6 +23,7 @@
       "label": "implementation",
       "role": "builder",
       "ask": ["architect"],
+      "expect": {"commit": true},
       "prompt": [
         "Task: {{task}}",
         "",

@@ -71,6 +71,22 @@ func fakeRole() {
 		}
 		var reply string
 		switch {
+		// TestRunChecks's flow: the maker finishes only when told what is
+		// missing; the prober asks someone it may not, then edits a file.
+		case strings.Contains(msg, "· make · not finished]"):
+			name := strings.Fields(strings.TrimPrefix(msg, "[mad run "))[0]
+			_ = os.MkdirAll(filepath.Join(".mad", "runs", name), 0o755)
+			_ = os.WriteFile(filepath.Join(".mad", "runs", name, "out.md"), []byte("made\n"), 0o644)
+			_ = os.WriteFile("made.txt", []byte("made\n"), 0o644)
+			_ = exec.Command("sh", "-c", "git add made.txt && git -c user.email=t@t -c user.name=t commit -q -m made").Run()
+			reply = "Made it.\nDONE"
+		case strings.Contains(msg, "· make]"):
+			reply = "Nothing yet.\nDONE"
+		case strings.Contains(msg, "· probe]"):
+			reply = "Not sure.\nQUESTION(@maker): what did you make?"
+		case strings.Contains(msg, "· no one to ask]"):
+			_ = os.WriteFile("made.txt", []byte("probed\n"), 0o644)
+			reply = "Probed it.\nVERDICT: APPROVE"
 		case strings.Contains(msg, "· question]"):
 			reply = "Yes, keep the old format.\nDONE"
 		case strings.Contains(msg, "· design]"):
@@ -302,6 +318,80 @@ func TestRunEndToEnd(t *testing.T) {
 	// A runner started again on a run that is over just draws it.
 	if err := Exec(r.ID, io.Discard); err != nil {
 		t.Errorf("runner on a finished run: %v", err)
+	}
+}
+
+// A step that leaves undone what it must hears what is missing once; a
+// question to a role the step may not ask is turned back; a role that
+// edits nothing and changes the worktree stops the run for you.
+func TestRunChecks(t *testing.T) {
+	repo := fakeDeck(t)
+	if err := paths.WriteFileAtomic(filepath.Join(UserFlows(), "checks.json"), []byte(`{"name": "checks",
+		"roles": [{"name": "maker", "agent": "claude"}, {"name": "prober", "agent": "claude", "no_edits": true}],
+		"steps": [
+			{"name": "make", "role": "maker", "prompt": "Make it.", "expect": {"files": ["{{run}}/out.md"], "commit": true}},
+			{"name": "probe", "role": "prober", "prompt": "Probe it.", "review": true, "back": "make"}
+		]}`)); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Create(Options{Project: repo, Flow: "checks", Task: "make a thing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- Exec(r.ID, io.Discard) }()
+	for end := time.Now().Add(2 * time.Minute); ; time.Sleep(100 * time.Millisecond) {
+		if f, err := Load(Dir(r)); err == nil && f.Progress.Status == Waiting {
+			if !strings.Contains(f.Progress.Waiting, "the prober edits nothing, yet the worktree changed (changed files: made.txt)") {
+				t.Fatalf("waiting for %q", f.Progress.Waiting)
+			}
+			break
+		}
+		if time.Now().After(end) {
+			f, _ := Load(Dir(r))
+			t.Fatalf("never stopped for the prober's edit: %+v", f.Progress)
+		}
+	}
+	if err := Command(r, Continue); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Minute):
+		f, _ := Load(Dir(r))
+		t.Fatalf("run never ended: %+v", f.Progress)
+	}
+
+	f, _ := Load(Dir(r))
+	var got []string
+	for _, e := range f.Progress.Entries {
+		got = append(got, fmt.Sprintf("%s/%d/%s", e.Step, e.Round, e.Status))
+	}
+	if f.Progress.Status != Done || strings.Join(got, " ") != "make/1/done probe/1/approve" {
+		t.Fatalf("status %s, steps %v", f.Progress.Status, got)
+	}
+	if f.Progress.Entries[0].Result != "Made it." {
+		t.Errorf("the maker's result = %q", f.Progress.Entries[0].Result)
+	}
+	sent, _ := os.ReadFile(filepath.Join(os.Getenv("XDG_STATE_HOME"), "fake-messages"))
+	for _, want := range []string{
+		"When you end, mad checks that .mad/runs/make-a-thing/out.md is written, the step made a commit.",
+		"The make is not finished:\n- .mad/runs/make-a-thing/out.md is missing or empty\n- there is no commit from this step",
+		"You edit no file in this worktree and make no commit: mad refuses it.",
+		"No one answers @maker in this step: this step asks no one.",
+	} {
+		if !strings.Contains(string(sent), want) {
+			t.Errorf("no message says %q:\n%s", want, sent)
+		}
+	}
+	log, _ := os.ReadFile(logPath(Dir(r)))
+	for _, want := range []string{"the make is not finished", "prober asks @maker, whom this step does not ask", "the prober, which edits nothing, changed the worktree", "run done"} {
+		if !strings.Contains(string(log), want) {
+			t.Errorf("log lacks %q:\n%s", want, log)
+		}
 	}
 }
 

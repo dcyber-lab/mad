@@ -3,12 +3,13 @@
   "description": "pstack bug fix: reproduce, root-cause and fix by poteto-mode → blast-radius check (needs the pstack skills; they start more agents of their own)",
   "roles": [
     {"name": "fixer", "agent": "claude:opus@high", "skill": "pstack:poteto-mode"},
-    {"name": "checker", "agent": "claude:opus@high", "skill": "pstack:blast-radius"}
+    {"name": "checker", "agent": "claude:opus@high", "skill": "pstack:blast-radius", "no_edits": true}
   ],
   "steps": [
     {
       "name": "fix",
       "role": "fixer",
+      "expect": {"files": ["{{run}}/bug.md"], "commit": true, "tests_first": true},
       "prompt": [
         "Task: {{task}}",
         "",

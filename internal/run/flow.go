@@ -62,6 +62,12 @@ type Role struct {
 	Agent string `json:"agent"`
 	// ReadOnly: the role looks and changes nothing (a reviewer).
 	ReadOnly bool `json:"read_only,omitempty"`
+	// NoEdits: the role runs what it likes (tests, a repro in a temporary
+	// directory) but changes no file in the worktree outside the run's
+	// directory, and makes no commit: a reviewer that proves what it
+	// finds. mad refuses its edits there and checks the worktree after
+	// each of its steps.
+	NoEdits bool `json:"no_edits,omitempty"`
 	// Skill is the skill the role works by ("pstack:poteto-mode"): its
 	// messages tell the agent to read the skill's SKILL.md and follow it.
 	Skill string `json:"skill,omitempty"`
@@ -94,6 +100,22 @@ type Step struct {
 	Ask []string `json:"ask,omitempty"`
 	// Gate, when the run asks for gates, stops after this step for you.
 	Gate bool `json:"gate,omitempty"`
+	// Expect is what the step must leave behind, checked when it ends.
+	Expect *Expect `json:"expect,omitempty"`
+}
+
+// Expect is what a step must leave behind the first time it runs. The
+// runner checks it when the reply comes, sends what is missing back to
+// the role once, and then waits for you.
+type Expect struct {
+	// Files must exist and not be empty: "{{run}}/bug.md".
+	Files []string `json:"files,omitempty"`
+	// Commit: the step makes at least one commit.
+	Commit bool `json:"commit,omitempty"`
+	// TestsFirst: among the step's commits, one that changes tests alone
+	// comes before the first that changes anything else, so the failing
+	// test is in the history ahead of the fix.
+	TestsFirst bool `json:"tests_first,omitempty"`
 }
 
 // Flow is a run's template.
@@ -326,6 +348,9 @@ func Check(f Flow) error {
 				bad("role %s: %v", r.Name, err)
 			}
 		}
+		if r.ReadOnly && r.NoEdits {
+			bad("role %s: read_only or no_edits, not both", r.Name)
+		}
 		c := ParseChoice(r.Agent)
 		switch c.Kind {
 		case "claude":
@@ -383,6 +408,21 @@ func Check(f Flow) error {
 		}
 		if r, ok := f.Role(s.Role); ok && r.ReadOnly && !s.Review {
 			bad("%s: its role %s is read only, so it can only review", at, s.Role)
+		}
+		if e := s.Expect; e != nil {
+			for _, file := range e.Files {
+				if strings.TrimSpace(file) == "" {
+					bad("%s: expect.files has an empty name", at)
+				}
+				for _, m := range placeholderRe().FindAllStringSubmatch(file, -1) {
+					if m[1] != "run" {
+						bad("%s: expect.files: unknown placeholder {{%s}} (there is {{run}})", at, m[1])
+					}
+				}
+			}
+			if r, ok := f.Role(s.Role); ok && (r.ReadOnly || r.NoEdits) && (e.Commit || e.TestsFirst) {
+				bad("%s: its role %s makes no commits, so the step can't expect one", at, s.Role)
+			}
 		}
 	}
 	return errors.Join(errs...)

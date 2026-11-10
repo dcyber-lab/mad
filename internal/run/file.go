@@ -74,6 +74,10 @@ type Entry struct {
 	End    time.Time `json:"end,omitzero"`
 	Cost   float64   `json:"cost,omitempty"`   // USD (claude)
 	Tokens int64     `json:"tokens,omitempty"` // tokens (codex)
+	// Head and Tree are the worktree's state when the step began (see
+	// worktreeState), to check the step against.
+	Head string `json:"head,omitempty"`
+	Tree string `json:"tree,omitempty"`
 }
 
 // Progress is how far a run got.

@@ -882,6 +882,25 @@ A step says only what to do; mad adds how to end the reply (`DONE`,
 review sends its changes back to an earlier step. A run keeps the flow it
 started with, whatever becomes of the file.
 
+What holds a role to its part, beyond its prompt:
+
+- A run's roles may not push or open or merge a pull request (mad's hook
+  refuses `git push`, `gh pr create` and `gh pr merge`): you do that from
+  the sidebar when the run is done.
+- `"no_edits": true` on a role: it runs what it likes (tests, a repro in
+  a temporary directory) but the hook refuses its edits in the worktree
+  outside the run's directory, and after each of its steps the runner
+  compares the worktree with how the step found it (commits, files,
+  ignoring checkouts nested in it such as a subagent's); a change stops
+  the run for you. A codex role gets its read-only sandbox instead.
+- `"expect"` on a step: `files` that must exist and not be empty
+  (`{{run}}/bug.md`), a `commit`, `tests_first` (a commit of tests alone
+  before the first commit of anything else). The role is told up front;
+  when the step ends what is missing goes back to it once, then the run
+  waits for you. Checked the first time the step runs.
+- A step asks only the roles in its `ask`; a question to anyone else is
+  answered by mad: decide, and say what you assumed.
+
 A role can work by a skill: `"skill": "pstack:poteto-mode"` (the skill's
 name, or `plugin:name` for a claude plugin's). Each message the role gets
 then says where its agent finds the skill's SKILL.md, to read it first
@@ -897,10 +916,10 @@ None is the default.
 
 | Flow | Steps (role: agent, skill) |
 |---|---|
-| `pstack` | design (architect: claude opus, `architect`: sketch more than once, commit the sketch) → implement (claude sonnet, `poteto-mode`) → interrogate (claude opus, `interrogate`: only findings a run proves) |
-| `pstack-bugfix` | fix (claude opus, `poteto-mode`'s Bug fix: reproduce, root cause, the failing test committed before the fix, `bug.md`) → blast radius (claude opus, `blast-radius`) |
-| `pstack-refactor` | pin today's behavior and write `shape.md` (claude opus, `poteto-mode`) → reshape (claude sonnet, `poteto-mode`) → blast radius (claude opus, `blast-radius`) |
-| `pstack-docs` | write (claude opus, `technical-writing`) → fact check against the code (codex, read only) → edit (claude sonnet, read only, `unslop`) |
+| `pstack` | design (architect: claude opus, `architect`: sketch more than once, commit the sketch and `design.md`, both checked) → implement (claude sonnet, `poteto-mode`, a commit checked) → interrogate (claude opus, `interrogate`: only findings a run proves; edits nothing) |
+| `pstack-bugfix` | fix (claude opus, `poteto-mode`'s Bug fix: reproduce, root cause; `bug.md`, a commit and the failing test committed before the fix are checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
+| `pstack-refactor` | pin today's behavior and write `shape.md` (claude opus, `poteto-mode`; both checked) → reshape (claude sonnet, `poteto-mode`; a commit checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
+| `pstack-docs` | write (claude opus, `technical-writing`; a commit checked) → fact check against the code (codex, read only) → edit (claude sonnet, read only, `unslop`) |
 
 pstack's skills start agents of their own, on the models its
 `/setup-pstack` chose, so such a run costs several times a plain one.

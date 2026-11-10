@@ -171,3 +171,161 @@ func statusPath(line string) string {
 	}
 	return ""
 }
+
+// Refused says why tool call t of role, in the run whose worktree is dir
+// and whose own directory is runDir, is refused, or "": it reaches out of
+// the worktree (root is the project's main checkout); it pushes or opens
+// a pull request, which a run leaves to the person; or the role edits
+// nothing, and t writes a file in the worktree. A file in a checkout
+// nested in the worktree (a subagent's worktree) is that checkout's.
+func Refused(dir, root, runDir string, role Role, t *discover.Tool) string {
+	if why := Outside(dir, root, t); why != "" {
+		return why
+	}
+	if t.Command != "" {
+		if what := publishes(t.Command); what != "" {
+			return fmt.Sprintf("mad: a run's roles do not %s: the person does that from the sidebar once the run is done. Commit, and say what is ready.", what)
+		}
+	}
+	if role.NoEdits && t.Path != "" && within(t.Path, dir) && !within(t.Path, runDir) && !nested(t.Path, dir) {
+		return fmt.Sprintf("mad: the %s edits no file in the run's worktree. Put scratch files in %s, and say in your reply what should change.", role.Label, os.TempDir())
+	}
+	return ""
+}
+
+// nested reports whether path is in a git checkout of its own below dir.
+func nested(path, dir string) bool {
+	top := resolve(dir)
+	for d := filepath.Dir(resolve(path)); d != top && within(d, top); d = filepath.Dir(d) {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// publishes says what command line does that a run leaves to the person
+// (pushing, a pull request), or "". Only what runs counts: a git push
+// quoted to grep or echo is no push.
+func publishes(line string) string {
+	for _, words := range simpleCommands(line) {
+		words = unwrap(words)
+		if len(words) == 0 {
+			continue
+		}
+		switch filepath.Base(words[0]) {
+		case "git":
+			if gitSubcommand(words[1:]) == "push" {
+				return "push"
+			}
+		case "gh":
+			if len(words) > 2 && words[1] == "pr" && (words[2] == "create" || words[2] == "merge") {
+				return "open or merge pull requests"
+			}
+		case "bash", "sh", "zsh":
+			for i := 1; i+1 < len(words); i++ {
+				if strings.HasPrefix(words[i], "-") && !strings.HasPrefix(words[i], "--") && strings.Contains(words[i], "c") {
+					if what := publishes(words[i+1]); what != "" {
+						return what
+					}
+					break
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// unwrap drops what runs a command rather than being it: variable
+// assignments, and env, sudo, xargs and their like with their options.
+func unwrap(words []string) []string {
+	for len(words) > 0 {
+		w := words[0]
+		switch {
+		case strings.Contains(w, "=") && !strings.HasPrefix(w, "-") && !strings.ContainsAny(w[:strings.Index(w, "=")], "/."):
+			words = words[1:]
+		case w == "env" || w == "sudo" || w == "command" || w == "exec" || w == "nohup" || w == "time" || w == "nice" || w == "xargs":
+			words = words[1:]
+			for len(words) > 0 && strings.HasPrefix(words[0], "-") {
+				words = words[1:]
+			}
+		default:
+			return words
+		}
+	}
+	return words
+}
+
+// gitSubcommand is the subcommand in git's arguments, past its options.
+func gitSubcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "-C" || a == "-c" || a == "--git-dir" || a == "--work-tree" || a == "--namespace" || a == "--config-env":
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			return a
+		}
+	}
+	return ""
+}
+
+// simpleCommands splits a shell command line into the words of its simple
+// commands, quotes taken off: enough to tell what a line runs, not to run
+// it. A quoted string stays one word.
+func simpleCommands(line string) [][]string {
+	var out [][]string
+	var words []string
+	var word strings.Builder
+	inWord := false
+	endWord := func() {
+		if inWord {
+			words = append(words, word.String())
+			word.Reset()
+			inWord = false
+		}
+	}
+	endCommand := func() {
+		endWord()
+		if len(words) > 0 {
+			out = append(out, words)
+			words = nil
+		}
+	}
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case c == '\'':
+			inWord = true
+			j := strings.IndexByte(line[i+1:], '\'')
+			if j < 0 {
+				j = len(line) - i - 1
+			}
+			word.WriteString(line[i+1 : i+1+j])
+			i += j + 1
+		case c == '"':
+			inWord = true
+			for i++; i < len(line) && line[i] != '"'; i++ {
+				if line[i] == '\\' && i+1 < len(line) {
+					i++
+				}
+				word.WriteByte(line[i])
+			}
+		case c == '\\' && i+1 < len(line):
+			inWord = true
+			i++
+			word.WriteByte(line[i])
+		case c == ' ' || c == '\t':
+			endWord()
+		case strings.IndexByte(";&|\n()`", c) >= 0:
+			endCommand()
+		case c == '$' && i+1 < len(line) && line[i+1] == '(':
+			endCommand()
+		default:
+			inWord = true
+			word.WriteByte(c)
+		}
+	}
+	endCommand()
+	return out
+}

@@ -4,13 +4,14 @@
   "roles": [
     {"name": "architect", "agent": "claude:opus@high", "skill": "pstack:poteto-mode"},
     {"name": "builder", "label": "refactorer", "agent": "claude:sonnet@high", "skill": "pstack:poteto-mode"},
-    {"name": "checker", "agent": "claude:opus@high", "skill": "pstack:blast-radius"}
+    {"name": "checker", "agent": "claude:opus@high", "skill": "pstack:blast-radius", "no_edits": true}
   ],
   "steps": [
     {
       "name": "pin",
       "role": "architect",
       "gate": true,
+      "expect": {"files": ["{{run}}/shape.md"], "commit": true},
       "prompt": [
         "Task: {{task}}",
         "",
@@ -21,6 +22,7 @@
       "name": "reshape",
       "role": "builder",
       "ask": ["architect"],
+      "expect": {"commit": true},
       "prompt": [
         "Task: {{task}}",
         "",

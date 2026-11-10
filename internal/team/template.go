@@ -251,6 +251,9 @@ func Check(t Template) error {
 		if r.Lead && r.ReadOnly {
 			bad("role %s: the lead can't be read only", r.Name)
 		}
+		if r.NoEdits {
+			bad("role %s: no_edits holds in runs only; a team's role is read_only or not", r.Name)
+		}
 	}
 	switch {
 	case leads == 0 && len(t.Roles) > 0:

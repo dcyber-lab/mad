@@ -76,6 +76,7 @@ use the one they use.
 | `roles[].label` | what the sidebar calls it (default: `name`) |
 | `roles[].agent` | `claude:opus`, `claude:sonnet`, `claude:haiku`, `codex` (the model its config sets), `codex:<model>`; add `@effort`: `claude:opus@high`, `codex:gpt-6-sol@xhigh` |
 | `roles[].read_only` | looks and changes nothing: it can only review |
+| `roles[].no_edits` | runs commands (tests, a repro in a temporary directory) but edits no file in the worktree outside `{{run}}/` and makes no commit: a reviewer that proves what it finds. mad refuses its edits there and checks the worktree after its steps. Runs only; a codex gets its read-only sandbox |
 | `roles[].skill` | a skill the role works by: `pstack:poteto-mode` (`plugin:name` for a claude plugin's, else the skill's name). The run does not start when the role's agent lacks it |
 | `steps[].name`, `label`, `role` | the step, what to call it, who does it |
 | `steps[].prompt` | what the step is to do: a string, or a list of lines |
@@ -85,6 +86,7 @@ use the one they use.
 | `steps[].max_rounds` | for a review: how often it may send work back (default 3; then the run waits for the user) |
 | `steps[].ask` | roles the step may put a question to; the answer comes back to it |
 | `steps[].gate` | the run may stop after this step for the user (they tick "gate" when they start it) |
+| `steps[].expect` | what the step must leave behind the first time it runs: `files` (exist, not empty; `{{run}}/bug.md`), `commit` (at least one new commit), `tests_first` (a commit of tests alone before the first commit of anything else). mad tells the role, checks when it ends, sends what is missing back once, then waits for the user |
 
 Placeholders in prompts: `{{task}}` the task, `{{run}}` the run's
 directory (relative to the worktree), `{{base}}` the commit the run
@@ -98,6 +100,11 @@ round (both for `again`).
   and for a step with `ask` how to ask (`QUESTION(@role): ...`).
 - A header naming the run, the step and the role, and that the work is
   handed on through the files in `{{run}}/`.
+- What it checks and refuses. A role that pushes or opens or merges a
+  pull request is refused: the user does that when the run is done. A
+  step asks only the roles in its `ask`; a question to anyone else is
+  turned back ("decide, say what you assumed"). A step's `expect` and a
+  `no_edits` role's untouched worktree are checked when the step ends.
 - For a role with a `skill`: where its agent finds the skill's SKILL.md,
   to read and follow it, and that the run wins where they differ (the
   worktree alone, no push or pull request, how to end). A prompt names
