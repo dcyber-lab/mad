@@ -11,6 +11,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -51,6 +52,7 @@ func board(out io.Writer) error {
 	}
 	facts.Cards = cards
 	facts.Skills, _ = skill.PendingList()
+	facts.Creates = create.List()
 	v := attention.NewDesk().Look(facts)
 	if len(v.Board) == 0 && v.Inbox.Needs == 0 {
 		fmt.Fprintln(out, "Nothing on the board.")

@@ -1262,34 +1262,10 @@ struct AskSheet: View {
                     }
                     .buttonStyle(AskPill(filled: true))
                 }
-            } else if card.permission {
-                HStack(spacing: 10) {
-                    if let deny = card.acts.first(where: { $0.kind == .deny }) ?? card.acts.first(where: { $0.kind == .denyWhy }) {
-                        Button(L("拒绝")) { choose(deny) }.buttonStyle(AskPill(filled: false))
-                    }
-                    if let allow = card.acts.first(where: { $0.kind == .allow }) {
-                        Button(allow.label) { choose(allow) }.buttonStyle(AskPill(filled: true))
-                    }
-                }
-                ForEach(card.acts.filter { $0.kind == .other }) { a in
-                    Button(a.label) { choose(a) }.buttonStyle(AskPill(filled: false))
-                }
-                if let session = card.acts.first(where: { $0.kind == .allowSession }) {
-                    Button { choose(session) } label: {
-                        Text(session.label)
-                            .font(Phone.bodySmall)
-                            .foregroundStyle(Color.madFg2)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+            } else if !card.questions.isEmpty {
+                AskForm(questions: card.questions) { answers in act("send", answers.joined(separator: "\n")) }
             } else {
-                VStack(spacing: 10) {
-                    ForEach(card.acts) { a in
-                        Button(a.label) { choose(a) }.buttonStyle(AskPill(filled: a.primary))
-                    }
-                }
+                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 })
             }
         }
     }

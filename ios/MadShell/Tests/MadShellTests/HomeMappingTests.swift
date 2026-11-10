@@ -19,6 +19,27 @@ final class HomeMappingTests: XCTestCase {
         MadLocale.language = "zh-Hans" // the words asserted are the Chinese ones, whatever the machine's language
     }
 
+    /// An agent's request to start an agent or a team carries its whole spec in a body the home card does not show: an
+    /// installed app must not offer Allow beside one line. The card has no acts and says 查看; an ordinary permission
+    /// (also a `full` item, when its screen showed it whole) keeps its Allow.
+    func testACreateRequestIsNeverAllowedFromTheHomeCard() throws {
+        let d = try deck("deck-create-confirm")
+        let creates = d.inbox.items.filter { $0.kind == "create" }
+        XCTAssertEqual(creates.count, 2)
+        XCTAssertTrue(creates.allSatisfy { $0.full && $0.acts.contains { $0.verb == "allow" } }, "the server does offer Allow")
+        let cards = HomeMapping.model(from: d).waiting.filter { $0.id.hasPrefix("create:") }
+        XCTAssertEqual(cards.count, 1, "both are the same agent's: its card shows one")
+        for card in cards {
+            XCTAssertTrue(card.mustOpen)
+            XCTAssertTrue(card.acts.isEmpty, "no Allow, no Deny: \(card.acts)")
+            XCTAssertNil(card.allow)
+            XCTAssertFalse(card.isPermission)
+            XCTAssertFalse(card.agentID.isEmpty, "查看 opens the agent")
+        }
+        let perm = HomeMapping.model(from: try deck("deck-edge-home")).waiting
+        XCTAssertTrue(perm.contains { $0.allow != nil && !$0.mustOpen }, "a permission keeps its Allow")
+    }
+
     func testEdgeHomeSectionsAndTheMachineName() throws {
         let m = HomeMapping.model(from: try deck("deck-edge-home"))
         XCTAssertEqual(m.machine.count, 60)
@@ -238,6 +259,26 @@ final class WebMenuTests: XCTestCase {
         for item in HomeNewItem.allCases { actions.create(item) }
         XCTAssertEqual(started, 1)
         XCTAssertEqual(asked, [.view(.newchannel), .view(.newteam)])
+    }
+
+    /// 新群聊 and 新团队 are native too when the app can make them: each calls its own, and none opens the page.
+    func testNewChannelAndNewTeamOpenNativelyWhenTheAppCanMakeThem() {
+        var asked: [WebTarget] = []
+        var called: [String] = []
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: nil, openWeb: { asked.append($0) },
+                                             newChat: { called.append("chat") }, newChannel: { called.append("channel") },
+                                             newTeam: { called.append("team") })
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(called, ["chat", "channel", "team"])
+        XCTAssertEqual(asked, [])
+    }
+
+    /// Each one falls back to the page alone: the app that cannot make a team still makes a group.
+    func testEachNativePageFallsBackToItsOwnPage() {
+        var asked: [WebTarget] = []
+        let actions = NativeRoot.homeActions(open: { _ in }, switchMac: nil, openWeb: { asked.append($0) }, newChannel: {})
+        for item in HomeNewItem.allCases { actions.create(item) }
+        XCTAssertEqual(asked, [.view(.newchat), .view(.newteam)])
     }
 
     func testThePlusMenuHasNewChatChannelAndTeam() {

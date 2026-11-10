@@ -30,6 +30,10 @@ type Config struct {
 	// calls go through mad stream, pi loads mad's extension. On unless
 	// turned off; agents started since follow it.
 	Stream bool
+	// CreateWithoutAsking: agents start agents and teams (agent_new,
+	// team_start) without the person confirming each. Off unless set
+	// ("agents_create_without_asking": true).
+	CreateWithoutAsking bool
 	// Bus is the "bus" object: follow-ups and the progress report.
 	Bus BusConfig
 }
@@ -62,12 +66,13 @@ func DefaultConfig() Config {
 // an error naming the line, for the caller to show.
 func LoadConfig() (Config, error) {
 	var file struct {
-		Notify *notify.Config `json:"notify"`
-		Diff   *DiffConfig    `json:"diff"`
-		Finish []FinishAction `json:"finish"`
-		Quota  *bool          `json:"quota"`
-		Stream *bool          `json:"stream"`
-		Bus    *struct {
+		Notify              *notify.Config `json:"notify"`
+		Diff                *DiffConfig    `json:"diff"`
+		Finish              []FinishAction `json:"finish"`
+		Quota               *bool          `json:"quota"`
+		Stream              *bool          `json:"stream"`
+		CreateWithoutAsking *bool          `json:"agents_create_without_asking"`
+		Bus                 *struct {
 			FollowUp *string `json:"follow_up"`
 			Report   *string `json:"report"`
 			Budget   *struct {
@@ -129,6 +134,9 @@ func LoadConfig() (Config, error) {
 	}
 	if file.Stream != nil {
 		c.Stream = *file.Stream
+	}
+	if file.CreateWithoutAsking != nil {
+		c.CreateWithoutAsking = *file.CreateWithoutAsking
 	}
 	return c, nil
 }

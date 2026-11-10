@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/status"
 )
@@ -31,6 +32,10 @@ func build(f Facts) View {
 	for _, p := range f.Skills {
 		b.skill(p)
 	}
+	for _, r := range f.Creates {
+		b.create(r)
+	}
+	sort.SliceStable(b.created, func(i, j int) bool { return b.created[i].Since.After(b.created[j].Since) })
 	b.budget(f.Spend)
 	needs := order(b.items)
 	fin := b.finished()
@@ -39,6 +44,7 @@ func build(f Facts) View {
 		Activity: activities(f.Agents),
 		Working:  working(f.Agents),
 		Board:    b.rest,
+		Creates:  append([]Item{}, b.created...),
 	}
 }
 
@@ -56,6 +62,8 @@ type builder struct {
 	// alike.
 	rank map[string]int
 	rest []bus.Card
+	// created are the "create" items that ended, for View.Creates.
+	created []Item
 }
 
 // rankOf is the place of agent id's items among equals: items of no agent
@@ -337,6 +345,73 @@ func splitFirst(text string) (first, rest string) {
 func (b *builder) skill(p skill.Pending) {
 	b.add(Item{Key: keySkill(p.Name), Kind: KindSkill, Icon: "skill", Title: "/" + p.Name, Context: "skill from " + p.By,
 		Text: p.Description, Since: p.At, Open: Open{Page: PageSkills}, route: skillRoute{slug: p.Name}})
+}
+
+// create adds an agent's request to start an agent or a team. Its agent
+// waits for the answer, so it blocks.
+func (b *builder) create(r create.Request) {
+	s := r.Spec
+	it := Item{Key: keyCreate(r.ID), Kind: KindCreate, Agent: r.ByID, Title: r.By, Create: &s, From: r.From, Since: r.At, Blocks: true,
+		Open: Open{Agent: r.ByID}, route: createRoute{id: r.ID}}
+	if !b.known[r.ByID] {
+		it.Agent = ""
+	}
+	it.Where = s.Project
+	where := s.ProjectName
+	if where == "" {
+		where = s.Project
+	}
+	switch s.Type {
+	case create.TypeTeam:
+		it.Context, it.Text = "wants to start a team", "Team "+s.Name+" in "+where
+		lines := []string{"Goal: " + s.Goal}
+		if s.Template != "" {
+			lines = append(lines, "Template: "+s.Template)
+		}
+		for _, x := range s.Roles {
+			line := x.Role + ": " + x.Kind
+			if x.Model != "" {
+				line += ":" + x.Model
+			}
+			if x.Effort != "" {
+				line += "@" + x.Effort
+			}
+			if x.Lead {
+				line += " (lead)"
+			}
+			if x.ReadOnly {
+				line += " (read only)"
+			}
+			lines = append(lines, line)
+			if x.Brief != "" {
+				lines = append(lines, "  "+strings.ReplaceAll(strings.TrimSpace(x.Brief), "\n", "\n  "))
+			}
+		}
+		if s.Kickoff != "" {
+			lines = append(lines, "Kickoff: "+strings.ReplaceAll(strings.TrimSpace(s.Kickoff), "{{goal}}", s.Goal))
+		}
+		it.Body = strings.Join(lines, "\n")
+	default:
+		what := s.Kind
+		if s.Model != "" {
+			what += ":" + s.Model
+		}
+		it.Context, it.Text = "wants to start an agent", s.Name+" ("+what+") in "+where
+		it.Body = "First message: " + s.Message
+		if s.Channel != "" {
+			it.Body += "\n\nJoins #" + s.Channel
+		}
+	}
+	it.Full = true // the whole request is what Allow lets through
+	if r.Status != create.Waiting {
+		o := r.Outcome()
+		it.Outcome, it.Blocks, it.Full, it.route, it.Acts = &o, false, false, nil, []Act{}
+		it.oneLine()
+		it.rank = b.rankOf(it.Agent)
+		b.created = append(b.created, it)
+		return
+	}
+	b.add(it)
 }
 
 // budget adds the day's budget once bus.SpendWarn of it is spent, or all;

@@ -594,3 +594,76 @@ func TestStartChineseName(t *testing.T) {
 		t.Errorf("Find = %+v %v %v", r, ok, err)
 	}
 }
+
+// A team of its own roles (what an agent asks for) starts like one of a
+// template: its lead leads the channel, its topic is the goal.
+func TestStartOwnRoles(t *testing.T) {
+	root, specs, _ := project(t)
+	asker := bus.From{ID: "aaaa1111-0000-0000-0000-000000000009", Label: "gus", Kind: "claude"}
+	roles := []Role{
+		{Role: run.Role{Name: "checker", Agent: "codex", ReadOnly: true}},
+		{Role: run.Role{Name: "fixer", Agent: "claude:opus"}, Lead: true},
+	}
+	s, err := Start(Options{Project: root, Name: "fix-flaky", Goal: "stop the flake", Custom: &Template{Name: "custom", Topic: "{{goal}}", Roles: roles}, By: &asker})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*specs) != 2 || (*specs)[0].Name != "checker" || (*specs)[0].Kind != "codex" || (*specs)[1].Name != "fixer" || (*specs)[1].Model != "opus" {
+		t.Fatalf("spawned %+v", *specs)
+	}
+	c, ok, _ := bus.Find(s.Channel)
+	st, _ := state.Load()
+	if _, lead := st.FindAgent(c.Lead); !ok || c.Topic != "stop the flake" || lead == nil || lead.Role != "fixer" {
+		t.Errorf("channel %+v, lead %+v", c, lead)
+	}
+	// Started by an agent: its channel and its kickoff are the agent's, not the person's.
+	msgs, _, _ := bus.Read(s.Channel, 0, 10)
+	if c.CreatedBy != asker.ID || len(msgs) != 1 || msgs[0].From.ID != asker.ID || !strings.HasPrefix(msgs[0].Text, "@fixer ") {
+		t.Errorf("created by %q, messages %+v", c.CreatedBy, msgs)
+	}
+	if list, _ := Running(nil); len(list) != 1 || list[0].Template != "custom" || len(list[0].Roles) != 2 {
+		t.Errorf("records %+v", list)
+	}
+	// Two leads is no team.
+	roles[0].Lead = true
+	if _, err := Start(Options{Project: root, Goal: "g", Custom: &Template{Name: "custom", Roles: roles}}); err == nil || !strings.Contains(err.Error(), "2 leads") {
+		t.Errorf("two leads: %v", err)
+	}
+	if name, err := CheckName("fix-flaky", "g"); err == nil {
+		t.Errorf("a taken name is %q", name)
+	}
+}
+
+// Two starts that both passed the limit check cannot make a fourth team:
+// the limit is checked where the record is added, under the lock.
+func TestStartLimitHoldsAgainstAConcurrentStart(t *testing.T) {
+	root, specs, _ := project(t)
+	for i := 0; i < MaxTeams-1; i++ {
+		if _, err := Start(Options{Project: root, Goal: "team " + string(rune('a'+i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := len(*specs)
+	// Another start takes the last place between this one's check and its record.
+	beforeRecord = func() {
+		beforeRecord = func() {}
+		if _, err := Start(Options{Project: root, Goal: "the other one"}); err != nil {
+			t.Errorf("the other start: %v", err)
+		}
+	}
+	t.Cleanup(func() { beforeRecord = func() {} })
+	_, err := Start(Options{Project: root, Goal: "one too many", Name: "too-many"})
+	if err == nil || !strings.Contains(err.Error(), "team limit is reached") || strings.Contains(err.Error(), "mad team rm") {
+		t.Fatalf("err = %v", err)
+	}
+	list, _ := Running(nil)
+	if len(list) != MaxTeams {
+		t.Errorf("%d teams run", len(list))
+	}
+	if c, ok, _ := bus.Find("too-many"); ok && !c.Archived {
+		t.Error("the refused team's channel stays")
+	}
+	if len(*specs)-before != 3 { // only the other start's roles were started
+		t.Errorf("spawned %d for the two", len(*specs)-before)
+	}
+}

@@ -47,9 +47,13 @@ public struct HomeWaiting: Identifiable, Equatable, Sendable {
     public var detail: String
     public var mono: Bool
     public var acts: [AskAct]
+    /// Its whole request is longer than the card's line (an agent asking to start an agent or a team): the card offers
+    /// no Allow and no Deny, only 查看, which opens where all of it is shown, so nothing is allowed blind.
+    public var mustOpen: Bool
 
     public init(id: String, agentID: String, agentKind: String = "", name: String, project: String = "", whereLine: String = "",
-                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = []) {
+                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false) {
+        self.mustOpen = mustOpen
         self.id = id; self.agentID = agentID; self.agentKind = agentKind; self.name = name; self.project = project
         self.whereLine = whereLine; self.age = age; self.cost = cost; self.detail = detail; self.mono = mono; self.acts = acts
     }
@@ -263,6 +267,9 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     public static let usageID = "mad:usage"
     /// The Mac's 新对话 page in the detail pane (no row of its own).
     public static let newChatID = "mad:newchat"
+    /// The Mac's 新群聊 and 新团队 pages in the detail pane (no row of their own).
+    public static let newChannelID = "mad:newchannel"
+    public static let newTeamID = "mad:newteam"
 
     /// What the row is called: its name, else "codex 32d23a28" for an untitled agent.
     public var title: String {

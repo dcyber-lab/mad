@@ -190,6 +190,12 @@ type Options struct {
 	Goal       string
 	Permission string // run.PermAuto by default
 	Branch     string // all roles work in this branch's worktree; none: the project's directory
+	// Custom, when set, is the template to follow instead of looking Template
+	// up: one resolved earlier (an agent's request, which the person read).
+	Custom *Template
+	// By is who starts it, as the channel's creator and the kickoff's
+	// author: the person when nil.
+	By *bus.From
 	// Agents choose another agent for a role: role name → "claude:opus@high".
 	Agents map[string]string
 	Kinds  []agent.Kind
@@ -215,8 +221,12 @@ func Start(o Options) (*Started, error) {
 	if goal == "" {
 		return nil, errors.New("the team needs a goal")
 	}
-	tpl, ok := ByName(root, o.Template)
-	if !ok {
+	var tpl Template
+	if o.Custom != nil {
+		tpl = o.Custom.resolved()
+	} else if t, ok := ByName(root, o.Template); ok {
+		tpl = t
+	} else {
 		return nil, fmt.Errorf("no team template %q (mad team ls)", o.Template)
 	}
 	for role, s := range o.Agents {
@@ -256,7 +266,7 @@ func Start(o Options) (*Started, error) {
 		return nil, err
 	}
 	if len(teams) >= MaxTeams {
-		return nil, fmt.Errorf("%d teams run already (the most there are at once); remove one first: mad team rm NAME", len(teams))
+		return nil, limitError(len(teams))
 	}
 	name, err := teamName(o.Name, goal, teams)
 	if err != nil {
@@ -273,12 +283,30 @@ func Start(o Options) (*Started, error) {
 		rec.Roles = append(rec.Roles, RoleRec{Role: r.Name, Spec: r.Agent, Lead: r.Lead, ReadOnly: r.ReadOnly, Brief: strings.TrimSpace(string(r.Brief))})
 	}
 	topic := strings.TrimSpace(render(string(tpl.Topic), goal))
-	if _, err := bus.Create(name, topic, nil, bus.From{ID: bus.You, Label: bus.You}); err != nil {
+	by := bus.From{ID: bus.You, Label: bus.You}
+	if o.By != nil {
+		by = *o.By
+	}
+	if _, err := bus.Create(name, topic, nil, by); err != nil {
 		return nil, err
 	}
 	// The record first: an agent's brief is read from it as its MCP server
 	// starts, with the agent.
-	if err := update(func(f *file) (bool, error) { f.Teams = append(f.Teams, rec); return true, nil }); err != nil {
+	beforeRecord()
+	if err := update(func(f *file) (bool, error) {
+		// The limit and the name are checked where the record is added, under
+		// the lock: two starts at once cannot both pass an earlier check.
+		if len(f.Teams) >= MaxTeams {
+			return false, limitError(len(f.Teams))
+		}
+		for _, t := range f.Teams {
+			if t.Name == name {
+				return false, fmt.Errorf("a team called %s exists; pick another name", name)
+			}
+		}
+		f.Teams = append(f.Teams, rec)
+		return true, nil
+	}); err != nil {
 		_ = bus.Archive(name)
 		return nil, err
 	}
@@ -333,7 +361,7 @@ func Start(o Options) (*Started, error) {
 	if kick == "" {
 		kick = "Goal: " + goal
 	}
-	if _, err := bus.Post(name, bus.From{ID: bus.You, Label: bus.You}, "@"+lead+" "+kick, 0); err != nil {
+	if _, err := bus.Post(name, by, "@"+lead+" "+kick, 0); err != nil {
 		out.Notes = append(out.Notes, "the kickoff was not posted: "+err.Error())
 	}
 	return out, nil
@@ -533,3 +561,30 @@ func dropRecord(f *file, name string) bool {
 	}
 	return false
 }
+
+// CheckName says what a team started now would be called, or why it cannot
+// be started: as many teams run as there can, or the name is taken.
+func CheckName(name, goal string) (string, error) {
+	st, err := state.Load()
+	if err != nil {
+		return "", err
+	}
+	teams, err := Running(st)
+	if err != nil {
+		return "", err
+	}
+	if len(teams) >= MaxTeams {
+		return "", limitError(len(teams))
+	}
+	return teamName(name, goal, teams)
+}
+
+// limitError says the team limit is reached: for an agent too, so it tells
+// the person's part, not a command.
+func limitError(n int) error {
+	return fmt.Errorf("the team limit is reached (%d teams run; %d is the most): the person can remove one", n, MaxTeams)
+}
+
+// beforeRecord runs between Start's checks and adding the record: a test's
+// place to start another team in that gap.
+var beforeRecord = func() {}

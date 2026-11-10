@@ -268,6 +268,15 @@ func DMImages(from From, to, text string, images []Image) (string, PostResult, e
 	return ch, res, err
 }
 
+// TellAgent is a word from mad to agent id in its DM with the person: it
+// wakes the agent, and is no one's text (an outcome it waits for).
+func TellAgent(id, text string) (PostResult, error) {
+	if id == "" || id == You {
+		return PostResult{}, errors.New("no agent to tell")
+	}
+	return post(postSpec{channel: dmID(You, id), dm: []string{You, id}, wake: id, from: madFrom, kind: "system", text: text, mentions: []string{id}})
+}
+
 // ErrTheirDM: the person may read a DM between two agents, not post in it.
 var ErrTheirDM = errors.New("a DM between two agents is theirs: read it, or post in a channel")
 

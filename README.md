@@ -1083,6 +1083,40 @@ mad bus handoffs                    # work agents gave each other, as chains
   its own bus tools without asking (in the settings it starts claude
   with); codex does not ask for MCP tools.
 
+### Agents starting agents and teams
+
+An agent starts an agent with the bus tool `agent_new` (kind, model,
+project, name, first message, optionally a channel to join) and a team
+with `team_start` (name, goal, project, a template or its own roles). It
+is checked against what the deck has (projects, kinds, templates) and
+refused with a message the agent can relay. Then **you are asked**: a
+`create` card says everything that would be started: name, project,
+kind and model, the first message or the goal, every role with its brief
+(a template is read when the agent asks, and the team starts with
+exactly those roles), with Allow, Deny and Ask for changes. The card is
+answered on the phone or in the window; the deck's sidebar and `mad
+board` cannot answer it.
+
+The tool call does not wait: it returns at once with `"status":
+"asked"` and a request id, and the agent ends its turn. When you answer,
+mad starts what you allowed (a team's channel and kickoff are the asking
+agent's, so the day's budget counts them) and tells the agent in a DM:
+`created` with the new ids, `declined`, `changes` with your words (it
+can propose again), `expired` (no answer in 10 minutes, or the agent is
+gone from the deck: nothing starts), or `failed` with why. An agent that
+was answering in a channel passes `from_channel`: the card shows there,
+and mad adds an event line (`created`, `create_declined`,
+`create_changes`, `create_expired`, `create_failed`, with `ref` the
+card's key and `data` the type, name and ids). How each request ended is
+kept for a day in the snapshot's `creates`. A spent budget refuses both
+tools, as it does `bus_handoff`.
+
+`"agents_create_without_asking": true` in `config.json` skips the card
+(off by default), for at most 5 agents or teams an hour; the sixth asks.
+
+This gate holds against mad's tools. It does not hold against an agent
+with a shell that writes mad's state files (or starts agents itself).
+
 ### Skills
 
 An agent that found a way of working worth keeping saves it with the

@@ -13,6 +13,8 @@ import (
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/git"
@@ -37,6 +39,11 @@ type Snapshot struct {
 	// Inbox is what waits on the person, in Next's order: every "needs
 	// you" on every surface reads it.
 	Inbox attention.Inbox `json:"inbox"`
+	// Creates are the agents' requests to start an agent or a team that
+	// ended lately (declined, created, expired, failed), newest first, each
+	// with its outcome: the channel and the card draw their result lines
+	// from them. The ones waiting are in Inbox.
+	Creates []attention.Item `json:"creates"`
 	// Working are the ids of the agents at work, longest in it first.
 	Working []string `json:"working"`
 	// Teams roll their members up.
@@ -352,12 +359,13 @@ func (p *poller) Poll(now time.Time) {
 	// The bus is read again only when it moved (bus.Source).
 	look, _ := p.bus.Look(st, attention.Statuses(facts), now)
 	pending, _ := skill.PendingList()
+	creator.Sweep(st)
 	snap.Bus = busChannels(st, look)
 	snap.Spend = bus.SpendNow(now)
 	snap.Today = p.today
 	snap.Timers = timersOf()
-	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Spend: snap.Spend, Now: now})
-	snap.Inbox, snap.Working, snap.Board = view.Inbox, view.Working, view.Board
+	view := p.desk.Look(attention.Facts{Agents: facts, Cards: look.Cards, Skills: pending, Creates: create.All(), Spend: snap.Spend, Now: now})
+	snap.Inbox, snap.Working, snap.Board, snap.Creates = view.Inbox, view.Working, view.Board, view.Creates
 	if snap.Board == nil {
 		snap.Board = []bus.Card{}
 	}

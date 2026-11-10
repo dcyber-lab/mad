@@ -575,3 +575,45 @@ func TestForgetAndSystem(t *testing.T) {
 		t.Error("a system line woke someone")
 	}
 }
+
+// mad's word to an agent (TellAgent: how its request to create something ended) wakes it and is in its
+// digest. mad's other notes in the same DM, and its word to another agent, are not.
+func TestTellAgentReachesTheDigest(t *testing.T) {
+	setup(t)
+	if _, _, ok, _ := Compose(idArch, now()); ok || wakes(idArch) {
+		t.Fatal("a digest of nothing")
+	}
+	// bookkeeping of mad's: a system note naming no one
+	mustCreate(t, "api", idArch, idBuild)
+	if err := Event("api", EventCreated, "create:c-0000000b", "Team x was created.", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, _ := Compose(idArch, now()); ok || wakes(idArch) {
+		t.Fatal("mad's event line reached the agent")
+	}
+	// its word to someone else
+	if _, err := TellAgent(idBuild, "[mad] your request c-0000000a to create agent z: nothing"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, _ := Compose(idArch, now()); ok || wakes(idArch) {
+		t.Fatal("mad's word to the builder reached the architect")
+	}
+	const word = "[mad] your request c-0000000a to create agent scout: the person declined"
+	res, err := TellAgent(idArch, word)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Woke) != 1 || res.Woke[0] != "architect" {
+		t.Fatalf("Woke = %v", res.Woke)
+	}
+	if !wakes(idArch) {
+		t.Error("the agent is not woken by mad's word")
+	}
+	text, _, ok, err := Compose(idArch, now())
+	if err != nil || !ok || !strings.Contains(text, word) || !strings.Contains(text, "1 message for you") {
+		t.Fatalf("Compose = %q %v %v", text, ok, err)
+	}
+	if strings.Contains(text, "Team x was created") {
+		t.Errorf("mad's event line is in the digest: %q", text)
+	}
+}

@@ -180,6 +180,37 @@ func mcpTools(id string) []mcp.Tool {
 			},
 		},
 		{
+			Name:        "agent_new",
+			Description: "Start a new agent with a first message, optionally in a channel it joins. The person is asked first (a card in their inbox on the phone and the Mac) and this call returns at once with status \"asked\" and a request id: end your turn. When they answer, mad sends you a message with the outcome (status created with the new agent's id and channel, declined, changes with their words: propose again, expired, or failed with why). Do not ask twice for one thing. The new agent does not share your conversation: put everything it needs in message.",
+			InputSchema: obj([]string{"kind", "message"}, `"kind":{"type":"string","description":"claude, codex, ... (kinds the deck has)"},"model":{"type":"string","description":"for example opus, sonnet, gpt-5; the kind's default when omitted"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"name":{"type":"string","description":"its name on the bus: lowercase letters, digits and dashes; made up when omitted"},"message":{"type":"string","description":"its first message: the task and what it must know"},"channel":{"type":"string","description":"a channel that exists (bus_who) for it to join; the first message is posted there"},"from_channel":{"type":"string","description":"the channel you are answering in, if any: the person sees the confirm card and its outcome there"}`),
+			Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
+				var a struct {
+					Kind, Model, Project, Name, Message, Channel string
+					FromChannel                                  string `json:"from_channel"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpAgentNew(ctx, id, a.Kind, a.Model, a.Project, a.Name, a.Message, a.Channel, a.FromChannel)
+			},
+		},
+		{
+			Name:        "team_start",
+			Description: "Start a team: a channel, agents in roles, a lead, and the goal posted to the lead (as you). Follow a template (the person's or the project's, \"dev\" by default) or give the roles. The person is asked first and this call returns at once with status \"asked\", as agent_new does; mad tells you the outcome by message when they answer.",
+			InputSchema: obj([]string{"goal"}, `"name":{"type":"string","description":"the team's and its channel's name; made from the goal when omitted"},"goal":{"type":"string"},"project":{"type":"string","description":"a project of this deck, by name or path; yours by default"},"template":{"type":"string","description":"a team template; dev by default when no roles are given"},"from_channel":{"type":"string","description":"the channel you are answering in, if any: the person sees the confirm card and its outcome there"},"roles":{"type":"array","description":"the team's own roles instead of a template: exactly one leads (the first, if none is marked)","items":{"type":"object","required":["role","kind"],"properties":{"role":{"type":"string","description":"lowercase letters, digits and dashes"},"kind":{"type":"string","enum":["claude","codex"]},"model":{"type":"string"},"lead":{"type":"boolean"}}}}`),
+			Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
+				var a struct {
+					Name, Goal, Project, Template string
+					FromChannel                   string `json:"from_channel"`
+					Roles                         []mcpRole
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "", err
+				}
+				return mcpTeamStart(ctx, id, a.Name, a.Goal, a.Project, a.Template, a.FromChannel, a.Roles)
+			},
+		},
+		{
 			Name:        "skill_save",
 			Description: "Save a way of working that proved itself as a skill others load later. description says when to use it (one or two sentences, the trigger words a person would say); body is markdown: the steps, exact commands and checks, the pitfalls you hit. Leave out secrets, machine paths and this conversation's specifics. It is pending until the person approves it.",
 			InputSchema: obj([]string{"name", "description", "body"}, `"name":{"type":"string","description":"short, lower case, dashes: becomes the skill's directory and /name"},"description":{"type":"string","description":"when to use it, at most 400 characters"},"body":{"type":"string","description":"markdown: the steps"},"scope":{"type":"string","enum":["project","user"],"description":"project (default): for this project; user: general"},"replace":{"type":"boolean","description":"overwrite a skill of that name that mad did not install"}`),
