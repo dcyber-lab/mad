@@ -24,9 +24,16 @@ final class AskChipsTests: XCTestCase {
         XCTAssertEqual(AskChips.words(AskAct(id: "a", label: "允许", kind: .allow), sending: false), "允许")
     }
 
-    func testAFormStartsIncomplete() {
-        let form = AskForm(questions: [AskQuestion(id: "q1", text: "颜色", options: ["红", "蓝"]), AskQuestion(id: "q2", text: "尺寸", options: ["大", "小"])],
-                           submit: { _ in })
-        XCTAssertFalse(form.complete)
+    /// The sending words are looked up in MadUI's own catalog: each has an English entry there, or it would stay Chinese
+    /// in English. SwiftPM does not compile the catalog for a test, so the file itself is read.
+    func testTheSendingWordsHaveEnglishEntriesInMadUIsCatalog() throws {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MadUI/Resources/Localizable.xcstrings")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
+        for key in ["允许中…", "拒绝中…"] {
+            let en = ((strings[key]?["localizations"] as? [String: Any])?["en"] as? [String: Any])?["stringUnit"] as? [String: Any]
+            XCTAssertNotNil(en?["value"], "“\(key)” has no English entry in MadUI's catalog")
+        }
     }
 }

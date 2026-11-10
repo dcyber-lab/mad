@@ -1312,6 +1312,8 @@ struct AskSheet: View {
     let card: AskCard
     let act: (String, String?) -> Void
     @State private var asking: AskAct?
+    /// The act sent and waiting for the Mac (AskChips draws it).
+    @State private var sent: String?
     @State private var text = ""
     @State private var contentHeight: CGFloat = 0
     static let maxHeight: CGFloat = 420
@@ -1376,16 +1378,10 @@ struct AskSheet: View {
                     }
                     .buttonStyle(AskPill(filled: true))
                 }
-            } else if !card.questions.isEmpty {
-                AskForm(questions: card.questions) { answers in act("send", answers.joined(separator: "\n")) }
             } else {
-                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 })
+                AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 }, sent: $sent)
             }
         }
-    }
-
-    private func choose(_ a: AskAct) {
-        if a.input { asking = a } else { act(a.id, nil) }
     }
 }
 

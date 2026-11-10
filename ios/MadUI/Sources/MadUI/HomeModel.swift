@@ -249,6 +249,15 @@ public struct HomeRow: Identifiable, Equatable, Sendable {
     /// A bot's request just made this row (a team's channel, an agent): it first shows with a soft highlight, once.
     public var fresh: Bool
 
+    /// The agent 删除 ends: an agent's row is its own, a DM's is the one agent it is with; nil for any other row.
+    public var removableAgentID: String? {
+        switch kind {
+        case .agent: id
+        case .dm: members.count == 1 ? members[0].id : nil
+        case .channel: nil
+        }
+    }
+
     public init(id: String, kind: Kind = .agent, agentKind: String = "", name: String, preview: String = "",
                 state: CharacterState = .idle, needsYou: Bool = false, dimmed: Bool = false, members: [HomeMember] = [], helpers: [HomeMember] = [],
                 tool: String = "", age: String = "", unread: Int = 0, fresh: Bool = false) {

@@ -44,7 +44,7 @@ public struct MacSidebar: View {
                         if isOpen(section) {
                             ForEach(shown(section)) { row in
                                 Button { selection = row.id; actions.open(row.id) } label: {
-                                    SidebarRow(row: row, menu: actions.remove == nil || row.kind != .agent ? nil : { deleting = row })
+                                    SidebarRow(row: row, menu: actions.remove == nil || row.removableAgentID == nil ? nil : { deleting = row })
                                         .padding(.horizontal, 10)
                                         .frame(height: Mac.rowHeight)
                                         .modifier(SelectedRowBackground(selected: selection == row.id))
@@ -66,7 +66,7 @@ public struct MacSidebar: View {
                             titleVisibility: .visible, presenting: deleting) { row in
             Button(L("删除"), role: .destructive) {
                 if selection == row.id { selection = nil }
-                actions.remove?(row.id)
+                if let id = row.removableAgentID { actions.remove?(id) }
             }
             Button(L("取消"), role: .cancel) {}
         } message: { _ in
