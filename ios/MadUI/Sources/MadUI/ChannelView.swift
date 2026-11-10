@@ -33,6 +33,12 @@ public struct ChannelView: View {
     @State private var realized = RealizedRows()
     #endif
     @State private var expanded: Set<Int> = []
+    /// How many of the screen's last items the list holds. A channel keeps hundreds of rows (the device's cache holds 200
+    /// messages, some with pictures). A lazy list of them, opened at its bottom, has to guess the heights of the rows above
+    /// the screen: the bottom anchor lands on a guess, and the list shows an empty band with the way-down button until
+    /// a scroll corrects it. So the list holds the last `Self.firstRows` in a plain stack (whose height is exact, and the
+    /// bottom anchor lands where it says) and takes `Self.moreRows` more when the person asks for them.
+    @State private var rowsHeld = ChannelView.firstRows
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
     @State private var drag: CGFloat = 0
@@ -49,6 +55,8 @@ public struct ChannelView: View {
     }
 
     private static let bottom = "bottom"
+    static let firstRows = 40
+    static let moreRows = 40
     private static let space = "channelList"
 
     public var body: some View {
@@ -178,10 +186,17 @@ public struct ChannelView: View {
     private var messages: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     // Each row is drawn again only when what it shows changed: a look that brought nothing new (or one
                     // new message) leaves the other rows alone.
-                    ForEach(screen.items) { item in
+                    if heldItems.count < screen.items.count {
+                        // the top of what is held: it takes the next older rows, and the list stays on the row it was at
+                        Button { loadEarlier(proxy) } label: {
+                            Text(L("更早的消息")).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(heldItems) { item in
                         DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
                             #if os(macOS)
                             .onAppear { realized.count += 1 }
@@ -308,6 +323,15 @@ public struct ChannelView: View {
                 }
             }
         }
+    }
+
+    private var heldItems: ArraySlice<ChannelItem> { screen.items.suffix(rowsHeld) }
+
+    /// The next older rows are held, and the row that was the first stays where it was on screen.
+    private func loadEarlier(_ proxy: ScrollViewProxy) {
+        guard let first = heldItems.first else { return }
+        rowsHeld += Self.moreRows
+        DispatchQueue.main.async { proxy.scrollTo(first.id, anchor: .top) }
     }
 
     /// The ids of the bubbles of `item` that are open: part of what its row shows.
