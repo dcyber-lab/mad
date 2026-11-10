@@ -1,6 +1,13 @@
 import Combine
 import Foundation
 
+/// A picture sent with a message.
+public struct OutgoingImage: Equatable, Sendable {
+    public var mime: String
+    public var data: Data
+    public init(mime: String, data: Data) { self.mime = mime; self.data = data }
+}
+
 /// What a conversation needs of the Mac; `MadClient` is it, a test's fake can be.
 public protocol ChatAPI {
     /// What the app keeps of this Mac on the device; nil for a fake.
@@ -8,6 +15,7 @@ public protocol ChatAPI {
     func chat(agent: String, file: String, from: Int64) async throws -> ChatPage
     func live(agent: String, since: Int64) async throws -> LiveMessage?
     func send(agent: String, text: String) async throws
+    func send(agent: String, text: String, images: [OutgoingImage]) async throws
     func setMode(agent: String, mode: String) async throws
     func interrupt(agent: String) async throws
 }
@@ -16,6 +24,10 @@ extension MadClient: ChatAPI {}
 
 extension ChatAPI {
     public var cache: SnapshotCache? { nil }
+    /// A fake that takes text only: the pictures are not sent.
+    public func send(agent: String, text: String, images: [OutgoingImage]) async throws {
+        try await send(agent: agent, text: text)
+    }
 }
 
 /// One agent's conversation: its transcript read by looks that never overlap,
@@ -139,9 +151,9 @@ public final class ChatSession: ObservableObject {
     /// before every send, not trusted from the snapshot: the Mac treats the
     /// same mode as nothing to do, and refuses (with its reason, shown) to
     /// switch a working agent. One send at a time.
-    public func send(_ text: String) async -> Bool {
+    public func send(_ text: String, images: [OutgoingImage] = []) async -> Bool {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty, !sending else { return false }
+        guard !t.isEmpty || !images.isEmpty, !sending else { return false }
         if fixture {
             notice = "这是示例数据：什么也没有发出去。"
             return false
@@ -152,7 +164,11 @@ public final class ChatSession: ObservableObject {
         outgoing.append(out)
         do {
             try await api.setMode(agent: agentID, mode: "window")
-            try await api.send(agent: agentID, text: t)
+            if images.isEmpty {
+                try await api.send(agent: agentID, text: t)
+            } else {
+                try await api.send(agent: agentID, text: t, images: images)
+            }
         } catch {
             outgoing.removeAll { $0.id == out.id }
             notice = (error as? ConnectionError)?.localizedDescription ?? error.localizedDescription
