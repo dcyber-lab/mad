@@ -131,17 +131,24 @@ public struct MadClient: Sendable {
         return try decodeJSON(LiveMessage.self, data)
     }
 
-    /// POST /api/send?id=<id> {"text"}. The agent must be in window mode.
-    public func sendRequest(agent: String, text: String) -> URLRequest {
+    /// POST /api/send?id=<id> {"text", "images": [{"mime", "data"}]} (data is base64; "images" is left out when there
+    /// are none). The agent must be in window mode.
+    public func sendRequest(agent: String, text: String, images: [OutgoingImage] = []) -> URLRequest {
         var r = request("/api/send", query: [URLQueryItem(name: "id", value: agent)])
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text], options: [.sortedKeys])
+        var body: [String: Any] = ["text": text]
+        if !images.isEmpty { body["images"] = images.map { ["mime": $0.mime, "data": $0.data.base64EncodedString()] } }
+        r.httpBody = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         return r
     }
 
     public func send(agent: String, text: String) async throws {
-        let (data, response) = try await runRequest(sendRequest(agent: agent, text: text))
+        try await send(agent: agent, text: text, images: [])
+    }
+
+    public func send(agent: String, text: String, images: [OutgoingImage]) async throws {
+        let (data, response) = try await runRequest(sendRequest(agent: agent, text: text, images: images))
         try Self.check(data, response, [204, 200])
     }
 

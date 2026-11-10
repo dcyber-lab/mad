@@ -223,6 +223,14 @@ final class ChatClientTests: XCTestCase {
         XCTAssertEqual(String(data: r.httpBody ?? Data(), encoding: .utf8), #"{"text":"hello \"there\""}"#)
     }
 
+    func testSendBodyWithImages() throws {
+        let r = try client().sendRequest(agent: "claude-1", text: "look", images: [OutgoingImage(mime: "image/png", data: Data([1, 2, 3]))])
+        let body = try JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(body?["text"] as? String, "look")
+        let images = body?["images"] as? [[String: String]]
+        XCTAssertEqual(images, [["mime": "image/png", "data": "AQID"]])
+    }
+
     func testModeAndInterruptRequests() throws {
         let c = try client()
         let m = c.modeRequest(agent: "a1")

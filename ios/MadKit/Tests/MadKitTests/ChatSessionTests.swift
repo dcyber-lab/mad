@@ -29,6 +29,10 @@ private final class FakeAPI: ChatAPI {
         }
         if let e = await MainActor.run(body: { self.sendError }) { throw e }
     }
+    nonisolated func send(agent: String, text: String, images: [OutgoingImage]) async throws {
+        await MainActor.run { self.calls.append("send:\(text):\(images.count)") }
+        if let e = await MainActor.run(body: { self.sendError }) { throw e }
+    }
     nonisolated func setMode(agent: String, mode: String) async throws {
         await MainActor.run { self.calls.append("mode:\(mode)") }
         if let e = await MainActor.run(body: { self.modeError }) { throw e }
@@ -131,6 +135,17 @@ final class ChatSessionTests: XCTestCase {
         XCTAssertTrue(firstOK)
         XCTAssertEqual(api.calls.filter { $0.hasPrefix("send") }, ["send:one"])
         XCTAssertFalse(s.sending)
+    }
+
+    func testASendWithPicturesGoesWithThemEvenWithoutText() async {
+        let api = FakeAPI()
+        let s = ChatSession(agentID: "a", api: api)
+        let pic = OutgoingImage(mime: "image/png", data: Data([1]))
+        let ok = await s.send("  ", images: [pic])
+        XCTAssertTrue(ok)
+        XCTAssertEqual(api.calls.filter { $0.hasPrefix("send") }, ["send::1"])
+        let none = await s.send("  ")
+        XCTAssertFalse(none, "no text and no picture sends nothing")
     }
 
     func testAFailedSendKeepsTheDraftAndSaysWhy() async {

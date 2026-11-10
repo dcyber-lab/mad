@@ -287,7 +287,7 @@ public final class AgentStore {
     public func run() async { await session.run() }
     /// One look at the transcript.
     public func look() async { await session.look() }
-    /// Sends `text`; true when the Mac took it.
-    public func send(_ text: String) async -> Bool { await session.send(text) }
+    /// Sends `text` and pictures; true when the Mac took it.
+    public func send(_ text: String, images: [OutgoingImage] = []) async -> Bool { await session.send(text, images: images) }
     public func interrupt() async { await session.interrupt() }
 }

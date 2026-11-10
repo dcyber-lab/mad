@@ -48,7 +48,7 @@ struct ChannelComposer: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let q = replying { replyBar(q).padding(.horizontal, phoneSide) }
-            if !images.isEmpty { thumbnails.padding(.horizontal, phoneSide) }
+            if !images.isEmpty { DraftImageStrip(images: $images).padding(.horizontal, phoneSide) }
             field
             if let note { Text(note).font(MadType.small).foregroundStyle(Color.madDanger).padding(.horizontal, phoneSide) }
         }
@@ -56,8 +56,8 @@ struct ChannelComposer: View {
         .padding(.top, 8)
         #if os(macOS)
         .padding(.bottom, 22)
-        .onPasteCommand(of: [.image]) { providers in pasteImages(providers) }
         #endif
+        .pastesPictures(focused: focused) { add($0) }
         // the @ list floats over the messages, its foot 8pt above the composer: the messages keep their size
         .overlay(alignment: .topLeading) {
             if !matches.isEmpty {
@@ -228,25 +228,6 @@ struct ChannelComposer: View {
         .padding(.horizontal, 4)
     }
 
-    private var thumbnails: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(images) { img in
-                    ZStack(alignment: .topTrailing) {
-                        if let i = Image(data: img.data) {
-                            i.resizable().scaledToFill().frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        Button { images.removeAll { $0.id == img.id } } label: {
-                            Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.6))
-                        }
-                        .buttonStyle(.plain).offset(x: 5, y: -5).accessibilityLabel("去掉这张")
-                    }
-                    .padding(.top, 5).padding(.trailing, 5)
-                }
-            }
-        }
-    }
-
     private func submit() {
         guard canSend else { return }
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -284,16 +265,6 @@ struct ChannelComposer: View {
             picked = []
         }
     }
-
-    #if os(macOS)
-    private func pasteImages(_ providers: [NSItemProvider]) {
-        for p in providers {
-            p.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
-                if let data { Task { @MainActor in add(data) } }
-            }
-        }
-    }
-    #endif
 
     #if os(iOS)
     private func pasteFromPasteboard() {
