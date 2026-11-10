@@ -17,7 +17,11 @@
             "shown": "idle",
             "chat": true,
             "color": "#d97757",
-            "name": "architect"
+            "name": "architect",
+            "headless": true,
+            "mode": "window",
+            "title": "architect",
+            "last": "在等你确认创建"
           },
           {
             "id": "fold0002-aaaa",
@@ -26,7 +30,11 @@
             "shown": "idle",
             "chat": true,
             "color": "#10a37f",
-            "name": "builder"
+            "name": "builder",
+            "headless": true,
+            "mode": "window",
+            "title": "builder",
+            "last": "在等你确认创建"
           },
           {
             "id": "fold0003-aaaa",
@@ -138,6 +146,50 @@
         "mention": true,
         "unread": 1,
         "lead": "fold0001-aaaa"
+      },
+      {
+        "id": "ship-it",
+        "title": "#ship-it",
+        "members": [
+          {
+            "id": "fold0001-aaaa",
+            "label": "architect",
+            "kind": "claude"
+          },
+          {
+            "id": "fold0002-aaaa",
+            "label": "builder",
+            "kind": "codex"
+          },
+          {
+            "id": "fold0003-aaaa",
+            "label": "reviewer",
+            "kind": "claude"
+          }
+        ],
+        "last": 1,
+        "last_text": "",
+        "last_at": "-4m",
+        "listed": true,
+        "unread": 1,
+        "lead": "fold0001-aaaa",
+        "team": {
+          "name": "ship-it",
+          "roles": [
+            {
+              "role": "architect",
+              "agent": "fold0001-aaaa"
+            },
+            {
+              "role": "builder",
+              "agent": "fold0002-aaaa"
+            },
+            {
+              "role": "reviewer",
+              "agent": "fold0003-aaaa"
+            }
+          ]
+        }
       }
     ],
     "board": [
@@ -260,8 +312,8 @@
         {
           "key": "create:c-00000002",
           "kind": "create",
-          "agent": "fold0001-aaaa",
-          "title": "architect",
+          "agent": "fold0002-aaaa",
+          "title": "builder",
           "context": "wants to start a team",
           "text": "Team fix-flaky in mad",
           "body": "Goal: stop the follow-up test from flaking\nTemplate: dev\narchitect: claude:opus (lead)\n  You lead: break the goal into tasks on the board and hand them out.\nbuilder: claude:sonnet\n  You implement what the architect hands you.\nreviewer: codex (read only)\n  You review diffs: real problems only.\nKickoff: Goal: stop the follow-up test from flaking\n\nPlan the work and start.",
@@ -288,7 +340,7 @@
             }
           ],
           "open": {
-            "agent": "fold0001-aaaa"
+            "agent": "fold0002-aaaa"
           },
           "create": {
             "type": "team",
@@ -502,6 +554,30 @@
           "channel": "dm.fold0001-aaaa.fold0006-aaaa",
           "at": "-3h"
         }
+      },
+      {
+        "key": "create:c-00000009",
+        "kind": "create",
+        "agent": "fold0001-aaaa",
+        "title": "architect",
+        "context": "wants to start a team",
+        "text": "Team release-prep in mad",
+        "since": "-6s",
+        "acts": [],
+        "open": {
+          "agent": "fold0001-aaaa"
+        },
+        "create": {
+          "type": "team",
+          "name": "release-prep",
+          "project": "/fixture/mad",
+          "project_name": "mad",
+          "goal": "prepare the release notes"
+        },
+        "outcome": {
+          "status": "creating",
+          "at": "-5s"
+        }
       }
     ]
   },
@@ -585,5 +661,149 @@
         }
       }
     ]
+  },
+  "chat": {
+    "fold0001-aaaa": {
+      "file": "fixture",
+      "offset": 3000,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "把发布检查拆成一个小组，再起几个 scout 看 CI。"
+        },
+        {
+          "kind": "text",
+          "text": "好的，先起 ship-it 小组。"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__team_start",
+          "label": "ship-it",
+          "args": "{\"name\": \"ship-it\", \"goal\": \"ship the release\", \"project\": \"/fixture/mad\"}",
+          "input": "{\"name\": \"ship-it\", \"goal\": \"ship the release\", \"project\": \"/fixture/mad\"}",
+          "id": "t1"
+        },
+        {
+          "kind": "result",
+          "id": "t1",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000003\", \"item\": \"create:c-00000003\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout2",
+          "args": "{\"name\": \"scout2\", \"kind\": \"codex\", \"project\": \"/fixture/mad\", \"message\": \"read the handlers\"}",
+          "input": "{\"name\": \"scout2\", \"kind\": \"codex\", \"project\": \"/fixture/mad\", \"message\": \"read the handlers\"}",
+          "id": "t2"
+        },
+        {
+          "kind": "result",
+          "id": "t2",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000004\", \"item\": \"create:c-00000004\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout6",
+          "args": "{\"name\": \"scout6\", \"kind\": \"claude\", \"model\": \"opus\", \"project\": \"/fixture/mad\", \"message\": \"audit the bus\"}",
+          "input": "{\"name\": \"scout6\", \"kind\": \"claude\", \"model\": \"opus\", \"project\": \"/fixture/mad\", \"message\": \"audit the bus\"}",
+          "id": "t7"
+        },
+        {
+          "kind": "result",
+          "id": "t7",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000008\", \"item\": \"create:c-00000008\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout3",
+          "args": "{\"name\": \"scout3\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"look at CI\"}",
+          "input": "{\"name\": \"scout3\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"look at CI\"}",
+          "id": "t3"
+        },
+        {
+          "kind": "result",
+          "id": "t3",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000005\", \"item\": \"create:c-00000005\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout4",
+          "args": "{\"name\": \"scout4\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"tidy up\"}",
+          "input": "{\"name\": \"scout4\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"tidy up\"}",
+          "id": "t4"
+        },
+        {
+          "kind": "result",
+          "id": "t4",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000006\", \"item\": \"create:c-00000006\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout5",
+          "args": "{\"name\": \"scout5\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"read the logs\"}",
+          "input": "{\"name\": \"scout5\", \"kind\": \"claude\", \"project\": \"/fixture/mad\", \"message\": \"read the logs\"}",
+          "id": "t5"
+        },
+        {
+          "kind": "result",
+          "id": "t5",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000007\", \"item\": \"create:c-00000007\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__team_start",
+          "label": "release-prep",
+          "args": "{\"name\": \"release-prep\", \"goal\": \"prepare the release notes\", \"project\": \"/fixture/mad\"}",
+          "input": "{\"name\": \"release-prep\", \"goal\": \"prepare the release notes\", \"project\": \"/fixture/mad\"}",
+          "id": "t8"
+        },
+        {
+          "kind": "result",
+          "id": "t8",
+          "text": "{\"status\": \"creating\", \"request\": \"c-00000009\", \"item\": \"create:c-00000009\"}"
+        },
+        {
+          "kind": "user",
+          "text": "[mad bus] 1 message for you (architect). Act on what asks you something; reply with\nbus_post(channel, text) in the channel or bus_dm(agent, text) privately, @mentioning\nwho should read it. Say nothing on the bus if nothing is asked of you.\nYour name on the bus is architect (the deck's name for this session). Who wrote reads only the bus: an answer written here reaches no one.\n\nDM with mad · mad · #3 · 00:05\n[mad] your request c-00000007 to create agent scout5: agent scout5 was created (id fold0006-aaaa, dm.fold0001-aaaa.fold0006-aaaa)\n{\"data\":{\"agent\":\"fold0006-aaaa\",\"name\":\"scout5\",\"type\":\"agent\"},\"request\":\"c-00000007\",\"say\":\"agent scout5 was created\",\"status\":\"created\"}\n"
+        },
+        {
+          "kind": "text",
+          "text": "scout 起好了。再起一个，并且开一个修 flaky 的小组："
+        },
+        {
+          "kind": "tool",
+          "tool": "mcp__mad__agent_new",
+          "label": "scout",
+          "args": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
+          "input": "{\"name\": \"scout\", \"kind\": \"claude\", \"model\": \"sonnet\", \"project\": \"/fixture/mad\", \"message\": \"Find the flaky test\", \"channel\": \"api\"}",
+          "id": "t6"
+        },
+        {
+          "kind": "result",
+          "id": "t6",
+          "text": "{\"status\": \"asked\", \"request\": \"c-00000001\", \"item\": \"create:c-00000001\", \"say\": \"asked the person; you'll be told by a message from mad when they answer. End your turn now.\"}"
+        }
+      ]
+    },
+    "fold0002-aaaa": {
+      "file": "fixture",
+      "offset": 500,
+      "reset": true,
+      "entries": [
+        {
+          "kind": "user",
+          "text": "开一个修 flaky 的小组。"
+        },
+        {
+          "kind": "text",
+          "text": "好，我提个小组方案："
+        }
+      ]
+    }
   }
 }

@@ -2179,16 +2179,68 @@ html.ptype .chat .wait.asks .ask .ah, html.ptype .chat .wait.asks .ask pre.input
 html.ptype #details { display: none; }
 
 /* ---- the ask card's options: chips that wrap, at the chat's own size; the tapped one shows it was ---- */
-html .chat .wait.asks .ask .acts.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 14px; }
-html .chat .wait.asks .ask .acts.chips .btn.chip:nth-child(n) {
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 14px; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip:nth-child(n) {
   flex: none; max-width: 100%; height: auto; min-height: 36px; padding: 6px 14px; border-radius: 18px; font-size: 14.5px; line-height: 1.35;
   font-weight: 400; text-align: left; white-space: normal; overflow-wrap: anywhere; border: 1px solid var(--border-2); background: var(--bg); color: var(--text);
 }
-html .chat .wait.asks .ask .acts.chips .btn.chip.more { color: var(--text-2); border-style: dashed; }
-html .chat .wait.asks .ask .acts.chips .btn.chip:hover:not(:disabled) { background: var(--raise); }
-html .chat .wait.asks .ask .acts.chips .btn.chip:disabled { opacity: 0.5; }
-html .chat .wait.asks .ask .acts.chips .btn.chip.tapped:disabled { opacity: 1; background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; animation: chipbusy 1.1s ease-in-out infinite alternate; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip.more { color: var(--text-2); border-style: dashed; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip:hover:not(:disabled) { background: var(--raise); }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip:disabled { opacity: 0.5; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip.tapped:disabled { opacity: 1; background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; animation: chipbusy 1.1s ease-in-out infinite alternate; }
 @keyframes chipbusy { from { opacity: 1; } to { opacity: 0.6; } }
 .ask .abody .abtext.qtext { font-size: 15px; line-height: 1.5; padding: 10px 14px; background: none; }
-html .chat .wait.asks .ask .acts.chips .btn.chip.primary:nth-child(n) { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; font-weight: 500; }
-html .chat .wait.asks .ask .acts.chips .btn.chip.primary:hover:not(:disabled) { background: var(--primary-bg); opacity: 0.88; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip.primary:nth-child(n) { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; font-weight: 500; }
+html :is(.chat .wait.asks, #chanask) .ask .acts.chips .btn.chip.primary:hover:not(:disabled) { background: var(--primary-bg); opacity: 0.88; }
+
+/* ---- a bot asks to create an agent or a team: its confirm card, the result line, the grey lines ---- */
+.ask-create .cbody2 { display: grid; gap: 10px; padding: 12px 14px 4px; }
+.ask-create .cname { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.ask-create .cname b { font-size: 17px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-create .cproj { font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.ask-create .cspec { background: var(--code-bg); border-radius: 10px; padding: 0 12px; }
+.ask-create .crow { display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 34px; font-size: 14px; }
+.ask-create .crow + .crow { border-top: 1px solid var(--border); }
+.ask-create .cl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-create .ctag { margin-left: 6px; font-size: 12px; color: var(--text-3); }
+.ask-create .cr { color: var(--text-3); white-space: nowrap; }
+.ask-create .cfirst { display: grid; gap: 3px; }
+.ask-create .cfl { font-size: 13px; color: var(--text-3); }
+.ask-create .cft { font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-create .replybox { margin: 0 14px 14px; box-shadow: none; }
+#chanask { flex: none; padding: 0 14px 8px; }
+#chanask[hidden] { display: none; }
+#chanask .ask { max-width: 640px; margin: 8px auto 0; }
+.cslot { display: flex; justify-content: center; }
+.cslot[hidden] { display: none; }
+.cres {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 520px; margin: 14px auto; padding: 10px 12px 10px 14px; text-align: left;
+  border: 1px solid var(--border-2); border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.cres:disabled { cursor: default; }
+.cres .ctxt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.cres .ct { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cres .cs { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cres .copen { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding: 0 8px 0 12px; border: 1px solid var(--border-2); border-radius: 15px; font-size: 13.5px; font-weight: 600; flex: none; }
+.cres .copen .i { width: 13px; height: 13px; color: var(--text-3); }
+.cnote { margin: 14px 24px; text-align: center; font-size: 13px; line-height: 1.4; color: var(--text-3); overflow-wrap: anywhere; }
+#chanlog > .cres, #chanlog > .cnote { align-self: center; }
+@keyframes freshrow { from { background: color-mix(in srgb, var(--accent, var(--waiting)) 12%, transparent); } to { background: transparent; } }
+.row.fresh { animation: freshrow 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
+.ask-create .acts.chips .btn.chip:nth-child(n) { min-width: 92px; justify-content: center; text-align: center; }
+.pcard .pwhat { font-size: 12.5px; color: var(--waiting); font-weight: 600; margin: 2px 0 4px; }
+.cres.creating { cursor: default; }
+.cres.creating .spin { width: 20px; height: 20px; flex: none; margin: 0 10px 0 4px; }
+.ask .acts[hidden] { display: none !important; }
+.ask-create .replybox { padding: 0; border: 0; background: none; box-shadow: none; gap: 10px; margin: 4px 14px 14px; }
+.ask-create .replybox textarea { min-height: 76px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border-2); background: var(--raise); font-size: 15px; line-height: 1.45; }
+.ask-create .replybox .ra { justify-content: flex-start; gap: 8px; }
+.ask-create .replybox .ra .muted { margin: 0 auto 0 0; order: 3; margin-left: auto; }
+.ask-create .replybox .ra .btn.chip:nth-child(n) {
+  flex: none; height: auto; min-height: 36px; min-width: 92px; padding: 6px 14px; border-radius: 18px; font-size: 14.5px; font-weight: 400; line-height: 1.35;
+  justify-content: center; text-align: center; border: 1px solid var(--border-2); background: var(--bg); color: var(--text);
+}
+.ask-create .replybox .ra .btn.chip.primary:nth-child(n) { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; font-weight: 500; }
+.ask-create .replybox .ra .btn.chip:disabled { opacity: 0.45; }
+html.ptype .ask-create .replybox .ra .muted { display: none; }

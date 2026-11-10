@@ -42,6 +42,7 @@ function channelsGroup(q) {
   const list = all.filter((c) => (!c.dm || c.yours) && hit.get(c.id));
   const at = (c) => Date.parse(c.last_at) || 0;
   list.sort((x, y) => chanDot(y) - chanDot(x) || at(y) - at(x));
+  list.splice(0, list.length, ...byFresh(list, freshCreates().channels, (c) => c.id)); // a team just made is first
   if (!all.length) {
     const hint = el("div", "chan none", T("和 agent 聊天：点 + 新建群聊或小组。", "Talk with agents: + makes a group or a team."));
     hint.onclick = () => createChannel();
@@ -106,7 +107,7 @@ function teamRow(c, found) {
   const face = c.dm && mem.length ? avatar(mem[0]) : groupChar(mem);
   const lead = chanDot(c) ? withDot(face) : face;
   return row({
-    key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}`,
+    key: `t:${c.id}`, cls: `teamrow${cv.open === c.id ? " sel" : ""}${freshRow(c.id) ? " fresh" : ""}`,
     lead, name: c.team ? c.team.name : c.dm ? c.title.replace(/^@/, "") : c.id, line: found ? `${label(found)}: ${lastLine(found, shownStatus(found))}`
       : String(c.last_text || "").replace(/\s+/g, " ").trim() || chanSub(c),
     onclick: () => openChannel(c.id), title: c.topic || c.title,
@@ -152,6 +153,7 @@ function openChannel(id, seq) {
   drawChanHead();
   drawSidebar();
   drawQueue();
+  drawChanAsk();
   cv.jump = seq || 0;
   loadChannel(fresh);
   clearInterval(cv.timer);
@@ -829,11 +831,23 @@ function drawMessage(m) {
   const log = $("#chanlog");
   // What agents settle between themselves is not drawn: no bubble, no time line, no break in a run. A reply
   // may quote it, so what it said is kept.
+  // mad's word to an agent (how its request to create something ended) is plumbing: mad's result line says it
+  if (m.kind === "system" && m.from.id === "mad" && (m.mentions || []).length && !m.event && !m.handoff) return;
   if (quiet(m)) {
     cv.quiet.set(m.seq, { who: m.from.label, text: m.text || "" });
     return;
   }
   log.querySelector(".note")?.remove();
+  if (m.kind === "system" && /^(created|create_declined|create_changes|create_expired|create_failed)$/.test(m.event || "")) {
+    // how an agent's request to create something ended: mad's line, from the card's own record
+    const line = createEventLine(m);
+    if (line) {
+      line.dataset.seq = m.seq;
+      log.append(line);
+      cv.run = null;
+      return;
+    }
+  }
   if (m.kind === "system") {
     // mad's pause, resume and trim notes are drawn in Chinese by what they mean
     const event = noteEvent(m);

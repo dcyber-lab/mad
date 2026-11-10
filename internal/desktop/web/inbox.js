@@ -73,9 +73,10 @@ function short(at) {
   return T(`${Math.floor(m / 1440)} 天`, `${Math.floor(m / 1440)} d`);
 }
 // tick is an age the page keeps current; suffix goes after it (" ago").
-function tick(at, suffix = "") {
+function tick(at, suffix = "", prefix = "") {
   const s = el("span", "t");
   s.dataset.at = at;
+  s.dataset.pre = prefix;
   s.dataset.suf = suffix;
   tickText(s);
   return s;
@@ -83,7 +84,7 @@ function tick(at, suffix = "") {
 function tickText(s) {
   const a = short(s.dataset.at);
   const suf = s.dataset.suf === " ago" ? T("前", " ago") : s.dataset.suf;
-  const t = a === T("刚刚", "now") ? a : a + suf;
+  const t = a === T("刚刚", "now") ? a : (s.dataset.pre || "") + a + suf; // under a minute: "刚刚" alone
   if (s.textContent !== t) s.textContent = t; // the same age is left alone: a selection in it stays
 }
 setInterval(() => {
@@ -196,6 +197,7 @@ function row(o) {
 const letsThrough = new Set(["allow", "always", "approve"]);
 
 function itemRow(it) {
+  it = createView(it);
   const acts = [];
   const p = ib.pending.get(it.key);
   const review = () => rowButton(T("查看", "Review"), "primary review", () => { ib.expanded.add(it.key); redraw(); }, T("允许之前先看完全部内容", "Read all of it before you allow it"), `${it.key}\nreview`);
@@ -231,6 +233,7 @@ function itemRow(it) {
 // lets something through is guarded as on a row: shown only while that line is whole (fitRows), else
 // Review opens the item as a card in place.
 function waitCard(it) {
+  it = createView(it);
   const p = ib.pending.get(it.key);
   const c = el("div", `pcard${ib.nextKey === it.key ? " sel" : ""}${p ? " pending" : ""}`);
   c.dataset.key = it.key;
@@ -240,6 +243,7 @@ function waitCard(it) {
   top.append(lead, el("span", "pnm", it.title), el("span", "page", ""));
   top.lastChild.append(tick(it.since));
   c.append(top);
+  if (it.kind === "create") c.append(el("div", "pwhat", it.context));
   const text = it.text || String(it.body || "").split("\n")[0];
   if (text) {
     const line = el("div", `t2 pcmd${it.mono ? " mono" : ""}`);
@@ -298,7 +302,7 @@ function fitRows(root) {
 function actButton(it, a, where, chip) {
   const cls = chip ? `chip${a.primary && !a.input ? " primary" : ""}${a.input ? " more" : ""}` : a.primary && a.verb !== "open" ? "primary" : a.verb === "open" ? "ghost" : "";
   const b = rowButton(actLabel(a), cls, () => {
-    if (a.verb === "open") openItem(it);
+    if (a.verb === "open" || a.verb === "view") openItem(it);
     else if (a.input) openReply(it, a, where);
     else act(it, a);
   }, a.option && a.option !== a.label ? `${actLabel(a)}: ${a.option}` : "", `${it.key}\n${a.verb}\n${a.label}\n${where}`);
@@ -320,7 +324,12 @@ function actButton(it, a, where, chip) {
 // TUI draws them); this maps by the act's verb and flags, never by its text.
 // An act with no word here, such as an option's own label, keeps the server's.
 function actLabel(a) {
+  if (a.kind === "create") {
+    if (a.verb === "allow") return T("允许", "Allow");
+    if (a.verb === "deny") return a.input ? T("改一下…", "Change…") : T("拒绝", "Deny");
+  }
   switch (a.verb) {
+    case "view": return T("查看", "View");
     case "allow": return a.option ? a.label : a.kind === "plan" ? T("批准计划", "Approve plan") : T("允许", "Allow");
     case "always": return T("总是允许", "Always allow");
     case "deny": return a.input ? (a.row ? T("继续规划", "Keep planning") : T("改为告诉它…", "Tell it instead…")) : a.row ? T("拒绝", "Deny") : T("取消", "Cancel");
@@ -341,6 +350,7 @@ function actLabel(a) {
 
 // pendingWord is what the button of an act in flight says.
 function pendingWord(a) {
+  if (a.kind === "create" && a.input) return `${T("发送中", "Sending")}…`;
   const w = { allow: T("允许中", "Allowing"), always: T("允许中", "Allowing"), deny: T("拒绝中", "Denying"), answer: T("回答中", "Answering"), reply: T("发送中", "Sending"), approve: T("批准中", "Approving"),
     discard: T("丢弃中", "Discarding"), seen: T("标记中", "Marking"), send: T("发送中", "Sending"), drop: T("放弃中", "Dropping"), resume: T("继续中", "Resuming"), raise: T("提高中", "Raising"), lift: T("取消中", "Lifting") }[a.verb];
   return `${w || actLabel(a).replace(/…$/, "")}…`;
@@ -379,14 +389,17 @@ function replyBox(it, r) {
   box.dataset.key = it.key;
   box.dataset.where = r.where;
   box.onclick = (e) => e.stopPropagation();
-  const q = el("div", "rq");
-  q.append(el("span", "who", `${it.title}${it.context ? " " + it.context : ""}: `), it.text || it.body || "");
-  box.append(q);
+  if (it.kind !== "create") {
+    const q = el("div", "rq");
+    q.append(el("span", "who", `${it.title}${it.context ? " " + it.context : ""}: `), it.text || it.body || "");
+    box.append(q);
+  }
   const opts = it.acts.filter((x) => x.option && !x.input && x.verb === a.verb);
   if (opts.length) box.append(el("div", "opts", ""));
   for (const o of opts) box.lastChild.append(rowButton(o.option, "opt", () => act(it, o), T("发送这个回答", "Send this answer"), `${it.key}\nopt\n${o.option}`));
   const ta = el("textarea");
-  ta.placeholder = `${actLabel(a).replace(/…$/, "")}…`;
+  ta.placeholder = it.kind === "create" ? T("告诉它要改什么", "Tell it what to change") : `${actLabel(a).replace(/…$/, "")}…`;
+  if (it.kind === "create") ta.dataset.test = "create.field";
   ta.rows = 2;
   ta.value = ib.drafts.get(it.key) || "";
   ta.oninput = () => ib.drafts.set(it.key, ta.value);
@@ -405,7 +418,15 @@ function replyBox(it, r) {
     if (ta.value.trim()) act(it, a, ta.value.trim());
   };
   const ra = el("div", "ra");
-  ra.append(el("span", "muted", T("↵ 发送 · Esc", "↵ send · Esc")), rowButton(T("取消", "Cancel"), "ghost", closeReply), rowButton(T("发送", "Send"), "primary", send, "", `${it.key}\nsend`));
+  const cancel = rowButton(T("取消", "Cancel"), it.kind === "create" ? "chip" : "ghost", closeReply);
+  const sendBtn = rowButton(T("发送", "Send"), it.kind === "create" ? "chip primary" : "primary", send, "", `${it.key}\nsend`);
+  if (it.kind === "create") {
+    cancel.dataset.test = "create.cancel";
+    sendBtn.dataset.test = "create.send";
+    sendBtn.disabled = !ta.value.trim();
+    ta.addEventListener("input", () => { sendBtn.disabled = !ta.value.trim(); });
+  }
+  ra.append(el("span", "muted", T("↵ 发送 · Esc", "↵ send · Esc")), cancel, sendBtn);
   box.append(ta, ra);
   return box;
 }
@@ -432,6 +453,7 @@ async function act(it, a, text) {
       toast((await r.text()).trim() || r.statusText, "err");
     } else {
       ib.drafts.delete(it.key);
+      if (it.kind === "create" && a.verb === "allow") allowedHere.add(it.key);
       toast(`${what} · ${it.title}`);
     }
   } catch (e) {
@@ -489,6 +511,7 @@ function nextItem() {
 // itemCard is an item as a card: its words in full, every act. compact
 // (the board's column) keeps the text to two lines.
 function itemCard(it, compact, where = "main") {
+  it = createView(it);
   const done = it.kind === "finished";
   const c = el("div", `icard ${done ? "k-finished" : "k-needs"}${compact ? " compact" : ""}${ib.pending.has(it.key) ? " pending" : ""}${ib.nextKey === it.key ? " sel" : ""}`);
   c.dataset.key = it.key;
