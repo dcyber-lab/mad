@@ -18,14 +18,14 @@ public enum AgentMapping {
     /// The screen for the agent `store` follows, as `deck` last said it stands.
     @MainActor
     public static func conversation(store: AgentStore, deck: Deck, pending: PendingFirst? = nil) -> AgentConversation {
-        conversation(id: store.id, transcript: store.transcript, live: store.live, deck: deck, pending: pending)
+        conversation(id: store.id, transcript: store.transcript, live: store.live, deck: deck, pending: pending, outgoing: store.outgoing)
     }
 
     /// The same from plain values, so a test needs no store.
     /// `pending` is the first message the person sent when they started the agent: until the transcript has a message of
     /// theirs it is shown as their bubble, and the agent as working, so the page never opens empty.
     public static func conversation(id: String, transcript: ChatTranscript, live: LiveState, deck: Deck,
-                                    pending: PendingFirst? = nil, now: Date = Date()) -> AgentConversation {
+                                    pending: PendingFirst? = nil, outgoing: [Outgoing] = [], now: Date = Date()) -> AgentConversation {
         let agent = deck.agent(id: id)
         let (canSend, hint) = sending(agent)
         let project = deck.projects.first { $0.agents.contains { $0.id == id } }
@@ -36,6 +36,8 @@ public enum AgentMapping {
         if let first = pendingEntry(pending, transcript: transcript) {
             shown.insert(first, at: 0)
         }
+        // what the person just sent, at once, until the transcript has it
+        shown += Outgoing.pending(outgoing, in: transcript, now: now).map { .user("out-\($0.id)", $0.text, images: []) }
         // working while it has not written anything yet, for a short while: one that exited before its first line
         // is not shown as working for ever
         if let pending, transcript.entries.isEmpty, now.timeIntervalSince(pending.since) < startingWindow,
