@@ -16,7 +16,6 @@ public struct ChannelView: View {
     #if os(iOS)
     // The list is full-bleed: the head, the composer and the keyboard are insets over it, and the end marker is still
     // realized while it sits under them. The end is judged by where the marker's foot is against the visible part.
-    @State private var markerShown = true
     @State private var markerFoot: CGFloat = 0
     @State private var bottomInset: CGFloat = 0
     /// The list was at its end when it was last judged with the same viewport and inset: what a size change finds it as,
@@ -35,12 +34,15 @@ public struct ChannelView: View {
     @State private var realized = RealizedRows()
     #endif
     @State private var expanded: Set<Int> = []
-    /// How many of the screen's last items the list holds. A channel keeps hundreds of rows (the device's cache holds 200
-    /// messages, some with pictures). A lazy list of them, opened at its bottom, has to guess the heights of the rows above
-    /// the screen: the bottom anchor lands on a guess, and the list shows an empty band with the way-down button until
-    /// a scroll corrects it. So the list holds the last `Self.firstRows` in a plain stack (whose height is exact, and the
-    /// bottom anchor lands where it says) and takes `Self.moreRows` more when the person asks for them.
-    @State private var rowsHeld = ChannelView.firstRows
+    /// Which of the screen's rows the list holds (see `HeldWindow`): the last rows at first, older ones as the person scrolls up.
+    @State private var window = HeldWindow()
+    /// When the window last took older rows: the geometry that asks for more needs a moment to see the rows it has just got.
+    @State private var tookAt = Date.distantPast
+    /// The scroll is at rest (no finger, no flick), and older rows were wanted while it was not.
+    @State private var scrollIdle = true
+    @State private var olderWanted = false
+    @State private var top = TopWatch()
+    @State private var place = PlaceMemory()
     @State private var replying: ChannelQuote?
     @State private var viewing: String?
     @State private var drag: CGFloat = 0
@@ -57,8 +59,6 @@ public struct ChannelView: View {
     }
 
     private static let bottom = "bottom"
-    static let firstRows = 40
-    static let moreRows = 40
     private static let space = "channelList"
 
     public var body: some View {
@@ -225,14 +225,14 @@ public struct ChannelView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Each row is drawn again only when what it shows changed: a look that brought nothing new (or one
                     // new message) leaves the other rows alone.
-                    if heldItems.count < screen.items.count {
-                        // the top of what is held: it takes the next older rows, and the list stays on the row it was at
-                        Button { loadEarlier(proxy) } label: {
-                            Text(L("更早的消息")).font(MadType.label).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 10)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    ForEach(heldItems) { item in
+                    // The top of what is held, for the scroll to ask for older rows when it comes near. Its frame is read, not
+                    // its appearing: a plain stack makes every row at once, so nothing appears or leaves as the scroll moves.
+                    Color.clear.frame(height: 1)
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { nearTop(g.frame(in: .named(Self.space)).minY, proxy) }
+                                .onChange(of: g.frame(in: .named(Self.space)).minY) { _, y in nearTop(y, proxy) }
+                        })
+                    ForEach(held) { item in
                         DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
                             #if os(macOS)
                             .onAppear { realized.count += 1 }
@@ -244,31 +244,16 @@ public struct ChannelView: View {
                     Color.clear.frame(height: 1).id(Self.bottom)
                         #if os(iOS)
                         .background(GeometryReader { g in
-                            Color.clear.onAppear { markerFoot = g.frame(in: .named(Self.space)).maxY; markerShown = true; judge() }
+                            Color.clear.onAppear { markerFoot = g.frame(in: .named(Self.space)).maxY; judge() }
                                 .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in markerFoot = y; judge() }
                         })
-                        .onDisappear {
-                            markerShown = false
-                            nearBottom = false
-                            // gone with the viewport unchanged: the person scrolled; gone with a resize: the resize did it
-                            if judgedViewport == viewport.height && judgedInset == bottomInset { endLatch = false }
-                        }
                         #else
                         .background(GeometryReader { g in
                             // where the marker's foot is in the scroll view, kept without drawing the view again
-                            Color.clear.onAppear { realized.markerFoot = g.frame(in: .named(Self.space)).maxY }
-                                .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in realized.markerFoot = y }
+                            // A plain stack makes the marker once and keeps it: whether it is in view is its frame's, read here.
+                            Color.clear.onAppear { markerMoved(g.frame(in: .named(Self.space)).maxY, proxy) }
+                                .onChange(of: g.frame(in: .named(Self.space)).maxY) { _, y in markerMoved(y, proxy) }
                         })
-                        .onAppear { watch.appeared(); nearBottom = true }
-                        .onDisappear {
-                            // a message that arrives pushes the marker out for a moment and the list follows it: that
-                            // is judged when the follow is over, so a person who scrolls up in that moment is not missed
-                            switch watch.disappeared() {
-                            case .now: left(proxy)
-                            case .recheck(let after):
-                                DispatchQueue.main.asyncAfter(deadline: .now() + after + 0.02) { if watch.stillLeft { left(proxy) } }
-                            }
-                        }
                         #endif
                 }
                 .frame(maxWidth: MadColumn.maxWidth)
@@ -345,6 +330,8 @@ public struct ChannelView: View {
             #endif
             .defaultScrollAnchor(.bottom)
             .pinnedToBottomThroughResizes() // iOS 18 and the Mac: the system keeps the bottom through size changes
+            .keepsReadingPlace(place, idle: $scrollIdle)
+            .onChange(of: scrollIdle) { _, idle in if idle && olderWanted { takeOlder(proxy) } }
             .scrollDismissesKeyboard(.interactively)
             #if os(macOS)
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: createHeight > 0 ? createHeight + 12 : 0) }
@@ -364,14 +351,49 @@ public struct ChannelView: View {
         }
     }
 
-    private var heldItems: ArraySlice<ChannelItem> { screen.items.suffix(rowsHeld) }
+    private var held: ArraySlice<ChannelItem> { window.items(screen.items) }
 
-    /// The next older rows are held, and the row that was the first stays where it was on screen.
-    private func loadEarlier(_ proxy: ScrollViewProxy) {
-        guard let first = heldItems.first else { return }
-        rowsHeld += Self.moreRows
-        DispatchQueue.main.async { proxy.scrollTo(first.id, anchor: .top) }
+    /// The top of the held rows is `y` (in the list's own space; 0 is the viewport's top): within two screens above it, the
+    /// next older rows are held, once the scroll is at rest. The rows go in above what is read, which the list keeps where it
+    /// is (`KeepsReadingPlace`); older systems put the first row at the top.
+    private func nearTop(_ y: CGFloat, _ proxy: ScrollViewProxy) {
+        top.y = y
+        guard wantsOlder else { return }
+        olderWanted = true
+        if scrollIdle { takeOlder(proxy) }
     }
+
+    private var wantsOlder: Bool {
+        !window.holdsAll(screen.items.map(\.id)) && viewport.height > 0 && top.y > -viewport.height * 2 && Date().timeIntervalSince(tookAt) > 0.3
+    }
+
+    private func takeOlder(_ proxy: ScrollViewProxy) {
+        olderWanted = false
+        guard wantsOlder else { return }
+        tookAt = Date()
+        let readingAt = held.first?.id
+        place.expectRows(atEnd: nearBottom)
+        window.earlier(in: screen.items.map(\.id))
+        if #unavailable(iOS 18, macOS 15), let readingAt { DispatchQueue.main.async { proxy.scrollTo(readingAt, anchor: .top) } }
+    }
+
+    #if os(macOS)
+    /// The marker's foot is at `y`: in view or not. Out of view for a person who scrolled; a message that arrives pushes it
+    /// out for a moment and the list follows it, which is judged when the follow is over (see `BottomWatch`).
+    private func markerMoved(_ y: CGFloat, _ proxy: ScrollViewProxy) {
+        realized.markerFoot = y
+        guard viewport.height > 0 else { return }
+        if y <= viewport.height + 2 {
+            if !watch.shown || !nearBottom { watch.appeared(); nearBottom = true }
+        } else if watch.shown {
+            switch watch.disappeared() {
+            case .now: left(proxy)
+            case .recheck(let after):
+                DispatchQueue.main.asyncAfter(deadline: .now() + after + 0.02) { if watch.stillLeft { left(proxy) } }
+            }
+        }
+    }
+    #endif
 
     /// The ids of the bubbles of `item` that are open: part of what its row shows.
     private func expandedBubbles(of item: ChannelItem) -> [Int] {
@@ -420,7 +442,7 @@ public struct ChannelView: View {
     /// At the end: the marker is realized and its foot is within the list's visible height. (`viewport` is the list's own
     /// frame, which the head, the composer and the keyboard already cut down: a marker realized under them is below it.)
     private func judge() {
-        nearBottom = markerShown && markerFoot <= viewport.height + 2
+        nearBottom = markerFoot <= viewport.height + 2
         if judgedViewport == viewport.height && judgedInset == bottomInset { endLatch = nearBottom }
         judgedViewport = viewport.height
         judgedInset = bottomInset
