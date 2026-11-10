@@ -88,8 +88,8 @@ final class ChannelWindowTests: MadUITestCase {
             let atRest = waitForRest(flick)
             XCTAssertTrue(heldTop.exists, "flick \(flick): the held top is not in the accessibility tree, so the look-ahead is not measured")
             if heldTop.exists {
-                // the held top is more than a screen above the list's top: nothing to run into (the load took more when it came near)
-                XCTAssertLessThan(heldTop.frame.minY, -screenFrame.height, "flick \(flick): the held top is only \(Int(heldTop.frame.minY))pt from the list's top, within a flick's reach")
+                // the held top is more than four screens above the list's top: no flick (1500 to 3000pt) can reach it (the load took more when it came near)
+                XCTAssertLessThan(heldTop.frame.minY, -4 * screenFrame.height, "flick \(flick): the held top is only \(Int(heldTop.frame.minY))pt above the list, within a flick's reach")
             }
             Thread.sleep(forTimeInterval: 1)
             let later = visible()

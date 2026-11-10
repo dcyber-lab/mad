@@ -10,6 +10,8 @@ struct HeldWindow: Equatable {
 
     /// The first row held. nil only before the window is first shown (`pin`): the last `first` rows.
     var firstID: String?
+    /// How many rows the channel had when the window's first row last changed: rows that came after are what a cut waits for.
+    var changedAt = 0
 
     /// Where the window starts in `ids`: at `firstID`, or, when that is nil or gone (the row left the channel), `first` from the end.
     func start(in ids: [String]) -> Int {
@@ -23,20 +25,38 @@ struct HeldWindow: Equatable {
 
     func holdsAll(_ ids: [String]) -> Bool { start(in: ids) == 0 }
 
+    /// How many screens above the viewport the held top may be before older rows are held.
+    static let lookAhead: CGFloat = 5
+
+    /// What the held top's distance asks for: more rows when it is within `lookAhead` screens above the viewport, the stack cut
+    /// back when it is beyond twice that, nothing between (the gap is what keeps loads and cuts from alternating).
+    enum Look { case load, hold, trim }
+    static func look(topY: CGFloat, viewport: CGFloat) -> Look {
+        if topY > -viewport * lookAhead { return .load }
+        return topY < -viewport * lookAhead * 2 ? .trim : .hold
+    }
+
     /// Names the first row, so that rows arriving at the end never move it. Done when the window is first shown, and again
-    /// when its first row is gone; a reader at the end whose window has grown past twice `first` (messages kept coming) gets
-    /// the last `first` rows again, so the stack stays short.
-    mutating func pin(in ids: [String], atEnd: Bool) {
-        guard !ids.isEmpty else { return }
+    /// when its first row is gone. With `trim` (a reader at the end whose held top is far above, see `look`) a window that
+    /// has grown by twice `more` rows since its first row last changed gets the last `first` rows again, so the stack stays
+    /// short and is not cut on every message (a cut is followed by a load for short rows); true when it did.
+    @discardableResult
+    mutating func pin(in ids: [String], trim: Bool = false) -> Bool {
+        guard !ids.isEmpty else { return false }
         let s = start(in: ids)
-        let trim = atEnd && ids.count - s > Self.first * 2
-        if firstID == nil || !ids.contains(firstID!) || trim { firstID = ids[trim ? ids.count - Self.first : s] }
+        let cut = trim && ids.count - s > Self.first * 2 && ids.count - changedAt >= Self.more * 2
+        if firstID == nil || !ids.contains(firstID!) || cut {
+            firstID = ids[cut ? ids.count - Self.first : s]
+            changedAt = ids.count
+        }
+        return cut
     }
 
     /// Takes `more` older rows: the window's first row moves back.
     mutating func earlier(in ids: [String]) {
         let i = max(0, start(in: ids) - Self.more)
         firstID = ids.isEmpty ? nil : ids[i]
+        changedAt = ids.count
     }
 }
 
@@ -123,5 +143,9 @@ struct EarlierChip: View {
     }
 }
 
-/// The top of the held rows, kept without drawing the view again.
-final class TopWatch { var y: CGFloat = -.infinity }
+/// The top of the held rows, and the first row's place in the list (its top and height), kept without drawing the view again.
+final class TopWatch {
+    var y: CGFloat = -.infinity
+    var firstY: CGFloat = 0
+    var firstHeight: CGFloat = 0
+}

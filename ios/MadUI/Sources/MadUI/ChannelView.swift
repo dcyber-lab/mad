@@ -240,6 +240,7 @@ public struct ChannelView: View {
                     ForEach(held) { item in
                         DrawnOnChange(item: item, expanded: expandedBubbles(of: item), width: columnWidth) { row(item) }.equatable().id(item.id)
                             .background { if place.anchorID == item.id { anchorReader(item.id) } }
+                            .background { if #unavailable(iOS 18, macOS 15), item.id == held.first?.id { firstRowReader() } }
                             #if os(macOS)
                             .onAppear { realized.count += 1 }
                             .onDisappear { realized.count -= 1 }
@@ -343,8 +344,8 @@ public struct ChannelView: View {
             #if os(macOS)
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: createHeight > 0 ? createHeight + 12 : 0) }
             #endif
-            .onAppear { pinWindow() }
-            .onChange(of: screen.items.count) { _, _ in pinWindow() }
+            .onAppear { pinWindow(proxy) }
+            .onChange(of: screen.items.count) { _, _ in pinWindow(proxy) }
             .onChange(of: screen.tail) { _, _ in
                 var mine = false
                 if case .mine? = screen.items.last { mine = true }
@@ -373,13 +374,10 @@ public struct ChannelView: View {
     }
 
     private var wantsOlder: Bool {
-        canTakeOlder && viewport.height > 0 && top.y > -viewport.height * ChannelView.lookAhead
+        canTakeOlder && viewport.height > 0 && top.y > -viewport.height * HeldWindow.lookAhead
     }
 
     private var canTakeOlder: Bool { !window.holdsAll(screen.items.map(\.id)) && Date().timeIntervalSince(tookAt) > 0.3 }
-
-    /// How many screens above the viewport the held top may be before older rows are held.
-    static let lookAhead: CGFloat = 5
 
     private func takeOlder(_ proxy: ScrollViewProxy, tapped: Bool = false) {
         olderWanted = false
@@ -387,9 +385,31 @@ public struct ChannelView: View {
         tookAt = Date()
         let readingAt = held.first?.id
         place.expectRows(above: readingAt, atEnd: nearBottom)
+        let rowY = top.firstY, rowHeight = top.firstHeight
         window.earlier(in: screen.items.map(\.id))
-        // the chip's reader is at the top of the held rows, just under the chip: the old first row goes back to the top
-        if tapped, let readingAt { DispatchQueue.main.async { proxy.scrollTo(readingAt, anchor: .top) } }
+        // The chip: the old first row goes back where it was in the viewport. A scroll view puts the point of the row at the
+        // anchor's fraction of its own height at the same fraction of the viewport: fraction u of a row `h` tall at `u * (H - h)`.
+        if tapped, let readingAt {
+            let room = viewport.height - rowHeight
+            let u = room > 1 ? min(max(rowY / room, 0), 1) : 0
+            DispatchQueue.main.async { proxy.scrollTo(readingAt, anchor: UnitPoint(x: 0, y: u)) }
+        }
+        // the load made rows: ask again when the throttle is over, so short rows chain to the look-ahead while at rest
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { nearTop(top.y, proxy) }
+    }
+
+    /// The first held row's place, for the chip's tap (before iOS 18 nothing else holds the reading place).
+    private func firstRowReader() -> some View {
+        GeometryReader { g in
+            Color.clear.onAppear { firstRowMoved(g) }
+                .onChange(of: g.frame(in: .named(Self.space)).minY) { _, _ in firstRowMoved(g) }
+        }
+    }
+
+    private func firstRowMoved(_ g: GeometryProxy) {
+        let f = g.frame(in: .named(Self.space))
+        top.firstY = f.minY
+        top.firstHeight = f.height
     }
 
     /// Reads the top of the row that was the first, in the stack's space, once the older rows are in above it.
@@ -401,7 +421,11 @@ public struct ChannelView: View {
     }
 
     /// The window names its first row once it is first shown, and again if that row is gone.
-    private func pinWindow() { window.pin(in: screen.items.map(\.id), atEnd: nearBottom) }
+    /// A reader at the end whose held top is far above gets the stack cut back, and is put at the end again after it.
+    private func pinWindow(_ proxy: ScrollViewProxy) {
+        let far = nearBottom && viewport.height > 0 && HeldWindow.look(topY: top.y, viewport: viewport.height) == .trim
+        if window.pin(in: screen.items.map(\.id), trim: far) { stick(proxy) }
+    }
 
     #if os(macOS)
     /// The marker's foot is at `y`: in view or not. Out of view for a person who scrolled; a message that arrives pushes it
