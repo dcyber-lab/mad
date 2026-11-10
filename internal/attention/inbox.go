@@ -13,7 +13,11 @@
 // nowhere else.
 package attention
 
-import "time"
+import (
+	"time"
+
+	"github.com/dcyber-lab/mad/internal/create"
+)
 
 // Kind is what an item is. The page uses it only as a CSS class.
 type Kind string
@@ -25,6 +29,7 @@ const (
 	// Something else waits on the person.
 	KindAsk     Kind = "ask"     // an @you or a message in their DM, until read or answered
 	KindSkill   Kind = "skill"   // a skill an agent saved, to approve
+	KindCreate  Kind = "create"  // an agent asks to start an agent or a team: its card lists what
 	KindBudget  Kind = "budget"  // the day's budget for mad's own work: near or spent
 	KindCheckin Kind = "checkin" // a check-in that could not go out
 	KindPaused  Kind = "paused"  // a channel is paused: its agents' messages wait
@@ -67,6 +72,14 @@ type Item struct {
 	Full bool `json:"full,omitempty"`
 	// Part is how much of the budget is spent (1 = all), for its meter.
 	Part *float64 `json:"part,omitempty"`
+	// Create is what a "create" item would start: its card lists the name,
+	// project, kind and model, roles and first message from it.
+	Create *create.Spec `json:"create,omitempty"`
+	// From is the channel the asking agent was answering in: its view shows
+	// the card there. Outcome is how a "create" item ended (View.Creates),
+	// for its result line; nil while it waits.
+	From    string          `json:"from,omitempty"`
+	Outcome *create.Outcome `json:"outcome,omitempty"`
 	// Tasks are the board's tasks this item holds up.
 	Tasks []TaskRef `json:"tasks,omitempty"`
 	// Since is when it began to wait. Surfaces tick its age themselves.
@@ -153,10 +166,11 @@ type Act struct {
 
 // The Kinds of act.
 const (
-	KindPlan  = "plan"  // allow: approves the plan
-	KindDM    = "dm"    // open: a direct message
-	KindBoard = "board" // open: the board
-	KindRead  = "read"  // open: a skill, to read it
+	KindPlan  = "plan"   // allow: approves the plan
+	KindDM    = "dm"     // open: a direct message
+	KindBoard = "board"  // open: the board
+	KindRead  = "read"   // open: a skill, to read it
+	KindNew   = "create" // allow, deny: starting an agent or a team
 )
 
 // Inbox is every item, in the order Next walks them: what needs the

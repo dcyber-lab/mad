@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/host"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -31,18 +33,19 @@ type route interface {
 
 // What the routes act through; tests replace them.
 var (
-	hostDo     = host.Do
-	busReply   = bus.Reply
-	approve    = skill.Approve
-	discard    = skill.Discard
-	spendRaise = bus.SpendRaise
-	spendLift  = bus.SpendOpenToday
-	fireTimer  = bus.FireTimer
-	dropTimer  = bus.RemoveTimer
-	resume     = bus.Resume
-	markSeen   = tmux.MarkSeen
-	capture    = tmux.Capture
-	sendKey    = tmux.SendKey
+	hostDo       = host.Do
+	busReply     = bus.Reply
+	approve      = skill.Approve
+	discard      = skill.Discard
+	answerCreate = creator.Answer
+	spendRaise   = bus.SpendRaise
+	spendLift    = bus.SpendOpenToday
+	fireTimer    = bus.FireTimer
+	dropTimer    = bus.RemoveTimer
+	resume       = bus.Resume
+	markSeen     = tmux.MarkSeen
+	capture      = tmux.Capture
+	sendKey      = tmux.SendKey
 )
 
 // hostRoute answers a request of a window-mode agent through its host,
@@ -301,6 +304,27 @@ func (r skillRoute) do(a Answer, _ *Facts) error {
 		return discard(r.slug)
 	}
 	return approve(r.slug, nil)
+}
+
+// createRoute answers an agent's request to start an agent or a team:
+// package creator starts what was allowed, in the background, and tells the
+// agent. Allow is offered only beside the whole request (its item is Full).
+type createRoute struct{ id string }
+
+func (createRoute) acts() []Act {
+	return []Act{
+		{Verb: VerbAllow, Label: "Allow", Kind: KindNew, Primary: true},
+		{Verb: VerbDeny, Label: "Deny", Kind: KindNew, Row: true},
+		{Verb: VerbDeny, Label: "Ask for changes…", Kind: KindNew, Input: true},
+	}
+}
+
+func (r createRoute) do(a Answer, _ *Facts) error {
+	err := answerCreate(r.id, a.Verb == VerbAllow, a.Text)
+	if errors.Is(err, create.ErrGone) {
+		return ErrGone
+	}
+	return err
 }
 
 // budgetRaise is the dollars Raise adds.

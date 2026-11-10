@@ -55,6 +55,7 @@ func keyPaused(channel string) Key { return Key("paused:" + channel) }
 func keyCheckin(timer string) Key  { return Key("checkin:" + timer) }
 func keySkill(slug string) Key     { return Key("skill:" + slug) }
 func keyTask(id string) Key        { return Key("task:" + id) }
+func keyCreate(id string) Key      { return Key("create:" + id) }
 
 // keyCard: a waiting-you card of a kind the inbox does not know, so it
 // shows rather than vanishes.

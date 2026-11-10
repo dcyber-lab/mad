@@ -126,9 +126,12 @@ type also struct {
 }
 
 // wakesAgent tells whether message m of channel c is one that wakes agent
-// id: it mentions it or all, or it is the other side of a DM.
+// id: it mentions it or all, or it is the other side of a DM. mad's other
+// notes are bookkeeping, not for an agent; mad's own word to the agent
+// (TellAgent: how its request to create something ended) is.
 func wakesAgent(c Channel, m Message, id string) bool {
-	if m.Kind == "system" && m.Handoff == nil || m.From.ID == id {
+	toldByMad := m.Kind == "system" && m.From.ID == madFrom.ID && has(m.Mentions, id)
+	if m.Kind == "system" && m.Handoff == nil && !toldByMad || m.From.ID == id {
 		return false
 	}
 	return isDM(c.ID) || has(m.Mentions, id) || has(m.Mentions, "*")

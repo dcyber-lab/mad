@@ -9,6 +9,8 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/attention"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/create"
+	"github.com/dcyber-lab/mad/internal/creator"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
@@ -149,5 +151,51 @@ func TestInboxStaleActSays(t *testing.T) {
 		if w.Code != 409 || strings.TrimSpace(w.Body.String()) != says {
 			t.Errorf("%s: %d %q", key, w.Code, w.Body.String())
 		}
+	}
+}
+
+// An agent's request to start an agent shows in the snapshot with its
+// spec, and Allow over /api/inbox records the answer its MCP call waits on.
+func TestInboxCreateRequest(t *testing.T) {
+	isolate(t)
+	const a1 = "aaaa1111-0000-0000-0000-000000000001"
+	st := &state.State{Projects: []*state.Project{{Name: "p", Path: t.TempDir(), Agents: []*state.Agent{{ID: a1, Kind: "claude", Name: "alice"}}}}}
+	if err := st.Save(); err != nil {
+		t.Fatal(err)
+	}
+	// Allowing would start an agent in the background: not here.
+	oldGo := creator.Go
+	creator.Go = func(func()) {}
+	t.Cleanup(func() { creator.Go = oldGo })
+	req, err := create.Add("alice", a1, "", create.Spec{Type: create.TypeAgent, Name: "scout", Project: "/p", ProjectName: "p", Kind: "claude", Message: "find the flake"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(manageKinds)
+	s.poll.Poll(time.Now())
+	var snap Snapshot
+	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	it, ok := snap.Inbox.Find(attention.Key("create:" + req.ID))
+	if !ok || it.Kind != attention.KindCreate || it.Create == nil || it.Create.Name != "scout" || it.Create.Message != "find the flake" || !it.Blocks || snap.Inbox.Needs != 1 {
+		t.Fatalf("inbox %+v", snap.Inbox)
+	}
+	body := `{"key":"create:` + req.ID + `","verb":"allow"}`
+	if r := call(t, s, "POST", "/api/inbox", body); r.Code >= 300 {
+		t.Fatalf("allow: %d %s", r.Code, r.Body)
+	}
+	if got, _ := create.Get(req.ID); got.Status != create.Allowed {
+		t.Errorf("status %q", got.Status)
+	}
+	// Once it ended, the card is in the snapshot's creates, with its outcome.
+	_, _ = create.Finish(req.ID, create.Allowed, create.Created, create.Result{Agent: "new-agent", Channel: "dm.x"})
+	s.poll.Poll(time.Now())
+	snap = Snapshot{}
+	if err := json.Unmarshal(call(t, s, "GET", "/api/deck", "").Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Creates) != 1 || snap.Creates[0].Outcome == nil || snap.Creates[0].Outcome.Status != create.Created || snap.Creates[0].Outcome.Agent != "new-agent" || snap.Inbox.Needs != 0 {
+		t.Errorf("creates %+v, inbox %+v", snap.Creates, snap.Inbox)
 	}
 }

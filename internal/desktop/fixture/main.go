@@ -27,7 +27,7 @@
 //
 // /api/bus/image?id= answers a small PNG whose color is the id's.
 //
-// Scenarios (testdata/): edge-home, empty, many-channels, channel-fold, channel-open-long (260 messages, long ones and
+// Scenarios (testdata/): edge-home, empty, create-confirm (two waiting "create" items, an agent and a team an agent asks to start, one from #fold, with event lines there, and five ended ones in deck.creates: created, declined, expired, failed), many-channels, channel-fold, channel-open-long (260 messages, long ones and
 // pictures: the shape of a busy channel), channel-quiet, team-members, long-title, usage and pairing; the files say what is in each.
 //
 // What the page gives a test to find (web/): a list row is a button
@@ -223,6 +223,7 @@ func (f *fixture) deck(w http.ResponseWriter, r *http.Request) {
 		"quota":   map[string]any{},
 		"spend":   map[string]any{"day": now.Format("2006-01-02"), "usd": 0, "turns": 0, "budget_usd": 20, "budget_turns": 150, "open_today": false, "closed": false, "part": 0},
 		"inbox":   map[string]any{"needs": 0, "items": []any{}},
+		"creates": []any{},
 		"states":  status.Looks,
 		"machine": "Fixture Mac",
 		"at":      now,
