@@ -54,18 +54,47 @@ struct ChannelBubbleView: View {
     private var radius: CGFloat { Mac.bubbleRadius }
     #endif
 
+    /// The text, with its code blocks and tables drawn as such (a plain message is one Text, as before).
+    @ViewBuilder private var textBlocks: some View {
+        let blocks = Self.blocks(bubble.text)
+        if blocks.count == 1, case let .text(s) = blocks[0] {
+            line(s)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case let .text(s): line(s)
+                    case let .code(s): CodeBlock(code: s)
+                    case let .table(header, rows): TableBlock(header: header, rows: rows) { chatText($0, mine: mine, colors: colors) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A message with a code fence or a table is split (Markdown.blocks); one with neither stays a single text exactly
+    /// as written.
+    static func blocks(_ text: String) -> [Markdown.Block] {
+        guard text.contains("```") || text.contains("|") else { return [.text(text)] }
+        let split = Markdown.blocks(text)
+        guard split.contains(where: { if case .text = $0 { false } else { true } }) else { return [.text(text)] }
+        return split
+    }
+
+    private func line(_ s: String) -> some View {
+        Text(chatText(s, mine: mine, colors: colors))
+            .font(bodyFont)
+            .lineSpacing(lineSpacing)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var picturesOnly: Bool { bubble.text.isEmpty && bubble.quote == nil && !bubble.images.isEmpty }
 
     @ViewBuilder private var whole: some View {
         VStack(alignment: mine ? .trailing : .leading, spacing: 6) {
             if let q = bubble.quote { quote(q) }
-            if !bubble.text.isEmpty {
-                Text(chatText(bubble.text, mine: mine, colors: colors))
-                    .font(bodyFont)
-                    .lineSpacing(lineSpacing)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if !bubble.text.isEmpty { textBlocks }
             if !bubble.images.isEmpty { pictures }
         }
         .foregroundStyle(mine ? Color.madMineFg : Color.primary)

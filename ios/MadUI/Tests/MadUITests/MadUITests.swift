@@ -327,6 +327,10 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(Markdown.blocks("```\nopen"), [.code("open")], "an unclosed fence is code to the end")
         XCTAssertEqual(Markdown.blocks("- a\n  - b\n# T"), [.text("• a\n  • b\n**T**")])
         XCTAssertEqual(Markdown.blocks("#hash stays"), [.text("#hash stays")])
+        XCTAssertEqual(Markdown.blocks("API:\n| a | b |\n|---|:--:|\n| 1 | x \\| y |\n| 2 |\n\nafter"),
+                       [.text("API:"), .table(header: ["a", "b"], rows: [["1", "x | y"], ["2", ""]]), .text("after")],
+                       "a pipe table: header, rule, rows; a short row padded, an escaped pipe kept")
+        XCTAssertEqual(Markdown.blocks("| not a table |\nno rule under it"), [.text("| not a table |\nno rule under it")])
     }
 
     func testMarkdownPlain() {
