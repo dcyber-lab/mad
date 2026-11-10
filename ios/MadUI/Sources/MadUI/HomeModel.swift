@@ -52,10 +52,12 @@ public struct HomeWaiting: Identifiable, Equatable, Sendable {
     public var mustOpen: Bool
     /// What 查看 opens when it is not the agent: the channel a bot's request came from.
     public var openID: String
+    /// The Mac sidebar's one line for a request to create (what it asks, then what it would start, no project); empty for others.
+    public var macLine: String
 
     public init(id: String, agentID: String, agentKind: String = "", name: String, project: String = "", whereLine: String = "",
-                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false, openID: String = "") {
-        self.mustOpen = mustOpen; self.openID = openID
+                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false, openID: String = "", macLine: String = "") {
+        self.mustOpen = mustOpen; self.openID = openID; self.macLine = macLine
         self.id = id; self.agentID = agentID; self.agentKind = agentKind; self.name = name; self.project = project
         self.whereLine = whereLine; self.age = age; self.cost = cost; self.detail = detail; self.mono = mono; self.acts = acts
     }

@@ -24,6 +24,25 @@ final class AskChipsTests: XCTestCase {
         XCTAssertEqual(AskChips.words(AskAct(id: "a", label: "允许", kind: .allow), sending: false), "允许")
     }
 
+    /// Every word MadUI's create card and ask chips look up with L("…") has an English entry in MadUI's catalog (one that is
+    /// missing reads in Chinese in English, as 发送 did).
+    func testEveryWordOfTheCreateCardAndTheChipsHasAnEnglishEntry() throws {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MadUI")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: sources.appendingPathComponent("Resources/Localizable.xcstrings"))) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
+        let looksUp = try NSRegularExpression(pattern: #"\bLf?\("([^"]+)""#)
+        for name in ["CreateViews.swift", "AskChips.swift"] {
+            let text = try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+            let found = looksUp.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }
+            XCTAssertFalse(found.isEmpty, "\(name) looks up no words: the pattern is stale")
+            for key in found {
+                let en = ((strings[key]?["localizations"] as? [String: Any])?["en"] as? [String: Any])?["stringUnit"] as? [String: Any]
+                XCTAssertNotNil(en?["value"], "“\(key)” (\(name)) has no English entry in MadUI's catalog")
+            }
+        }
+    }
+
     /// The sending words are looked up in MadUI's own catalog: each has an English entry there, or it would stay Chinese
     /// in English. SwiftPM does not compile the catalog for a test, so the file itself is read.
     func testTheSendingWordsHaveEnglishEntriesInMadUIsCatalog() throws {

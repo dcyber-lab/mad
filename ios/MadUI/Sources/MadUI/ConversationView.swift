@@ -32,6 +32,8 @@ public struct ConversationView: View {
     /// How tall the approval card floating above the composer is (0 when there is none): the list leaves room for it.
     @State private var askHeight: CGFloat = 0
     #else
+    /// The create card's change field is open: the composer gives way to it (see `CreateSheet`).
+    @State private var createChanging = false
     /// The end marker is on screen: new things are followed only then.
     @State private var atEnd = true
     @State private var endShown = true
@@ -59,7 +61,7 @@ public struct ConversationView: View {
         // the approval floats above the composer (design v6); the composer stays under it
         VStack(spacing: 10) {
             if let create = model.create {
-                CreateSheet(card: create, act: { actions.act(create.id, $0, $1) })
+                CreateSheet(card: create, changing: $createChanging, act: { actions.act(create.id, $0, $1) })
                     .id(create.id)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let ask = model.ask {
@@ -67,7 +69,7 @@ public struct ConversationView: View {
                     .id(ask.id) // a replacement card starts fresh: what was typed for the old one is not its answer
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            composer
+            if !(createChanging && model.create != nil) { composer }
         }
         #else
         // the approval floats over the composer's top, as wide as the column (design v6). It is an overlay, not a row: its
@@ -1332,9 +1334,11 @@ struct AskSheet: View {
         .padding(.horizontal, 18)
         .padding(.top, 18)
         .padding(.bottom, 14)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: Phone.cardRadius, style: .continuous))
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.16), radius: 20, x: 0, y: 10)
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.08), radius: 1.5, x: 0, y: 1)
+        .background {
+            RoundedRectangle(cornerRadius: Phone.cardRadius, style: .continuous).fill(cardFill)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.16), radius: 20, x: 0, y: 10)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.08), radius: 1.5, x: 0, y: 1)
+        }
         .padding(.horizontal, 12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)

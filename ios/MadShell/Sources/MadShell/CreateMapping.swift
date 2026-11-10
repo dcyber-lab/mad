@@ -100,7 +100,7 @@ public enum CreateMapping {
     public static func line(_ item: InboxItem, deck: Deck) -> CreateLine? {
         guard let spec = item.create, let o = item.outcome else { return nil }
         return line(id: item.key, status: o.status, isTeam: spec.isTeam, name: spec.name, team: o.team, agent: o.agent, channel: o.channel,
-                    reason: o.reason, words: o.reply, deck: deck)
+                    reason: o.reason, words: o.reply, deck: deck, spec: spec)
     }
 
     /// mad's line for an event line of a channel (`created`, `create_declined` ...), from its `data`; nil for any other event.
@@ -120,8 +120,9 @@ public enum CreateMapping {
                     words: d["words"] ?? "", deck: deck)
     }
 
+    /// `spec` is the request, when known: what a made thing that is gone is drawn from (its characters, stopped).
     static func line(id: String, status: String, isTeam: Bool, name: String, team: String, agent: String, channel: String,
-                     reason: String, words: String, deck: Deck?) -> CreateLine? {
+                     reason: String, words: String, deck: Deck?, spec: CreateSpec? = nil) -> CreateLine? {
         func note(_ text: String) -> CreateLine { CreateLine(id: id, phase: .note, title: text) }
         switch status {
         case "creating":
@@ -138,7 +139,12 @@ public enum CreateMapping {
             let title = isTeam ? Lf("团队「%@」建好了", name) : Lf("「%@」建好了", name)
             if isTeam {
                 guard let channel = deck?.channel(id: channel.isEmpty ? team : channel) else {
-                    return CreateLine(id: id, phase: .created, title: title, sub: L("已经不在了"), mark: .team(members: []))
+                    // gone: the tile of its roles' characters, stopped (a request's roles are in `spec`; without it, one for the name)
+                    let roles = spec?.roles ?? []
+                    let members: [CreateLine.Member] = roles.isEmpty
+                        ? [.init(id: name, kind: "claude", state: .stopped)]
+                        : roles.map { .init(id: $0.role, kind: $0.kind.isEmpty ? "claude" : $0.kind, state: .stopped) }
+                    return CreateLine(id: id, phase: .created, title: title, sub: L("已经不在了"), mark: .team(members: members))
                 }
                 let split = ChannelMapping.split(channel: channel, deck: deck)
                 let members = split.team.filter { !$0.dim }
@@ -150,7 +156,8 @@ public enum CreateMapping {
                                   target: .channel(channel.id))
             }
             guard let a = deck?.agent(id: agent) else {
-                return CreateLine(id: id, phase: .created, title: title, sub: L("已经不在了"))
+                return CreateLine(id: id, phase: .created, title: title, sub: L("已经不在了"),
+                                  mark: .agent(id: agent.isEmpty ? name : agent, kind: spec?.kind.isEmpty == false ? spec!.kind : "claude", state: .stopped))
             }
             let state = CharacterState(status: a.state)
             let sub = [modelWords(kind: a.kind, model: a.model), state.title].filter { !$0.isEmpty }.joined(separator: " · ")

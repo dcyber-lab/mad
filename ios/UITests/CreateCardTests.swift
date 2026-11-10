@@ -11,8 +11,9 @@ class CreateCardCase: MadUITestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 40), "the channel did not open, or its confirm card did not show")
     }
 
-    func openAgent() {
-        launch(native: true, extra: ["-nativeOpen", "fold0001-aaaa"])
+    /// The conversation of the agent that asked: architect (fold0001-aaaa) asked for scout, builder (fold0002-aaaa) for the team.
+    func openAgent(_ id: String = "fold0001-aaaa") {
+        launch(native: true, extra: ["-nativeOpen", id])
         XCTAssertTrue(element("对话").firstMatch.waitForExistence(timeout: 40), "the agent's conversation did not open")
     }
 
@@ -61,14 +62,15 @@ class CreateDenyTests: CreateCardCase {
         XCTAssertTrue(app.buttons["拒绝中…"].firstMatch.waitForExistence(timeout: 5) || control("create.note").waitForExistence(timeout: 10))
         let note = control("create.note")
         XCTAssertTrue(note.waitForExistence(timeout: 15), "no grey line after 拒绝")
-        XCTAssertTrue(elements(containing: "你拒绝了，没有创建「scout」").firstMatch.exists)
+        // other, older requests of the scenario have their grey lines already: wait for this one's
+        XCTAssertTrue(elements(containing: "你拒绝了，没有创建「scout」").firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(card.exists)
         shot("declined")
     }
 
-    /// The asking agent has two requests; the first (scout) was declined above, so its conversation shows the team's card.
-    func testTheAskingAgentsConversationShowsTheTeamCardNext() {
-        openAgent()
+    /// The team's request (fix-flaky) is builder's: its conversation shows the team's card.
+    func testTheAskingAgentsConversationShowsTheTeamCard() {
+        openAgent("fold0002-aaaa")
         XCTAssertTrue(card.waitForExistence(timeout: 15), "no confirm card in the asking agent's conversation")
         XCTAssertTrue(element("想创建一个团队").firstMatch.exists, "the next card is not the team's")
         XCTAssertTrue(element("fix-flaky").firstMatch.exists)
@@ -89,11 +91,22 @@ class CreateChangeTests: CreateCardCase {
         field.tap()
         field.typeText("用 sonnet")
         XCTAssertTrue(control("create.send").isEnabled)
-        shot("changing, words typed")
+        // a second after the focus: the keyboard is up, the head has not moved into the status bar, the composer has given
+        // way, and the field and 发送 are above the keyboard
+        Thread.sleep(forTimeInterval: 1.2)
+        shot("changing, words typed, keyboard up")
+        let keyboardTop = app.keyboards.firstMatch.frame.minY
+        XCTAssertGreaterThan(app.keyboards.firstMatch.frame.height, 100, "no keyboard")
+        XCTAssertGreaterThanOrEqual(element("群信息").firstMatch.frame.minY, 48, "the head slid up into the status bar")
+        XCTAssertGreaterThanOrEqual(card.frame.minY, element("群信息").firstMatch.frame.maxY, "the card runs up under the head")
+        XCTAssertLessThanOrEqual(control("create.field").frame.maxY, keyboardTop, "the field is under the keyboard")
+        XCTAssertLessThanOrEqual(control("create.send").frame.maxY, keyboardTop, "发送 is under the keyboard")
+        XCTAssertFalse(app.textFields.matching(NSPredicate(format: "placeholderValue CONTAINS %@", "发消息给")).firstMatch.exists,
+                       "the composer is still on screen under the card")
         control("create.send").tap()
         let note = control("create.note")
         XCTAssertTrue(note.waitForExistence(timeout: 15), "no grey line after 发送")
-        XCTAssertTrue(elements(containing: "你要改一下：用 sonnet").firstMatch.exists)
+        XCTAssertTrue(elements(containing: "你要改一下：用 sonnet").firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(card.exists)
     }
 
@@ -104,6 +117,27 @@ class CreateChangeTests: CreateCardCase {
         XCTAssertTrue(control("create.field").waitForExistence(timeout: 5))
         control("create.cancel").tap()
         XCTAssertTrue(control("create.allow").waitForExistence(timeout: 5), "cancel did not go back to the card's pills")
+    }
+}
+
+class CreateComposerKeptTests: CreateCardCase {
+    /// 改一下… takes the composer out of sight, not out of the tree: what was being written in it (and its pictures) is there
+    /// after 取消.
+    func testWhatWasWrittenInTheComposerSurvivesTheChangeField() {
+        openChannel()
+        XCTAssertTrue(card.waitForExistence(timeout: 15))
+        let composer = app.textFields.matching(NSPredicate(format: "placeholderValue CONTAINS %@", "发消息给")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 10), "no composer")
+        composer.tap()
+        composer.typeText("半截消息")
+        control("create.change").tap()
+        XCTAssertTrue(control("create.field").waitForExistence(timeout: 5))
+        XCTAssertFalse(composer.exists, "the composer is still on screen under the card")
+        control("create.cancel").tap()
+        XCTAssertTrue(control("create.allow").waitForExistence(timeout: 5))
+        let kept = app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "半截消息")).firstMatch
+        XCTAssertTrue(kept.waitForExistence(timeout: 5), "the half-written message is gone")
+        shot("the half-written message kept")
     }
 }
 

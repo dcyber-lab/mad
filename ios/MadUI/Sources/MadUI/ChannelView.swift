@@ -10,6 +10,10 @@ public struct ChannelView: View {
     let actions: ChannelActions
 
     @State private var panelOpen = false
+    #if os(iOS)
+    /// The create card's change field is open (see `CreateSheet`).
+    @State private var createChanging = false
+    #endif
     @State private var gallery = false
     @State private var nearBottom = true
     @State private var viewport = CGSize.zero
@@ -94,7 +98,7 @@ public struct ChannelView: View {
     @ViewBuilder private var createCard: some View {
         if let create = screen.create {
             #if os(iOS)
-            CreateSheet(card: create, act: { actions.act(create.id, $0, $1) })
+            CreateSheet(card: create, changing: $createChanging, act: { actions.act(create.id, $0, $1) })
                 .id(create.id)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             #endif
@@ -121,7 +125,20 @@ public struct ChannelView: View {
         messages
             .safeAreaInset(edge: .top, spacing: 0) { head.background(alignment: .top) { PhoneHeadFade() } }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 10) { createCard; composerRow }.background(alignment: .bottom) { PhoneFootFade() }
+                // While the card's change field is open the composer is collapsed, not taken out: what was written in it (and
+                // its pictures) stays. The card then sits 8pt above the keyboard.
+                let collapsed = createChanging && screen.create != nil
+                VStack(spacing: collapsed ? 0 : 10) {
+                    createCard
+                    composerRow
+                        .frame(height: collapsed ? 0 : nil)
+                        .clipped()
+                        .opacity(collapsed ? 0 : 1)
+                        .allowsHitTesting(!collapsed)
+                        .accessibilityHidden(collapsed)
+                }
+                .padding(.bottom, collapsed ? 8 : 0)
+                .background(alignment: .bottom) { PhoneFootFade() }
             }
             .background(Color.madPaper)
         #else

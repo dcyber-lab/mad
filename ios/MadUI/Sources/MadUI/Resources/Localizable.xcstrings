@@ -1801,6 +1801,17 @@
           }
         }
       }
+    },
+    "发送": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

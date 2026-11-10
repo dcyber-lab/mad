@@ -249,6 +249,9 @@ struct AskCardView: View {
     @State private var text = ""
     /// The act sent and waiting for the Mac, by a tap or by Return / Esc (AskChips draws it).
     @State private var sent: String?
+    /// A text field outside the card (the composer, a search) has the keyboard: the card has no keys then.
+    /// True until the watcher's first report: a card that appears while the composer has the keyboard has no keys.
+    @State private var textFocused = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -267,11 +270,14 @@ struct AskCardView: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .fixedSize(horizontal: false, vertical: true)
-        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).fill(Color.macFloatFill)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
+        }
         .overlay(RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
+        .watchesTextFocus($textFocused)
     }
 
     @ViewBuilder private var detail: some View {
@@ -314,7 +320,7 @@ struct AskCardView: View {
         } else {
             HStack(alignment: .top, spacing: 8) {
                 AskChips(card: card, send: { act($0.id, nil) }, input: { asking = $0 }, sent: $sent)
-                if card.permission, returnAct != nil || escapeAct != nil {
+                if card.permission, !textFocused, returnAct != nil || escapeAct != nil {
                     Spacer(minLength: 8)
                     HStack(spacing: 14) {
                         if returnAct != nil { hint("⏎", L("允许")) }
@@ -328,12 +334,13 @@ struct AskCardView: View {
                 }
             }
             .background {
-                // Return allows and Esc denies, as the hint says (a focused field takes its own Return first)
-                if let a = returnAct {
-                    Button("") { act(a.id, nil) }.keyboardShortcut(.defaultAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+                // Return allows and Esc denies, as the hint says, through the same sending state as a tap. They are left out
+                // while another text field has the keyboard: a Return typed in the composer must not allow a command.
+                if !textFocused, let a = returnAct {
+                    Button("") { choose(a) }.keyboardShortcut(.defaultAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 }
-                if let a = escapeAct {
-                    Button("") { act(a.id, nil) }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+                if !textFocused, let a = escapeAct {
+                    Button("") { choose(a) }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 }
             }
         }
