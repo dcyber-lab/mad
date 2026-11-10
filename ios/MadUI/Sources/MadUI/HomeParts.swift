@@ -23,7 +23,7 @@ struct WaitingCard: View {
                 Text(item.age).font(.system(size: 13.5)).monospacedDigit().foregroundStyle(Color.madFg3)
             }
             if item.mustOpen, !item.detail.isEmpty {
-                Text(item.detail).font(.system(size: 14)).foregroundStyle(Color.madFg2).lineLimit(1)
+                Text(item.macLine.isEmpty ? item.detail : item.macLine).font(.system(size: 14)).foregroundStyle(Color.madFg2).lineLimit(1)
             } else if !item.detail.isEmpty {
                 MacCommandLine(text: item.detail, mono: item.mono, cut: $cut)
             }
@@ -45,7 +45,7 @@ struct WaitingCard: View {
                     Button(L("回复")) { actions.open(item.agentID) }.buttonStyle(MacPillStyle(primary: false))
                 }
                 Spacer(minLength: 0)
-                Text(item.project).font(.system(size: 13.5)).foregroundStyle(Color.madFg3).lineLimit(1)
+                if item.macLine.isEmpty { Text(item.project).font(.system(size: 13.5)).foregroundStyle(Color.madFg3).lineLimit(1) }
             }
         }
         .padding(.horizontal, 13)

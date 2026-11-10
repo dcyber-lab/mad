@@ -177,12 +177,17 @@ public enum HomeMapping {
         // An agent's request to start an agent or a team is `full`: its whole spec is in the body, which this card does
         // not show. No Allow here (an installed app meets this item before it has a card of its own): 查看 opens it.
         let blind = item.kind == "create" && item.full
+        // the Mac sidebar says what is asked, then what it would start; the project is not in it
+        let macLine = item.kind == "create" && item.create != nil
+            ? [what, item.create.map { $0.isTeam ? [$0.name, Lf("%lld 个角色", $0.roles.count)] : [$0.name, CreateMapping.modelWords(kind: $0.kind, model: $0.model)] }?.filter { !$0.isEmpty }.joined(separator: " · ") ?? ""]
+                .filter { !$0.isEmpty }.joined(separator: " · ")
+            : ""
         return HomeWaiting(id: item.key, agentID: agent?.id ?? item.open.agent ?? item.open.channel ?? "",
                            agentKind: agent?.kind ?? "", name: agent?.label ?? item.title, project: project,
                            whereLine: whereLine, age: item.since.map { MadWords.age(now.timeIntervalSince($0)) } ?? "",
                            cost: (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : "",
                            detail: detail, mono: item.mono, acts: blind ? ActWords.acts(of: item).filter { $0.kind == .deny } : ActWords.acts(of: item), mustOpen: blind,
-                           openID: blind ? (item.from ?? "") : "")
+                           openID: blind ? (item.from ?? "") : "", macLine: macLine)
     }
 
     // MARK: Today

@@ -71,36 +71,21 @@ private struct CreateSpecBox: View {
 
     var body: some View {
         if !rows.isEmpty {
-            if mac {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 3) {
-                    ForEach(rows) { r in
-                        GridRow {
-                            HStack(spacing: 6) {
-                                Text(r.left).foregroundStyle(Color.madFg).lineLimit(1)
-                                if !r.tag.isEmpty { Text(r.tag).font(.mad(11.5)).foregroundStyle(Color.madFg3) }
-                            }
-                            Text(r.right).foregroundStyle(Color.madFg3).lineLimit(1)
-                        }
+            // the phone's box at the Mac's size: rows of 34pt at least, 1px lines between them
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                    HStack(spacing: 8) {
+                        Text(r.left).font(.system(size: mac ? 14.5 : 16)).foregroundStyle(Color.madFg).lineLimit(1)
+                        if !r.tag.isEmpty { Text(r.tag).font(.system(size: mac ? 12 : 13)).foregroundStyle(Color.madFg3).lineLimit(1) }
+                        Spacer(minLength: 8)
+                        Text(r.right).font(.system(size: mac ? 13.5 : 15)).foregroundStyle(Color.madFg3).lineLimit(1).fixedSize()
                     }
+                    .frame(minHeight: mac ? 34 : 40)
+                    if i < rows.count - 1 { Rectangle().fill(Color.madLine).frame(height: 1) }
                 }
-                .font(.mad(13))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
-                        HStack(spacing: 8) {
-                            Text(r.left).font(.system(size: 16)).foregroundStyle(Color.madFg).lineLimit(1)
-                            if !r.tag.isEmpty { Text(r.tag).font(.system(size: 13)).foregroundStyle(Color.madFg3).lineLimit(1) }
-                            Spacer(minLength: 8)
-                            Text(r.right).font(.system(size: 15)).foregroundStyle(Color.madFg3).lineLimit(1).fixedSize()
-                        }
-                        .frame(minHeight: 40)
-                        if i < rows.count - 1 { Rectangle().fill(Color.madLine).frame(height: 1) }
-                    }
-                }
-                .padding(.vertical, 2).padding(.horizontal, 14)
-                .background(Color.madCode, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            .padding(.vertical, 2).padding(.horizontal, 14)
+            .background(Color.madCode, in: RoundedRectangle(cornerRadius: mac ? 11 : 14, style: .continuous))
         }
     }
 }
@@ -112,13 +97,22 @@ private struct CreateSpecBox: View {
 /// and its project, the spec box, the first task or message, 拒绝 | 允许 pills and 改一下… under them.
 struct CreateSheet: View {
     let card: CreateCard
+    /// The change field is open: the screen takes its composer away while it is (the card has its own field), so the card sits
+    /// right above the keyboard.
+    @Binding var changing: Bool
     let act: (String, String?) -> Void
     @State private var sending: CreateSending?
-    @State private var changing = false
     @State private var words = ""
     @State private var contentHeight: CGFloat = 0
+    /// The top of the keyboard, in screen points, while it is up.
+    @State private var keyboardTop: CGFloat?
     @FocusState private var focused: Bool
     static let maxHeight: CGFloat = 420
+    /// What the card gets above the screen's keyboard: the status bar and the head are 130 points, and a gap.
+    static let headRoom: CGFloat = 130
+
+    /// The card is at most 420 tall, and less when the keyboard is up: it scrolls inside itself then, and the head stays.
+    private var maxHeight: CGFloat { min(Self.maxHeight, keyboardTop.map { max(160, $0 - Self.headRoom) } ?? Self.maxHeight) }
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -126,16 +120,29 @@ struct CreateSheet: View {
             content.background(GeometryReader { Color.clear.preference(key: CreateHeightKey.self, value: $0.size.height) })
         }
         .scrollBounceBehavior(.basedOnSize)
-        .frame(height: contentHeight > 0 ? min(contentHeight, Self.maxHeight) : nil)
+        .frame(height: contentHeight > 0 ? min(contentHeight, maxHeight) : nil)
         .onPreferenceChange(CreateHeightKey.self) { contentHeight = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            keyboardTop = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.minY
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardTop = nil }
+        .task(id: sending) {
+            guard sending != nil else { return }
+            try? await Task.sleep(for: .seconds(8))
+            sending = nil
+        }
         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
-        .background(scheme == .dark ? Color.madRaise : Color.madPaper, in: RoundedRectangle(cornerRadius: Phone.cardRadius, style: .continuous))
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.16), radius: 20, x: 0, y: 10)
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.08), radius: 1.5, x: 0, y: 1)
+        // the shadows are the card shape's, not every child's: the spec box inside stays flat
+        .background {
+            RoundedRectangle(cornerRadius: Phone.cardRadius, style: .continuous).fill(scheme == .dark ? Color.madRaise : Color.madPaper)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.16), radius: 20, x: 0, y: 10)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.08), radius: 1.5, x: 0, y: 1)
+        }
         .padding(.horizontal, 12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
         .accessibilityIdentifier("create.card")
+        .onDisappear { changing = false }
     }
 
     private var content: some View {
@@ -219,16 +226,19 @@ struct CreateCardView: View {
                 Spacer(minLength: 8)
                 if !card.waited.isEmpty { Text(card.waited).font(.system(size: 14)).foregroundStyle(Color.madFg3) }
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(card.name).font(.mad(15, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
-                    if !card.project.isEmpty { Text(card.project).font(.mad(13)).foregroundStyle(Color.madFg3).lineLimit(1) }
+                    Text(card.name).font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
+                    if !card.project.isEmpty { Text(card.project).font(.system(size: 14)).foregroundStyle(Color.madFg3).lineLimit(1) }
                 }
                 CreateSpecBox(rows: card.rows, mac: true)
                 if !card.first.isEmpty {
-                    (Text(card.firstLabel + " ").foregroundColor(.madFg3) + Text(card.first).foregroundColor(.madFg))
-                        .font(.mad(13)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(card.firstLabel).font(.system(size: 13)).foregroundStyle(Color.madFg3)
+                        Text(card.first).font(MadType.detail).foregroundStyle(Color.madFg)
+                            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             acts
@@ -237,12 +247,19 @@ struct CreateCardView: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .fixedSize(horizontal: false, vertical: true)
-        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).fill(Color.macFloatFill)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
+        }
         .overlay(RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
         .accessibilityIdentifier("create.card")
+        .task(id: sending) {
+            guard sending != nil else { return }
+            try? await Task.sleep(for: .seconds(8))
+            sending = nil
+        }
     }
 
     @ViewBuilder private var acts: some View {

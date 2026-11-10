@@ -267,9 +267,11 @@ struct AskCardView: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .fixedSize(horizontal: false, vertical: true)
-        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).fill(Color.macFloatFill)
+                .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
+        }
         .overlay(RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
-        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
     }

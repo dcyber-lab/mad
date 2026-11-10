@@ -64,6 +64,20 @@ final class CreateMappingTests: XCTestCase {
         }
     }
 
+    func testTheMacSidebarSaysWhatIsAskedWithoutTheProject() throws {
+        let d = try deck()
+        func card(_ key: String) throws -> HomeWaiting {
+            let item = try XCTUnwrap(d.inbox.waiting.first { $0.key == key })
+            return HomeMapping.card(item, agent: d.agent(id: item.agent), deck: d, now: Date())
+        }
+        let agent = try card("create:c-00000001")
+        XCTAssertEqual(agent.macLine, "想创建一个 agent · scout · Claude Sonnet")
+        let team = try card("create:c-00000002")
+        XCTAssertEqual(team.macLine, "想创建一个团队 · fix-flaky · 3 个角色")
+        XCTAssertFalse(agent.macLine.contains("mad"), "the project is in the Mac's line")
+        XCTAssertTrue(agent.detail.contains("mad"), "the iPhone's row lost its project")
+    }
+
     func testACreatedTeamsLineHasItsTileSubAndTarget() throws {
         let d = try deck()
         let made = try XCTUnwrap(CreateMapping.line(try XCTUnwrap(d.creates.first { $0.key == "create:c-00000003" }), deck: d))
@@ -72,6 +86,10 @@ final class CreateMappingTests: XCTestCase {
         XCTAssertEqual(made.phase, .created)
         XCTAssertEqual(made.sub, "已经不在了")
         XCTAssertNil(made.target)
+        // a gone team is drawn from the request's roles, stopped: never the empty tile (a "#")
+        guard case .team(let members)? = made.mark else { return XCTFail("no tile for a gone team") }
+        XCTAssertFalse(members.isEmpty)
+        XCTAssertTrue(members.allSatisfy { $0.state == .stopped })
     }
 
     func testAnEventLineOfAChannelDrawsFromItsData() throws {

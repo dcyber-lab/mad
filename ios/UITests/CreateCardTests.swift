@@ -91,7 +91,17 @@ class CreateChangeTests: CreateCardCase {
         field.tap()
         field.typeText("用 sonnet")
         XCTAssertTrue(control("create.send").isEnabled)
-        shot("changing, words typed")
+        // a second after the focus: the keyboard is up, the head has not moved into the status bar, the composer has given
+        // way, and the field and 发送 are above the keyboard
+        Thread.sleep(forTimeInterval: 1.2)
+        shot("changing, words typed, keyboard up")
+        let keyboardTop = app.keyboards.firstMatch.frame.minY
+        XCTAssertGreaterThan(app.keyboards.firstMatch.frame.height, 100, "no keyboard")
+        XCTAssertGreaterThanOrEqual(element("群信息").firstMatch.frame.minY, 48, "the head slid up into the status bar")
+        XCTAssertGreaterThanOrEqual(card.frame.minY, element("群信息").firstMatch.frame.maxY, "the card runs up under the head")
+        XCTAssertLessThanOrEqual(control("create.field").frame.maxY, keyboardTop, "the field is under the keyboard")
+        XCTAssertLessThanOrEqual(control("create.send").frame.maxY, keyboardTop, "发送 is under the keyboard")
+        XCTAssertFalse(elements(containing: "发消息给").firstMatch.exists, "the composer is still drawn under the card")
         control("create.send").tap()
         let note = control("create.note")
         XCTAssertTrue(note.waitForExistence(timeout: 15), "no grey line after 发送")
