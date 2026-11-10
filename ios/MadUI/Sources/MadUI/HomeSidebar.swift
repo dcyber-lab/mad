@@ -47,6 +47,7 @@ public struct HomeSidebar: View {
                             ProjectHeader(title: section.title, open: isOpen(section), toggle: { toggle(section) },
                                           hideStopped: $hideStopped,
                                           create: actions.createIn.map { create in { item in create(item, section.id) } })
+                                .font(MadType.label)
                         }
                     } else {
                         Section {
@@ -135,7 +136,7 @@ public struct HomeSidebar: View {
 
 /// An agent's row, with a … at the right (on the Mac when the pointer is over the row) that opens the row's menu,
 /// the same as a right-click: 删除, which asks first.
-private struct SidebarRow: View {
+struct SidebarRow: View {
     let row: HomeRow
     /// Asks to delete the row; nil for a row that has no menu.
     let menu: (() -> Void)?
@@ -167,8 +168,8 @@ private struct SidebarRow: View {
 
 /// A project's header, as Claude Code's: its name and a small chevron (the name folds and opens the project), and at
 /// the right a filter button and a + (新对话, 新群聊, 新团队 for the project); the buttons show when the pointer is
-/// over the header.
-private struct ProjectHeader: View {
+/// over the header. Its font is the list's (MacSidebar, HomeSidebar).
+struct ProjectHeader: View {
     let title: String
     let open: Bool
     let toggle: () -> Void
@@ -183,7 +184,7 @@ private struct ProjectHeader: View {
                     Text(title).lineLimit(1)
                     Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
                 }
-                .font(MadType.label).foregroundStyle(.secondary)
+                .foregroundStyle(Color.madFg3)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -214,7 +215,6 @@ private struct ProjectHeader: View {
                 .accessibilityLabel(L("在这个项目里新建"))
             }
         }
-        .font(.system(size: 12, weight: .medium))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
     }
