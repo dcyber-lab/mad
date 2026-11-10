@@ -1626,17 +1626,6 @@
         }
       }
     },
-    "想问你": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asks you"
-          }
-        }
-      }
-    },
     "允许中…": {
       "extractionState": "manual",
       "localizations": {
@@ -1688,17 +1677,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Change…"
-          }
-        }
-      }
-    },
-    "发送": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send"
           }
         }
       }
