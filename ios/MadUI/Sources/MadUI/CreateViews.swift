@@ -27,24 +27,41 @@ enum CreateSending: Equatable {
     }
 }
 
-/// A tapped button pulses while the Mac answers (opacity 1 to 0.6, 1.1s, alternating); still, at 0.6, with Reduce Motion.
-private struct CreatePulse: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var low = false
+/// The acts of a create card as the ask card's chips (`AskChipLabel`, #171): 允许 filled, 拒绝, 改一下… dashed; with the field
+/// open, 取消 and 发送 (filled, off while the field is empty). A tapped chip says what it is doing and pulses; the others dim.
+struct CreateChips: View {
+    enum Tap { case allow, deny, change, cancel, send }
+    let card: CreateCard
+    let sending: CreateSending?
+    let changing: Bool
+    let canSend: Bool
+    let tap: (Tap) -> Void
 
-    func body(content: Content) -> some View {
-        content
-            .opacity(active && low ? 0.6 : 1)
-            .onChange(of: active, initial: true) { _, on in
-                guard on, !reduceMotion else { low = on; return }
-                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { low = true }
+    var body: some View {
+        FlowLayout(spacing: 8) {
+            if changing {
+                chip(.cancel, "create.cancel", L("取消"))
+                chip(.send, "create.send", L("发送"), filled: true, sendingWords: CreateSending.send.words, mine: .send, off: !canSend)
+            } else {
+                if card.allow != nil { chip(.allow, "create.allow", L("允许"), filled: true, sendingWords: CreateSending.allow.words, mine: .allow) }
+                if card.deny != nil { chip(.deny, "create.deny", L("拒绝"), sendingWords: CreateSending.deny.words, mine: .deny) }
+                if card.change != nil { chip(.change, "create.change", L("改一下…"), dashed: true) }
             }
+        }
     }
-}
 
-extension View {
-    fileprivate func createPulse(_ active: Bool) -> some View { modifier(CreatePulse(active: active)) }
+    private func chip(_ t: Tap, _ id: String, _ words: String, filled: Bool = false, dashed: Bool = false,
+                      sendingWords: String? = nil, mine: CreateSending? = nil, off: Bool = false) -> some View {
+        let tapped = mine != nil && sending == mine
+        return Button { tap(t) } label: {
+            AskChipLabel(text: tapped ? (sendingWords ?? words) : words, filled: filled || tapped, dashed: dashed, pulsing: tapped, reserve: sendingWords)
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(sending == nil)
+        .disabled(off)
+        .opacity(off ? 0.45 : (sending != nil && !tapped ? 0.45 : 1))
+        .accessibilityIdentifier(id)
+    }
 }
 
 /// The spec box: a row each of a role and its model, or of 模型 and the model, 加入群聊 and the channel.
@@ -143,15 +160,14 @@ struct CreateSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if changing { changeField }
-            pills
-            if !changing, card.change != nil {
-                Button { changing = true; focused = true } label: {
-                    Text(L("改一下…")).font(.system(size: 15)).foregroundStyle(Color.madFg2)
-                        .frame(maxWidth: .infinity, minHeight: 40).contentShape(Rectangle())
+            CreateChips(card: card, sending: sending, changing: changing, canSend: !trimmed.isEmpty) { t in
+                switch t {
+                case .allow: if let a = card.allow { sending = .allow; act(a, nil) }
+                case .deny: if let d = card.deny { sending = .deny; act(d, nil) }
+                case .change: changing = true; focused = true
+                case .cancel: changing = false; words = ""
+                case .send: send()
                 }
-                .buttonStyle(.plain)
-                .disabled(sending != nil)
-                .accessibilityIdentifier("create.change")
             }
         }
     }
@@ -166,34 +182,6 @@ struct CreateSheet: View {
             .accessibilityIdentifier("create.field")
     }
 
-    private var pills: some View {
-        HStack(spacing: 10) {
-            if changing {
-                Button { changing = false; words = "" } label: { Text(L("取消")) }
-                    .buttonStyle(CreatePill(filled: false)).disabled(sending != nil)
-                    .accessibilityIdentifier("create.cancel")
-                Button { send() } label: { Text(sending == .send ? CreateSending.send.words : L("发送")) }
-                    .buttonStyle(CreatePill(filled: true))
-                    .disabled(sending != nil || trimmed.isEmpty)
-                    .createPulse(sending == .send)
-                    .accessibilityIdentifier("create.send")
-            } else {
-                if let deny = card.deny {
-                    Button { sending = .deny; act(deny, nil) } label: { Text(sending == .deny ? CreateSending.deny.words : L("拒绝")) }
-                        .buttonStyle(CreatePill(filled: false)).disabled(sending != nil)
-                        .createPulse(sending == .deny)
-                        .accessibilityIdentifier("create.deny")
-                }
-                if let allow = card.allow {
-                    Button { sending = .allow; act(allow, nil) } label: { Text(sending == .allow ? CreateSending.allow.words : L("允许")) }
-                        .buttonStyle(CreatePill(filled: true)).disabled(sending != nil)
-                        .createPulse(sending == .allow)
-                        .accessibilityIdentifier("create.allow")
-                }
-            }
-        }
-    }
-
     private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func send() {
@@ -203,20 +191,6 @@ struct CreateSheet: View {
     }
 }
 
-/// A 50pt pill of the card: 允许 filled black, the others outlined; dimmed while another one is being answered.
-private struct CreatePill: ButtonStyle {
-    let filled: Bool
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 17, weight: .semibold)).lineLimit(1)
-            .foregroundStyle(filled ? Color.madPaper : Color.madFg)
-            .frame(maxWidth: .infinity, minHeight: 50).padding(.horizontal, 12)
-            .background(filled ? Color.madFg : Color.madPaper, in: Capsule())
-            .overlay(Capsule().strokeBorder(filled ? Color.madFg : Color.madLine2, lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
 #endif
 
 private struct CreateHeightKey: PreferenceKey {
@@ -227,8 +201,8 @@ private struct CreateHeightKey: PreferenceKey {
 // MARK: the Mac's card
 
 #if os(macOS)
-/// The Mac's confirm card (the ask card's look): the asker's avatar and the head in an amber bar, the body, the acts with the keys named
-/// at the right (Return allows, Esc denies).
+/// The Mac's confirm card, the live ask card's look (`AskCardView`): a floating white card, the head in amber words, the body,
+/// the chips with the keys named at the right (Return allows, Esc denies).
 struct CreateCardView: View {
     let card: CreateCard
     let act: (String, String?) -> Void
@@ -238,17 +212,13 @@ struct CreateCardView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                CharacterView(id: card.askerID, kind: card.askerKind, state: .needsYou, size: 18)
-                Text(card.head).lineLimit(1)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(card.head).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.madWait)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                if !card.waited.isEmpty { Text(card.waited).font(.mad(11.5)).fontWeight(.regular).foregroundStyle(Color.madFg3) }
+                if !card.waited.isEmpty { Text(card.waited).font(.system(size: 14)).foregroundStyle(Color.madFg3) }
             }
-            .font(.mad(12.5, weight: .semibold)).foregroundStyle(Color.madWait)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.madWaitBg)
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(card.name).font(.mad(15, weight: .semibold)).foregroundStyle(Color.madFg).lineLimit(1)
@@ -261,70 +231,74 @@ struct CreateCardView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .bottom) { Rectangle().fill(Color.madLine).frame(height: 1) }
-            acts.padding(.horizontal, 12).padding(.vertical, 9)
+            acts
         }
-        .background(Color.madPaper)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.madWait.opacity(0.45), lineWidth: 1))
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 14)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color.macFloatFill, in: RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Mac.cardRadius, style: .continuous).strokeBorder(Color.madLine, lineWidth: 1))
+        .shadow(color: Color(red: 15 / 255, green: 18 / 255, blue: 30 / 255).opacity(0.12), radius: 17, x: 0, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
         .accessibilityIdentifier("create.card")
     }
 
     @ViewBuilder private var acts: some View {
-        if changing {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            if changing {
                 TextField(L("告诉它要改什么"), text: $words, axis: .vertical)
-                    .lineLimit(1...4).textFieldStyle(.plain).font(.mad(13)).focused($focused)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Color.madRaise, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .lineLimit(1...4).textFieldStyle(.plain).font(MadType.detail).focused($focused)
+                    .padding(.horizontal, 13).padding(.vertical, 9)
+                    .background(Color.madRaise, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     .disabled(sending != nil).onSubmit(send)
                     .accessibilityIdentifier("create.field")
-                HStack(spacing: 8) {
-                    Button(sending == .send ? CreateSending.send.words : L("发送"), action: send).buttonStyle(.mad(.primary))
-                        .disabled(sending != nil || trimmed.isEmpty).createPulse(sending == .send)
-                        .accessibilityIdentifier("create.send")
-                    Button(L("取消")) { changing = false; words = "" }.buttonStyle(.mad())
-                        .keyboardShortcut(.cancelAction).disabled(sending != nil)
-                        .accessibilityIdentifier("create.cancel")
+            }
+            HStack(alignment: .top, spacing: 8) {
+                CreateChips(card: card, sending: sending, changing: changing, canSend: !trimmed.isEmpty) { t in
+                    switch t {
+                    case .allow: if let a = card.allow { sending = .allow; act(a, nil) }
+                    case .deny: if let d = card.deny { sending = .deny; act(d, nil) }
+                    case .change: changing = true; focused = true
+                    case .cancel: changing = false; words = ""
+                    case .send: send()
+                    }
+                }
+                if !changing {
+                    Spacer(minLength: 8)
+                    HStack(spacing: 14) {
+                        if card.allow != nil { hint("⏎", L("允许")) }
+                        if card.deny != nil { hint("esc", L("拒绝")) }
+                    }
+                    .font(.system(size: 13.5)).foregroundStyle(Color.madFg3).fixedSize().frame(minHeight: 36).accessibilityHidden(true)
                 }
             }
-        } else {
-            HStack(alignment: .center, spacing: 8) {
-                if let allow = card.allow {
-                    Button(sending == .allow ? CreateSending.allow.words : L("允许")) { sending = .allow; act(allow, nil) }
-                        .buttonStyle(.mad(.primary)).disabled(sending != nil).createPulse(sending == .allow)
-                        .accessibilityIdentifier("create.allow")
-                }
-                if let deny = card.deny {
-                    Button(sending == .deny ? CreateSending.deny.words : L("拒绝")) { sending = .deny; act(deny, nil) }
-                        .buttonStyle(.mad()).disabled(sending != nil).createPulse(sending == .deny)
-                        .accessibilityIdentifier("create.deny")
-                }
-                if card.change != nil {
-                    Button(L("改一下…")) { changing = true; focused = true }.buttonStyle(.mad()).disabled(sending != nil)
-                        .accessibilityIdentifier("create.change")
-                }
-                Spacer(minLength: 8)
-                HStack(spacing: 4) {
-                    if card.allow != nil { Kbd("⏎"); Text(L("允许")) }
-                    if card.deny != nil { Kbd("esc"); Text(L("拒绝")) }
-                }
-                .font(.mad(11.5)).foregroundStyle(Color.madFg3).fixedSize().accessibilityHidden(true)
+        }
+        .background {
+            // Return allows and Esc denies, as the hint says; with the field open Esc cancels it (a focused field takes its own Return first)
+            if !changing, let allow = card.allow {
+                Button("") { sending = .allow; act(allow, nil) }.keyboardShortcut(.defaultAction)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
             }
-            .background {
-                if let allow = card.allow {
-                    Button("") { sending = .allow; act(allow, nil) }.keyboardShortcut(.defaultAction)
-                        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
-                }
-                if let deny = card.deny {
-                    Button("") { sending = .deny; act(deny, nil) }.keyboardShortcut(.cancelAction)
-                        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
-                }
+            if !changing, let deny = card.deny {
+                Button("") { sending = .deny; act(deny, nil) }.keyboardShortcut(.cancelAction)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
             }
+            if changing {
+                Button("") { changing = false; words = "" }.keyboardShortcut(.cancelAction)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
+            }
+        }
+    }
+
+    private func hint(_ key: String, _ words: String) -> some View {
+        HStack(spacing: 5) {
+            Text(key)
+                .font(.system(size: 11, design: .monospaced))
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.madLine2, lineWidth: 1))
+            Text(words)
         }
     }
 
