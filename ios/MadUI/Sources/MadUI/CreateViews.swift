@@ -214,16 +214,11 @@ struct CreateCardView: View {
     let card: CreateCard
     let act: (String, String?) -> Void
     @State private var sending: CreateSending?
-    @State private var changing: Bool
+    @State private var changing = false
     @State private var words = ""
     @FocusState private var focused: Bool
-
-    /// `opensChange` shows the card with its change field already open (for a picture of that state).
-    init(card: CreateCard, act: @escaping (String, String?) -> Void, opensChange: Bool = false) {
-        self.card = card
-        self.act = act
-        _changing = State(initialValue: opensChange)
-    }
+    /// A text field outside the card (the composer, a search) has the keyboard: the card has no keys then.
+    @State private var textFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -262,6 +257,7 @@ struct CreateCardView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityLabel)
         .accessibilityIdentifier("create.card")
+        .watchesTextFocus($textFocused)
         .task(id: sending) {
             guard sending != nil else { return }
             try? await Task.sleep(for: .seconds(8))
@@ -289,7 +285,7 @@ struct CreateCardView: View {
                     case .send: send()
                     }
                 }
-                if !changing {
+                if !changing, !textFocused {
                     Spacer(minLength: 8)
                     HStack(spacing: 14) {
                         if card.allow != nil { hint("⏎", L("允许")) }
@@ -301,11 +297,13 @@ struct CreateCardView: View {
         }
         .background {
             // Return allows and Esc denies, as the hint says; with the field open Esc cancels it (a focused field takes its own Return first)
-            if !changing, let allow = card.allow {
+            // The keys are not there at all while another text field has the keyboard (a Return typed in the composer
+            // would otherwise allow, and so create, what the card asks): the shortcut is left out, not guarded.
+            if !changing, !textFocused, let allow = card.allow {
                 Button("") { sending = .allow; act(allow, nil) }.keyboardShortcut(.defaultAction)
                     .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
             }
-            if !changing, let deny = card.deny {
+            if !changing, !textFocused, let deny = card.deny {
                 Button("") { sending = .deny; act(deny, nil) }.keyboardShortcut(.cancelAction)
                     .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true).disabled(sending != nil)
             }

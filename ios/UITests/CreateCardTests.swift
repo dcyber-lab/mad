@@ -101,7 +101,8 @@ class CreateChangeTests: CreateCardCase {
         XCTAssertGreaterThanOrEqual(card.frame.minY, element("群信息").firstMatch.frame.maxY, "the card runs up under the head")
         XCTAssertLessThanOrEqual(control("create.field").frame.maxY, keyboardTop, "the field is under the keyboard")
         XCTAssertLessThanOrEqual(control("create.send").frame.maxY, keyboardTop, "发送 is under the keyboard")
-        XCTAssertFalse(elements(containing: "发消息给").firstMatch.exists, "the composer is still drawn under the card")
+        XCTAssertFalse(app.textFields.matching(NSPredicate(format: "placeholderValue CONTAINS %@", "发消息给")).firstMatch.exists,
+                       "the composer is still on screen under the card")
         control("create.send").tap()
         let note = control("create.note")
         XCTAssertTrue(note.waitForExistence(timeout: 15), "no grey line after 发送")
@@ -116,6 +117,27 @@ class CreateChangeTests: CreateCardCase {
         XCTAssertTrue(control("create.field").waitForExistence(timeout: 5))
         control("create.cancel").tap()
         XCTAssertTrue(control("create.allow").waitForExistence(timeout: 5), "cancel did not go back to the card's pills")
+    }
+}
+
+class CreateComposerKeptTests: CreateCardCase {
+    /// 改一下… takes the composer out of sight, not out of the tree: what was being written in it (and its pictures) is there
+    /// after 取消.
+    func testWhatWasWrittenInTheComposerSurvivesTheChangeField() {
+        openChannel()
+        XCTAssertTrue(card.waitForExistence(timeout: 15))
+        let composer = app.textFields.matching(NSPredicate(format: "placeholderValue CONTAINS %@", "发消息给")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 10), "no composer")
+        composer.tap()
+        composer.typeText("半截消息")
+        control("create.change").tap()
+        XCTAssertTrue(control("create.field").waitForExistence(timeout: 5))
+        XCTAssertFalse(composer.exists, "the composer is still on screen under the card")
+        control("create.cancel").tap()
+        XCTAssertTrue(control("create.allow").waitForExistence(timeout: 5))
+        let kept = app.textFields.matching(NSPredicate(format: "value CONTAINS %@", "半截消息")).firstMatch
+        XCTAssertTrue(kept.waitForExistence(timeout: 5), "the half-written message is gone")
+        shot("the half-written message kept")
     }
 }
 
