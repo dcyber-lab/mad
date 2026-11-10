@@ -1,0 +1,54 @@
+{
+  "name": "pstack",
+  "description": "pstack: architect → poteto-mode → interrogate (needs the pstack skills; they start more agents of their own)",
+  "roles": [
+    {"name": "architect", "agent": "claude:opus@high", "skill": "pstack:architect"},
+    {"name": "builder", "label": "implementer", "agent": "claude:sonnet@high", "skill": "pstack:poteto-mode"},
+    {"name": "interrogator", "agent": "claude:opus@high", "skill": "pstack:interrogate"}
+  ],
+  "steps": [
+    {
+      "name": "design",
+      "role": "architect",
+      "gate": true,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Run the skill's Ground and Sketch phases, then stop before Implement: the implementer fills the sketch in. Commit the sketch (the caller's usage, types, signatures and module shape, with not-implemented bodies) as one commit, and write its rationale to {{run}}/design.md."
+      ]
+    },
+    {
+      "name": "implement",
+      "label": "implementation",
+      "role": "builder",
+      "ask": ["architect"],
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Take the playbook that fits (Feature, or Bug fix for a defect). The architect has done its how and architect steps: start from {{run}}/design.md and the sketch it committed, and fill the sketch in. Skip Opening a PR: the interrogator takes the change next. Verify it on the real surface, change nothing in {{run}}/, and commit in small ordered commits."
+      ],
+      "again": [
+        "Interrogation findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Fix each at its root cause, or say why it breaks nothing. Verify again, and commit."
+      ]
+    },
+    {
+      "name": "review",
+      "label": "interrogation",
+      "role": "interrogator",
+      "review": true,
+      "back": "implement",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "The scope is git diff {{base}}, uncommitted work included; the intent is the task and {{run}}/design.md. Change no file in this worktree: repros stay in your adversaries' worktrees or a temporary directory. Any verified finding means CHANGES."
+      ],
+      "again": [
+        "The implementer has worked through your findings. Interrogate git diff {{base}} again: are they fixed, and does anything new break? Any verified finding means CHANGES."
+      ]
+    }
+  ]
+}

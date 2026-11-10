@@ -21,7 +21,8 @@ and write the file; mad checks it and runs it.
    Where they leave something open, take the defaults below and say so.
 2. **See what is there.** `mad run flow ls` lists the flows this project
    can use; `mad run flow show design-impl-review` prints the default
-   one, a good start. `mad run flow agents` lists the agents this machine
+   one, a good start; `mad run flow show pstack` one whose roles work by
+   pstack's skills. `mad run flow agents` lists the agents this machine
    can run, with their efforts.
 3. **Write the file**: `.mad/flows/<name>.json` at the repository's root
    for the project (and the team: it can be committed), or
@@ -75,6 +76,7 @@ use the one they use.
 | `roles[].label` | what the sidebar calls it (default: `name`) |
 | `roles[].agent` | `claude:opus`, `claude:sonnet`, `claude:haiku`, `codex` (the model its config sets), `codex:<model>`; add `@effort`: `claude:opus@high`, `codex:gpt-6-sol@xhigh` |
 | `roles[].read_only` | looks and changes nothing: it can only review |
+| `roles[].skill` | a skill the role works by: `pstack:poteto-mode` (`plugin:name` for a claude plugin's, else the skill's name). The run does not start when the role's agent lacks it |
 | `steps[].name`, `label`, `role` | the step, what to call it, who does it |
 | `steps[].prompt` | what the step is to do: a string, or a list of lines |
 | `steps[].again` | the prompt when the step runs again after a review asked for changes (mad has a default) |
@@ -96,6 +98,10 @@ round (both for `again`).
   and for a step with `ask` how to ask (`QUESTION(@role): ...`).
 - A header naming the run, the step and the role, and that the work is
   handed on through the files in `{{run}}/`.
+- For a role with a `skill`: where its agent finds the skill's SKILL.md,
+  to read and follow it, and that the run wins where they differ (the
+  worktree alone, no push or pull request, how to end). A prompt names
+  the skill's parts to use or skip, not its path.
 - Sending a review's findings back, waiting for the user (permission
   prompts, gates, budget, the five-hour window), notifications, cost, and
   compacting a role whose context passed 150k tokens.

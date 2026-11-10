@@ -382,6 +382,9 @@ func (b *builder) create(r create.Request) {
 			if x.ReadOnly {
 				line += " (read only)"
 			}
+			if x.Skill != "" {
+				line += ", skill " + x.Skill
+			}
 			lines = append(lines, line)
 			if x.Brief != "" {
 				lines = append(lines, "  "+strings.ReplaceAll(strings.TrimSpace(x.Brief), "\n", "\n  "))

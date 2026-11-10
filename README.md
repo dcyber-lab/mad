@@ -865,7 +865,8 @@ form (`--agent builder=codex:gpt-6-sol@xhigh`, `--perm allowlist`); `mad run ls`
 ### Flows
 
 A flow is a run's template: its roles, who plays each, and its steps. mad
-comes with two (`design-impl-review`, the default, and `impl-review`);
+comes with three (`design-impl-review`, the default, `impl-review` and
+`pstack`);
 more are JSON files in a project's `.mad/flows/` (shared with whoever
 clones it) or in `~/.config/mad/flows/` (yours), and one named as an
 existing flow takes its place. The form lists them all.
@@ -881,6 +882,23 @@ A step says only what to do; mad adds how to end the reply (`DONE`,
 `VERDICT: ...`, `QUESTION(@role): ...`). Steps run one at a time; a
 review sends its changes back to an earlier step. A run keeps the flow it
 started with, whatever becomes of the file.
+
+A role can work by a skill: `"skill": "pstack:poteto-mode"` (the skill's
+name, or `plugin:name` for a claude plugin's). Each message the role gets
+then says where its agent finds the skill's SKILL.md, to read it first
+and follow it, and that the run wins where the two differ: the worktree
+alone, no push or pull request, the reply's end. claude looks in the
+project's `.claude/skills`, then `~/.claude/skills`, then its installed
+plugins; codex in `~/.codex/skills`, by the name after the colon. A run
+whose agents lack a role's skill does not start.
+
+The built-in `pstack` flow works the way of
+[pstack](https://github.com/cursor/plugins/tree/main/pstack)'s skills: an
+architect (claude opus, `architect`: ground the task, sketch it more than
+once, commit the sketch) → an implementer (claude sonnet, `poteto-mode`)
+→ an interrogator (claude opus, `interrogate`: only findings a run
+proves). Those skills start agents of their own, on the models pstack's
+`/setup-pstack` chose, so such a run costs several times a plain one.
 
 You need not write flows yourself: `mad skill install` puts the
 `mad-flow` skill in `~/.claude/skills/`, and claude then designs a flow
@@ -1153,7 +1171,9 @@ the lead, and stay: they talk on the bus and hand work to each other with
 `bus_handoff` (a run, above, pushes one task through steps instead). A
 template names the roles; the built-in `dev` has an architect (claude
 opus, the lead), a builder (claude sonnet) and a reviewer (codex, read
-only).
+only). The built-in `pstack` has an architect (claude opus, the lead) and
+a builder (claude sonnet) who work by pstack's `poteto-mode`, and an
+interrogator (claude opus) who works by its `interrogate`.
 
 ```sh
 mad team ls                         # templates and where each is from; running teams
@@ -1177,8 +1197,10 @@ mad team check FILE                 # check a template file
 - Templates are JSON files, in `~/.config/mad/teams/` and a project's
   `.mad/teams/`, a later one replacing an earlier one of its name:
   `{"name", "description", "topic", "roles": [{"name", "agent", "lead",
-  "read_only", "brief"}], "kickoff"}`; `{{goal}}` fills the topic and
-  the kickoff. Exactly one role leads.
+  "read_only", "brief", "skill"}], "kickoff"}`; `{{goal}}` fills the
+  topic and the kickoff. Exactly one role leads. A role's `skill` is a
+  run role's (see Flows): its brief says where its agent finds the skill,
+  and the team does not start while an agent lacks it.
 - A role's `brief` reaches the agent in its `mad mcp` instructions,
   with its team, channel, lead and its teammates' first lines, at every
   start and resume: it holds across sleep, restarts and mad rebuilds.
