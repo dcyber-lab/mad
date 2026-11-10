@@ -178,16 +178,24 @@ public enum AgentMapping {
         return mine.first { $0.blocks } ?? mine.first
     }
 
+    /// What the card's head says, in words (the server's context is a tool's code name, or "needs you"): a question 想问你,
+    /// a command 想运行一条命令, any other tool 想用 Edit, and what the server only says needs the person 在等你.
+    static func askTitle(_ item: InboxItem) -> String {
+        if item.kind == "question" { return L("想问你") }
+        guard item.kind == "permission" else { return L("在等你") }
+        let tool = item.context.flatMap { $0.isEmpty || $0 == "needs you" ? nil : $0 } ?? item.title
+        if item.mono || tool == "Bash" { return L("想运行一条命令") }
+        return tool.isEmpty ? L("在等你") : Lf("想用 %@", tool)
+    }
+
     static func ask(for id: String, deck: Deck, now: Date = Date()) -> AskCard? {
         guard let item = item(for: id, deck: deck) else { return nil }
         let acts = ActWords.acts(of: item)
         guard !acts.isEmpty else { return nil }
-        let title = item.context.flatMap { $0.isEmpty ? nil : $0 } ?? item.title
         var detail = item.text ?? ""
         if item.full, let body = item.body, !body.isEmpty { detail += (detail.isEmpty ? "" : "\n") + body }
         let permission = item.kind == "permission"
-        // a command is "想运行一条命令" (the card's head), any other tool "想用 Edit"
-        let head = permission ? (title == "Bash" || item.mono ? L("想运行一条命令") : Lf("想用 %@", title)) : title
+        let head = askTitle(item)
         if permission && item.mono && !detail.isEmpty && !detail.hasPrefix("$ ") { detail = "$ " + detail }
         return AskCard(id: item.key, title: head, detail: detail, mono: item.mono, acts: acts,
                        waited: item.since.map { Lf("等了 %@", MadWords.age(now.timeIntervalSince($0))) } ?? "",

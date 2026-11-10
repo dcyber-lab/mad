@@ -1146,9 +1146,11 @@ function drawAgentMenu(w) {
   const c = busChannel(cv.open);
   const members = new Set(((c && c.members) || []).map((m) => m.id));
   const q = w.query.toLowerCase();
-  const all = [...agents.values()].filter((a) => a.chat && (!a.role || a.team))
+  // a group offers its members, whatever their role says; a channel with none, the agents that can chat
+  const pool = members.size ? [...members].map((id) => agents.get(id)).filter(Boolean) : [...agents.values()].filter((a) => a.chat && (!a.role || a.team));
+  const all = pool
     .filter((a) => !q || label(a).toLowerCase().includes(q) || a.id.startsWith(q))
-    .sort((x, y) => (members.has(y.id) - members.has(x.id)) || label(x).localeCompare(label(y)));
+    .sort((x, y) => label(x).localeCompare(label(y)));
   if (!all.length) return closeMenu();
   if (menu.query !== w.query || !menu.files) menu.sel = 0;
   menu.items = all.map((a) => ({ path: label(a), dir: false }));
@@ -1158,7 +1160,7 @@ function drawAgentMenu(w) {
   const box = $("#qmenu");
   box.replaceChildren(...all.map((a, i) => {
     const li = el("li", "file");
-    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", members.has(a.id) ? T("已在群里", "Already in the group") : `${a.kind} · ${a.project.name}`));
+    li.append(avatar(a, true), el("span", "n", label(a)), el("span", "d", a.role ? `${a.role} · ${a.kind}` : `${a.kind} · ${a.project.name}`));
     li.onmousedown = (e) => {
       e.preventDefault();
       menu.sel = i;
