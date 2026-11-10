@@ -18,7 +18,7 @@ func stateOf(t *testing.T, ch string, seq int) Receipt {
 }
 
 // A message of the person's wakes who it names; its receipt goes from
-// waiting to delivered, read and replied as the cursors and the agent's
+// waiting to read (delivered: the digest carries it whole) and replied as the cursors and the agent's
 // words move; a line with no @ wakes nobody.
 func TestReceipts(t *testing.T) {
 	setup(t)
@@ -45,13 +45,13 @@ func TestReceipts(t *testing.T) {
 	want(one, RcWaiting)
 	want(all, RcWaiting, RcWaiting)
 
-	// Delivered: the agent's digest covers it.
+	// Delivered: the agent's digest carries it whole, so it is read.
 	if err := locked(func() error {
 		return setCursor(idArch, "ops", func(c *cursor) { c.Delivered = one })
 	}); err != nil {
 		t.Fatal(err)
 	}
-	want(one, RcDelivered)
+	want(one, RcRead)
 	want(all, RcWaiting, RcWaiting)
 
 	// Read.
