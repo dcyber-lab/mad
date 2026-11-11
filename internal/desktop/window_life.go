@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 )
 
 // windows knows which app windows are open: each holds one websocket to
@@ -74,7 +76,7 @@ func (s *Server) window(w http.ResponseWriter, r *http.Request) {
 // opened its window on this server and waits for it to close.
 func (s *Server) windowState(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]bool{"open": s.wins.Open(r.URL.Query().Get("id"))})
+	_ = json.NewEncoder(w).Encode(api.WindowState{Open: s.wins.Open(r.URL.Query().Get("id"))})
 }
 
 // Windows' timing: how long a window may take to show its first page,

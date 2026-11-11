@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/state"
 )
 
@@ -25,10 +26,7 @@ const (
 	filesFor   = 15 * time.Second // a listing is kept
 )
 
-type fileEntry struct {
-	Path string `json:"path"` // from the directory, "/"-separated
-	Dir  bool   `json:"dir,omitempty"`
-}
+type fileEntry = api.FileEntry
 
 // fileCache keeps each directory's listing a while: one is asked for at
 // each key typed.

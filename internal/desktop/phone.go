@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/phone"
 )
 
@@ -80,7 +81,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, map[string]string{"id": id, "machine": machine()})
+	reply(w, api.Paired{ID: id, Machine: machine()})
 }
 
 // phoneDevices lists the paired phones (GET) or removes one (DELETE ?id=).
@@ -91,20 +92,14 @@ func (s *Server) phoneDevices(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	type dev struct {
-		ID       string    `json:"id"`
-		Name     string    `json:"name"`
-		Created  time.Time `json:"created"`
-		LastSeen time.Time `json:"last_seen"`
-	}
-	out := []dev{}
+	out := []api.PhoneDevice{}
 	devs, err := phone.Devices()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	for _, d := range devs {
-		out = append(out, dev{d.ID, d.Name, d.Created, d.LastSeen})
+		out = append(out, api.PhoneDevice{ID: d.ID, Name: d.Name, Created: d.Created, LastSeen: d.LastSeen})
 	}
 	reply(w, out)
 }

@@ -1,12 +1,14 @@
 package deck
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
@@ -14,8 +16,12 @@ import (
 // processes lists every process as pid, parent pid, process group and
 // command name; replaceable in tests, as is hangUp.
 var (
-	processes = func() ([]byte, error) { return exec.Command("ps", "-axo", "pid=,ppid=,pgid=,comm=").Output() }
-	hangUp    = hangUpGroup
+	processes = func() ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,pgid=,comm=").Output()
+	}
+	hangUp = hangUpGroup
 )
 
 // BusyError keeps an agent awake: a command runs under it in a shell, or

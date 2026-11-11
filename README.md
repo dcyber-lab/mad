@@ -5,10 +5,16 @@
 [![CI](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml/badge.svg)](https://github.com/dcyber-lab/mad/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Run many coding-agent TUIs (Claude Code, Codex, pi, Google's Antigravity
-CLI, or a plain shell) side by
-side in one terminal, organized by project. A project sidebar stays on the
-left; the selected agent's real TUI fills the right.
+mad orchestrates the AI agents on your desktop. It runs Claude Code, Codex,
+pi, Google's Antigravity CLI, or any other agent CLI side by side, organized
+by project, and has them work together: a [run](#runs) takes a task through
+agents in roles (one designs, one implements, one reviews), a
+[team](#teams) keeps a group of them on a project, and they hand work to
+each other and to you over [the bus](#talking-on-the-bus).
+
+You watch and steer from where you are: the deck in a terminal (a project
+sidebar on the left, the selected agent's real TUI on the right), a
+[desktop window](#desktop-window-preview), or [your phone](#on-your-phone).
 
 ![mad demo: a sidebar of projects and agents on the left, the selected agent's TUI on the right](docs/demo.gif)
 

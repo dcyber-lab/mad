@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -20,6 +21,13 @@ type pendingSkill struct {
 type approvedSkill struct {
 	skill.Skill
 	ProjectName string `json:"project_name,omitempty"`
+}
+
+// skillList answers GET /api/skills. It stays out of package api because
+// its entries nest package skill's types.
+type skillList struct {
+	Pending  []pendingSkill  `json:"pending"`
+	Approved []approvedSkill `json:"approved"`
 }
 
 // skills answers with the pending skills and the approved ones: of the
@@ -48,10 +56,7 @@ func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
 		}
 		return filepath.Base(path)
 	}
-	out := struct {
-		Pending  []pendingSkill  `json:"pending"`
-		Approved []approvedSkill `json:"approved"`
-	}{Pending: []pendingSkill{}, Approved: []approvedSkill{}}
+	out := skillList{Pending: []pendingSkill{}, Approved: []approvedSkill{}}
 	for _, p := range pending {
 		pn := ""
 		if p.Project != "" {
@@ -101,7 +106,7 @@ func (s *Server) skillApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changed()
-	reply(w, map[string]bool{"ok": true})
+	reply(w, api.OK{OK: true})
 }
 
 func (s *Server) skillDiscard(w http.ResponseWriter, r *http.Request) {
@@ -116,5 +121,5 @@ func (s *Server) skillDiscard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changed()
-	reply(w, map[string]bool{"ok": true})
+	reply(w, api.OK{OK: true})
 }

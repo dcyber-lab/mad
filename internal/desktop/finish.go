@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -75,12 +76,7 @@ var finishRun = func(ctx context.Context, dir, command string) (string, error) {
 	return string(out), err
 }
 
-type finishAct struct {
-	Name string `json:"name"`
-	// Kind is a built-in action's kind, for the page to name it in its
-	// own words: push, pr, rebase, merge; empty for the user's own.
-	Kind string `json:"kind,omitempty"`
-}
+type finishAct = api.FinishAction
 
 // finishKind tells which built-in action name is.
 func finishKind(name string) string {
@@ -107,7 +103,7 @@ func (s *Server) finish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		reply(w, map[string]any{"error": err.Error(), "actions": []finishAct{}})
+		reply(w, api.FinishFailed{Actions: []finishAct{}, Error: err.Error()})
 		return
 	}
 	acts := finishActions(c)
@@ -116,7 +112,7 @@ func (s *Server) finish(w http.ResponseWriter, r *http.Request) {
 		for i, a := range acts {
 			list[i] = finishAct{Name: a.Name, Kind: finishKind(a.Name)}
 		}
-		reply(w, map[string]any{"branch": c.Branch, "base": c.Base, "actions": list})
+		reply(w, api.FinishMenu{Actions: list, Base: c.Base, Branch: c.Branch})
 		return
 	}
 	i, err := strconv.Atoi(r.URL.Query().Get("i"))
@@ -133,9 +129,9 @@ func (s *Server) finish(w http.ResponseWriter, r *http.Request) {
 	rctx, rcancel := context.WithTimeout(context.Background(), finishTimeout)
 	defer rcancel()
 	out, err := finishRun(rctx, c.Dir, acts[i].Command)
-	res := map[string]any{"ok": err == nil, "output": tail(out, 4000)}
+	res := api.FinishResult{OK: err == nil, Output: tail(out, 4000)}
 	if err != nil {
-		res["error"] = err.Error()
+		res.Error = err.Error()
 	}
 	reply(w, res)
 }

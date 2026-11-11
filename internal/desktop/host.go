@@ -224,7 +224,18 @@ func (s *Server) hostWS(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
-			conns <- conn
+			// The page may never send a command, so nothing may have
+			// taken the last connection (closed by now): replace it
+			// rather than wait behind it for good.
+			select {
+			case conns <- conn:
+			default:
+				select {
+				case <-conns:
+				default:
+				}
+				conns <- conn
+			}
 			sc := bufio.NewScanner(conn)
 			sc.Buffer(make([]byte, 64<<10), 64<<20)
 			for sc.Scan() {

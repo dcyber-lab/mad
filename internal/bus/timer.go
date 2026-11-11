@@ -153,10 +153,10 @@ func changeTimers(fn func(ts *[]Timer) (finished []Timer, err error)) error {
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(filepath.Dir(timerArchive()), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(timerArchive()), 0o700); err != nil {
 				return err
 			}
-			f, err := os.OpenFile(timerArchive(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+			f, err := os.OpenFile(timerArchive(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 			if err != nil {
 				return err
 			}

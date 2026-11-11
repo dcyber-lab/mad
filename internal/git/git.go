@@ -4,6 +4,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Info summarizes a checkout for display.
@@ -21,10 +23,17 @@ type Info struct {
 	Ahead  int    // commits not on the upstream
 }
 
+// statusTimeout is how long Status waits for git.
+const statusTimeout = 10 * time.Second
+
 // Status reads dir's checkout; ok is false outside a git work tree.
 // --no-optional-locks keeps a background read from touching the index.
 func Status(dir string) (info Info, ok bool) {
-	out, err := exec.Command("git", "--no-optional-locks", "-C", dir, "status", "--porcelain=v1", "-b").Output()
+	// Bounded: a status that hangs (a dead network mount) would stop the
+	// sidebar's git poll, which waits for the last one to return.
+	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "--no-optional-locks", "-C", dir, "status", "--porcelain=v1", "-b").Output()
 	if err != nil {
 		return Info{}, false
 	}

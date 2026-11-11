@@ -6,6 +6,7 @@ package discover
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -63,7 +64,7 @@ var (
 
 // Process inspection, replaceable in tests.
 var (
-	listProcesses = func() ([]byte, error) { return exec.Command("ps", "-axo", "pid=,tty=,args=").Output() }
+	listProcesses = func() ([]byte, error) { return bounded("ps", "-axo", "pid=,tty=,args=") }
 	processCwd    = lsofCwd
 	openFiles     = lsofFiles
 )
@@ -333,8 +334,17 @@ func ScanExternal(deckTTYs, taken map[string]bool) []External {
 	return kept
 }
 
+// bounded runs a command and gives up on it after five seconds: a ps or
+// lsof that hangs (a stale mount) would stop the scan for good, since the
+// sidebar waits for the last scan before starting the next.
+func bounded(name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
+}
+
 func lsofCwd(pid int) string {
-	out, err := exec.Command("lsof", "-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn").Output()
+	out, err := bounded("lsof", "-b", "-w", "-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn")
 	if err != nil {
 		return ""
 	}
@@ -347,7 +357,7 @@ func lsofCwd(pid int) string {
 }
 
 func lsofFiles(pid int) []string {
-	out, err := exec.Command("lsof", "-p", strconv.Itoa(pid), "-Fn").Output()
+	out, err := bounded("lsof", "-b", "-w", "-p", strconv.Itoa(pid), "-Fn")
 	if err != nil {
 		return nil
 	}
