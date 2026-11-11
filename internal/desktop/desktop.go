@@ -312,7 +312,7 @@ func headers(h http.Handler) http.Handler {
 
 // Serve listens on a free port of 127.0.0.1, calls ready with the page's
 // URL (token included) once it accepts connections, and serves until ctx
-// ends.
+// ends. Its poller has taken its last look by the time it returns.
 func (s *Server) Serve(ctx context.Context, addr string, ready func(url string)) error {
 	if addr == "" {
 		addr = "127.0.0.1:0"
@@ -337,5 +337,17 @@ func (s *Server) Serve(ctx context.Context, addr string, ready func(url string))
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	// The poller ends with ctx too, after the look it is taking: wait for
+	// it, so that a server that returned looks at nothing any more (a
+	// test's would look at the next test's state). Not for a look that
+	// hangs.
+	select {
+	case <-s.poll.stopped:
+	case <-time.After(pollerStopWait):
+	}
 	return nil
 }
+
+// pollerStopWait is how long Serve waits, once it stopped serving, for the
+// poller's last look to end.
+const pollerStopWait = 2 * time.Second
