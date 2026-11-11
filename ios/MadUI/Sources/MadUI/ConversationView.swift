@@ -205,7 +205,7 @@ public struct ConversationView: View {
     private var messages: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: rowGap) {
+                ConvStack(spacing: rowGap) {
                     // consecutive tool calls are one small card
                     ForEach(ConvRow.rows(model.entries)) { row in
                         switch row {
@@ -588,6 +588,23 @@ struct ConvTabs: View {
 }
 
 /// ⋯: 在终端打开 (the agent in mad's terminal deck, for the rare case of claude's own menus) and the page.
+/// The list's rows, one under another. On the Mac all of them are built: a lazy stack under a scroll view anchored at
+/// its bottom re-placed its rows without end as their guessed heights gave way to the real ones (the window hung at
+/// full CPU), and a conversation is a few hundred rows at most (the server sends the last 600 entries). The phone keeps
+/// the lazy one.
+struct ConvStack<Content: View>: View {
+    var spacing: CGFloat
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: spacing) { content }
+        #else
+        LazyVStack(alignment: .leading, spacing: spacing) { content }
+        #endif
+    }
+}
+
 struct ConvMoreMenu: View {
     let actions: ConversationActions
     /// The phone's capsule has no room for it: the menu says it.
