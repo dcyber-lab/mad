@@ -74,7 +74,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, phone.ErrBadCode) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		refuse(w, api.ErrDenied, "forbidden")
 		return
 	}
 	if err != nil {

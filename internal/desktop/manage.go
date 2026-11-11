@@ -74,9 +74,21 @@ func reply(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// fail answers with err and code.
+// fail answers with err and code. A 403 by this way is not the token's
+// fault (api.ErrDenied); a token that is not known is refused by refuse.
 func fail(w http.ResponseWriter, code int, err error) {
+	if code == http.StatusForbidden {
+		refuse(w, api.ErrDenied, err.Error())
+		return
+	}
 	http.Error(w, err.Error(), code)
+}
+
+// refuse answers 403 and says which kind of refusal it is (api.ErrorHeader):
+// every 403 of the server goes through here, so that none is without it.
+func refuse(w http.ResponseWriter, kind, text string) {
+	w.Header().Set(api.ErrorHeader, kind)
+	http.Error(w, text, http.StatusForbidden)
 }
 
 // decode reads the JSON body into v, answering 400 when it is not.

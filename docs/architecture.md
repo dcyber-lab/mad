@@ -150,8 +150,11 @@ layers.
   scenario files. The page's Chrome tests and the apps' UI tests run
   against it, and tests hold its answers, and the apps' own fixture
   files, to the server's types.
-- An error is a status and a line of English text. There are no codes
-  for a client to put its own words to yet.
+- An error is a status and a line of English text. A 403 also says
+  which kind of refusal it is (`X-Mad-Error`): `token`, a token mad does
+  not know, which pairing again puts right, or `denied`, something a
+  good token may not do. The apps act on the kind, not on the text. The
+  other errors have no kinds yet for a client to put its own words to.
 
 ## Three ways agents work together
 

@@ -286,12 +286,12 @@ extension MadClient {
         return r
     }
 
-    /// The server's 403 for a bad token reads "forbidden"; any other 403 (a DM that is not the
-    /// person's) is its own message, so it is not taken for a refused token.
+    /// A 403 that is not a refused token (a DM that is not the person's) is its own message. The server says
+    /// which a 403 is (`isRefusedToken`); one too old to say reads "forbidden" for a bad token.
     static func checkBus(_ data: Data, _ response: URLResponse, _ ok: Set<Int>) throws {
-        if (response as? HTTPURLResponse)?.statusCode == 403 {
+        if let http = response as? HTTPURLResponse, http.statusCode == 403 {
             let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !message.isEmpty && message != "forbidden" { throw ConnectionError.unexpected(message) }
+            if !message.isEmpty && !isRefusedToken(http, message, byText: true) { throw ConnectionError.unexpected(message) }
         }
         try check(data, response, ok)
     }

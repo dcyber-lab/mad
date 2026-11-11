@@ -17,6 +17,23 @@ const Version = 1
 // VersionHeader carries Version.
 const VersionHeader = "X-Mad-API"
 
+// ErrorHeader says, on an answer that refuses (403), which kind of refusal
+// it is, for a client to act on without reading the answer's English.
+// The two are told apart because they end differently: a token mad does
+// not know is put right by pairing again, and nothing else is.
+//
+// An answer without it comes from a mad older than the header.
+const ErrorHeader = "X-Mad-Error"
+
+const (
+	// ErrToken: no token, or not one this mad knows (a device's that was
+	// removed, the master token through a tunnel).
+	ErrToken = "token"
+	// ErrDenied: the token is good, and what was asked is not its to do,
+	// or the code it came with is not good.
+	ErrDenied = "denied"
+)
+
 // OK is the answer of an act that has nothing more to say.
 type OK struct {
 	OK bool `json:"ok"`

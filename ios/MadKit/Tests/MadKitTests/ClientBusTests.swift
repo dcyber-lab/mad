@@ -11,6 +11,11 @@ private func http(_ code: Int) -> URLResponse {
     HTTPURLResponse(url: URL(string: "https://x")!, statusCode: code, httpVersion: nil, headerFields: nil)!
 }
 
+/// A 403 from a mad that says which kind of refusal it is.
+private func refusal(_ kind: String) -> URLResponse {
+    HTTPURLResponse(url: URL(string: "https://x")!, statusCode: 403, httpVersion: nil, headerFields: ["X-Mad-Error": kind])!
+}
+
 private func query(_ r: URLRequest, _ name: String) -> String? {
     URLComponents(url: r.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
 }
@@ -78,5 +83,40 @@ final class ClientBusTests: XCTestCase {
             XCTAssertEqual($0 as? ConnectionError, .conflict("the channel is paused"))
         }
         XCTAssertNoThrow(try MadClient.checkBus(Data(), http(200), [200]))
+    }
+
+    /// A mad that says which kind a 403 is, is taken at its word, whatever the answer reads: only "token" is a
+    /// refused token, which clears what was kept of the Mac and asks the person to pair again.
+    func testA403sKindSaysWhetherTheTokenWasRefused() {
+        // The bus: the kind, not the words.
+        XCTAssertThrowsError(try MadClient.checkBus(Data("that DM is not yours".utf8), refusal("token"), [200])) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
+        XCTAssertThrowsError(try MadClient.checkBus(Data("forbidden\n".utf8), refusal("denied"), [200])) {
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("forbidden"))
+        }
+        // The other answers took every 403 for a refused token.
+        XCTAssertThrowsError(try MadClient.check(Data("forbidden\n".utf8), refusal("token"), [200])) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
+        XCTAssertThrowsError(try MadClient.check(Data("that is not a device's to do".utf8), refusal("denied"), [200])) {
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("that is not a device's to do"))
+        }
+        XCTAssertThrowsError(try MadClient.checkAct(Data("that is not a device's to do".utf8), refusal("denied"))) {
+            XCTAssertEqual($0 as? ConnectionError, .unexpected("that is not a device's to do"))
+        }
+        XCTAssertThrowsError(try MadClient.decode(Data("forbidden".utf8), refusal("denied"))) {
+            XCTAssertNotEqual($0 as? ConnectionError, .refused)
+        }
+        XCTAssertThrowsError(try MadClient.decode(Data("forbidden".utf8), refusal("token"))) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
+        // A mad too old to say: every 403 but the bus's own words is a refused token, as before.
+        XCTAssertThrowsError(try MadClient.check(Data("anything".utf8), http(403), [200])) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
+        XCTAssertThrowsError(try MadClient.checkAct(Data("anything".utf8), http(403))) {
+            XCTAssertEqual($0 as? ConnectionError, .refused)
+        }
     }
 }

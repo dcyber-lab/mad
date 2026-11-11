@@ -42,7 +42,7 @@ func (s *Server) pushSubscribe(w http.ResponseWriter, r *http.Request) {
 	sub.Device = deviceOf(r)
 	if err := phone.SubscribeDevice(sub); err != nil {
 		if errors.Is(err, phone.ErrDeviceGone) {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			refuse(w, api.ErrToken, "forbidden") // removed while it asked: its token is no more
 			return
 		}
 		fail(w, http.StatusBadRequest, err)
