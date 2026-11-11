@@ -1,0 +1,104 @@
+{
+  "name": "pstack-feature",
+  "description": "pstack feature: ground → two sketches (claude, codex) → one design → build → interrogate → audit",
+  "roles": [
+    {"name": "architect", "agent": "$strong", "skill": "pstack:architect"},
+    {"name": "rival", "agent": "$other", "skill": "pstack:architect"},
+    {"name": "builder", "label": "implementer", "agent": "$fast", "skill": "pstack:build"},
+    {"name": "interrogator", "agent": "$strong", "skill": "pstack:interrogate", "no_edits": true},
+    {"name": "auditor", "agent": "$other", "skill": "pstack:audit", "read_only": true}
+  ],
+  "steps": [
+    {
+      "name": "ground",
+      "role": "architect",
+      "expect": {"files": ["{{run}}/ground.md"], "unchanged": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Ground part: say the goal back in your own words, then build the model of the code this task touches. Write it to {{run}}/ground.md. Design nothing yet."
+      ]
+    },
+    {
+      "name": "sketch",
+      "role": "architect",
+      "expect": {"files": ["{{run}}/sketch/architect/rationale.md"], "unchanged": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Sketch part from {{run}}/ground.md: one candidate design, the best you can make. Put its sketch files and rationale.md in {{run}}/sketch/architect/. A second candidate will be sketched apart from yours and the two compared, so design for the task, not for the comparison."
+      ]
+    },
+    {
+      "name": "rival",
+      "label": "second sketch",
+      "role": "rival",
+      "expect": {"files": ["{{run}}/sketch/rival/rationale.md"], "unchanged": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Sketch part: one candidate design, the best you can make. Start from {{run}}/ground.md, and check it against the code where your design leans on it. Put your sketch files and rationale.md in {{run}}/sketch/rival/. Another candidate is in {{run}}/sketch/architect/: do not open it. The two are compared after you are done, and a copy of it is worth nothing."
+      ]
+    },
+    {
+      "name": "design",
+      "role": "architect",
+      "gate": true,
+      "expect": {"files": ["{{run}}/design.md"], "commit": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Choose part with the candidates in {{run}}/sketch/: read the rival's whole, score both, pick the base, graft what is worth it, and screen the result against the red flags. Commit the chosen sketch into the code as one commit (types, signatures and module layout, bodies not implemented), and write {{run}}/design.md by the rationale template, its Decision section filled in."
+      ]
+    },
+    {
+      "name": "build",
+      "label": "implementation",
+      "role": "builder",
+      "ask": ["architect"],
+      "expect": {"commit": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Build the design in {{run}}/design.md against the sketch the architect committed ({{run}}/ground.md says how the code works today). Where the sketch does not fit, ask the architect instead of bending it. Verify on the real surface, and commit in small ordered commits. Change nothing in {{run}}/."
+      ],
+      "again": [
+        "Findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Rerun each finding's command first. Fix each real one at its root cause, and say which did not reproduce or break nothing, and why. Verify again, and commit."
+      ]
+    },
+    {
+      "name": "interrogate",
+      "label": "interrogation",
+      "role": "interrogator",
+      "review": true,
+      "back": "build",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Interrogate git diff {{base}}, uncommitted work included. The intent is the task and {{run}}/design.md. Any finding a run proves means CHANGES."
+      ],
+      "again": [
+        "The implementer has worked through your findings. Rerun each one's command, then interrogate git diff {{base}} again: are they fixed, and does anything new break? Any finding a run proves means CHANGES."
+      ]
+    },
+    {
+      "name": "audit",
+      "role": "auditor",
+      "review": true,
+      "back": "build",
+      "max_rounds": 2,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Audit git diff {{base}}, uncommitted work included, against the task and {{run}}/design.md. At most 5 findings. A traced or ran finding means CHANGES; findings you only suspect do not."
+      ],
+      "again": [
+        "The implementer has worked through your findings. Audit git diff {{base}} again: are they solved, and did the fixes break anything? At most 5. A traced or ran finding means CHANGES."
+      ]
+    }
+  ]
+}

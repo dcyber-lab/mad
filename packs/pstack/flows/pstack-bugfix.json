@@ -1,0 +1,82 @@
+{
+  "name": "pstack-bugfix",
+  "description": "pstack bug fix: reproduce → diagnose → a second model challenges the cause → fix → blast radius",
+  "roles": [
+    {"name": "fixer", "agent": "$strong", "skill": "pstack:bugfix"},
+    {"name": "skeptic", "agent": "$other", "skill": "pstack:bugfix", "read_only": true},
+    {"name": "checker", "agent": "$strong", "skill": "pstack:blast-radius", "no_edits": true}
+  ],
+  "steps": [
+    {
+      "name": "reproduce",
+      "role": "fixer",
+      "expect": {"files": ["{{run}}/bug.md"]},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Reproduce part. Where the bug has a cheap test path, commit the failing test alone; otherwise keep the reproduction as {{run}}/repro.sh, which exits non-zero while the bug is there. Write {{run}}/bug.md: the command that reproduces the bug, what it prints now, and what the intended behavior would print. Fix nothing yet."
+      ]
+    },
+    {
+      "name": "diagnose",
+      "label": "diagnosis",
+      "role": "fixer",
+      "expect": {"files": ["{{run}}/bug.md"], "unchanged": true},
+      "prompt": [
+        "Do the skill's Diagnose part for the bug in {{run}}/bug.md. Add to that file: the root cause with its file and line, the evidence from a run that shows it, the causes you ruled out and how, and other places with the same fault. Take your probes out again, and fix nothing yet."
+      ],
+      "again": [
+        "A second model doubts the diagnosis (round {{round}}):",
+        "{{review}}",
+        "",
+        "Get the evidence that settles each doubt, or change the diagnosis where a doubt is right. Update {{run}}/bug.md. Take your probes out again, and fix nothing yet."
+      ]
+    },
+    {
+      "name": "challenge",
+      "role": "skeptic",
+      "review": true,
+      "back": "diagnose",
+      "max_rounds": 2,
+      "gate": true,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Do the skill's Challenge part on {{run}}/bug.md: is the root cause shown by what ran, or guessed? A doubt that could change the fix means CHANGES."
+      ],
+      "again": [
+        "The fixer has worked through your doubts and updated {{run}}/bug.md. Read it again: is the root cause now shown by what ran? A doubt that could change the fix means CHANGES."
+      ]
+    },
+    {
+      "name": "fix",
+      "role": "fixer",
+      "expect": {"commit": true},
+      "prompt": [
+        "Do the skill's Fix part: the smallest change the evidence in {{run}}/bug.md justifies, at the root cause. Run the reproduction: it passes now. Add its output after the fix to {{run}}/bug.md, and commit the fix."
+      ],
+      "again": [
+        "Blast-radius findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Rerun each finding's command first. Fix each real one at its root cause, or show why it breaks nothing. Update {{run}}/bug.md, verify again, and commit."
+      ]
+    },
+    {
+      "name": "check",
+      "label": "blast radius",
+      "role": "checker",
+      "review": true,
+      "back": "fix",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Check the fix: {{run}}/bug.md and git diff {{base}}, uncommitted work included. Its own claim first: run the reproduction on the code before the fix (it fails) and now (it passes). Then: does the fix remove the root cause bug.md names, and what could it break beyond the diff? A reproduction that still fails, a fix that misses the cause, or a break a run proves means CHANGES."
+      ],
+      "again": [
+        "The fixer has worked through your findings. Rerun each one's command, then check git diff {{base}} again: are they fixed, and does the fix break anything new? A break a run proves means CHANGES."
+      ]
+    }
+  ]
+}

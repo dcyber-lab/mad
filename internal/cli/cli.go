@@ -24,6 +24,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
+	"github.com/dcyber-lab/mad/internal/team"
 	"github.com/dcyber-lab/mad/internal/tmux"
 	"github.com/dcyber-lab/mad/internal/ui"
 )
@@ -63,6 +64,9 @@ usage:
   mad team ls|start|show|sleep|rm|check
                       teams: agents in roles started together in a channel
                       with a lead; "mad team" for more
+  mad pack ls|show|check|eject
+                      packs: the flows, templates and skills runs and teams
+                      work by, as files apart from mad; "mad pack" for more
   mad skill install   put the skill that designs flows with you
                       (mad-flow) where claude finds it
   mad skill pending|approve|discard|sync|ls
@@ -150,6 +154,8 @@ func Run(args []string, stdio IO) int {
 		err = runCmd(args, stdio)
 	case "team":
 		err = teamCmd(args, stdio)
+	case "pack":
+		err = packCmd(args, stdio)
 	case "skill":
 		err = skillCmd(args, stdio)
 	case "fit":
@@ -334,15 +340,19 @@ func noteTyped(id string, prompts []string) {
 }
 
 // outsideRun says why agent id may not make tool call t: the agent plays
-// a role in a run, and its flow refuses the call (see run.Refused).
+// a role in a run, and its flow refuses the call (see run.Refused), or a
+// role in a team that edits nothing (see team.Refused).
 func outsideRun(id string, t *discover.Tool) string {
 	st, err := state.Load()
 	if err != nil {
 		return ""
 	}
 	p, a := st.FindAgent(id)
-	if a == nil || !p.InRun(a) {
+	if a == nil {
 		return ""
+	}
+	if !p.InRun(a) {
+		return team.Refused(a, t)
 	}
 	_, r := st.FindRun(a.Run)
 	var role madrun.Role

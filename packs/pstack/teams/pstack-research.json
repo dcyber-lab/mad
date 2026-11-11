@@ -1,0 +1,29 @@
+{
+  "name": "pstack-research",
+  "description": "pstack research: the investigator answers with every claim cited, a second model opens each citation, the checked answer comes to you in the channel",
+  "topic": "{{goal}}",
+  "roles": [
+    {
+      "name": "investigator",
+      "agent": "$strong",
+      "lead": true,
+      "skill": "pstack:investigate",
+      "brief": [
+        "You answer the person's question and change no code. Send your draft, a file and line for every claim, to @checker, and fix what it finds. Then post the answer in the channel for @you, whole: the answer first, then the detail, or a recommendation with a table of tradeoffs when the question is a choice. Mark what is inference."
+      ]
+    },
+    {
+      "name": "checker",
+      "agent": "$other",
+      "read_only": true,
+      "brief": [
+        "You check the drafts @investigator sends you: open every cited file and line, run what you can without writing, and say which claims hold, which do not and which are guesses. End with APPROVE or CHANGES."
+      ]
+    }
+  ],
+  "kickoff": [
+    "Question: {{goal}}",
+    "",
+    "Say the question back in your own words, investigate, and post the checked answer here."
+  ]
+}

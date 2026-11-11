@@ -2,6 +2,7 @@ package run
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -78,6 +79,9 @@ func NewForm(dir string) error {
 	f.task.Focus()
 	f.checks = precheck(root)
 	flows, err := Flows(root)
+	if len(flows) == 0 {
+		return errors.Join(errors.New("no flow to run by here (mad pack ls)"), err)
+	}
 	f.flows = flows
 	if err != nil {
 		for _, line := range strings.Split(err.Error(), "\n") {
@@ -90,16 +94,24 @@ func NewForm(dir string) error {
 	return err
 }
 
-// resetAgents puts the flow's own agents in its roles.
+// resetAgents puts the flow's own agents in its roles. One the choices
+// lack (a model a pack names that mad does not list) joins them: the
+// form starts the run with the agents its flow says.
 func (f *form) resetAgents() {
 	roles := f.flows[f.flow].Roles
 	f.agents, f.efforts = make([]int, len(roles)), make([]int, len(roles))
 	for i, r := range roles {
+		at := -1
 		for j, c := range f.choices {
 			if c.Kind == r.Kind && c.Model == r.Model {
-				f.agents[i] = j
+				at = j
 			}
 		}
+		if at < 0 {
+			f.choices = append(f.choices, Choice{Kind: r.Kind, Model: r.Model})
+			at = len(f.choices) - 1
+		}
+		f.agents[i] = at
 		for j, l := range Efforts(f.choices[f.agents[i]]) {
 			if l == r.Effort {
 				f.efforts[i] = j
@@ -285,11 +297,12 @@ func (f *form) View() string {
 	add(" " + head + strings.Repeat(" ", max(w-lipgloss.Width(head)-12, 1)) + fDim.Render("esc cancel"))
 	add(" " + rule)
 	fl := f.flows[f.flow]
+	// A flow or a pack kept in the project's .mad/ or in mad's config.
 	where := ""
 	switch {
-	case strings.HasPrefix(fl.Source, ProjectFlows(f.root)):
+	case strings.HasPrefix(fl.Source, filepath.Join(f.root, ".mad")+string(filepath.Separator)):
 		where = " (the project's)"
-	case strings.HasPrefix(fl.Source, UserFlows()):
+	case strings.HasPrefix(fl.Source, paths.ConfigDir()+string(filepath.Separator)):
 		where = " (yours)"
 	}
 	add(" " + label(fieldFlow, "flow") + textutil.PadRight(choice(fieldFlow, fl.Name), 34) + fDim.Render(fl.Description+where))

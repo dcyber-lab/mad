@@ -202,6 +202,42 @@ func TestUnmet(t *testing.T) {
 	}
 }
 
+// A step that must leave the worktree as it found it may change it
+// meanwhile, and write in the run's directory; what it leaves changed is
+// said every time it runs, the files and commits it must make the first.
+func TestUnmetUnchanged(t *testing.T) {
+	repo := gitRepo(t)
+	x := &runner{run: &state.Run{Name: "x", Dir: repo}}
+	var e Entry
+	e.Head, e.Tree = worktreeState(repo)
+	s := Step{Name: "diagnose", Expect: &Expect{Unchanged: true, Files: []string{"{{run}}/bug.md"}}}
+
+	write(t, filepath.Join(repo, "a.go"), "package a // a probe\n")
+	write(t, filepath.Join(repo, "a.go"), "package a\n")
+	write(t, filepath.Join(repo, ".mad", "runs", "x", "bug.md"), "the cause\n")
+	if got := x.unmet(s, 1, e); got != nil {
+		t.Errorf("a probe put in and taken out again: %q", got)
+	}
+	write(t, filepath.Join(repo, "a.go"), "package a // a probe left in\n")
+	got := x.unmet(s, 1, e)
+	if len(got) != 1 || got[0] != "the worktree is not as this step found it (changed files: a.go): undo that; what the step makes goes in .mad/runs/x/" {
+		t.Errorf("a probe left in: %q", got)
+	}
+	if err := os.Remove(filepath.Join(repo, ".mad", "runs", "x", "bug.md")); err != nil {
+		t.Fatal(err)
+	}
+	if got := x.unmet(s, 1, e); len(got) != 2 || !strings.Contains(got[1], "bug.md is missing or empty") {
+		t.Errorf("the first time, its file too: %q", got)
+	}
+	if got := x.unmet(s, 2, e); len(got) != 1 || !strings.Contains(got[0], "changed files: a.go") {
+		t.Errorf("coming round again, the worktree alone: %q", got)
+	}
+	commit(t, repo, "the fix, too early", nil)
+	if got := x.unmet(s, 1, e); len(got) != 2 || !strings.Contains(got[0], "new commits:") {
+		t.Errorf("a commit: %q", got)
+	}
+}
+
 func TestIsTest(t *testing.T) {
 	for path, want := range map[string]bool{
 		"internal/run/check_test.go": true, "internal/run/check.go": false,
@@ -223,6 +259,8 @@ func TestCheckNoEditsAndExpect(t *testing.T) {
 		`{"name":"x","roles":[{"name":"a","agent":"claude","read_only":true,"no_edits":true}],"steps":[{"name":"s","role":"a","prompt":"p","review":true,"back":"s"}]}`: "read_only or no_edits, not both",
 		`{"name":"x","roles":[{"name":"a","agent":"claude","no_edits":true}],"steps":[{"name":"s","role":"a","prompt":"p","expect":{"commit":true}}]}`:                  "makes no commits, so the step can't expect one",
 		`{"name":"x","roles":[{"name":"a","agent":"claude"}],"steps":[{"name":"s","role":"a","prompt":"p","expect":{"files":["{{task}}.md"]}}]}`:                        "expect.files: unknown placeholder {{task}}",
+		`{"name":"x","roles":[{"name":"a","agent":"claude"}],"steps":[{"name":"s","role":"a","prompt":"p","expect":{"unchanged":true,"commit":true}}]}`:                 "a step that leaves the worktree unchanged makes no commit",
+		`{"name":"x","roles":[{"name":"a","agent":"claude","no_edits":true}],"steps":[{"name":"s","role":"a","prompt":"p","expect":{"unchanged":true}}]}`:               "its role a changes nothing as it is: leave unchanged out",
 	} {
 		if _, err := Parse([]byte(body)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v, want %q", body, err, want)

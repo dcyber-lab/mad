@@ -23,6 +23,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/notify"
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/poke"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -273,7 +274,9 @@ func (x *runner) work() error {
 				}
 			}
 		}
-		if s.Gate && x.f.Spec.Gate {
+		// A review that sends the work back has nothing for you to look
+		// over yet: its gate holds when it lets the work through.
+		if s.Gate && x.f.Spec.Gate && next == i+1 {
 			if err := x.hold(fmt.Sprintf("the %s is done: look it over (files in %s/), change what you like, then press c", s.Label, RelDir(x.run))); err != nil {
 				return x.cancelled()
 			}
@@ -433,7 +436,7 @@ func (x *runner) prompt(s Step, role Role) string {
 	head += " Write in the language the task is written in.\n\n"
 	x.takeNotes()
 	head += x.newNotes(role.Name)
-	head += x.skillLine(role, round > 1)
+	head += x.skillLine(role, round > 1 || x.briefed(role.Name))
 	if role.NoEdits {
 		head += fmt.Sprintf("You edit no file in this worktree and make no commit: mad refuses it. Scratch files go in %s.\n\n", os.TempDir())
 	}
@@ -447,13 +450,37 @@ func (x *runner) prompt(s Step, role Role) string {
 	}) + check + x.flow.ending(s)
 }
 
+// briefed: role took a step of this run before the one under way, so it
+// has read its skill.
+func (x *runner) briefed(role string) bool {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	es := x.f.Progress.Entries
+	for i := 0; i < len(es)-1; i++ {
+		if es[i].Role == role && es[i].Sent {
+			return true
+		}
+	}
+	return false
+}
+
+// skillPath is where role's agent finds the skill it works by: the copy
+// the run keeps of a pack's (a path in the worktree), else among the
+// agent's own; "" when it is nowhere.
+func (x *runner) skillPath(role Role) string {
+	if rel := pack.SkillFile(skillsDir(x.dir), role.Skill); rel != "" {
+		return filepath.Join(RelDir(x.run), "skills", rel)
+	}
+	return skill.Find(role.Kind, x.run.Dir, role.Skill)
+}
+
 // skillLine tells role to work by its skill, where its agent finds it:
-// to read it first, or, coming round again, to keep to it.
+// to read it first, or, having read it (again), to keep to it.
 func (x *runner) skillLine(role Role, again bool) string {
 	if role.Skill == "" {
 		return ""
 	}
-	path := skill.Find(role.Kind, x.run.Dir, role.Skill)
+	path := x.skillPath(role)
 	if path == "" {
 		x.logf("the %s works by the skill %s, which is no longer found: its message goes without it", role.Label, role.Skill)
 		return ""
@@ -461,7 +488,7 @@ func (x *runner) skillLine(role Role, again bool) string {
 	if again {
 		return fmt.Sprintf("Keep working by the skill %s (%s); read it again if it has left your context.\n\n", role.Skill, path)
 	}
-	return fmt.Sprintf("Work by the skill %s: read %s in full before you start, and follow it. Where the skill and this run differ, the run wins: work in this worktree alone, push nothing and open no pull request, and end your reply as this message asks.\n\n", role.Skill, path)
+	return fmt.Sprintf("Work by the skill %s: read %s in full before you start, and follow it; the files it names are by their paths from its own directory. Where the skill and this run differ, the run wins: work in this worktree alone, push nothing and open no pull request, and end your reply as this message asks.\n\n", role.Skill, path)
 }
 
 // roundOf is the round step s is in and the findings it works from: a
@@ -602,6 +629,9 @@ func (x *runner) expectLine(s Step) string {
 		return ""
 	}
 	var what []string
+	if ex.Unchanged {
+		what = append(what, fmt.Sprintf("the worktree is as you found it (what you make goes in %s/)", RelDir(x.run)))
+	}
 	for _, f := range ex.Files {
 		what = append(what, render(f, map[string]string{"run": RelDir(x.run)})+" is written")
 	}

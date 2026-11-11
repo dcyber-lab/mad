@@ -136,15 +136,25 @@ func Create(o Options) (*state.Run, error) {
 		return nil, err
 	}
 	f := &File{
-		Spec: Spec{Flow: flow.Name, Definition: &flow, Task: task, Base: base, Gate: o.Gate,
+		Spec: Spec{Flow: flow.Name, Pack: flow.Pack, Definition: &flow, Task: task, Base: base, Gate: o.Gate,
 			MaxRounds: DefaultMaxRounds, Budget: DefaultBudget, Compact: DefaultCompact,
 			Permission: o.Permission, Agents: o.Agents},
 		Progress: Progress{Status: Starting, Round: 1},
 	}
+	// Before the run's file: a run that can't keep its skills is none,
+	// and leaves nothing in the way of starting it again.
+	if err := KeepSkills(flow.Roles, root, skillsDir(rd)); err != nil {
+		_ = os.RemoveAll(rd)
+		return nil, err
+	}
 	if err := f.Save(rd); err != nil {
 		return nil, err
 	}
-	appendLog(rd, "run created: "+task, time.Now())
+	created := "run created: " + task
+	if flow.Pack != "" {
+		created = fmt.Sprintf("run created, by the flow %s of pack %s: %s", flow.Name, flow.Pack, task)
+	}
+	appendLog(rd, created, time.Now())
 
 	if err := drive.EnsureDeck(root); err != nil {
 		return nil, err

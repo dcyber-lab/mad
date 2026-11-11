@@ -1,0 +1,10 @@
+{
+  "name": "pstack",
+  "version": "0.1.0",
+  "description": "pstack's playbooks as steps mad runs itself: ground, design twice, build, prove, with a second model where it counts",
+  "agents": {
+    "strong": "claude:opus@high",
+    "fast": "claude:sonnet@high",
+    "other": "codex"
+  }
+}

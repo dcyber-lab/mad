@@ -1,0 +1,58 @@
+{
+  "name": "pstack-docs",
+  "description": "pstack docs: write → a second model checks every fact against the code → edit for the reader",
+  "roles": [
+    {"name": "writer", "agent": "$strong", "skill": "pstack:technical-writing"},
+    {"name": "checker", "label": "fact-checker", "agent": "$other", "read_only": true},
+    {"name": "editor", "agent": "$fast", "read_only": true, "skill": "pstack:unslop"}
+  ],
+  "steps": [
+    {
+      "name": "write",
+      "role": "writer",
+      "expect": {"commit": true},
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Read the code the doc covers, and run the commands it will show. Pick the doc's mode (tutorial, how-to, reference or explanation), write or update it where the project keeps its docs, and commit. Change nothing but docs."
+      ],
+      "again": [
+        "Review findings (round {{round}}):",
+        "{{review}}",
+        "",
+        "Fix each, or say why the doc is right, and commit."
+      ]
+    },
+    {
+      "name": "fact-check",
+      "label": "fact check",
+      "role": "checker",
+      "review": true,
+      "back": "write",
+      "max_rounds": 3,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Check the doc change, git diff {{base}}, against the code: every symbol, flag, path and command must exist and behave as written. Run what you can without writing. Report only statements that are wrong, at most 8, each with its file and line and what is true. A wrong statement means CHANGES."
+      ],
+      "again": [
+        "The writer has worked through your findings. Check git diff {{base}} against the code again: is every statement now true? At most 8."
+      ]
+    },
+    {
+      "name": "edit",
+      "role": "editor",
+      "review": true,
+      "back": "write",
+      "max_rounds": 2,
+      "prompt": [
+        "Task: {{task}}",
+        "",
+        "Edit the doc change, git diff {{base}}, for its reader by the skill: one mode per doc, the short everyday word, no AI tells. You change no file: quote each line to change and give its rewrite, at most 10. A style you merely prefer is no finding."
+      ],
+      "again": [
+        "The writer has worked through your edits. Read git diff {{base}} again: are they taken, and did the rewrite bring new tells? At most 10."
+      ]
+    }
+  ]
+}

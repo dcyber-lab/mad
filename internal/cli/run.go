@@ -160,7 +160,8 @@ const flowUsage = `usage:
   mad run flow check [FILE…]  check flow files (default: every flow here)
   mad run flow agents         the agents a role can be played by, with their efforts
 Flows are JSON files in .mad/flows/ (the project's) and ~/.config/mad/flows/
-(yours); "mad skill install" adds a skill that writes them with you.
+(yours), and in packs (mad pack ls); "mad skill install" adds a skill that
+writes them with you.
 `
 
 // flowCmd is `mad run flow ...`.

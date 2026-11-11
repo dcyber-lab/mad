@@ -2,10 +2,14 @@ package team
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/git"
+	"github.com/dcyber-lab/mad/internal/pack"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/skill"
@@ -73,16 +77,53 @@ func (rec Record) brief(st *state.State, role string) string {
 	if me.Brief != "" {
 		b.WriteString("\nYour part: " + me.Brief)
 	}
+	if me.NoEdits {
+		fmt.Fprintf(&b, "\nYou edit no file in %s: mad refuses it. Scratch files go in %s.", rec.dir(), os.TempDir())
+	}
 	if me.Skill != "" {
-		kind := run.ParseChoice(me.Spec).Kind
-		if path := skill.Find(kind, rec.dir(), me.Skill); path != "" {
-			fmt.Fprintf(&b, "\nWork by the skill %s: read %s in full before your first task, and follow it. Where the skill and your part here differ, your part wins: hand work over on the bus, and push nothing and open no pull request unless the lead or the person asks for it.", me.Skill, path)
+		if path := rec.skillPath(*me); path != "" {
+			fmt.Fprintf(&b, "\nWork by the skill %s: read %s in full before your first task, and follow it; the files it names are by their paths from its own directory. Where the skill and your part here differ, your part wins: hand work over on the bus, and push nothing and open no pull request unless the lead or the person asks for it.", me.Skill, path)
 		} else {
 			fmt.Fprintf(&b, "\nYour part names the skill %s, which is not on this machine any more: work without it.", me.Skill)
 		}
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// skillPath is where role x's agent finds the skill it works by: the
+// copy the team keeps of a pack's, else among the agent's own; "" when
+// it is nowhere.
+func (rec Record) skillPath(x RoleRec) string {
+	if rel := pack.SkillFile(skillsDir(rec.Name), x.Skill); rel != "" {
+		return filepath.Join(skillsDir(rec.Name), rel)
+	}
+	return skill.Find(run.ParseChoice(x.Spec).Kind, rec.dir(), x.Skill)
+}
+
+// Refused says why tool call t of agent a is refused by its part in its
+// team, or "": its role edits nothing, and t writes a file where the
+// team works. Only what an edit tool writes is seen: a team has no steps
+// after which to look at what a shell command left, as a run does.
+func Refused(a *state.Agent, t *discover.Tool) string {
+	if a == nil || a.Team == "" || t == nil || t.Path == "" {
+		return ""
+	}
+	var f file
+	if paths.ReadJSON(recordsFile(), &f) != nil {
+		return ""
+	}
+	for _, rec := range f.Teams {
+		if rec.Name != a.Team {
+			continue
+		}
+		for _, x := range rec.Roles {
+			if x.Role == a.Role && x.NoEdits {
+				return run.NoEdits(rec.dir(), "", x.Role, "the team's directory", t)
+			}
+		}
+	}
+	return ""
 }
 
 // dir is where the team's agents work: its branch's worktree, or the
@@ -97,8 +138,11 @@ func (rec Record) dir() string {
 // describe says what plays a role: claude opus, codex (read only).
 func (x RoleRec) describe() string {
 	s := strings.NewReplacer(":", " ", "@", " at ").Replace(x.Spec)
-	if x.ReadOnly {
+	switch {
+	case x.ReadOnly:
 		s += ", read only"
+	case x.NoEdits:
+		s += ", edits nothing"
 	}
 	return s
 }

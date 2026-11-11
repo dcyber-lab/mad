@@ -183,7 +183,7 @@ func Template(spec create.Spec) *team.Template {
 		if r.Effort != "" {
 			agentSpec += "@" + r.Effort
 		}
-		t.Roles = append(t.Roles, team.Role{Role: run.Role{Name: r.Role, Agent: agentSpec, ReadOnly: r.ReadOnly, Skill: r.Skill}, Lead: r.Lead, Brief: run.Text(r.Brief)})
+		t.Roles = append(t.Roles, team.Role{Role: run.Role{Name: r.Role, Agent: agentSpec, ReadOnly: r.ReadOnly, NoEdits: r.NoEdits, Skill: r.Skill}, Lead: r.Lead, Brief: run.Text(r.Brief)})
 	}
 	return &t
 }

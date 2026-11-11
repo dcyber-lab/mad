@@ -207,6 +207,9 @@ mad ls                  list the agents: id, name, kind, status, directory
 mad board               the task board: who owns what, what waits for you
 mad team ls|start|show|sleep|rm|check
                         teams: agents in roles started together in a channel
+mad pack ls|show|check|eject
+                        packs: the flows, templates and skills runs and
+                        teams work by, kept as files apart from mad
 mad spawn [flags] [-- agent flags]
                         start an agent off stage and print its id
 mad send [-w] AGENT TEXT
@@ -864,11 +867,14 @@ form (`--agent builder=codex:gpt-6-sol@xhigh`, `--perm allowlist`); `mad run ls`
 
 ### Flows
 
-A flow is a run's template: its roles, who plays each, and its steps. mad
-comes with `design-impl-review` (the default), `impl-review` and four
-that work by pstack's skills (below); more are JSON files in a project's `.mad/flows/` (shared with whoever
-clones it) or in `~/.config/mad/flows/` (yours), and one named as an
-existing flow takes its place. The form lists them all.
+A flow is a run's template: its roles, who plays each, and its steps.
+Flows are files, not part of mad's code. They come in packs (see
+[Packs](#packs)): the built-in pack `mad` has `design-impl-review` (the
+default) and `impl-review`, and the built-in pack `pstack` has five that
+work the way of pstack (below). More are JSON files in a project's
+`.mad/flows/` (shared with whoever clones it) or in
+`~/.config/mad/flows/` (yours), and one named as an existing flow takes
+its place. The form lists them all.
 
 ```sh
 mad run flow ls                         # the flows here, and where each is from
@@ -879,8 +885,9 @@ mad run flow agents                     # the agents and efforts a role can have
 
 A step says only what to do; mad adds how to end the reply (`DONE`,
 `VERDICT: ...`, `QUESTION(@role): ...`). Steps run one at a time; a
-review sends its changes back to an earlier step. A run keeps the flow it
-started with, whatever becomes of the file.
+review sends its changes back to an earlier step. A step's gate stops the
+run for you after it, a review's when it lets the work through. A run
+keeps the flow it started with, whatever becomes of the file.
 
 What holds a role to its part, beyond its prompt:
 
@@ -898,31 +905,47 @@ What holds a role to its part, beyond its prompt:
   before the first commit of anything else). The role is told up front;
   when the step ends what is missing goes back to it once, then the run
   waits for you. Checked the first time the step runs.
+- `"unchanged": true` in a step's `expect`: the step leaves the worktree
+  as it found it, whatever it did meanwhile (a probe, a log line). For a
+  step that reads, measures or designs, whose work goes in `{{run}}/`:
+  a diagnosis cannot slip the fix in, a design cannot start the build.
+  Checked every time the step runs.
 - A step asks only the roles in its `ask`; a question to anyone else is
   answered by mad: decide, and say what you assumed.
 
-A role can work by a skill: `"skill": "pstack:poteto-mode"` (the skill's
-name, or `plugin:name` for a claude plugin's). Each message the role gets
-then says where its agent finds the skill's SKILL.md, to read it first
-and follow it, and that the run wins where the two differ: the worktree
-alone, no push or pull request, the reply's end. claude looks in the
-project's `.claude/skills`, then `~/.claude/skills`, then its installed
-plugins; codex in `~/.codex/skills`, by the name after the colon. A run
-whose agents lack a role's skill does not start.
+A role can work by a skill: `"skill": "pstack:bugfix"`. Each message the
+role gets then says where the skill's SKILL.md is, to read it in full
+before its first step and follow it, and that the run wins where the two
+differ: the worktree alone, no push or pull request, the reply's end.
+`pack:name` is a pack's skill: the run copies the pack's skills into
+`.mad/runs/<name>/skills/` when it starts and goes on by that copy, so
+any agent can play the role and nothing needs installing. A name no pack
+has is one the role's agent has itself: claude looks in the project's
+`.claude/skills`, then `~/.claude/skills`, then its installed plugins
+(`plugin:name`); codex in `~/.codex/skills`, by the name after the
+colon. A run whose role's skill is nowhere does not start.
 
-Four built-in flows work the way of
-[pstack](https://github.com/cursor/plugins/tree/main/pstack)'s skills.
-None is the default.
+The pack `pstack` works the way of
+[pstack](https://github.com/cursor/plugins/tree/main/pstack), with mad as
+the one that runs it: each phase of a playbook is a step, each second
+opinion a role with an agent of its own, and what a phase must leave
+behind is checked by the runner. It needs no plugin. None of its flows
+is the default.
 
-| Flow | Steps (role: agent, skill) |
+| Flow | Steps |
 |---|---|
-| `pstack` | design (architect: claude opus, `architect`: sketch more than once, commit the sketch and `design.md`, both checked) → implement (claude sonnet, `poteto-mode`, a commit checked) → interrogate (claude opus, `interrogate`: only findings a run proves; edits nothing) |
-| `pstack-bugfix` | fix (claude opus, `poteto-mode`'s Bug fix: reproduce, root cause; `bug.md`, a commit and the failing test committed before the fix are checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
-| `pstack-refactor` | pin today's behavior and write `shape.md` (claude opus, `poteto-mode`; both checked) → reshape (claude sonnet, `poteto-mode`; a commit checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
-| `pstack-docs` | write (claude opus, `technical-writing`; a commit checked) → fact check against the code (codex, read only) → edit (claude sonnet, read only, `unslop`) |
+| `pstack-feature` | ground (`ground.md`; the code untouched) → sketch (claude opus) → second sketch (codex, apart from the first) → design (the architect picks a base, grafts, commits the sketch and writes `design.md`; the gate) → build (claude sonnet; may ask the architect; a commit checked) → interrogate (claude opus, edits nothing: only findings a run proves) → audit (codex, read only) |
+| `pstack-bugfix` | reproduce (`bug.md`; the failing test committed alone where there is a cheap one) → diagnose (the root cause with evidence from a run; the code left as it was) → challenge (codex, read only: is the cause shown, or guessed; the gate) → fix (a commit checked) → blast radius (claude opus, edits nothing: reruns the reproduction before and after the fix, proves what it could break) |
+| `pstack-refactor` | pin (today's behavior as tests, committed alone; `pin.md`) → shape (`shape.md`; the code untouched; the gate) → reshape (claude sonnet; a commit checked) → blast radius (claude opus, edits nothing) |
+| `pstack-perf` | baseline (`perf.md`: the claim, the harness, the runs, the limiter; the gate) → improve (one hypothesis at a time, one commit per kept change) → second measurement (claude opus, edits nothing: measures again by itself) |
+| `pstack-docs` | write (claude opus; a commit checked) → fact check against the code (codex, read only) → edit (claude sonnet, read only) |
 
-pstack's skills start agents of their own, on the models its
-`/setup-pstack` chose, so such a run costs several times a plain one.
+Its roles are played by three agents the pack names once, in its
+`pack.json`: `$strong` (claude opus at high effort) for judgment, `$fast`
+(claude sonnet) for writing code, `$other` (codex) for the second model.
+Such a run has up to five agents, and costs several times a plain one.
+[`packs/pstack/README.md`](packs/pstack/README.md) says what each skill
+was made from.
 
 You need not write flows yourself: `mad skill install` puts the
 `mad-flow` skill in `~/.claude/skills/`, and claude then designs a flow
@@ -1195,18 +1218,20 @@ the lead, and stay: they talk on the bus and hand work to each other with
 `bus_handoff` (a run, above, pushes one task through steps instead). A
 template names the roles; the built-in `dev` has an architect (claude
 opus, the lead), a builder (claude sonnet) and a reviewer (codex, read
-only). Three more work by pstack's skills:
+only). Three more are the pack `pstack`'s (see [Packs](#packs)), their
+roles working by the pack's skills:
 
-- `pstack`: an architect (claude opus, the lead) and a builder (claude
-  sonnet) by `poteto-mode`, and an interrogator (claude opus) by
-  `interrogate`.
+- `pstack`: an architect (claude opus, the lead) picks the playbook that
+  fits the goal (a question, a bug, a feature, a refactoring, something
+  slow, docs) and does its thinking; a builder (claude sonnet) builds;
+  an interrogator (claude opus, edits nothing) breaks each diff, with
+  only findings a run proves.
 - `pstack-research`: an investigator (claude opus, the lead) answers your
-  question by `poteto-mode`'s Investigation playbook (`how`, `why`), a
-  checker (codex, read only) opens every file and line it cites, and the
-  checked answer comes to you in the channel.
-- `pstack-docs`: a writer (claude opus, the lead) by `technical-writing`,
-  a fact-checker (codex, read only) against the code, and an editor
-  (claude sonnet, read only) by `unslop`.
+  question with every claim cited, a checker (codex, read only) opens
+  every file and line it cites, and the checked answer comes to you in
+  the channel.
+- `pstack-docs`: a writer (claude opus, the lead), a fact-checker (codex,
+  read only) against the code, and an editor (claude sonnet, read only).
 
 ```sh
 mad team ls                         # templates and where each is from; running teams
@@ -1230,10 +1255,16 @@ mad team check FILE                 # check a template file
 - Templates are JSON files, in `~/.config/mad/teams/` and a project's
   `.mad/teams/`, a later one replacing an earlier one of its name:
   `{"name", "description", "topic", "roles": [{"name", "agent", "lead",
-  "read_only", "brief", "skill"}], "kickoff"}`; `{{goal}}` fills the
-  topic and the kickoff. Exactly one role leads. A role's `skill` is a
-  run role's (see Flows): its brief says where its agent finds the skill,
-  and the team does not start while an agent lacks it.
+  "read_only", "no_edits", "brief", "skill"}], "kickoff"}`; `{{goal}}`
+  fills the topic and the kickoff. Exactly one role leads. A role's
+  `skill` is a run role's (see Flows): its brief says where the skill
+  is, and the team does not start while it is nowhere. A pack's skills
+  are copied for the team when it starts (in mad's state, under
+  `bus/teams/<name>/`), and go when it does.
+- A `no_edits` role runs commands but edits nothing: mad's hook refuses
+  its edit tools where the team works (codex gets its read-only
+  sandbox). A team has no steps after which to compare the worktree, as
+  a run does, so what a shell command writes is not seen.
 - A role's `brief` reaches the agent in its `mad mcp` instructions,
   with its team, channel, lead and its teammates' first lines, at every
   start and resume: it holds across sleep, restarts and mad rebuilds.
@@ -1245,6 +1276,48 @@ mad team check FILE                 # check a template file
   permission and an optional shared worktree. A team's channel header
   shows its roles with their live status; its menu has **Sleep team**
   and **Remove team**.
+
+## Packs
+
+A pack is a way of working, kept as files apart from mad itself: the
+flows runs follow, the templates teams start from, and the skills their
+roles work by. mad runs them, and knows nothing of what they say. So a
+way of working changes without a new mad, and mad learns to do more
+without the packs changing.
+
+```
+pack.json         {"name", "version", "description", "agents"}
+flows/*.json      run flows
+teams/*.json      team templates
+skills/<name>/    SKILL.md, and the files it points at
+```
+
+```sh
+mad pack ls              # the packs here: what each has, and where it is from
+mad pack show pstack     # its agents, flows, templates and skills
+mad pack eject pstack    # a copy in ~/.config/mad/packs/pstack/ to change (-p: in the project's .mad/packs/)
+mad pack check           # every flow and template reads, every skill a role names is there
+```
+
+- mad comes with two, built into the binary from [`packs/`](packs):
+  `mad` (the plain flows and the `dev` team) and `pstack`. A pack in
+  `~/.config/mad/packs/` (yours) or in a project's `.mad/packs/` (shared
+  with whoever clones it) joins them, and one of the same name takes the
+  other's place whole. `mad pack ls` says which stands in for which.
+- `"agents"` in `pack.json` names agents for the pack's roles to share: a
+  role with `"agent": "$strong"` is played by `agents.strong`, so who
+  plays what across a pack is said once. The form and `--agent` still
+  choose for one run.
+- A role names a pack's skill as `pack:name`. Skills point at each other
+  by path (`../principles/fix-root-causes.md`), and `mad pack check`
+  fails on a path that is not there.
+- A run or a team keeps what it started with: the flow in its
+  `run.json`, with the pack's name and version, and the pack's skills as
+  files beside it. A change to a pack shows in what starts next, never in
+  what is under way.
+- To work on a pack in a checkout of mad, link it:
+  `ln -s $PWD/packs/pstack ~/.config/mad/packs/pstack`. Packs are read
+  when a run or a team starts, with no build between.
 
 ## Custom agents
 
@@ -1334,6 +1407,7 @@ prompt.
 | `~/.config/mad/tmux.conf`             | Generated tmux config (rewritten on every start)  |
 | `~/.config/mad/claude-settings.json`  | Generated Claude hook settings                    |
 | `~/.config/mad/agents.json`           | Optional custom agent definitions                 |
+| `~/.config/mad/packs/`, `<project>/.mad/packs/` | Packs of your own and a project's: flows, team templates, skills (see [Packs](#packs)) |
 | `~/.gemini/config/hooks.json`, `mcp_config.json` | agy's own config; mad keeps an entry named `mad` in each (only when agy is installed) |
 | `~/.config/mad/config.json`           | Optional settings (notifications, diff viewer, finish menu, quota, sleep) |
 | `~/.local/state/mad/state.json`       | Projects and agents                               |
