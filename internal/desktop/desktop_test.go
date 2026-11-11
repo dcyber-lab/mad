@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,16 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
+
+// The tests do not ask the system for the Mac's friendly name: it arrives a
+// moment after the first look at the deck and is news (the deck's tag
+// changes), which answered the request TestDeckWait had waiting whenever
+// that test was the first to look, as it is run alone. The tests of the
+// name put their own lookup in its place (resetMachine).
+func TestMain(m *testing.M) {
+	lookupComputerName = func(context.Context) string { return "" }
+	os.Exit(m.Run())
+}
 
 func isolate(t *testing.T) string {
 	t.Helper()
