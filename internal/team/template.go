@@ -104,7 +104,7 @@ var builtin struct {
 // Builtin are the templates mad comes with, the default first.
 func Builtin() []Template {
 	builtin.once.Do(func() {
-		for _, name := range []string{"dev", "pstack"} {
+		for _, name := range []string{"dev", "pstack", "pstack-research", "pstack-docs"} {
 			data, err := builtinFS.ReadFile("teams/" + name + ".json")
 			if err != nil {
 				panic(err)
@@ -250,6 +250,9 @@ func Check(t Template) error {
 		}
 		if r.Lead && r.ReadOnly {
 			bad("role %s: the lead can't be read only", r.Name)
+		}
+		if r.NoEdits {
+			bad("role %s: no_edits holds in runs only; a team's role is read_only or not", r.Name)
 		}
 	}
 	switch {

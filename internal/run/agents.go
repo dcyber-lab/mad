@@ -179,12 +179,15 @@ func ParseChoice(s string) Choice {
 }
 
 // Args are the flags role r's agent starts with: under permission p for
-// claude; codex works in its sandbox, read only for a reviewer.
+// claude; codex works in its sandbox, read only for a reviewer. A claude
+// that edits nothing runs as a builder would, and mad's hook keeps it out
+// of the worktree's files; codex can't be kept out of its own working
+// directory but by the read-only sandbox.
 func (r Role) Args(p string) []string {
 	switch r.Kind {
 	case "codex":
 		sandbox := "workspace-write"
-		if r.ReadOnly {
+		if r.ReadOnly || r.NoEdits {
 			sandbox = "read-only"
 		}
 		// No update notice for a codex a run starts: it would hold the
@@ -221,7 +224,7 @@ func (r Role) Args(p string) []string {
 // codex's sandbox lets it write in dir alone, and a commit there writes
 // to the repository's git directory as well.
 func (r Role) WorktreeArgs(dir string) []string {
-	if r.Kind != "codex" || r.ReadOnly {
+	if r.Kind != "codex" || r.ReadOnly || r.NoEdits {
 		return nil
 	}
 	paths := git.CommitPaths(dir)
@@ -238,7 +241,7 @@ func (r Role) WorktreeArgs(dir string) []string {
 // Permits says in a few words what role r's agent may do.
 func (r Role) Permits(p string) string {
 	switch {
-	case r.Kind == "codex" && r.ReadOnly:
+	case r.Kind == "codex" && (r.ReadOnly || r.NoEdits):
 		return "read only (codex sandbox)"
 	case r.Kind == "codex":
 		return "edits the worktree (codex sandbox)"
@@ -246,6 +249,8 @@ func (r Role) Permits(p string) string {
 		return "as its own settings say"
 	case r.ReadOnly:
 		return "read only; asks before any command but git diff, log, show, status"
+	case r.NoEdits:
+		return "runs commands, edits no file in the worktree"
 	case p == PermAllowlist:
 		return "edits, tests, builds, commits"
 	case p == PermBypass:

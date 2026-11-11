@@ -865,9 +865,8 @@ form (`--agent builder=codex:gpt-6-sol@xhigh`, `--perm allowlist`); `mad run ls`
 ### Flows
 
 A flow is a run's template: its roles, who plays each, and its steps. mad
-comes with three (`design-impl-review`, the default, `impl-review` and
-`pstack`);
-more are JSON files in a project's `.mad/flows/` (shared with whoever
+comes with `design-impl-review` (the default), `impl-review` and four
+that work by pstack's skills (below); more are JSON files in a project's `.mad/flows/` (shared with whoever
 clones it) or in `~/.config/mad/flows/` (yours), and one named as an
 existing flow takes its place. The form lists them all.
 
@@ -883,6 +882,25 @@ A step says only what to do; mad adds how to end the reply (`DONE`,
 review sends its changes back to an earlier step. A run keeps the flow it
 started with, whatever becomes of the file.
 
+What holds a role to its part, beyond its prompt:
+
+- A run's roles may not push or open or merge a pull request (mad's hook
+  refuses `git push`, `gh pr create` and `gh pr merge`): you do that from
+  the sidebar when the run is done.
+- `"no_edits": true` on a role: it runs what it likes (tests, a repro in
+  a temporary directory) but the hook refuses its edits in the worktree
+  outside the run's directory, and after each of its steps the runner
+  compares the worktree with how the step found it (commits, files,
+  ignoring checkouts nested in it such as a subagent's); a change stops
+  the run for you. A codex role gets its read-only sandbox instead.
+- `"expect"` on a step: `files` that must exist and not be empty
+  (`{{run}}/bug.md`), a `commit`, `tests_first` (a commit of tests alone
+  before the first commit of anything else). The role is told up front;
+  when the step ends what is missing goes back to it once, then the run
+  waits for you. Checked the first time the step runs.
+- A step asks only the roles in its `ask`; a question to anyone else is
+  answered by mad: decide, and say what you assumed.
+
 A role can work by a skill: `"skill": "pstack:poteto-mode"` (the skill's
 name, or `plugin:name` for a claude plugin's). Each message the role gets
 then says where its agent finds the skill's SKILL.md, to read it first
@@ -892,12 +910,18 @@ project's `.claude/skills`, then `~/.claude/skills`, then its installed
 plugins; codex in `~/.codex/skills`, by the name after the colon. A run
 whose agents lack a role's skill does not start.
 
-The built-in `pstack` flow works the way of
-[pstack](https://github.com/cursor/plugins/tree/main/pstack)'s skills: an
-architect (claude opus, `architect`: ground the task, sketch it more than
-once, commit the sketch) → an implementer (claude sonnet, `poteto-mode`)
-→ an interrogator (claude opus, `interrogate`: only findings a run
-proves). Those skills start agents of their own, on the models pstack's
+Four built-in flows work the way of
+[pstack](https://github.com/cursor/plugins/tree/main/pstack)'s skills.
+None is the default.
+
+| Flow | Steps (role: agent, skill) |
+|---|---|
+| `pstack` | design (architect: claude opus, `architect`: sketch more than once, commit the sketch and `design.md`, both checked) → implement (claude sonnet, `poteto-mode`, a commit checked) → interrogate (claude opus, `interrogate`: only findings a run proves; edits nothing) |
+| `pstack-bugfix` | fix (claude opus, `poteto-mode`'s Bug fix: reproduce, root cause; `bug.md`, a commit and the failing test committed before the fix are checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
+| `pstack-refactor` | pin today's behavior and write `shape.md` (claude opus, `poteto-mode`; both checked) → reshape (claude sonnet, `poteto-mode`; a commit checked) → blast radius (claude opus, `blast-radius`; edits nothing) |
+| `pstack-docs` | write (claude opus, `technical-writing`; a commit checked) → fact check against the code (codex, read only) → edit (claude sonnet, read only, `unslop`) |
+
+pstack's skills start agents of their own, on the models its
 `/setup-pstack` chose, so such a run costs several times a plain one.
 
 You need not write flows yourself: `mad skill install` puts the
@@ -1171,9 +1195,18 @@ the lead, and stay: they talk on the bus and hand work to each other with
 `bus_handoff` (a run, above, pushes one task through steps instead). A
 template names the roles; the built-in `dev` has an architect (claude
 opus, the lead), a builder (claude sonnet) and a reviewer (codex, read
-only). The built-in `pstack` has an architect (claude opus, the lead) and
-a builder (claude sonnet) who work by pstack's `poteto-mode`, and an
-interrogator (claude opus) who works by its `interrogate`.
+only). Three more work by pstack's skills:
+
+- `pstack`: an architect (claude opus, the lead) and a builder (claude
+  sonnet) by `poteto-mode`, and an interrogator (claude opus) by
+  `interrogate`.
+- `pstack-research`: an investigator (claude opus, the lead) answers your
+  question by `poteto-mode`'s Investigation playbook (`how`, `why`), a
+  checker (codex, read only) opens every file and line it cites, and the
+  checked answer comes to you in the channel.
+- `pstack-docs`: a writer (claude opus, the lead) by `technical-writing`,
+  a fact-checker (codex, read only) against the code, and an editor
+  (claude sonnet, read only) by `unslop`.
 
 ```sh
 mad team ls                         # templates and where each is from; running teams

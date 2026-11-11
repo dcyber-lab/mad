@@ -334,7 +334,7 @@ func noteTyped(id string, prompts []string) {
 }
 
 // outsideRun says why agent id may not make tool call t: the agent plays
-// a role in a run, and the call reaches out of the run's worktree.
+// a role in a run, and its flow refuses the call (see run.Refused).
 func outsideRun(id string, t *discover.Tool) string {
 	st, err := state.Load()
 	if err != nil {
@@ -345,7 +345,11 @@ func outsideRun(id string, t *discover.Tool) string {
 		return ""
 	}
 	_, r := st.FindRun(a.Run)
-	return madrun.Outside(r.Dir, p.Path, t)
+	var role madrun.Role
+	if f, err := madrun.Load(madrun.Dir(r)); err == nil {
+		role, _ = f.Flow().Role(a.Role)
+	}
+	return madrun.Refused(r.Dir, p.Path, madrun.Dir(r), role, t)
 }
 
 // hook takes a report from an agent to its kind's provider, and records

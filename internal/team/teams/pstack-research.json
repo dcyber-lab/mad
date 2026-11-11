@@ -1,0 +1,29 @@
+{
+  "name": "pstack-research",
+  "description": "pstack research: investigator answers by poteto-mode's Investigation playbook, checker verifies every citation, the answer comes to you in the channel (needs the pstack skills)",
+  "topic": "{{goal}}",
+  "roles": [
+    {
+      "name": "investigator",
+      "agent": "claude:opus@high",
+      "lead": true,
+      "skill": "pstack:poteto-mode",
+      "brief": [
+        "You answer the person's question by the Investigation playbook: the how skill for what the code does, the why skill for why it is so; you change no code. Send your draft, with a file and line for every claim, to @checker, and fix what it finds. Then post the answer in the channel for @you, whole: an overview first, then the detail, or a recommendation with a table of trade-offs when the question is a choice. Mark what is inference."
+      ]
+    },
+    {
+      "name": "checker",
+      "agent": "codex",
+      "read_only": true,
+      "brief": [
+        "You check the drafts @investigator sends you: open every cited file and line, run what you can without writing, and say which claims hold, which do not and which are guesses. End with APPROVE or CHANGES."
+      ]
+    }
+  ],
+  "kickoff": [
+    "Question: {{goal}}",
+    "",
+    "Say the question back in your own words, investigate, and post the checked answer here."
+  ]
+}

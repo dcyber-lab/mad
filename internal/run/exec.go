@@ -301,7 +301,11 @@ func (x *runner) step(s Step) (string, error) {
 	round, _ := x.roundOf(s)
 	resumed := n > 0 && pr.Entries[n-1].Step == s.Name && pr.Entries[n-1].Round == round && pr.Entries[n-1].Status == "running"
 	if !resumed {
-		pr.Entries = append(pr.Entries, Entry{Step: s.Name, Role: s.Role, Round: round, Status: "running", Start: now()})
+		e := Entry{Step: s.Name, Role: s.Role, Round: round, Status: "running", Start: now()}
+		x.mu.Unlock()
+		e.Head, e.Tree = worktreeState(x.run.Dir)
+		x.mu.Lock()
+		pr.Entries = append(pr.Entries, e)
 	}
 	idx := len(pr.Entries) - 1
 	sent := pr.Entries[idx].Sent
@@ -339,8 +343,14 @@ func (x *runner) step(s Step) (string, error) {
 		}
 		x.update(func() { pr.Entries[idx].Sent = true })
 	}
-	reply, err := x.converse(a, role, text)
+	reply, err := x.converse(a, role, text, s.Ask)
 	if err != nil {
+		return "", err
+	}
+	x.mu.Lock()
+	began := pr.Entries[idx]
+	x.mu.Unlock()
+	if reply, err = x.settle(a, role, s, round, began, reply); err != nil {
 		return "", err
 	}
 	if moved := changes(main, x.checkout()); len(moved) > 0 {
@@ -424,10 +434,17 @@ func (x *runner) prompt(s Step, role Role) string {
 	x.takeNotes()
 	head += x.newNotes(role.Name)
 	head += x.skillLine(role, round > 1)
+	if role.NoEdits {
+		head += fmt.Sprintf("You edit no file in this worktree and make no commit: mad refuses it. Scratch files go in %s.\n\n", os.TempDir())
+	}
+	check := ""
+	if round == 1 {
+		check = x.expectLine(s)
+	}
 	return head + render(string(tpl), map[string]string{
 		"task": x.f.Spec.Task, "run": RelDir(x.run), "base": x.f.Spec.Base,
 		"review": review, "round": strconv.Itoa(round - 1),
-	}) + x.flow.ending(s)
+	}) + check + x.flow.ending(s)
 }
 
 // skillLine tells role to work by its skill, where its agent finds it:
@@ -492,8 +509,10 @@ func (x *runner) backTarget(name string) bool {
 }
 
 // converse waits for the reply to the message just sent to a, putting
-// any question it ends in to the role it asks and the answer back to a.
-func (x *runner) converse(a *state.Agent, role Role, text string) (string, error) {
+// any question it ends in to the role it asks, one of those the step may
+// ask (ask), and the answer back to a. A question to anyone else is
+// answered by mad: decide, and go on.
+func (x *runner) converse(a *state.Agent, role Role, text string, ask []string) (string, error) {
 	asked := 0
 	for {
 		reply, err := x.await(a, role, text)
@@ -501,11 +520,19 @@ func (x *runner) converse(a *state.Agent, role Role, text string) (string, error
 			return "", err
 		}
 		target, q, ok := question(reply)
-		other, known := x.flow.Role(target)
-		if !ok || !known || other.Name == role.Name || asked >= maxAsks {
+		if !ok || asked >= maxAsks {
 			return reply, nil
 		}
 		asked++
+		other, known := x.flow.Role(target)
+		if !known || other.Name == role.Name || !contains(ask, other.Name) {
+			x.logf("%s asks @%s, whom this step does not ask: told to decide", role.Label, target)
+			text = fmt.Sprintf("[mad run %s · no one to ask] No one answers @%s in this step: %s. Decide it yourself, say what you assumed, go on with your task, and end it as asked before.", x.run.Name, target, x.whoToAsk(ask))
+			if err := x.send(a, role, text); err != nil {
+				return "", err
+			}
+			continue
+		}
 		x.logf("%s asks the %s: %s", role.Label, other.Label, q)
 		answer, err := x.ask(other, role, q)
 		if err != nil {
@@ -517,6 +544,77 @@ func (x *runner) converse(a *state.Agent, role Role, text string) (string, error
 			return "", err
 		}
 	}
+}
+
+// whoToAsk says whom a step may ask, for an agent that asked someone else.
+func (x *runner) whoToAsk(ask []string) string {
+	if len(ask) == 0 {
+		return "this step asks no one"
+	}
+	var who []string
+	for _, q := range ask {
+		who = append(who, "the "+x.flow.RoleLabel(q)+" (@"+q+")")
+	}
+	return "you may ask " + strings.Join(who, " or ")
+}
+
+// settle checks what step s left behind (see unmet and changedBy) and
+// returns the reply to go on with. What is missing goes back to the role
+// once; if it is still missing, or a role that edits nothing changed the
+// worktree, the run waits for you, and goes on when you continue.
+func (x *runner) settle(a *state.Agent, role Role, s Step, round int, e Entry, reply string) (string, error) {
+	if role.ReadOnly || role.NoEdits {
+		if what := changedBy(x.run.Dir, e); what != "" {
+			x.logf("the %s, which edits nothing, changed the worktree: %s", role.Label, what)
+			if err := x.hold(fmt.Sprintf("the %s edits nothing, yet the worktree changed (%s): look, undo what should not be there, then press c", role.Label, what)); err != nil {
+				return "", err
+			}
+		}
+	}
+	for tries := 0; ; tries++ {
+		missing := x.unmet(s, round, e)
+		if len(missing) == 0 {
+			return reply, nil
+		}
+		x.logf("the %s is not finished: %s", s.Label, strings.Join(missing, "; "))
+		if tries > 0 {
+			if err := x.hold(fmt.Sprintf("the %s is still not finished (%s): look, finish it with the %s, then press c", s.Label, strings.Join(missing, "; "), role.Label)); err != nil {
+				return "", err
+			}
+			return reply, nil
+		}
+		text := fmt.Sprintf("[mad run %s · %s · not finished] The %s is not finished:\n- %s\n\nFinish it, and end your reply as asked before.%s",
+			x.run.Name, s.Name, s.Label, strings.Join(missing, "\n- "), x.flow.ending(s))
+		if err := x.send(a, role, text); err != nil {
+			return "", err
+		}
+		var err error
+		if reply, err = x.converse(a, role, text, s.Ask); err != nil {
+			return "", err
+		}
+	}
+}
+
+// expectLine says what mad checks when step s ends, for its first round.
+func (x *runner) expectLine(s Step) string {
+	ex := s.Expect
+	if ex == nil {
+		return ""
+	}
+	var what []string
+	for _, f := range ex.Files {
+		what = append(what, render(f, map[string]string{"run": RelDir(x.run)})+" is written")
+	}
+	if ex.Commit {
+		what = append(what, "the step made a commit")
+	}
+	if ex.TestsFirst {
+		what = append(what, "a commit of the failing test alone comes before the fix")
+	}
+	if len(what) == 0 {
+		return ""
+	}
+	return "\n\nWhen you end, mad checks that " + strings.Join(what, ", ") + "."
 }
 
 // ask puts a question from one role to another and returns the answer.

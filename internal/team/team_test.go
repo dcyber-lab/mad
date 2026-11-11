@@ -101,7 +101,7 @@ func TestTemplatesLoadedLikeFlows(t *testing.T) {
 	for _, tp := range list {
 		names = append(names, tp.Name)
 	}
-	if strings.Join(names, " ") != "dev pstack pair" {
+	if strings.Join(names, " ") != "dev pstack pstack-research pstack-docs pair" {
 		t.Errorf("templates = %v", names)
 	}
 	if len(list[0].Roles) != 1 || !strings.HasSuffix(list[0].Source, "dev.json") {
@@ -414,6 +414,11 @@ func TestSkill(t *testing.T) {
 	if err := Check(Template{Name: "x", Roles: []Role{{Role: run.Role{Name: "a", Agent: "claude", Skill: "a/b"}, Lead: true}}}); err == nil ||
 		!strings.Contains(err.Error(), `role a: skill "a/b"`) {
 		t.Errorf("a bad skill name: %v", err)
+	}
+	// no_edits is a run's: nothing holds a team's role to it.
+	if err := Check(Template{Name: "x", Roles: []Role{{Role: run.Role{Name: "a", Agent: "claude"}, Lead: true}, {Role: run.Role{Name: "b", Agent: "claude", NoEdits: true}}}}); err == nil ||
+		!strings.Contains(err.Error(), "no_edits holds in runs only") {
+		t.Errorf("no_edits in a team: %v", err)
 	}
 }
 
