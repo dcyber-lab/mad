@@ -24,6 +24,10 @@ import (
 	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
+// desktopContext is what a server runs under until a signal ends it;
+// tests replace it, to end the servers they start.
+var desktopContext = context.Background
+
 // desktopCmd serves the deck to a window of its own and opens it. The
 // server ends with the window, or with Ctrl-C when the window is a tab
 // of the user's browser (mad can't tell when that one closes).
@@ -56,7 +60,7 @@ func desktopCmd(args []string, stdio IO) error {
 		}
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	ctx, stop := signal.NotifyContext(desktopContext(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	if *exitOnEOF {
 		go func() {
