@@ -3,6 +3,9 @@ name: ios
 # The Swift side: the three packages' unit tests, the iPhone app's simulator build (as `make ios`
 # does, unsigned) and the Mac app's Release build, uploaded. MadUI's tests read the fixture server's
 # edge-home.json, hence its path below.
+#
+# Two jobs, not one for each part: macOS runners are few, each job waits for one of its own (ten
+# minutes and more on a busy day), and a job that gets none fails the run.
 on:
   push:
     branches: [main]
@@ -12,35 +15,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The packages one after the other; each is tested even when one before it failed.
   swift-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        package: [MadKit, MadUI, MadShell]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -version && swift --version
-      - run: cd ios/${{ matrix.package }} && swift test
+      - name: MadKit
+        run: cd ios/MadKit && swift test
+      - name: MadUI
+        if: ${{ !cancelled() }}
+        run: cd ios/MadUI && swift test
+      - name: MadShell
+        if: ${{ !cancelled() }}
+        run: cd ios/MadShell && swift test
 
-  ios-build:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: brew install xcodegen
-      - run: cd ios && xcodegen generate
-      # No team or signing secrets: Base.xcconfig defaults MAD_BUNDLE_ID and leaves DEVELOPMENT_TEAM empty.
-      - run: xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
-
+  # The iPhone app for the simulator, then the Mac app, which is built even when the iPhone's was not
+  # and is uploaded whenever it was built.
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
       - run: cd ios && xcodegen generate
-      - run: xcodebuild -project ios/mad.xcodeproj -scheme madmac -configuration Release -destination 'platform=macOS' -derivedDataPath ios/build/mac-release build
-      - run: cd ios/build/mac-release/Build/Products/Release && ditto -c -k --keepParent madmac.app $GITHUB_WORKSPACE/madmac.zip
-      - uses: actions/upload-artifact@v4
+      # No team or signing secrets: Base.xcconfig defaults MAD_BUNDLE_ID and leaves DEVELOPMENT_TEAM empty.
+      - name: iPhone app (simulator)
+        run: xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
+      - name: Mac app (Release)
+        id: mac
+        if: ${{ !cancelled() }}
+        run: xcodebuild -project ios/mad.xcodeproj -scheme madmac -configuration Release -destination 'platform=macOS' -derivedDataPath ios/build/mac-release build
+      - if: ${{ !cancelled() && steps.mac.outcome == 'success' }}
+        run: cd ios/build/mac-release/Build/Products/Release && ditto -c -k --keepParent madmac.app $GITHUB_WORKSPACE/madmac.zip
+      - if: ${{ !cancelled() && steps.mac.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
         with:
           name: madmac
           path: madmac.zip
