@@ -30,6 +30,8 @@ public struct ConversationView: View {
     #if os(macOS)
     @State private var keeper = BottomKeeper()
     /// How tall the approval card floating above the composer is (0 when there is none): the list leaves room for it.
+    /// Bumped once when the list stops being empty: a new identity, so it is built again (see `messages`).
+    @State private var listGeneration = 0
     @State private var askHeight: CGFloat = 0
     #else
     /// The create card's change field is open: the composer gives way to it (see `CreateSheet`).
@@ -257,8 +259,13 @@ public struct ConversationView: View {
             .defaultScrollAnchor(.bottom)
             .pinnedToBottomThroughResizes()
             // A conversation that opens empty (a new agent, nothing cached) and then gets its first entries is built
-            // again: the lazy stack, scrolled to its end from nothing, otherwise draws no rows until it is rebuilt.
-            .id(model.entries.isEmpty)
+            // again: the lazy stack, scrolled to its end from nothing, otherwise draws no rows until it is rebuilt. The
+            // rebuild waits for the next turn of the run loop: done in the layout pass that brought the entries, it
+            // changed state while AppKit laid the window out.
+            .id(listGeneration)
+            .onChange(of: model.entries.isEmpty) { was, now in
+                if was && !now { DispatchQueue.main.async { listGeneration += 1 } }
+            }
             .scrollDismissesKeyboardIfAvailable()
             .onChange(of: model.entries.count) { _, _ in follow(proxy) }
             .onChange(of: model.live) { _, _ in follow(proxy) }
