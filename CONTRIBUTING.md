@@ -32,30 +32,41 @@ MAD_SOCKET=mad-dev ./mad kill-server
 
 ### Code layout
 
+[docs/architecture.md](docs/architecture.md) is the map of mad as it runs:
+its processes, what is kept where, and who does what.
+
 `main.go` only calls `internal/cli`. Everything else lives in `internal/`,
 with dependencies pointing downwards in this list:
 
 | Package              | Responsibility                                                   |
 | -------------------- | ---------------------------------------------------------------- |
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
-| `internal/desktop`   | `mad desktop`: the deck in a window (web sidebar, conversations drawn from transcripts and hosts) |
-| `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
+| `internal/desktop/fixture` | A stand-in for the desktop server that answers from scenario files: what the page's Chrome tests and the apps' UI tests and screenshots run against |
+| `internal/desktop`   | `mad desktop`: the deck's API and its page, for the window, the phone and the apps (the deck's snapshot, conversations drawn from transcripts and hosts) |
+| `internal/desktop/api` | The JSON the desktop server answers with, as types (standard library only), and the API's version |
+| `internal/ui`        | Bubble Tea sidebar, project picker, session picker; it keeps the deck: polls it, and has its rounds made |
 | `internal/rounds`    | The deck's work by the clock, with nobody at the keys: queued messages and bus digests sent to agents whose turn is over, lapsed handoffs marked, work followed up, timers fired, idle agents put to sleep. No loop of its own: the sidebar has the rounds made on each tick |
+| `internal/attention` | What waits on the person and how each agent stands, worked out once for every surface: the inbox, the board's "Waiting for you", the activity lines |
+| `internal/creator`   | Carries out the person's answer to an agent's request to start an agent or a team, and tells the agent how it went |
 | `internal/team`      | Teams: agents in roles started together in a channel, from a template |
 | `internal/run`       | Runs: a task handed through agents in roles by a flow (steps, reviews, questions, gates, what a step must leave behind) |
-| `internal/queue`     | Messages waiting for an agent's turn to end (the sidebar sends them) |
-| `internal/host`      | `mad host`: an agent run headless in its pane for the desktop window to draw (window mode) |
-| `internal/phone`     | `mad phone`: the window served to the user's phone over Tailscale (`tailscale serve`), its token and QR code |
-| `internal/push`      | Web Push to the user's devices: subscriptions, VAPID keys, RFC 8291 encryption (stdlib only) |
-| `internal/bus`       | Channels and DMs where agents and the user talk: messages, mentions, digests, guards (the sidebar delivers) |
+| `internal/create`    | Agents' requests to start an agent or a team, kept as files while the person has not answered |
+| `internal/buschat`   | `mad bus chat`: one channel or DM read and written in a terminal |
+| `internal/phone`     | `mad phone`: the window served to the user's phone over Tailscale (`tailscale serve`) or a Cloudflare Tunnel, its tokens, paired devices and QR code |
+| `internal/bus`       | Channels and DMs where agents and the user talk: messages, mentions, digests, handoffs, the board, timers, the day's budget (the rounds deliver) |
+| `internal/queue`     | Messages waiting for an agent's turn to end (the rounds send them) |
 | `internal/mcp`       | A small MCP stdio server: `mad mcp` serves the bus's tools to each agent |
+| `internal/drive`     | Works agents from outside the sidebar: starts one off stage, types a message into it, waits for the turn that answers (`mad spawn`, `send`, `wait`) |
+| `internal/host`      | `mad host`: an agent run headless in its pane for the desktop window to draw (window mode) |
 | `internal/deck`      | tmux layout, agent lifecycle, generated tmux config              |
 | `internal/live`      | `mad stream`: what agents write as they write it (an API proxy for claude and codex, an extension for pi) |
 | `internal/transcript`| Titles, prompts, tool calls and tokens from agents' transcripts  |
 | `internal/discover`  | Per-agent providers: history, sessions, transcript lines, processes outside the deck |
-| `internal/status`    | Hook reports and running/waiting/idle inference                  |
 | `internal/notify`    | Desktop notifications and the user's notify command              |
+| `internal/push`      | Web Push to the user's devices: subscriptions, VAPID keys, RFC 8291 encryption (stdlib only) |
+| `internal/status`    | Hook reports and running/waiting/idle inference                  |
 | `internal/poke`      | Socket for other mad processes to reach the sidebar              |
+| `internal/skill`     | Skills agents hand to the person: saved as pending, approved, kept in mad's store and copied where the agents look for them |
 | `internal/agent`     | Agent kinds (built-in + `agents.json`) and their commands        |
 | `internal/git`       | Checkout info for the sidebar; worktrees for agents               |
 | `internal/tmux`      | Thin wrapper around the private tmux server                      |
@@ -63,6 +74,9 @@ with dependencies pointing downwards in this list:
 | `internal/state`     | Persistent project/agent tree                                    |
 | `internal/paths`     | Config/state locations, path and shell helpers                   |
 | `internal/textutil`  | Width-aware truncation/padding for the terminal                  |
+
+`go test ./internal/cli` holds the list to the code: every package is in
+it, above the ones it imports.
 
 ### Packs: how work is done is not code
 
@@ -87,7 +101,7 @@ Launching an agent is configuration: an entry in `agent.builtin` (or a
 user's `agents.json`) with its commands, waiting patterns and icon. That
 alone runs it in the deck.
 
-Everything else about an agent goes through `discover.Provider`:
+What mad reads of an agent goes through `discover.Provider`:
 
 - how mad wires itself in: files written at deck start (claude's settings),
   the placeholders its commands use (`{claude_settings}`,
@@ -98,10 +112,26 @@ Everything else about an agent goes through `discover.Provider`:
 - how to recognize it running in another terminal or a desktop app, and
   whether a deck started it.
 
-Each agent is one file, `internal/discover/claude.go` and `codex.go`; a new
-one implements the interface in its own file and is added to `providers`.
-Nothing outside those files and the built-in kinds names an agent, except
-`.claude/worktrees`, the worktree directory mad shares with Claude Code.
+Each agent is one file there, `internal/discover/claude.go` and
+`codex.go`; a new one implements the interface in its own file and is
+added to `providers`. With that it runs in the deck with its status,
+title and usage.
+
+Five more things are a kind's own, each in one place. A kind without one
+does not take part in it:
+
+- **Window mode** (drawn by the window and the apps, not as its TUI): a
+  host that speaks the agent's structured protocol,
+  `internal/host/<kind>.go`, and the kind in `deck.Headless`.
+- **The bus**: how the kind is given mad's MCP server, `deck.MCPFlags`.
+- **Text as it is written**: a tap in `internal/live`.
+- **Roles in runs and teams**: the models, efforts and the permission or
+  sandbox flags a role starts with, `internal/run/agents.go`; claude and
+  codex have them.
+- **Skills**: where the kind looks for them, `skill.Find`.
+
+`.claude/worktrees` is also named: the worktree directory mad shares with
+Claude Code.
 
 ### Tests
 
