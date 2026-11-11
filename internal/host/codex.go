@@ -470,6 +470,16 @@ func (c *codex) ask(id json.RawMessage, method string, params json.RawMessage) {
 		c.mu.Lock()
 		c.quest[key] = ids
 		c.mu.Unlock()
+	case "mcpServer/elicitation/request":
+		// how codex asks before it calls an MCP server's tool; a form that
+		// asks for more than a yes is not one the card can fill
+		e, ok := mcpApproval(params)
+		if !ok {
+			_ = c.write(map[string]any{"id": id, "result": map[string]any{"action": "decline"}})
+			return
+		}
+		req.Tool, req.Label, req.Input, req.Title = e.tool, e.tool, e.input, e.message
+		req.Always = e.always
 	default:
 		_ = c.write(map[string]any{"id": id, "error": map[string]any{"code": -32601, "message": "not supported by mad host: " + method}})
 		return
@@ -481,6 +491,58 @@ func (c *codex) ask(id json.RawMessage, method string, params json.RawMessage) {
 		s.Requests = append(s.Requests, req)
 		s.Status = Waiting
 	})
+}
+
+// mcpElicit is codex's question before an MCP tool call, as the card shows it.
+type mcpElicit struct {
+	tool, input, message string
+	always               bool // it can be allowed for the session
+}
+
+// mcpApproval reads an elicitation that only asks yes or no (a form with no
+// fields: codex's approval of an MCP tool call); ok is false for any other.
+func mcpApproval(params json.RawMessage) (e mcpElicit, ok bool) {
+	var p struct {
+		Server  string `json:"serverName"`
+		Mode    string `json:"mode"`
+		Message string `json:"message"`
+		Schema  struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"requestedSchema"`
+		Meta struct {
+			Title   string          `json:"tool_title"`
+			Name    string          `json:"tool_name"`
+			Display json.RawMessage `json:"tool_params_display"`
+			Params  json.RawMessage `json:"tool_params"`
+			Persist json.RawMessage `json:"persist"`
+		} `json:"_meta"`
+	}
+	if json.Unmarshal(params, &p) != nil || p.Mode != "form" || len(p.Schema.Properties) > 0 {
+		return e, false
+	}
+	tool := p.Meta.Title
+	if tool == "" {
+		tool = p.Meta.Name
+	}
+	if tool == "" {
+		tool = p.Server
+	} else if p.Server != "" {
+		tool = p.Server + " · " + tool
+	}
+	input := p.Meta.Params
+	if len(p.Meta.Display) > 0 && string(p.Meta.Display) != "null" {
+		input = p.Meta.Display
+	}
+	e = mcpElicit{tool: tool, message: p.Message, always: strings.Contains(string(p.Meta.Persist), "session")}
+	if len(input) > 0 && string(input) != "null" {
+		var v any
+		if json.Unmarshal(input, &v) == nil {
+			if b, err := json.MarshalIndent(v, "", "  "); err == nil {
+				e.input = string(b)
+			}
+		}
+	}
+	return e, true
 }
 
 func firstLine(s string) string {
@@ -558,6 +620,15 @@ func (c *codex) answer(a Answer) error {
 			granted = p.Perms
 		}
 		result = map[string]any{"permissions": granted, "scope": scope}
+	case "mcpServer/elicitation/request":
+		r := map[string]any{"action": "decline"}
+		if a.Allow {
+			r = map[string]any{"action": "accept", "content": map[string]any{}}
+			if a.Always {
+				r["_meta"] = map[string]any{"persist": "session"}
+			}
+		}
+		result = r
 	default:
 		decision := "decline"
 		switch {
