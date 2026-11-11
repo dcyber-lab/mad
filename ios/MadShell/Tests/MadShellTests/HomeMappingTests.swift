@@ -135,6 +135,7 @@ final class HomeMappingTests: XCTestCase {
         XCTAssertEqual(card.acts.map(\.label), ["允许", "拒绝"])
         XCTAssertEqual(card.acts.map(\.kind), [.allow, .deny])
         XCTAssertTrue(card.isPermission)
+        XCTAssertEqual(card.removableAgentID, "need0001-bbbb", "a waiting agent is only in 待处理: its card must remove it")
         XCTAssertEqual(m.today?.waiting, 1)
     }
 

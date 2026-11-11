@@ -54,10 +54,14 @@ public struct HomeWaiting: Identifiable, Equatable, Sendable {
     public var openID: String
     /// The Mac sidebar's one line for a request to create (what it asks, then what it would start, no project); empty for others.
     public var macLine: String
+    /// The agent 删除 ends from the card: the agent that waits; empty for a request to create and an item of no agent.
+    /// An agent that waits is pinned here and left out of its project, so the card is where it is removed.
+    public var removableAgentID: String
 
     public init(id: String, agentID: String, agentKind: String = "", name: String, project: String = "", whereLine: String = "",
-                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false, openID: String = "", macLine: String = "") {
-        self.mustOpen = mustOpen; self.openID = openID; self.macLine = macLine
+                age: String = "", cost: String = "", detail: String = "", mono: Bool = false, acts: [AskAct] = [], mustOpen: Bool = false, openID: String = "", macLine: String = "",
+                removableAgentID: String = "") {
+        self.mustOpen = mustOpen; self.openID = openID; self.macLine = macLine; self.removableAgentID = removableAgentID
         self.id = id; self.agentID = agentID; self.agentKind = agentKind; self.name = name; self.project = project
         self.whereLine = whereLine; self.age = age; self.cost = cost; self.detail = detail; self.mono = mono; self.acts = acts
     }

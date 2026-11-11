@@ -10,6 +10,8 @@ struct WaitingCard: View {
     /// Whether the command box had to cut the command: then Allow is not offered beside it, Review is (it opens the
     /// agent, whose card shows the whole command). Until the box is measured it counts as cut.
     @State private var cut = true
+    /// 删除 was picked from the card's menu: the confirmation is up.
+    @State private var deleting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -53,6 +55,18 @@ struct WaitingCard: View {
         .background(Color.madWaitBg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { actions.open(item.agentID) }
+        // an agent that waits is only here (not in its project), so this is where it is removed, as a row is
+        .contextMenu {
+            if !item.removableAgentID.isEmpty, actions.remove != nil {
+                Button(role: .destructive) { deleting = true } label: { Label(L("删除"), systemImage: "trash") }
+            }
+        }
+        .confirmationDialog(Lf("删除“%@”？", item.name), isPresented: $deleting, titleVisibility: .visible) {
+            Button(L("删除"), role: .destructive) { actions.remove?(item.removableAgentID) }
+            Button(L("取消"), role: .cancel) {}
+        } message: {
+            Text(L("它会停止，并从 mad 里移除。"))
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(item.name), needs you, \(item.detail)")
     }
