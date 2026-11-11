@@ -1395,6 +1395,7 @@ function xtermColor(n) {
 // with nothing new. The page is drawn again every second all the same (poll), from the deck it holds: what it
 // shows moves with the clock too, and some of it acts on time passing.
 async function poll() {
+  sayPairError();
   if (deckOK && Date.now() - lastDraw > 900) {
     try {
       draw();
@@ -1498,14 +1499,19 @@ function setOffline(off) {
   }
 }
 
+// sayPairError says, once, why pairing failed (pairError). toast is actions.js's, which runs after this file:
+// the page's first refresh comes before there is one, so it is said from poll, which starts a moment later and
+// comes round each second.
+let pairToasted = false;
+function sayPairError() {
+  if (!pairError || pairToasted || typeof toast !== "function") return;
+  pairToasted = true;
+  toast(pairError, "err");
+}
+
 // refresh takes the deck's latest look at once and draws it: after an action, to show what it did. The long
 // poll in flight is dropped and asked again with the deck this brings.
-let pairToasted = false;
 async function refresh() {
-  if (pairError && !pairToasted && typeof toast === "function") {
-    pairToasted = true;
-    toast(pairError, "err");
-  }
   deckAbort?.abort();
   try {
     await fetchDeck(0);
