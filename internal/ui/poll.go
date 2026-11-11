@@ -331,7 +331,7 @@ func (m *model) event(p *state.Project, a *state.Agent, prev, cur string, hook *
 		// A new turn, seen from its start: whose it is was marked when
 		// mad delivered, or not at all.
 		m.runSince[a.ID], m.runSeen[a.ID] = now, true
-		m.runByMad[a.ID] = m.madNext.take(a.ID, now)
+		m.runByMad[a.ID] = m.rounds.Mad.Take(a.ID, now)
 	case (cur == status.Running || cur == status.Waiting) && prev == "":
 		delete(m.runSeen, a.ID) // the deck came in mid-turn: whose it is, is not known
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/notify"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	"github.com/dcyber-lab/mad/internal/rounds"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -45,6 +46,16 @@ func setup(t *testing.T, projects ...string) (*model, *state.State) {
 	old := usableDir
 	usableDir = func(dir string) bool { fi, err := os.Stat(dir); return err == nil && fi.IsDir() }
 	t.Cleanup(func() { usableDir = old })
+	// The rounds a tick has made reach no real deck: nobody is at it, and
+	// what they would send or put to sleep is refused, unless a test puts
+	// its own in.
+	oldWatched, oldSend, oldSleep := rounds.Watched, rounds.Send, rounds.SleepAgent
+	rounds.Watched = func() bool { return false }
+	rounds.Send = func(*state.State, *state.Agent, string, []agent.Kind) error {
+		return errors.New("a test sent a message to the deck")
+	}
+	rounds.SleepAgent = func(string, bool) (bool, error) { return false, errors.New("a test put an agent of the deck to sleep") }
+	t.Cleanup(func() { rounds.Watched, rounds.Send, rounds.SleepAgent = oldWatched, oldSend, oldSleep })
 	m := newModel(st, agent.Builtin())
 	m.Update(tea.WindowSizeMsg{Width: 32, Height: 30})
 	return m, st
@@ -1539,6 +1550,9 @@ func TestWaitForState(t *testing.T) {
 	}
 }
 
+// What the sidebar's poll found is what the rounds know of the deck: an
+// agent idle off stage for sleep.after is put to sleep, one in front of
+// someone is not, and how the round ended is taken in.
 func TestSleepIdleAgents(t *testing.T) {
 	m, st := setup(t, "/code/a")
 	m.cfg.SleepAfter = time.Hour
@@ -1552,9 +1566,9 @@ func TestSleepIdleAgents(t *testing.T) {
 	}
 	m.rebuildRows()
 	var calls []string
-	old := sleepAgent
-	t.Cleanup(func() { sleepAgent = old })
-	sleepAgent = func(id string, away bool) (bool, error) {
+	old := rounds.SleepAgent
+	t.Cleanup(func() { rounds.SleepAgent = old })
+	rounds.SleepAgent = func(id string, away bool) (bool, error) {
 		calls = append(calls, fmt.Sprintf("%s away=%v", id, away))
 		if id == "busy" {
 			return false, &deck.BusyError{Command: "node"}
@@ -1586,41 +1600,38 @@ func TestSleepIdleAgents(t *testing.T) {
 		"busy": idleSince(t0),
 	})
 
-	if got := strings.Join(m.sleepers(later), ","); got != "old,busy" {
+	sleepers := func() string {
+		return strings.Join(rounds.Sleepers(later, m.cfg.SleepAfter, m.roundFacts()), ",")
+	}
+	if got := sleepers(); got != "old,busy" {
 		t.Errorf("sleepers = %q", got)
 	}
 	// Its diff on stage keeps an agent awake: closing the diff shows it.
 	m.shown, m.taskFor = map[string]bool{tmux.IDTask: true}, "old"
-	if got := strings.Join(m.sleepers(later), ","); got != "busy" {
+	if got := sleepers(); got != "busy" {
 		t.Errorf("sleepers with old's diff up = %q", got)
 	}
 	m.shown, m.taskFor = map[string]bool{"stage": true}, ""
-	cmd := m.sleepCmd(later)
-	if cmd == nil || !m.sleeping {
+
+	// The round, as a tick at that time has it made: its job stirs the
+	// panes, and its end is the sidebar's to take in.
+	var sleep *rounds.Job
+	for _, j := range m.rounds.Due(later, rounds.Config{SleepAfter: m.cfg.SleepAfter}, m.roundFacts) {
+		if j.Stirs {
+			sleep = &j
+		}
+	}
+	if sleep == nil {
 		t.Fatal("no sleep round started")
 	}
-	msg := cmd()
+	res := sleep.Run()
 	if got := strings.Join(calls, ","); got != "old away=true,busy away=true" {
 		t.Errorf("slept %q", got)
 	}
-	m.Update(msg)
-	if m.sleeping || m.flash != "" {
-		t.Errorf("after the round: sleeping=%v flash=%q", m.sleeping, m.flash)
-	}
-	if m.sleepCmd(t0.Add(time.Minute)) != nil || m.sleeping {
-		t.Error("a round started with nobody idle long enough")
-	}
-
-	// The tick looks only when sleep.after is set, every sleepCheckEvery.
-	m.cfg.SleepAfter, m.lastSleepCheck = 0, time.Time{}
-	m.Update(tickMsg(time.Now()))
-	if !m.lastSleepCheck.IsZero() {
-		t.Error("checked with sleep.after unset")
-	}
-	m.cfg.SleepAfter = time.Hour
-	m.Update(tickMsg(time.Now()))
-	if time.Since(m.lastSleepCheck) > time.Second {
-		t.Error("no check with sleep.after set")
+	m.polling = false
+	_, cmd := m.Update(roundMsg{res})
+	if m.flash != "" || cmd == nil {
+		t.Errorf("after the round: flash=%q, polled again: %v", m.flash, cmd != nil)
 	}
 }
 

@@ -283,7 +283,7 @@ func (m *model) rowSegs(r row) (left, right []seg) {
 		kind.st = kind.st.Foreground(lipgloss.Color(k.Color))
 	}
 	left = []seg{{stPlain, " "}, bar, {stPlain, " "}, {stFaint, num}, {stPlain, " "}, icon, {stPlain, " "}, kind, {stPlain, " "}, name}
-	if n := m.queued[a.ID]; n > 0 {
+	if n := m.rounds.Queued(a.ID); n > 0 {
 		// Messages waiting for its turn to end (mad queue).
 		left = append(left, seg{stFaint, fmt.Sprintf(" ⇢%d", n)})
 	}

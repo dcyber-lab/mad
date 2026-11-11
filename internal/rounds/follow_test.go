@@ -1,4 +1,4 @@
-package ui
+package rounds
 
 import (
 	"testing"
@@ -9,21 +9,20 @@ import (
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
-// The sidebar raises follow-ups every minute with its own statuses, and the
-// follow-up time and the on/off switch come from config.json's "bus".
-func TestFollowCmd(t *testing.T) {
-	m, st := setup(t, "/code/a")
+// Follow-ups are raised with the keeper's statuses, and the follow-up time
+// and the on/off switch come from config.json's "bus".
+func TestFollow(t *testing.T) {
+	r, st, set, facts := newDeck(t)
 	st.Projects[0].Agents = []*state.Agent{{ID: "one", Kind: "claude"}, {ID: "two", Kind: "claude"}}
-	m.rebuildRows()
 
 	oldF, oldOn, oldAt := bus.FollowUp, bus.NudgesOn, bus.PersonAt
-	oldFU, oldRep, oldW, oldTm := checkFollowUps, checkReport, deckWatched, checkTimers
+	oldFU, oldRep, oldW, oldTm := checkFollowUps, checkReport, Watched, checkTimers
 	t.Cleanup(func() {
 		bus.FollowUp, bus.NudgesOn, bus.PersonAt = oldF, oldOn, oldAt
-		checkFollowUps, checkReport, deckWatched, checkTimers = oldFU, oldRep, oldW, oldTm
+		checkFollowUps, checkReport, Watched, checkTimers = oldFU, oldRep, oldW, oldTm
 	})
 	watched := false
-	deckWatched = func() bool { return watched }
+	Watched = func() bool { return watched }
 	bus.PersonAt = time.Time{}
 	var gotStatuses map[string]string
 	var gotAt time.Time
@@ -38,20 +37,21 @@ func TestFollowCmd(t *testing.T) {
 	}
 
 	// Before the first poll the statuses are unknown: nothing runs.
-	if cmd := m.followCmd(time.Now()); cmd != nil || m.following {
+	var cfg Config
+	if job := r.follow(time.Now(), cfg, facts); job != nil || r.following {
 		t.Fatal("followed before any status was known")
 	}
 
-	m.trackers["one"] = &status.Tracker{Status: status.Idle}
-	m.trackers["two"] = &status.Tracker{Status: status.Running}
-	m.cfg.Bus.FollowUp, m.cfg.Bus.Report = 45*time.Minute, "08:30"
+	set("one", status.Idle)
+	set("two", status.Running)
+	cfg.FollowUp, cfg.Report = 45*time.Minute, "08:30"
 	at := time.Date(2026, 10, 30, 14, 2, 0, 0, time.UTC)
-	cmd := m.followCmd(at)
-	if cmd == nil || !m.following || !m.lastFollow.Equal(at) {
-		t.Fatalf("no follow-up round started: cmd=%v following=%v", cmd != nil, m.following)
+	job := r.follow(at, cfg, facts)
+	if job == nil || !r.following || !r.lastFollow.Equal(at) {
+		t.Fatalf("no follow-up round started: job=%v following=%v", job != nil, r.following)
 	}
-	if _, ok := cmd().(followedMsg); !ok {
-		t.Fatal("round did not end with followedMsg")
+	if _, ok := job.Run().(Followed); !ok {
+		t.Fatal("round did not end with Followed")
 	}
 	if !gotAt.Equal(at) || gotStatuses["one"] != status.Idle || gotStatuses["two"] != status.Running || !reported || clock != "08:30" {
 		t.Errorf("follow-ups: at=%v statuses=%v reported=%v clock=%q", gotAt, gotStatuses, reported, clock)
@@ -67,38 +67,49 @@ func TestFollowCmd(t *testing.T) {
 	}
 	// Someone at the deck: they are here, as of this round.
 	watched = true
-	m.Update(followedMsg{})
-	m.followCmd(at)()
+	r.Done(Followed{}, at)
+	r.follow(at, cfg, facts).Run()
 	if !bus.PersonAt.Equal(at) {
 		t.Errorf("PersonAt=%v with the deck watched, want %v", bus.PersonAt, at)
 	}
-	m.Update(followedMsg{})
-	if m.following {
+	// The round's end says how the day's budget stands.
+	if out := r.Done(Followed{Spend: bus.SpendState{Turns: 3}}, at); out.Spend == nil || out.Spend.Turns != 3 {
+		t.Errorf("the budget was not passed on: %+v", out)
+	}
+	if r.following {
 		t.Error("still following after the round ended")
+	}
+	// A window showing an agent is the person being there too.
+	watched, bus.PersonAt = false, time.Time{}
+	shown := func() Facts { f := facts(); f.Viewed = true; return f }
+	r.follow(at, cfg, shown).Run()
+	r.Done(Followed{}, at)
+	if !bus.PersonAt.Equal(at) {
+		t.Errorf("PersonAt=%v with an agent in a window, want %v", bus.PersonAt, at)
 	}
 
 	// "follow_up": "0" turns the nudges off and leaves the board's time.
-	m.cfg.Bus.FollowUp = 0
-	m.followCmd(at)
+	cfg.FollowUp = 0
+	r.follow(at, cfg, facts)
 	if bus.NudgesOn || bus.FollowUp != 45*time.Minute {
 		t.Errorf("off: NudgesOn=%v FollowUp=%v", bus.NudgesOn, bus.FollowUp)
 	}
 }
 
 // A tick starts a round when the last was a minute ago, and not before.
-func TestTickStartsFollowUps(t *testing.T) {
-	m, _ := setup(t, "/code/a")
-	oldFU, oldW := checkFollowUps, deckWatched
-	t.Cleanup(func() { checkFollowUps, deckWatched = oldFU, oldW })
-	deckWatched = func() bool { return false }
-	m.lastFollow = time.Now()
-	m.Update(tickMsg(time.Now()))
-	if m.following {
+func TestDueStartsFollowUps(t *testing.T) {
+	r, _, _, facts := newDeck(t)
+	oldFU := checkFollowUps
+	t.Cleanup(func() { checkFollowUps = oldFU })
+	now := time.Now()
+	r.lastFollow = now
+	r.Due(now, Config{}, facts)
+	if r.following {
 		t.Error("followed again within a minute")
 	}
-	m.lastFollow = time.Now().Add(-followEvery)
-	m.Update(tickMsg(time.Now()))
-	if !m.following {
+	r.lastFollow = now.Add(-followEvery)
+	r.Due(now, Config{}, facts)
+	if !r.following {
 		t.Error("tick a minute after the last round did not start one")
 	}
 }
