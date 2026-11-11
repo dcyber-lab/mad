@@ -143,8 +143,21 @@ func ShellQuote(s string) string {
 }
 
 // WriteFileAtomic writes data via a temp file and rename, creating parent
-// directories, so readers never see a partial file.
-func WriteFileAtomic(path string, data []byte) error {
+// directories, so readers never see a partial file. The data is synced
+// before the rename, or a power loss could leave the name pointing at an
+// empty file.
+func WriteFileAtomic(path string, data []byte) error { return writeFile(path, data, true) }
+
+// WriteFileUnsynced is WriteFileAtomic without the sync, which takes
+// milliseconds (on a Mac it flushes the disk): for what is written often
+// and only says how things stand now, as every hook writes an agent's
+// status.
+func WriteFileUnsynced(path string, data []byte) error { return writeFile(path, data, false) }
+
+// syncFile is (*os.File).Sync, replaced in tests.
+var syncFile = (*os.File).Sync
+
+func writeFile(path string, data []byte, sync bool) error {
 	// A symlinked file (a dotfile kept in a repository) is written
 	// through, not replaced by a regular file.
 	if dst, err := filepath.EvalSymlinks(path); err == nil {
@@ -162,10 +175,8 @@ func WriteFileAtomic(path string, data []byte) error {
 		_ = tmp.Chmod(fi.Mode().Perm())
 	}
 	_, err = tmp.Write(data)
-	if err == nil {
-		// Synced before the rename, or a power loss could leave the
-		// name pointing at an empty file.
-		err = tmp.Sync()
+	if err == nil && sync {
+		err = syncFile(tmp)
 	}
 	if err != nil {
 		tmp.Close()

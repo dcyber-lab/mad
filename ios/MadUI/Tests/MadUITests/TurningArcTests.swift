@@ -22,7 +22,9 @@ final class TurningArcTests: XCTestCase {
     }
 
     func testTheArcIsALayerTheRenderServerTurns() throws {
-        let l = try arc(StatusRing(state: .working, size: 40), size: 40)
+        // The arc itself, not StatusRing: the ring holds it still under the machine's Reduce Motion, which a CI
+        // runner has on.
+        let l = try arc(ArcLayerView(size: 40, still: false), size: 40)
         XCTAssertEqual(l.bounds.size, CGSize(width: 40, height: 40))
         XCTAssertEqual(l.lineWidth, 2, accuracy: 1e-6, "5 of 100")
         XCTAssertEqual(l.strokeEnd, 0.265, accuracy: 1e-6)

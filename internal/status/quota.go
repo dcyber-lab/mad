@@ -92,7 +92,7 @@ func WriteQuota(kind string, q Quota, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(QuotaPath(kind), data)
+	return paths.WriteFileUnsynced(QuotaPath(kind), data)
 }
 
 // ReadQuota returns the last report for kind, if there is one.

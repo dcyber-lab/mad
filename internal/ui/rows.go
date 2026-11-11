@@ -207,8 +207,12 @@ func (m *model) save() {
 		m.configError(fmt.Errorf("%w; changes aren't saved until it's fixed", m.stErr))
 		return
 	}
+	// base becomes what was written, others' changes merged in; if the
+	// save failed, it stays what the file last had, so the next save
+	// still sees what changed here.
 	if err := m.st.SaveMerged(m.base, m.stMod); err != nil {
 		m.setFlashErr(err.Error())
+		return
 	}
 	m.stMod = state.ModTime()
 	m.base = m.st.Clone()

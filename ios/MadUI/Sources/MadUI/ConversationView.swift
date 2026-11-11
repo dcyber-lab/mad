@@ -262,10 +262,12 @@ public struct ConversationView: View {
             // again: the lazy stack, scrolled to its end from nothing, otherwise draws no rows until it is rebuilt. The
             // rebuild waits for the next turn of the run loop: done in the layout pass that brought the entries, it
             // changed state while AppKit laid the window out.
+            #if os(macOS)
             .id(listGeneration)
             .onChange(of: model.entries.isEmpty) { was, now in
                 if was && !now { DispatchQueue.main.async { listGeneration += 1 } }
             }
+            #endif
             .scrollDismissesKeyboardIfAvailable()
             .onChange(of: model.entries.count) { _, _ in follow(proxy) }
             .onChange(of: model.live) { _, _ in follow(proxy) }
