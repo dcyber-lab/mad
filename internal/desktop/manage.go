@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/host"
@@ -89,13 +91,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 // changed tells the sidebar that the deck's state changed.
 func changed() { _ = poke.Send(poke.Poll) }
 
-type suggestion struct {
-	Path  string `json:"path"`
-	Name  string `json:"name"`
-	Short string `json:"short"`
-	Used  string `json:"used"`
-	Added bool   `json:"added"`
-}
+type suggestion = api.Suggestion
 
 // isPathQuery: q is a place to look in, not a name to look for.
 func isPathQuery(q string) bool {
@@ -177,7 +173,7 @@ func (s *Server) projectAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changed()
-	reply(w, map[string]any{"name": p.Name, "path": p.Path, "added": added})
+	reply(w, api.ProjectAdded{Added: added, Name: p.Name, Path: p.Path})
 }
 
 // projectRemove removes the project at path, unless agents are left in it.
@@ -229,6 +225,10 @@ func (s *Server) agentAdd(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, errors.New("unknown kind "+req.Kind))
 		return
 	}
+	if !sessionIDRe().MatchString(req.Session) {
+		fail(w, http.StatusBadRequest, errors.New("not a session id"))
+		return
+	}
 	a := &state.Agent{ID: state.NewUUID(), Kind: req.Kind, SessionID: req.Session, CreatedAt: time.Now()}
 	if req.Model != "" {
 		a.Args = []string{"--model", req.Model}
@@ -257,7 +257,7 @@ func (s *Server) agentAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changed()
-	out := map[string]string{"id": a.ID}
+	out := api.AgentAdded{ID: a.ID}
 	if a.Mode == "" {
 		err = drive.EnsureDeck(p.Path)
 		if err == nil {
@@ -270,7 +270,7 @@ func (s *Server) agentAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		out["error"] = err.Error()
+		out.Error = err.Error()
 	}
 	reply(w, out)
 }
@@ -448,9 +448,9 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 	if len(list) > maxHistory {
 		list = list[:maxHistory]
 	}
-	out := []map[string]any{}
+	out := []api.Session{}
 	for _, se := range list {
-		out = append(out, map[string]any{"kind": se.Kind, "id": se.ID, "title": se.Title, "cwd": se.Cwd, "origin": se.Origin, "updated": se.Updated})
+		out = append(out, api.Session{Cwd: se.Cwd, ID: se.ID, Kind: se.Kind, Origin: se.Origin, Title: se.Title, Updated: se.Updated})
 	}
 	reply(w, out)
 }
@@ -495,7 +495,7 @@ func (s *Server) diff(w http.ResponseWriter, r *http.Request) {
 	dir := p.Dir(a)
 	res, err := agentDiff(ctx, dir)
 	if err != nil {
-		reply(w, map[string]any{"dir": dir, "error": err.Error()})
+		reply(w, api.DiffFailed{Dir: dir, Error: err.Error()})
 		return
 	}
 	reply(w, res)
@@ -583,3 +583,7 @@ func agentDiff(ctx context.Context, dir string) (*diffResult, error) {
 	res.Patch = all.String()
 	return res, nil
 }
+
+// sessionIDRe is what a session to resume may be named: nothing, or the
+// plain word the agents give their sessions. It ends up in a command line.
+var sessionIDRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._-]{0,128}$`) })

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -15,19 +16,11 @@ import (
 // from, starting one, and putting one to sleep or ending it.
 
 // BusTeam is the team a channel belongs to, as the channel's header
-// draws it: its roles with their agents, whose live status the window
-// has from the agents.
-type BusTeam struct {
-	Name     string        `json:"name"`
-	Template string        `json:"template"`
-	Roles    []BusTeamRole `json:"roles"`
-}
-
-type BusTeamRole struct {
-	Role  string `json:"role"`
-	Agent string `json:"agent,omitempty"` // the agent's id
-	Lead  bool   `json:"lead,omitempty"`
-}
+// draws it (package api).
+type (
+	BusTeam     = api.BusTeam
+	BusTeamRole = api.BusTeamRole
+)
 
 // busTeams maps channel id → its team.
 func busTeams(st *state.State) map[string]*BusTeam {
@@ -43,26 +36,11 @@ func busTeams(st *state.State) map[string]*BusTeam {
 	return out
 }
 
-type teamRole struct {
-	Name     string `json:"name"`
-	Agent    string `json:"agent"` // claude:opus, codex@high
-	Lead     bool   `json:"lead,omitempty"`
-	ReadOnly bool   `json:"read_only,omitempty"`
-	Brief    string `json:"brief,omitempty"` // its first line
-	Skill    string `json:"skill,omitempty"`
-}
-
-type teamTemplate struct {
-	Name        string     `json:"name"`
-	Description string     `json:"description,omitempty"`
-	Source      string     `json:"source"`
-	Roles       []teamRole `json:"roles"`
-}
-
-type teamChoice struct {
-	Agent   string   `json:"agent"` // claude:opus, codex, codex:gpt-6-sol
-	Efforts []string `json:"efforts"`
-}
+type (
+	teamRole     = api.TeamRole
+	teamTemplate = api.TeamTemplate
+	teamChoice   = api.TeamChoice
+)
 
 // teamTemplates answers GET /api/team/templates?project=PATH: the
 // templates a team there can follow, the agents a role can be played by
@@ -70,13 +48,7 @@ type teamChoice struct {
 func (s *Server) teamTemplates(w http.ResponseWriter, r *http.Request) {
 	root, _ := paths.ProjectRoot(paths.Expand(r.URL.Query().Get("project")))
 	list, err := team.Templates(root)
-	out := struct {
-		Templates   []teamTemplate `json:"templates"`
-		Choices     []teamChoice   `json:"choices"`
-		Permissions []string       `json:"permissions"`
-		MaxTeams    int            `json:"max_teams"`
-		Error       string         `json:"error,omitempty"`
-	}{Templates: []teamTemplate{}, Choices: []teamChoice{}, Permissions: run.Permissions, MaxTeams: team.MaxTeams}
+	out := api.TeamTemplates{Templates: []teamTemplate{}, Choices: []teamChoice{}, Permissions: run.Permissions, MaxTeams: team.MaxTeams}
 	if err != nil {
 		out.Error = err.Error()
 	}
@@ -127,7 +99,7 @@ func (s *Server) teamDo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changed()
-		reply(w, map[string]any{"name": got.Name, "channel": got.Channel, "notes": got.Notes})
+		reply(w, api.TeamStarted{Channel: got.Channel, Name: got.Name, Notes: got.Notes})
 	case "sleep":
 		n, err := team.Sleep(req.Team)
 		if err != nil {
@@ -135,14 +107,14 @@ func (s *Server) teamDo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changed()
-		reply(w, map[string]any{"slept": n})
+		reply(w, api.TeamSlept{Slept: n})
 	case "rm":
 		if err := team.Remove(req.Team); err != nil {
 			fail(w, http.StatusBadRequest, err)
 			return
 		}
 		changed()
-		reply(w, map[string]any{"ok": true})
+		reply(w, api.OK{OK: true})
 	default:
 		fail(w, http.StatusBadRequest, errors.New("op is start, sleep or rm"))
 	}

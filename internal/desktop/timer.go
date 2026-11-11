@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 )
 
 // The scheduled strip of the Board page (bus.Timer): the snapshot carries
@@ -33,7 +34,7 @@ func (s *Server) timerSet(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	var err error
-	var out any = map[string]any{"ok": true}
+	var out any = api.OK{OK: true}
 	switch req.Op {
 	case "add":
 		var t bus.Timer

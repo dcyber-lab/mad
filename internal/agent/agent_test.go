@@ -271,3 +271,17 @@ func TestScreenWaiting(t *testing.T) {
 		}
 	}
 }
+
+func TestCommandQuotesAnOddSessionID(t *testing.T) {
+	withHome(t)
+	claude := ByName(Builtin(), "claude")
+	w := written{"x; touch /tmp/pwned": true, "0c1d-2e3f": true}
+	a := &state.Agent{ID: "id-1", Kind: "claude", SessionID: "x; touch /tmp/pwned"}
+	if cmd := claude.Command(a, true, w.launch()); !strings.Contains(cmd, `'x; touch /tmp/pwned'`) {
+		t.Errorf("the session id is not quoted: %q", cmd)
+	}
+	a.SessionID = "0c1d-2e3f"
+	if cmd := claude.Command(a, true, w.launch()); strings.Contains(cmd, `'0c1d-2e3f'`) || !strings.Contains(cmd, "0c1d-2e3f") {
+		t.Errorf("a plain session id changed: %q", cmd)
+	}
+}

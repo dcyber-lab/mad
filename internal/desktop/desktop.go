@@ -19,11 +19,13 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/discover"
 	"github.com/dcyber-lab/mad/internal/phone"
 )
@@ -84,6 +86,9 @@ func WebFS() fs.FS {
 	return web
 }
 
+// apiVersion is api.Version as the header carries it.
+var apiVersion = strconv.Itoa(api.Version)
+
 // BuildHeader carries the build on /api/deck.
 const BuildHeader = "X-Mad-Build"
 
@@ -111,7 +116,8 @@ func PageHandler(web fs.FS, build string) http.Handler {
 }
 
 // WithHeaders holds a handler to what the real one is held to: nothing
-// cached, and the page under its content security policy.
+// cached, the page under its content security policy, and the API's
+// version on every answer of /api/.
 func WithHeaders(h http.Handler) http.Handler { return headers(h) }
 
 // Handler routes the page, its assets and the API.
@@ -295,6 +301,11 @@ func headers(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", csp)
+		// Every answer of the API says which one it is, here so that no
+		// route can leave it out; the fixture server is held to it too.
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set(api.VersionHeader, apiVersion)
+		}
 		h.ServeHTTP(w, r)
 	})
 }

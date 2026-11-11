@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -106,7 +107,7 @@ func (s *Server) boardNudge(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	reply(w, map[string]any{"ok": true})
+	reply(w, api.OK{OK: true})
 }
 
 var you = bus.From{ID: bus.You, Label: bus.You}
@@ -149,7 +150,7 @@ func (s *Server) busReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	reply(w, map[string]any{"line": line})
+	reply(w, api.BusReport{Line: line})
 }
 
 // busLead answers POST /api/bus/lead {channel, agent}: the agent that
@@ -163,7 +164,7 @@ func (s *Server) busLead(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	reply(w, map[string]any{"ok": true})
+	reply(w, api.OK{OK: true})
 }
 
 // labelOf is agent id's name on the bus.

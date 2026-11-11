@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dcyber-lab/mad/internal/bus"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/drive"
 	"github.com/dcyber-lab/mad/internal/state"
 )
@@ -21,36 +21,12 @@ import (
 // The bus in the window (package bus): its channels and DMs with the
 // sidebar (in the snapshot), a channel's messages, and the person's posts.
 
-// BusMember is an agent in a channel, as the window draws it.
-type BusMember struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Kind  string `json:"kind"`
-}
-
-// BusChannel is a channel or DM as the sidebar lists it.
-type BusChannel struct {
-	ID      string      `json:"id"`
-	Title   string      `json:"title"` // #name, @agent (a DM with you), a ↔ b
-	Topic   string      `json:"topic,omitempty"`
-	DM      bool        `json:"dm,omitempty"`
-	Yours   bool        `json:"yours,omitempty"` // a DM with you: you may write in it
-	Members []BusMember `json:"members"`
-	// Last is the number of the last message, as it always was; LastText is
-	// it as a line of a list ("who: its first line"), LastAt when it was said
-	// (RFC 3339).
-	Last     int       `json:"last"`
-	LastText string    `json:"last_text"`
-	LastAt   time.Time `json:"last_at,omitzero"`
-	Unread   int       `json:"unread,omitempty"`
-	// Mention: an unread message in it asks you; Listed: it is in the
-	// short list (bus.Yours).
-	Mention bool     `json:"mention,omitempty"`
-	Listed  bool     `json:"listed,omitempty"`
-	Paused  bool     `json:"paused,omitempty"`
-	Lead    string   `json:"lead,omitempty"` // the agent that answers for its work
-	Team    *BusTeam `json:"team,omitempty"` // the team it is the channel of (team.go)
-}
+// BusMember and BusChannel are the channels and DMs the snapshot lists
+// (package api).
+type (
+	BusMember  = api.BusMember
+	BusChannel = api.BusChannel
+)
 
 // busChannels lists the channels, then the DMs, for the snapshot, as of
 // the poller's last look at the bus.
@@ -80,7 +56,7 @@ func busChannels(st *state.State, look bus.Look) []BusChannel {
 				continue
 			}
 			if _, a := st.FindAgent(m); a != nil {
-				bc.Members = append(bc.Members, BusMember{a.ID, drive.Label(a), a.Kind})
+				bc.Members = append(bc.Members, BusMember{ID: a.ID, Label: drive.Label(a), Kind: a.Kind})
 				names = append(names, drive.Label(a))
 			} else {
 				gone++
@@ -129,7 +105,7 @@ func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 	if msgs == nil {
 		msgs = []bus.Message{}
 	}
-	body, err := json.Marshal(map[string]any{"channel": ch, "messages": msgs, "last": last, "paused": c.Paused, "receipts": busReceipts(ch)})
+	body, err := json.Marshal(BusMessages{Channel: ch, Last: last, Messages: msgs, Paused: c.Paused, Receipts: busReceipts(ch)})
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
@@ -151,21 +127,26 @@ func (s *Server) busMessages(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// BusReceipt is how one of the person's messages stands: the agents it
-// wakes, each with its state (waiting, delivered, read, replied); none
-// when it wakes nobody.
-type BusReceipt struct {
-	Seq     int             `json:"seq"`
-	Targets []BusTargetInfo `json:"targets"`
-	Paused  bool            `json:"paused,omitempty"`
+// BusMessages answers GET /api/bus/messages: a channel's messages after
+// the number asked for, the number of its last one, whether it is paused,
+// and the receipts of the person's last messages in it. It stays out of
+// package api because it nests bus.Message. Its fields are in the order
+// of their keys, as the map it replaced wrote them, so the bytes and the
+// ETag did not change.
+type BusMessages struct {
+	Channel  string        `json:"channel"`
+	Last     int           `json:"last"`
+	Messages []bus.Message `json:"messages"`
+	Paused   bool          `json:"paused"`
+	Receipts []BusReceipt  `json:"receipts"`
 }
 
-// BusTargetInfo is an agent a message wakes, by its label.
-type BusTargetInfo struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	State string `json:"state"`
-}
+// BusReceipt and BusTargetInfo are how the person's messages stand
+// (package api).
+type (
+	BusReceipt    = api.BusReceipt
+	BusTargetInfo = api.BusTargetInfo
+)
 
 // busReceipts is the receipts of the person's last messages in a channel;
 // all of them, each time, so a mark moves as the agent reads. None on an
@@ -186,7 +167,7 @@ func busReceipts(ch string) []BusReceipt {
 					name = drive.Label(a)
 				}
 			}
-			br.Targets = append(br.Targets, BusTargetInfo{t.ID, name, t.State})
+			br.Targets = append(br.Targets, BusTargetInfo{ID: t.ID, Label: name, State: t.State})
 		}
 		out = append(out, br)
 	}
@@ -341,7 +322,7 @@ func (s *Server) busDM(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	reply(w, map[string]any{"channel": ch, "seq": res.Seq, "woke": res.Woke})
+	reply(w, api.BusDMReply{Channel: ch, Seq: res.Seq, Woke: res.Woke})
 }
 
 // busCreate answers POST /api/bus/channel {name, topic, members}: a new
@@ -376,7 +357,7 @@ func (s *Server) busRead(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, map[string]any{"ok": true})
+	reply(w, api.OK{OK: true})
 }
 
 // busResume answers POST /api/bus/resume {channel}: a paused channel goes on.
@@ -389,5 +370,5 @@ func (s *Server) busResume(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	reply(w, map[string]any{"ok": true})
+	reply(w, api.OK{OK: true})
 }

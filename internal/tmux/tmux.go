@@ -8,6 +8,7 @@ package tmux
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -54,12 +55,23 @@ func Args(args ...string) []string {
 	return append([]string{"-u", "-L", Socket, "-f", paths.TmuxConf()}, args...)
 }
 
+// Timeout is how long Out waits for tmux. Its commands answer in
+// milliseconds; none of those run through Out waits for a person.
+var Timeout = 10 * time.Second
+
 // Out runs a tmux command and returns its trimmed stdout.
 func Out(args ...string) (string, error) {
-	cmd := exec.Command("tmux", Args(args...)...)
+	// A tmux that never answers would otherwise stop whoever asked for
+	// good: the sidebar's pollers wait for their last call to return.
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", Args(args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("tmux %s: no answer in %s", strings.Join(args, " "), Timeout)
+	}
 	if err != nil {
 		return "", fmt.Errorf("tmux %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}

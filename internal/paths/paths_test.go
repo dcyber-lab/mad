@@ -176,3 +176,28 @@ func TestReadJSON(t *testing.T) {
 		t.Error("existing file has no ModTime")
 	}
 }
+
+func TestWriteFileAtomicKeepsModeAndSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.json")
+	if err := os.WriteFile(real, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.json")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFileAtomic(link, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v %v", fi, err)
+	}
+	fi, err := os.Stat(real)
+	if err != nil || fi.Mode().Perm() != 0o644 {
+		t.Fatalf("mode = %v, %v; want 0644", fi.Mode().Perm(), err)
+	}
+	if data, _ := os.ReadFile(real); string(data) != "new" {
+		t.Fatalf("content = %q", data)
+	}
+}

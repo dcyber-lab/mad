@@ -145,6 +145,11 @@ func ShellQuote(s string) string {
 // WriteFileAtomic writes data via a temp file and rename, creating parent
 // directories, so readers never see a partial file.
 func WriteFileAtomic(path string, data []byte) error {
+	// A symlinked file (a dotfile kept in a repository) is written
+	// through, not replaced by a regular file.
+	if dst, err := filepath.EvalSymlinks(path); err == nil {
+		path = dst
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -152,7 +157,17 @@ func WriteFileAtomic(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(data); err != nil {
+	// The file keeps the mode it had; a new one is CreateTemp's 0600.
+	if fi, err := os.Stat(path); err == nil {
+		_ = tmp.Chmod(fi.Mode().Perm())
+	}
+	_, err = tmp.Write(data)
+	if err == nil {
+		// Synced before the rename, or a power loss could leave the
+		// name pointing at an empty file.
+		err = tmp.Sync()
+	}
+	if err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return err

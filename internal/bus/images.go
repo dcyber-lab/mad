@@ -74,7 +74,7 @@ func StoreImage(data []byte) (Image, error) {
 		_ = os.Chtimes(path, now, now)
 		return im, nil
 	}
-	if err := os.MkdirAll(imageDir(), 0o755); err != nil {
+	if err := os.MkdirAll(imageDir(), 0o700); err != nil {
 		return Image{}, err
 	}
 	return im, writeAtomic(path, data)

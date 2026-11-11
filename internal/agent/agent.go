@@ -248,6 +248,12 @@ func (k Kind) Command(a *state.Agent, resume bool, l Launch) string {
 	for name, text := range l.Vars {
 		vars[name] = text
 	}
+	// A session id is a uuid or the like; one that is not a plain word
+	// (from a hook's payload, or a request to the desktop server) is
+	// quoted, so it cannot be read as shell.
+	if !plainWord(sid) {
+		sid = paths.ShellQuote(sid)
+	}
 	pairs := []string{"{id}", a.ID, "{sid}", sid}
 	for name, text := range vars {
 		if text == "" {
@@ -272,4 +278,19 @@ func (k Kind) ScreenWaiting(screen string) bool {
 		}
 	}
 	return false
+}
+
+// plainWord reports whether s is safe in a shell command as it is.
+func plainWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }

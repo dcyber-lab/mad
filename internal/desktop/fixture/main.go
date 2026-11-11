@@ -59,7 +59,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/bus"
 	"github.com/dcyber-lab/mad/internal/desktop"
+	"github.com/dcyber-lab/mad/internal/desktop/api"
+	"github.com/dcyber-lab/mad/internal/phone"
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
@@ -173,8 +176,8 @@ func newHandler(name, web string) (http.Handler, error) {
 	for _, p := range []string{"commands", "models", "phone/devices", "projects/suggest", "history", "files"} {
 		mux.HandleFunc("GET /api/"+p, func(w http.ResponseWriter, r *http.Request) { reply(w, []any{}) })
 	}
-	mux.HandleFunc("GET /api/phone", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]any{"on": false}) })
-	mux.HandleFunc("GET /api/push", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]any{"key": "", "on": false}) })
+	mux.HandleFunc("GET /api/phone", func(w http.ResponseWriter, r *http.Request) { reply(w, phone.Status{}) })
+	mux.HandleFunc("GET /api/push", func(w http.ResponseWriter, r *http.Request) { reply(w, api.PushState{}) })
 	// Anything else of the API answers nothing, harmlessly.
 	for _, m := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
 		mux.HandleFunc(m+" /api/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -430,7 +433,7 @@ func (f *fixture) post(w http.ResponseWriter, r *http.Request) {
 		f.postedAt[in.Channel] = map[int]time.Time{}
 	}
 	f.postedAt[in.Channel][seq] = time.Now()
-	reply(w, map[string]any{"seq": seq, "woke": []string{}})
+	reply(w, bus.PostResult{Seq: seq, Woke: []string{}})
 }
 
 // image answers a small PNG, its color the id's.
@@ -504,7 +507,7 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 	}
 	switch in.Code {
 	case strings.Repeat("a", 32):
-		reply(w, map[string]string{"id": "fixture-device", "machine": "Fixture Mac"})
+		reply(w, api.Paired{ID: "fixture-device", Machine: "Fixture Mac"})
 	case strings.Repeat("c", 32):
 		f.mu.Lock()
 		again := f.pairTried[in.Token]
@@ -517,7 +520,7 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "try again", http.StatusServiceUnavailable)
 			return
 		}
-		reply(w, map[string]string{"id": "fixture-device", "machine": "Fixture Mac"})
+		reply(w, api.Paired{ID: "fixture-device", Machine: "Fixture Mac"})
 	default:
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
@@ -548,10 +551,10 @@ func (f *fixture) start(w http.ResponseWriter, r *http.Request) {
 	f.started = append(f.started, startedAgent{project: req.Project, agent: agent, text: strings.TrimSpace(req.Text), at: time.Now(), failed: failed})
 	// a first message with [fail] in it does not go, as when the real host did not start: the agent is there all the same
 	if failed {
-		reply(w, map[string]any{"id": id, "error": "its host did not start"})
+		reply(w, api.AgentAdded{ID: id, Error: "its host did not start"})
 		return
 	}
-	reply(w, map[string]any{"id": id})
+	reply(w, api.AgentAdded{ID: id})
 }
 
 // addStarted puts the agents started through the fixture into their projects of deck d. The scenario's projects are
@@ -703,7 +706,7 @@ func (f *fixture) applyAnswers(d map[string]any, now time.Time) {
 			out["status"] = "created"
 			if spec["type"] == "team" {
 				out["team"], out["channel"] = name, name
-				addTeamChannel(d, name, spec)
+				addTeamChannel(d, name, spec, a.at)
 			} else {
 				id := "made-" + name
 				out["agent"], out["channel"] = id, "dm."+fmt.Sprint(m["agent"])+"."+id
@@ -763,8 +766,9 @@ func (f *fixture) addEvent(channel, key string, out, spec map[string]any, at tim
 	f.posted[channel] = append(f.posted[channel], raw)
 }
 
-// addTeamChannel gives the deck the channel of a team that was made: its roles, the first three agents of the deck in them.
-func addTeamChannel(d map[string]any, name string, spec map[string]any) {
+// addTeamChannel gives the deck the channel of a team that was made at at: its roles, the first three agents of the deck
+// in them. It is added after the scenario's times were made, so its own is a time, as the server's is.
+func addTeamChannel(d map[string]any, name string, spec map[string]any, at time.Time) {
 	var ids []map[string]any
 	ps, _ := d["projects"].([]any)
 	for _, p := range ps {
@@ -779,7 +783,7 @@ func addTeamChannel(d map[string]any, name string, spec map[string]any) {
 	roleSpecs, _ := spec["roles"].([]any)
 	for i, r := range roleSpecs {
 		rm, _ := r.(map[string]any)
-		role := map[string]any{"role": rm["role"], "kind": rm["kind"], "lead": rm["lead"] == true}
+		role := map[string]any{"role": rm["role"], "lead": rm["lead"] == true}
 		if i < len(ids) {
 			role["agent"] = ids[i]["id"]
 		}
@@ -789,8 +793,8 @@ func addTeamChannel(d map[string]any, name string, spec map[string]any) {
 	for i, m := range ids {
 		members[i] = m
 	}
-	ch := map[string]any{"id": name, "title": "#" + name, "members": members, "last": 0, "last_text": "", "last_at": "-0s",
-		"listed": true, "unread": 1, "team": map[string]any{"name": name, "roles": roles}}
+	ch := map[string]any{"id": name, "title": "#" + name, "members": members, "last": 0, "last_text": "", "last_at": at.Format(time.RFC3339),
+		"listed": true, "unread": 1, "team": map[string]any{"name": name, "template": spec["template"], "roles": roles}}
 	bus, _ := d["bus"].([]any)
 	d["bus"] = append([]any{ch}, bus...)
 }

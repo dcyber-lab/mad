@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dcyber-lab/mad/internal/desktop/api"
 	"github.com/dcyber-lab/mad/internal/phone"
 	"github.com/dcyber-lab/mad/internal/push"
 )
@@ -28,7 +29,7 @@ func (s *Server) pushState(w http.ResponseWriter, r *http.Request) {
 			on = on || sub.Endpoint == ep
 		}
 	}
-	reply(w, map[string]any{"key": key, "on": on})
+	reply(w, api.PushState{Key: key, On: on})
 }
 
 func (s *Server) pushSubscribe(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +48,7 @@ func (s *Server) pushSubscribe(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	reply(w, map[string]any{"on": true})
+	reply(w, api.PushOn{On: true})
 }
 
 func (s *Server) pushUnsubscribe(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +56,7 @@ func (s *Server) pushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, map[string]any{"on": false})
+	reply(w, api.PushOn{On: false})
 }
 
 func (s *Server) pushTest(w http.ResponseWriter, r *http.Request) {
@@ -66,5 +67,5 @@ func (s *Server) pushTest(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, err)
 		return
 	}
-	reply(w, map[string]any{"sent": true})
+	reply(w, api.PushSent{Sent: true})
 }

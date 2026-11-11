@@ -126,10 +126,10 @@ func cursorFile(agentID string) string {
 
 // locked runs fn holding the bus lock.
 func locked(fn func() error) error {
-	if err := os.MkdirAll(dir(), 0o755); err != nil {
+	if err := os.MkdirAll(dir(), 0o700); err != nil {
 		return err
 	}
-	lf, err := os.OpenFile(filepath.Join(dir(), ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	lf, err := os.OpenFile(filepath.Join(dir(), ".lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
@@ -143,11 +143,11 @@ func locked(fn func() error) error {
 
 // writeAtomic replaces a file by renaming a new one over it.
 func writeAtomic(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -234,7 +234,7 @@ func addMsg(ch string, msgs *[]Message, m Message) (Message, error) {
 	if err != nil {
 		return m, err
 	}
-	f, err := os.OpenFile(msgFile(ch), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(msgFile(ch), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return m, err
 	}
