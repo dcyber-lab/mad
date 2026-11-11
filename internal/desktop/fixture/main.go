@@ -522,6 +522,7 @@ func (f *fixture) pair(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(w, api.Paired{ID: "fixture-device", Machine: "Fixture Mac"})
 	default:
+		w.Header().Set(api.ErrorHeader, api.ErrDenied)
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
 }

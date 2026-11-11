@@ -209,7 +209,7 @@ func (s *Server) auth(h http.Handler) http.Handler {
 		// window, the app's first way): through a tunnel it would be in
 		// its logs, so there it is refused, as the master token is.
 		if inURL && viaCloudflare(r) {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			refuse(w, api.ErrToken, "forbidden")
 			return
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) == 1 && !viaCloudflare(r) {
@@ -218,7 +218,7 @@ func (s *Server) auth(h http.Handler) http.Handler {
 		}
 		dev, ok := phone.DeviceFor(got)
 		if !ok {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			refuse(w, api.ErrToken, "forbidden")
 			return
 		}
 		ctx, cancel := context.WithCancel(context.WithValue(r.Context(), deviceKey{}, dev.ID))

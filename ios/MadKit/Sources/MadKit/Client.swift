@@ -71,7 +71,19 @@ public struct MadClient: Sendable {
         try Self.checkAct(data, response)
     }
 
-    /// 204 is done; 409 carries the server's message; 403 is a refused token.
+    /// The header a mad puts on a 403 to say which kind of refusal it is: "token" for a token it does not know
+    /// (pairing again puts it right), anything else for something a good token may not do.
+    static let errorHeader = "X-Mad-Error"
+
+    /// Whether a 403 is a refused token. A mad that says the kind is taken at its word. One too old to say it is
+    /// read as before: by its words where `byText` is set (the bus's answers: "forbidden", or nothing, is a
+    /// refused token, any other text is not), and as a refused token otherwise.
+    static func isRefusedToken(_ http: HTTPURLResponse, _ message: String, byText: Bool) -> Bool {
+        if let kind = http.value(forHTTPHeaderField: errorHeader), !kind.isEmpty { return kind == "token" }
+        return !byText || message.isEmpty || message == "forbidden"
+    }
+
+    /// 204 is done; 409 carries the server's message; a 403 is a refused token unless the server says otherwise.
     public static func checkAct(_ data: Data, _ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else {
             throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
@@ -79,7 +91,7 @@ public struct MadClient: Sendable {
         let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch http.statusCode {
         case 204, 200: return
-        case 403: throw ConnectionError.refused
+        case 403 where isRefusedToken(http, message, byText: false): throw ConnectionError.refused
         case 409: throw ConnectionError.conflict(message.isEmpty ? "It is not waiting on you any more." : message)
         default: throw ConnectionError.unexpected(message.isEmpty ? "这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。" : message)
         }
@@ -265,7 +277,7 @@ public struct MadClient: Sendable {
     }
 
     /// Maps a status to the error the person should read; `ok` are the ones that pass.
-    /// 403 is a refused token, 409 carries the server's message.
+    /// A 403 is a refused token unless the server says otherwise, 409 carries the server's message.
     public static func check(_ data: Data, _ response: URLResponse, _ ok: Set<Int>) throws {
         guard let http = response as? HTTPURLResponse else {
             throw ConnectionError.unexpected("收到的不是 HTTP 回应：请检查链接是不是这台 Mac 的。")
@@ -273,7 +285,7 @@ public struct MadClient: Sendable {
         if ok.contains(http.statusCode) { return }
         let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch http.statusCode {
-        case 403: throw ConnectionError.refused
+        case 403 where isRefusedToken(http, message, byText: false): throw ConnectionError.refused
         case 409: throw ConnectionError.conflict(message.isEmpty ? "The Mac could not do that now." : message)
         case 404: throw ConnectionError.unexpected(message.isEmpty ? "No such agent." : message)
         default: throw ConnectionError.unexpected(message.isEmpty ? "这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。" : message)
@@ -336,7 +348,7 @@ public struct MadClient: Sendable {
         }
         switch http.statusCode {
         case 200: break
-        case 403: throw ConnectionError.refused
+        case 403 where isRefusedToken(http, "", byText: false): throw ConnectionError.refused
         default: throw ConnectionError.unexpected("这台 Mac 返回了 HTTP \(http.statusCode)：稍后再试，或在 Mac 上重启 mad。")
         }
         do {

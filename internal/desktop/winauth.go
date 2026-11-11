@@ -138,7 +138,7 @@ func (s *Server) windowCode(w http.ResponseWriter, r *http.Request) {
 // refused anyway.
 func (s *Server) windowToken(w http.ResponseWriter, r *http.Request) {
 	if viaCloudflare(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		refuse(w, api.ErrDenied, "forbidden")
 		return
 	}
 	var in struct{ Code string }
@@ -148,7 +148,7 @@ func (s *Server) windowToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.winCodes.take(in.Code) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		refuse(w, api.ErrDenied, "forbidden")
 		return
 	}
 	reply(w, api.WindowToken{Token: s.Token})
@@ -160,7 +160,7 @@ func (s *Server) windowToken(w http.ResponseWriter, r *http.Request) {
 func masterOnly(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if deviceOf(r) != "" {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			refuse(w, api.ErrDenied, "forbidden")
 			return
 		}
 		h.ServeHTTP(w, r)
