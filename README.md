@@ -974,7 +974,10 @@ mad send -w reviewer  "Review the change against .mad/run/design.md; end with VE
   (default claude), `-m` the model, `-C` the directory, and `-w` a worktree
   on that branch, as `w` in the sidebar; several agents can share one.
   What follows `--` is passed to the agent, on resume too. It prints the
-  agent's id; `-n` gives it a name to use instead. One that comes up
+  agent's id; `-n` gives it a name to use instead. `-window` makes it
+  an agent of the desktop window and the phone (claude, codex, pi): it
+  runs headless and starts with its first message, so you can write to it
+  there; a script hands it work with `send` or `queue add` as usual. One that comes up
   asking something (claude's folder trust, codex's update notice) exits 1
   saying so: answer it in the deck.
 - **`send`** types the message in as one paste, then enter (`-f file` or

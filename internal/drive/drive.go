@@ -162,6 +162,10 @@ type Spec struct {
 	Run, Role string
 	// Team, if set, makes the agent a member of that team, in Role.
 	Team string
+	// Window runs it headless under `mad host`, for the desktop window
+	// and the phone to draw and write to, as an agent made there. It
+	// starts with its first message (mad send, mad queue add).
+	Window bool
 }
 
 // Spawn adds an agent to its project and starts it off stage, starting
@@ -171,6 +175,9 @@ type Spec struct {
 func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 	if !known(kinds, s.Kind) {
 		return nil, fmt.Errorf("unknown kind %q", s.Kind)
+	}
+	if s.Window && !deck.Headless[s.Kind] {
+		return nil, fmt.Errorf("%s can't run in window mode", s.Kind)
 	}
 	dir := paths.Expand(s.Dir)
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
@@ -193,6 +200,9 @@ func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 	if dir != root {
 		a.Dir = dir
 	}
+	if s.Window {
+		a.Mode = state.ModeWindow
+	}
 	if err := EnsureDeck(root); err != nil {
 		return nil, err
 	}
@@ -211,6 +221,11 @@ func Spawn(s Spec, kinds []agent.Kind) (*state.Agent, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if s.Window {
+		// Its host starts with the first message, as the desktop's own.
+		_ = poke.Send(poke.Poll)
+		return a, nil
 	}
 	started := now()
 	if err := deck.StartAgent(p, a, false, kinds); err != nil {

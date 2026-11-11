@@ -44,6 +44,7 @@ func spawn(args []string, stdio IO) error {
 	fs.StringVar(&s.Model, "m", "", "`model`, passed as --model")
 	fs.StringVar(&s.Dir, "C", ".", "`dir`ectory to run in")
 	fs.StringVar(&s.Branch, "w", "", "run in a worktree on `branch`")
+	fs.BoolVar(&s.Window, "window", false, "run headless, for the desktop window and phone to write to (claude, codex, pi); starts with its first message")
 	fs.Usage = func() {
 		fmt.Fprintln(stdio.Err, "usage: mad spawn [flags] [-- agent flags...]")
 		fs.PrintDefaults()
