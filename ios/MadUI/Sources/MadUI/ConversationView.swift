@@ -256,6 +256,9 @@ public struct ConversationView: View {
             }
             .defaultScrollAnchor(.bottom)
             .pinnedToBottomThroughResizes()
+            // A conversation that opens empty (a new agent, nothing cached) and then gets its first entries is built
+            // again: the lazy stack, scrolled to its end from nothing, otherwise draws no rows until it is rebuilt.
+            .id(model.entries.isEmpty)
             .scrollDismissesKeyboardIfAvailable()
             .onChange(of: model.entries.count) { _, _ in follow(proxy) }
             .onChange(of: model.live) { _, _ in follow(proxy) }
