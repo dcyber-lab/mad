@@ -168,14 +168,8 @@ var refreshRunning = func() (bool, error) {
 	return refresh()
 }
 
-// Get says how things stand, with a pairing code in the URL when it is on.
-func Get(ctx context.Context) Status { return get(ctx, true) }
-
-// Peek says how things stand without a URL, so it mints no pairing code:
-// for a paired device, which may not let others in.
-func Peek(ctx context.Context) Status { return get(ctx, false) }
-
-func get(ctx context.Context, withCode bool) Status {
+// Get says how things stand.
+func Get(ctx context.Context) Status {
 	var s Status
 	panes, err := tmux.ListPanes()
 	if err == nil {
@@ -186,7 +180,7 @@ func get(ctx context.Context, withCode bool) Status {
 	s.Via = c.Via
 	if c.Via == ViaCloudflare {
 		s.Host = tunnelHost()
-		if withCode && s.On && s.Host != "" {
+		if s.On && s.Host != "" {
 			if c, err := PairCode(); err == nil {
 				s.URL = cloudflareURL(s.Host, c)
 			}
@@ -199,7 +193,7 @@ func get(ctx context.Context, withCode bool) Status {
 		return s
 	}
 	s.Host = h
-	if withCode && s.On {
+	if s.On {
 		if c, err := PairCode(); err == nil {
 			s.URL = pageURL(h, c)
 		}

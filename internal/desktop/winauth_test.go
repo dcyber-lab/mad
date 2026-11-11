@@ -206,55 +206,51 @@ func pairAs(t *testing.T, name, tok string) string {
 	return id
 }
 
-// What only the master token may do is refused a paired device, and what
-// it may still do is not.
-func TestMasterOnly(t *testing.T) {
+// A window code is traded for the master token, so it is the master
+// token's to ask for: a paired device, which has a token of its own, is
+// refused one. What a device does with the phone's way in, it still does.
+func TestAWindowCodeIsTheMasterTokensToAskFor(t *testing.T) {
 	isolate(t)
 	st := phone.Status{On: true, Host: "box.ts.net", URL: "https://box.ts.net:7443/#pair=c"}
 	phoneGet = func(context.Context) phone.Status { return st }
-	phonePeek = func(context.Context) phone.Status { return phone.Status{On: st.On, Host: st.Host} }
 	phoneOn = func(context.Context) (phone.Status, error) { return st, nil }
 	phoneOff = func(context.Context) error { return nil }
-	t.Cleanup(func() { phoneGet, phonePeek, phoneOn, phoneOff = phone.Get, phone.Peek, phone.On, phone.Off })
+	t.Cleanup(func() { phoneGet, phoneOn, phoneOff = phone.Get, phone.On, phone.Off })
 	s := New(agent.Builtin())
 	h := s.Handler()
 	const devTok, otherTok = "00112233445566778899aabbccddeeff", "ffeeddccbbaa99887766554433221100"
 	dev := pairAs(t, "mine", devTok)
 	other := pairAs(t, "other", otherTok)
 
+	if w := do(h, "POST", "/api/window/code", devTok, ""); w.Code != 403 {
+		t.Errorf("a window code for a device: %d, want 403", w.Code)
+	}
+	var code struct{ Code string }
+	if w := do(h, "POST", "/api/window/code", s.Token, ""); w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &code) != nil || code.Code == "" {
+		t.Errorf("a window code for the master token: %d %s", w.Code, w.Body)
+	}
+	// A code, however a device came by it, is not traded with a device's
+	// token either: the trade takes no token, only the code.
+	if w := do(h, "POST", "/api/window/token", devTok, `{"code":"nope"}`); w.Code != 403 {
+		t.Errorf("a wrong code traded by a device: %d", w.Code)
+	}
 	for _, c := range []struct{ method, url string }{
+		{"GET", "/api/deck"},
+		{"GET", "/api/phone"},
+		{"GET", "/api/phone/qr"},
 		{"POST", "/api/phone"},
 		{"DELETE", "/api/phone"},
-		{"GET", "/api/phone/qr"},
-		{"POST", "/api/window/code"},
+		{"GET", "/api/phone/devices"},
 		{"DELETE", "/api/phone/devices?id=" + other},
 	} {
-		if w := do(h, c.method, c.url, devTok, ""); w.Code != 403 {
-			t.Errorf("%s %s by a device: %d, want 403", c.method, c.url, w.Code)
-		}
-		if w := do(h, c.method, c.url, s.Token, ""); w.Code != 200 {
-			t.Errorf("%s %s by the master token: %d %s", c.method, c.url, w.Code, w.Body)
+		if w := do(h, c.method, c.url, devTok, ""); w.Code != 200 {
+			t.Errorf("%s %s by a device: %d %s", c.method, c.url, w.Code, w.Body)
 		}
 	}
-	// A device still sees how it stands, without a pairing code.
-	var got phone.Status
-	if w := do(h, "GET", "/api/phone", devTok, ""); w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil || !got.On || got.URL != "" {
-		t.Errorf("GET /api/phone by a device: %d %s", w.Code, w.Body)
+	if _, ok := phone.DeviceFor(otherTok); ok {
+		t.Error("the other device is still paired after a device removed it")
 	}
-	if w := do(h, "GET", "/api/phone", s.Token, ""); !strings.Contains(w.Body.String(), "#pair=") {
-		t.Errorf("GET /api/phone by the master token: %d %s", w.Code, w.Body)
-	}
-	if w := do(h, "GET", "/api/phone/devices", devTok, ""); w.Code != 200 || !strings.Contains(w.Body.String(), dev) {
-		t.Errorf("devices listed to a device: %d %s", w.Code, w.Body)
-	}
-	if w := do(h, "GET", "/api/deck", devTok, ""); w.Code != 200 {
-		t.Errorf("the deck to a device: %d", w.Code)
-	}
-	// It may remove itself.
-	if w := do(h, "DELETE", "/api/phone/devices?id="+dev, devTok, ""); w.Code != 200 {
-		t.Errorf("a device removing itself: %d %s", w.Code, w.Body)
-	}
-	if _, ok := phone.DeviceFor(devTok); ok {
-		t.Error("the device is still paired after removing itself")
+	if _, ok := phone.DeviceFor(devTok); !ok || dev == "" {
+		t.Error("the device itself is gone")
 	}
 }

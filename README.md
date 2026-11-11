@@ -406,10 +406,6 @@ Home Screen keeps it at hand as an app.
   it: a window open on that server and the Mac app need opening again,
   phones paired before devices need pairing again, and paired devices
   keep working.
-- A paired device drives the deck as the master token does, but only the
-  master token lets others in or shuts them out: a device cannot make a
-  pairing code (no QR code or link in its phone dialog), turn the phone's
-  way in on or off, or remove another device. It can remove itself.
 - It needs HTTPS certificates turned on in your tailnet (the Tailscale
   admin console, DNS page). mad says so if they are off.
 - While it serves the phone, a Mac stays awake (`caffeinate -i`): its

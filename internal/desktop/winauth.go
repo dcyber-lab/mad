@@ -19,8 +19,8 @@ import (
 
 // The master token stays off the wire until the server has shown it is
 // mad (hello), and off a browser's command line, where any local user
-// reads it with ps (window codes). What a paired device may not do is
-// held by masterOnly.
+// reads it with ps (window codes). A window code is the master token's
+// to ask for (masterOnly).
 
 // helloLabel is what the proof signs besides the nonce, so the proof is
 // of nothing but this.
@@ -154,10 +154,9 @@ func (s *Server) windowToken(w http.ResponseWriter, r *http.Request) {
 	reply(w, api.WindowToken{Token: s.Token})
 }
 
-// masterOnly refuses a paired device what only the master token may do:
-// letting others in (pairing codes, window codes), cutting others off,
-// and opening or closing the way in. A device still drives the deck; it
-// cannot widen or narrow who else does.
+// masterOnly refuses a paired device what only the master token may ask
+// for: a window code, which is traded for the master token itself. A
+// device has a token of its own and is not to come by that one.
 func masterOnly(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if deviceOf(r) != "" {
