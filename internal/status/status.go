@@ -84,7 +84,9 @@ func ReadHook(id string) *Hook {
 }
 
 // WriteHook stores h for agent id, keeping the previously known session id
-// when h doesn't carry one.
+// when h doesn't carry one. Like everything in the status directory it is
+// written without a sync (paths.WriteFileUnsynced): the agent waits for
+// each hook, and a status lost with the power is reported again.
 func WriteHook(id string, h *Hook, now time.Time) error {
 	if h.SessionID == "" {
 		if prev := ReadHook(id); prev != nil {
@@ -96,7 +98,7 @@ func WriteHook(id string, h *Hook, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(HookPath(id), data)
+	return paths.WriteFileUnsynced(HookPath(id), data)
 }
 
 // RemoveHook forgets everything the agent reported and was sent.
@@ -129,7 +131,7 @@ func WriteTurn(id string, t *Turn, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(turnPath(id), data)
+	return paths.WriteFileUnsynced(turnPath(id), data)
 }
 
 // ReadTurn returns how agent id's last turn ended, or nil before its
@@ -154,10 +156,10 @@ func digestPath(id string) string { return filepath.Join(paths.StatusDir(), id+"
 // message, to tell later whether it was the one that went in; it is kept
 // apart from the time, which a mad from before reads alone.
 func MarkSent(id string, now time.Time, digest string) error {
-	if err := paths.WriteFileAtomic(digestPath(id), []byte(digest)); err != nil {
+	if err := paths.WriteFileUnsynced(digestPath(id), []byte(digest)); err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(sentPath(id), []byte(now.Format(time.RFC3339Nano)))
+	return paths.WriteFileUnsynced(sentPath(id), []byte(now.Format(time.RFC3339Nano)))
 }
 
 // SentDigest is the digest of the message mad last typed into agent id;
@@ -397,6 +399,6 @@ func readSince(id string) (sinceRecord, bool) {
 
 func writeSince(id string, r sinceRecord) {
 	if data, err := json.Marshal(r); err == nil {
-		_ = paths.WriteFileAtomic(sincePath(id), data)
+		_ = paths.WriteFileUnsynced(sincePath(id), data)
 	}
 }

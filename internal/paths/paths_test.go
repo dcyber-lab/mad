@@ -178,26 +178,49 @@ func TestReadJSON(t *testing.T) {
 }
 
 func TestWriteFileAtomicKeepsModeAndSymlink(t *testing.T) {
-	dir := t.TempDir()
-	real := filepath.Join(dir, "real.json")
-	if err := os.WriteFile(real, []byte("old"), 0o644); err != nil {
-		t.Fatal(err)
+	for name, write := range map[string]func(string, []byte) error{"WriteFileAtomic": WriteFileAtomic, "WriteFileUnsynced": WriteFileUnsynced} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			real := filepath.Join(dir, "real.json")
+			if err := os.WriteFile(real, []byte("old"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(dir, "link.json")
+			if err := os.Symlink(real, link); err != nil {
+				t.Fatal(err)
+			}
+			if err := write(link, []byte("new")); err != nil {
+				t.Fatal(err)
+			}
+			if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("the link was replaced: %v %v", fi, err)
+			}
+			fi, err := os.Stat(real)
+			if err != nil || fi.Mode().Perm() != 0o644 {
+				t.Fatalf("mode = %v, %v; want 0644", fi.Mode().Perm(), err)
+			}
+			if data, _ := os.ReadFile(real); string(data) != "new" {
+				t.Fatalf("content = %q", data)
+			}
+		})
 	}
-	link := filepath.Join(dir, "link.json")
-	if err := os.Symlink(real, link); err != nil {
-		t.Fatal(err)
+}
+
+// Only WriteFileAtomic waits for the disk: WriteFileUnsynced is what
+// every hook writes an agent's status with.
+func TestOnlyWriteFileAtomicSyncs(t *testing.T) {
+	synced := 0
+	orig := syncFile
+	syncFile = func(f *os.File) error { synced++; return orig(f) }
+	t.Cleanup(func() { syncFile = orig })
+	path := filepath.Join(t.TempDir(), "f.json")
+	if err := WriteFileUnsynced(path, []byte("a")); err != nil || synced != 0 {
+		t.Fatalf("WriteFileUnsynced: %v, synced %d times", err, synced)
 	}
-	if err := WriteFileAtomic(link, []byte("new")); err != nil {
-		t.Fatal(err)
+	if err := WriteFileAtomic(path, []byte("b")); err != nil || synced != 1 {
+		t.Fatalf("WriteFileAtomic: %v, synced %d times", err, synced)
 	}
-	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("the link was replaced: %v %v", fi, err)
-	}
-	fi, err := os.Stat(real)
-	if err != nil || fi.Mode().Perm() != 0o644 {
-		t.Fatalf("mode = %v, %v; want 0644", fi.Mode().Perm(), err)
-	}
-	if data, _ := os.ReadFile(real); string(data) != "new" {
+	if data, _ := os.ReadFile(path); string(data) != "b" {
 		t.Fatalf("content = %q", data)
 	}
 }

@@ -91,7 +91,7 @@ func WriteAsks(id string, asks []Ask) error {
 	if err != nil {
 		return err
 	}
-	return paths.WriteFileAtomic(asksPath(id), data)
+	return paths.WriteFileUnsynced(asksPath(id), data)
 }
 
 // NewHostInstance names this process as a host: its pid, to tell it
