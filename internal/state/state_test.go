@@ -264,3 +264,168 @@ func TestSaveMergedKeepsProjectAddedBack(t *testing.T) {
 		t.Errorf("project added back was lost: projects=%d ignored=%v", len(got.Projects), got.Ignored)
 	}
 }
+
+// TestMerge runs merge on a base, ours (a change made here) and theirs (a
+// change another writer made to the file).
+func TestMerge(t *testing.T) {
+	start := func() *State {
+		return &State{Projects: []*Project{
+			{Name: "p", Path: "/p", Agents: []*Agent{{ID: "a", Kind: "claude", Name: "old"}}, Runs: []*Run{{ID: "r", Name: "run"}}},
+			{Name: "q", Path: "/q", Agents: []*Agent{}},
+		}}
+	}
+	agent := func(s *State) *Agent { _, a := s.FindAgent("a"); return a }
+	for _, tc := range []struct {
+		name   string
+		ours   func(*State)
+		theirs func(*State)
+		check  func(*testing.T, *State)
+	}{{
+		name:   "their field edit to an agent ours left alone",
+		ours:   func(s *State) { s.FindProject("/q").Collapsed = true },
+		theirs: func(s *State) { agent(s).Mode, agent(s).SessionID = ModeWindow, "s2" },
+		check: func(t *testing.T, s *State) {
+			if a := agent(s); a.Mode != ModeWindow || a.SessionID != "s2" || !s.FindProject("/q").Collapsed {
+				t.Errorf("agent %+v, q collapsed %v", a, s.FindProject("/q").Collapsed)
+			}
+		},
+	}, {
+		name:   "both changed different fields of an agent",
+		ours:   func(s *State) { agent(s).Name = "mine" },
+		theirs: func(s *State) { agent(s).Mode = ModeWindow },
+		check: func(t *testing.T, s *State) {
+			if a := agent(s); a.Name != "mine" || a.Mode != ModeWindow {
+				t.Errorf("agent %+v", a)
+			}
+		},
+	}, {
+		name:   "both changed the same field",
+		ours:   func(s *State) { agent(s).Name = "mine" },
+		theirs: func(s *State) { agent(s).Name = "theirs" },
+		check: func(t *testing.T, s *State) {
+			if a := agent(s); a.Name != "mine" {
+				t.Errorf("name %q, want ours", a.Name)
+			}
+		},
+	}, {
+		name: "their run and project field edits",
+		ours: func(s *State) { agent(s).Name = "mine" },
+		theirs: func(s *State) {
+			_, r := s.FindRun("r")
+			r.Collapsed = true
+			s.FindProject("/p").Name = "renamed"
+			s.Compact = true
+		},
+		check: func(t *testing.T, s *State) {
+			if _, r := s.FindRun("r"); !r.Collapsed || s.FindProject("/p").Name != "renamed" || !s.Compact {
+				t.Errorf("run %+v, project %q, compact %v", r, s.FindProject("/p").Name, s.Compact)
+			}
+		},
+	}, {
+		name:   "project removed by another, unchanged here",
+		ours:   func(s *State) { agent(s).Name = "mine" },
+		theirs: func(s *State) { s.RemoveProject(s.FindProject("/q")) },
+		check: func(t *testing.T, s *State) {
+			if s.FindProject("/q") != nil || !s.IsIgnored("/q") {
+				t.Errorf("q resurrected: ignored=%v", s.Ignored)
+			}
+		},
+	}, {
+		name:   "project removed by another, changed here",
+		ours:   func(s *State) { s.FindProject("/q").Agents = append(s.FindProject("/q").Agents, &Agent{ID: "new"}) },
+		theirs: func(s *State) { s.RemoveProject(s.FindProject("/q")) },
+		check: func(t *testing.T, s *State) {
+			if s.FindProject("/q") == nil || s.IsIgnored("/q") {
+				t.Errorf("q dropped with an agent added here: ignored=%v", s.Ignored)
+			}
+		},
+	}, {
+		name:   "ignored list: their removal and their lift both taken",
+		ours:   func(s *State) { s.Ignored = append(s.Ignored, "/mine") },
+		theirs: func(s *State) { s.Ignored = []string{"/theirs"} },
+		check: func(t *testing.T, s *State) {
+			if strings.Join(s.Ignored, " ") != "/mine /theirs" {
+				t.Errorf("ignored %v", s.Ignored)
+			}
+		},
+	}, {
+		name: "agents and runs added and removed on both sides, in order",
+		ours: func(s *State) {
+			p := s.FindProject("/p")
+			p.Agents = append(p.Agents, &Agent{ID: "o1"}, &Agent{ID: "o2"})
+		},
+		theirs: func(s *State) {
+			p := s.FindProject("/p")
+			p.Agents = append(p.Agents[:0], &Agent{ID: "t1"})
+			p.Runs = nil
+		},
+		check: func(t *testing.T, s *State) {
+			var ids []string
+			for _, a := range s.FindProject("/p").Agents {
+				ids = append(ids, a.ID)
+			}
+			if strings.Join(ids, " ") != "o1 o2 t1" || len(s.FindProject("/p").Runs) != 0 {
+				t.Errorf("agents %v, runs %d", ids, len(s.FindProject("/p").Runs))
+			}
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := start()
+			base.Ignored = []string{"/lifted"}
+			ours, theirs := base.Clone(), base.Clone()
+			tc.ours(ours)
+			tc.theirs(theirs)
+			kept := agent(ours)
+			ours.merge(base, theirs)
+			tc.check(t, ours)
+			if a := agent(ours); a != nil && a != kept {
+				t.Error("agent replaced, not updated in place")
+			}
+		})
+	}
+}
+
+func TestSaveMergedKeepsOthersFieldEdit(t *testing.T) {
+	useTempState(t)
+	s := &State{}
+	p, _ := s.AddProject("/p")
+	p.Agents = append(p.Agents, &Agent{ID: "a", Kind: "claude"})
+	_ = s.Save()
+	base, since := s.Clone(), ModTime()
+	time.Sleep(10 * time.Millisecond)
+	_ = Update(func(o *State) error {
+		_, a := o.FindAgent("a")
+		a.Mode, a.Name = ModeWindow, "theirs"
+		return nil
+	})
+	p.Collapsed = true
+	if err := s.SaveMerged(base, since); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load()
+	if _, a := got.FindAgent("a"); a.Mode != ModeWindow || a.Name != "theirs" || !got.FindProject("/p").Collapsed {
+		t.Errorf("merged state lost their edit or my change: %+v", a)
+	}
+}
+
+func TestSaveMergedDropsProjectRemovedByOther(t *testing.T) {
+	useTempState(t)
+	s := &State{}
+	s.AddProject("/p")
+	q, _ := s.AddProject("/q")
+	_ = s.Save()
+	base, since := s.Clone(), ModTime()
+	time.Sleep(10 * time.Millisecond)
+	_ = Update(func(o *State) error {
+		o.RemoveProject(o.FindProject("/p"))
+		return nil
+	})
+	q.Collapsed = true
+	if err := s.SaveMerged(base, since); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load()
+	if got.FindProject("/p") != nil || !got.IsIgnored("/p") || !got.FindProject("/q").Collapsed {
+		t.Errorf("project removed by another came back: %d projects, ignored %v", len(got.Projects), got.Ignored)
+	}
+}

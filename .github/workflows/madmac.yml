@@ -1,14 +1,37 @@
-name: madmac
+name: ios
 
+# The Swift side: the three packages' unit tests, the iPhone app's simulator build (as `make ios`
+# does, unsigned) and the Mac app's Release build, uploaded. MadUI's tests read the fixture server's
+# edge-home.json, hence its path below.
 on:
   push:
     branches: [main]
-    paths: ["ios/**", ".github/workflows/madmac.yml"]
+    paths: ["ios/**", "internal/desktop/fixture/testdata/**", ".github/workflows/madmac.yml"]
   pull_request:
-    paths: ["ios/**", ".github/workflows/madmac.yml"]
+    paths: ["ios/**", "internal/desktop/fixture/testdata/**", ".github/workflows/madmac.yml"]
   workflow_dispatch:
 
 jobs:
+  swift-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [MadKit, MadUI, MadShell]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version && swift --version
+      - run: cd ios/${{ matrix.package }} && swift test
+
+  ios-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate
+      # No team or signing secrets: Base.xcconfig defaults MAD_BUNDLE_ID and leaves DEVELOPMENT_TEAM empty.
+      - run: xcodebuild -project ios/mad.xcodeproj -scheme mad -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- build
+
   build:
     runs-on: macos-latest
     steps:

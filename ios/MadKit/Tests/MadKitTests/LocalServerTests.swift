@@ -120,6 +120,17 @@ final class LocalServerTests: XCTestCase {
         XCTAssertFalse(l.isRunning, "a server that did not say where it is, is stopped")
     }
 
+    /// A server that exits is seen to have closed its output a moment before it is seen to have ended: here that
+    /// moment is a minute. It failed, it did not time out.
+    func testClosedOutputIsAnExitEvenWhileTheProcessStillRuns() async throws {
+        let lingers = try script("exec >&-\nexec sleep 60")
+        let l = ServerLauncher()
+        do { _ = try await l.start(binary: lingers, arguments: [], timeout: 5); XCTFail("expected a failure") } catch {
+            XCTAssertEqual(error as? LocalServer.LaunchError, .failed("it exited at once"))
+        }
+        XCTAssertFalse(l.isRunning)
+    }
+
     func testTheLauncherTimesOutOnASilentServer() async throws {
         let silent = try script("exec sleep 60")
         let l = ServerLauncher()
