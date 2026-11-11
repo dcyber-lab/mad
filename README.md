@@ -656,6 +656,10 @@ whole thing off with `{"quota": false}` in `config.json`.
   for codex the thread id is recorded. If tmux dies or the machine restarts,
   press `enter` on the agent to resume the same conversation.
 
+For working on mad, [docs/architecture.md](docs/architecture.md) is the
+map of how it runs today: its processes, what is kept where, who delivers
+what.
+
 For the proposed runtime direction, see [agent threads and file
 communication](docs/agent-runtime.md): lifecycle, message delivery, recovery,
 and scheduling. This is an architecture proposal, not a description of
@@ -813,7 +817,10 @@ stays `● done` while asleep.
 ## Runs
 
 A run hands one task through agents in roles, in a worktree of its own.
-Press `o` on a project, write the task in one line and press enter:
+It is started and followed in the terminal deck, or with `mad run`; the
+desktop window and the phone show a run's agents like any others, not
+the run itself. Press `o` on a project, write the task in one line and
+press enter:
 
 1. **Design.** claude on Opus reads the code and writes
    `.mad/runs/<name>/design.md`.

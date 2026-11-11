@@ -1,21 +1,29 @@
-# mad for iOS
+# mad for iOS and the Mac
 
-A SwiftUI app for mad. It pairs with a Mac by the QR code `mad phone` shows
-(or its pasted link), lists what waits on you as native cards you can act on,
-and shows the full deck page in a second tab. The README at the top of the
-repository tells how to build and install it; this file is for working on it.
-[PROGRESS.md](PROGRESS.md) records where the work stands: what shipped, what was
-decided and what is left.
+Two SwiftUI apps for mad, on three packages they share. The iPhone app pairs
+with a Mac by the QR code `mad phone` shows (or its pasted link); the Mac app
+finds the mad on its own Mac. Both draw the deck themselves (home, channels,
+conversations, what waits on you) and open mad's page for what has no native
+screen yet. The README at the top of the repository tells how to build and
+install them; this file is for working on them. [PROGRESS.md](PROGRESS.md)
+records where the work stands: what shipped, what was decided and what is left.
+How mad's own processes fit together is in
+[docs/architecture.md](../docs/architecture.md).
 
-- `MadKit/` is a Swift package with the core, tested with `swift test` on the
-  Mac (no simulator needed): pairing-link parsing (`Pairing`), the pairing
-  exchange (`PendingPairing`), `PairingBook`, the rules for the paired Macs,
-  the Mac's name from `/api/deck` (`MadClient`, `DeckSnapshot`), what the page
-  may say to the app (`DeckMessage`, `WebOrigin`) and the provisioning
-  profile's expiry (`ProvisioningProfile`).
-- `App/` is the SwiftUI app: the Macs list (`MacsView`), an opened Mac, which is
-  the deck page in a full-screen web view (`MacView`, `MacModel` with
-  `DeckWebHost`), the camera (`ScannerScreen`) and storage (`MacStore`).
+- `MadKit/` is a Swift package with the core and no UI, tested with `swift test`
+  on the Mac (no simulator needed): pairing (`Pairing`, `PendingPairing`,
+  `PairingBook`, the rules for the paired Macs), the models of mad's JSON API,
+  the client and the stores (see [MadKit's contract](#madkits-contract)), what
+  the page may say to the app (`DeckMessage`, `WebOrigin`), finding or starting
+  the Mac's own server (`LocalServer`) and the provisioning profile's expiry
+  (`ProvisioningProfile`).
+- `MadUI/` has the views and `MadShell/` the glue between the two (see
+  [Native apps](#native-apps-the-foundation)).
+- `App/` is the iPhone app: the Macs list (`MacsView`), an opened Mac
+  (`MacView`: the native screens, or the deck page in a full-screen web view
+  for a Mac set to 使用网页版, `MacModel` with `DeckWebHost`), the camera
+  (`ScannerScreen`) and storage (`MacStore`).
+- `MacApp/` is the Mac app, `madmac`.
 - `project.yml` is the XcodeGen spec. The `.xcodeproj` is generated and
   gitignored.
 
@@ -82,8 +90,9 @@ a name only when the person renamed the Mac.
 
 ## The page and the app
 
-The app has no screens of its own after pairing: the page is the app, and the
-only thing it asks of the app is to go back to the Macs list. It posts
+Where the iPhone app shows mad's page (the whole web deck for a Mac set to
+使用网页版, or one of its views in a sheet), the only thing the page asks of the
+app is to go back to the Macs list. It posts
 `window.webkit.messageHandlers.mad.postMessage({type: "switchMac"})`. The app
 reads a message only from the main frame of the paired Mac's own origin
 (scheme, host and port), ignores any other type, and ignores anything else.
@@ -105,8 +114,8 @@ share three local packages:
   maps a deck to what the home view shows (tested against the fixture decks), and
   `NativeRoot(api:title:onSwitchMac:)` owns a `DeckStore`, polls it while the scene is active, and shows
   `HomeSidebar` in a `NavigationSplitView` on the Mac, `HomeView` with the detail over it on the
-  iPhone. Channel and agent details are placeholders for now; the other agents' views plug in there,
-  mapping their store's messages to their own view-model structs the same way.
+  iPhone. A channel and an agent's conversation are native too (`ChannelDetail`, `AgentMapping` with
+  `ConversationView`), each mapping its store's messages to its own view-model structs the same way.
 
 Both apps open `NativeRoot` by default. What has no native screen yet opens the web page: the ⋯ menu's
 用量, 看板, 技能, 手机和已配对设备, 通知, 添加项目 and 主题 open it on that view (`#open=usage|board|skills|phone|notify|addproject|theme`

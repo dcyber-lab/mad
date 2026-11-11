@@ -2,6 +2,12 @@
 
 Status: proposed. This document describes a direction for mad; the interfaces
 and directory layout below are proposals, not features available today.
+How mad runs today is in [architecture.md](architecture.md).
+
+One step toward it is in: the deck's work by the clock (deliveries, lapsed
+handoffs, follow-ups, sleep) is a package of its own, `internal/rounds`, which
+draws nothing and is called by whoever keeps the deck. The sidebar still is
+that keeper.
 
 ## Philosophy
 
