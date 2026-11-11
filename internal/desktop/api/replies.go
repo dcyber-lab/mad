@@ -159,3 +159,23 @@ type TeamChoice struct {
 	Agent   string   `json:"agent"` // claude:opus, codex, codex:gpt-6-sol
 	Efforts []string `json:"efforts"`
 }
+
+// Hello answers GET /api/hello?nonce=: an HMAC-SHA256 of "mad-hello:"
+// and the nonce, keyed by the master token, in hex. A client that holds
+// the token checks it before sending the token anywhere, so a process
+// squatting on mad's port never sees it.
+type Hello struct {
+	Proof string `json:"proof"`
+}
+
+// WindowCode answers POST /api/window/code: a code a new window trades
+// once, within a minute, for the token (POST /api/window/token), so the
+// token itself is never on a browser's command line.
+type WindowCode struct {
+	Code string `json:"code"`
+}
+
+// WindowToken answers POST /api/window/token: the token the code was for.
+type WindowToken struct {
+	Token string `json:"token"`
+}

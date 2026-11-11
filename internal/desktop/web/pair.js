@@ -8,6 +8,12 @@
 // only once and the QR code may be gone. On success the fragment holds
 // #token= for app.js, which keeps it, so the page is signed in even where
 // storage throws.
+//
+// A window code in the fragment (#code=, from mad desktop) is traded the
+// same way for the token, once: mad puts a code on the browser's command
+// line, where any local user can read it, rather than the token. It works
+// once and for a minute, so a failure is not retried: the page goes on
+// with the token it kept, if any.
 "use strict";
 
 window.madPairError = "";
@@ -19,6 +25,14 @@ let made = ""; // see ownToken
 
 (async () => {
   const hash = new URLSearchParams(location.hash.slice(1));
+  const win = hash.get("code");
+  if (win) {
+    const t = await windowToken(win);
+    hash.delete("code");
+    if (t) hash.set("token", t);
+    else window.madPairError = T("这个窗口的代码已经用过或过期了：再运行一次 mad desktop。", "This window's code was used or has expired: run mad desktop again.");
+    replace(hash);
+  }
   const code = hash.get("pair");
   if (code) {
     const token = ownToken();
@@ -88,6 +102,22 @@ async function exchange(code, token) {
     return { status: 0, error: ctl.signal.aborted ? T("10 秒没有回应", "No answer in 10 seconds") : String(e.message || e) };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// windowToken trades a window code for the token, or "" when it can't.
+async function windowToken(code) {
+  try {
+    const r = await fetch("/api/window/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    if (!r.ok) return "";
+    const v = await r.json();
+    return typeof v.token === "string" ? v.token : "";
+  } catch (_) {
+    return "";
   }
 }
 

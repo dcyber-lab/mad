@@ -1111,7 +1111,7 @@ async function phoneDialog() {
   } else {
     const img = el("img", "qr");
     img.alt = "QR code";
-    loadImage(img, `/api/phone/qr?${new URLSearchParams({ t: Date.now() })}`);
+    if (s.url) loadImage(img, `/api/phone/qr?${new URLSearchParams({ t: Date.now() })}`);
     const url = el("div", "purl");
     const copy = el("button", "icon-btn");
     copy.type = "button";
@@ -1144,9 +1144,13 @@ async function phoneDialog() {
         devs.append(row);
       }
     } catch (_) { /* the list is a courtesy */ }
-    body.append(img, el("p", "dtext muted", T(`已通过 ${cf ? "Cloudflare Tunnel" : "Tailscale"} 提供。用手机相机扫它${cf ? "" : "（手机要在你的 tailnet 里）"}：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。`,
+    // A paired phone gets no address (it would carry a pairing code): only the Mac lets others in.
+    if (!s.url) body.append(el("p", "dtext", T("在 Mac 上运行 mad phone 可以配对另一台手机。", "Run mad phone on the Mac to pair another phone.")), el("p", "dtext muted", T("已配对的手机", "Paired phones")), devs);
+    else body.append(img, el("p", "dtext muted", T(`已通过 ${cf ? "Cloudflare Tunnel" : "Tailscale"} 提供。用手机相机扫它${cf ? "" : "（手机要在你的 tailnet 里）"}：里面的验证码只能用一次，10 分钟内有效，手机会得到一把自己的钥匙。在那里“添加到主屏幕”，下次就方便了。`,
       `Served through ${cf ? "Cloudflare Tunnel" : "Tailscale"}. Scan it with the phone's camera${cf ? "" : " (the phone must be in your tailnet)"}: its code works once, for 10 minutes, and the phone gets a key of its own. “Add to Home Screen” there for next time.`)), url, el("p", "dtext muted", T("已配对的手机", "Paired phones")), devs);
-    actions = [{ label: T("关闭", "Close"), value: "off" }, { label: T("完成", "Done"), cls: "primary", value: null }];
+    // Closing the way in is the Mac's too.
+    actions = s.url ? [{ label: T("关闭", "Close"), value: "off" }, { label: T("完成", "Done"), cls: "primary", value: null }]
+      : [{ label: T("完成", "Done"), cls: "primary", value: null }];
   }
   const v = await dialog({ title: T("在你的手机上", "On your phone"), body, actions });
   try {

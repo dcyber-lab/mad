@@ -15,11 +15,13 @@ import (
 // how it stands, POST serves it, DELETE stops it; /api/phone/qr is the QR
 // code of its address.
 
-// phoneGet, phoneOn and phoneOff are package phone's, replaced in tests.
+// phoneGet, phonePeek, phoneOn and phoneOff are package phone's, replaced
+// in tests.
 var (
-	phoneGet = phone.Get
-	phoneOn  = phone.On
-	phoneOff = phone.Off
+	phoneGet  = phone.Get
+	phonePeek = phone.Peek
+	phoneOn   = phone.On
+	phoneOff  = phone.Off
 )
 
 func (s *Server) phone(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +41,14 @@ func (s *Server) phone(w http.ResponseWriter, r *http.Request) {
 		}
 		st = phoneGet(ctx)
 	default:
-		st = phoneGet(ctx)
+		// A paired device sees how it stands but gets no URL: the URL
+		// carries a pairing code, and letting others in is the master
+		// token's (masterOnly).
+		if deviceOf(r) != "" {
+			st = phonePeek(ctx)
+		} else {
+			st = phoneGet(ctx)
+		}
 	}
 	reply(w, st)
 }
@@ -85,9 +94,16 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 }
 
 // phoneDevices lists the paired phones (GET) or removes one (DELETE ?id=).
+// A paired device may remove only itself (by its id): cutting others off
+// is the master token's.
 func (s *Server) phoneDevices(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodDelete {
-		if _, err := phone.Revoke(r.URL.Query().Get("id")); err != nil {
+		id := r.URL.Query().Get("id")
+		if dev := deviceOf(r); dev != "" && id != dev {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if _, err := phone.Revoke(id); err != nil {
 			fail(w, http.StatusNotFound, err)
 			return
 		}

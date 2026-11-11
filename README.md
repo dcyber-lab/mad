@@ -365,8 +365,12 @@ not followed.
   those, in your default browser. `-no-window` only prints the URL.
 - The server listens on 127.0.0.1 only and wants the token in the URL it
   printed: the window drives agents that run commands on your machine. The
-  page runs only its own scripts, and what agents wrote is sanitized
-  before it is drawn.
+  window itself is opened with a code (`#code=`) its page trades once,
+  within a minute, for the token, so the token is not on the browser's
+  command line for `ps` to show. Before a window opens on the phone's
+  server, that server proves it holds the token (`/api/hello`); only then
+  is the token sent to it, in a header. The page runs only its own
+  scripts, and what agents wrote is sanitized before it is drawn.
 - `Alt-n` jumps to the next agent that needs you, `Alt-j` / `Alt-k` to the
   next / previous agent, `Alt-1`…`Alt-9` to a tab, `Alt-w` closes the tab.
 - `⌘K` searches the agents. The window is light or dark as the system is,
@@ -396,10 +400,16 @@ Home Screen keeps it at hand as an app.
 
 - Only your own devices reach it over Tailscale, and they need a token
   too. A phone gets its own by pairing (below). The master token, kept in
-  mad's state directory (`phone_token`), is what the local window uses and
-  what phones paired before devices still hold. To shut those out, run
-  `mad phone off`, delete the file, then `mad phone on`: the running
-  server keeps the old token until it is stopped.
+  mad's state directory (`phone_token`), is what the local window and the
+  Mac app use and what phones paired before devices still hold.
+  `mad phone rotate` replaces it and restarts the phone's server to take
+  it: a window open on that server and the Mac app need opening again,
+  phones paired before devices need pairing again, and paired devices
+  keep working.
+- A paired device drives the deck as the master token does, but only the
+  master token lets others in or shuts them out: a device cannot make a
+  pairing code (no QR code or link in its phone dialog), turn the phone's
+  way in on or off, or remove another device. It can remove itself.
 - It needs HTTPS certificates turned on in your tailnet (the Tailscale
   admin console, DNS page). mad says so if they are off.
 - While it serves the phone, a Mac stays awake (`caffeinate -i`): its

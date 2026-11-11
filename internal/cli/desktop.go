@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -72,13 +73,18 @@ func desktopCmd(args []string, stdio IO) error {
 		if t, ok := phone.ExistingToken(); ok {
 			base := fmt.Sprintf("http://127.0.0.1:%d", phone.Port)
 			client := &http.Client{Timeout: 3 * time.Second}
+			// Reusable and WindowCodeFrom each have the server prove it is
+			// mad before the token goes to it. The window gets a one-use
+			// code, not the token: a browser's command line is ps's to read.
 			if desktop.Reusable(ctx, client, base, t) {
-				fmt.Fprintf(stdio.Err, "mad: window on the phone's server (%s); it keeps running when the window closes\n", base)
-				openWindow(ctx, stdio, base+"/#token="+t+"&win="+id, func() bool {
-					return desktop.OpenOnServer(ctx, client, base, t, id)
-				}, stop)
-				<-ctx.Done()
-				return nil
+				if code, err := desktop.WindowCodeFrom(ctx, client, base, t); err == nil {
+					fmt.Fprintf(stdio.Err, "mad: window on the phone's server (%s); it keeps running when the window closes\n", base)
+					openWindow(ctx, stdio, windowURL(base+"/", code, id), func() bool {
+						return desktop.OpenOnServer(ctx, client, base, t, id)
+					}, stop)
+					<-ctx.Done()
+					return nil
+				}
 			}
 		}
 	}
@@ -105,8 +111,21 @@ func desktopCmd(args []string, stdio IO) error {
 		if *noWindow {
 			return
 		}
-		openWindow(ctx, stdio, url+"&win="+id, func() bool { return srv.WindowOpen(id) }, stop)
+		code, err := srv.WindowCode()
+		if err != nil {
+			fmt.Fprintf(stdio.Err, "mad: no window (%v); open the URL above\n", err)
+			return
+		}
+		base, _, _ := strings.Cut(url, "#")
+		openWindow(ctx, stdio, windowURL(base, code, id), func() bool { return srv.WindowOpen(id) }, stop)
 	})
+}
+
+// windowURL is the page at base (ending in /) for the window named id,
+// with a code its page trades once for the token: what goes on the
+// browser's command line, where the token would be anyone's to read.
+func windowURL(base, code, id string) string {
+	return base + "#code=" + code + "&win=" + id
 }
 
 // nativeAppPath is where the Mac app is installed ("" when it is not, or off macOS): /Applications first,
