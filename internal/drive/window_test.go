@@ -8,9 +8,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/host"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/state"
+	"github.com/dcyber-lab/mad/internal/tmux"
 )
 
 // fakeHost serves agent id's host socket: each connection gets a state of
@@ -93,5 +95,31 @@ func TestSendToWindowModeBusy(t *testing.T) {
 	fakeHost(t, a.ID, host.Running)
 	if err := Send(st, a, "hi", kinds); !errors.Is(err, ErrBusy) {
 		t.Errorf("busy: %v", err)
+	}
+}
+
+func TestSpawnWindow(t *testing.T) {
+	dir, kinds := useDeck(t)
+	a, err := Spawn(Spec{Kind: "claude", Name: "win", Dir: dir, Window: true}, kinds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, got, err := Find(st, "win", dir); err != nil || got.ID != a.ID || got.Mode != state.ModeWindow {
+		t.Fatalf("spawned agent = %+v, %v", got, err)
+	}
+	// Nothing runs for it yet: its host starts with the first message.
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tmux.FindPane(panes, a.ID); ok {
+		t.Error("a window-mode agent was started before its first message")
+	}
+	if _, err := Spawn(Spec{Kind: "shell", Dir: dir, Window: true}, append(kinds, agent.Kind{Name: "shell", Start: "sh"})); err == nil {
+		t.Error("a shell spawned in window mode")
 	}
 }
