@@ -225,3 +225,33 @@ func BenchmarkDeckPoll(b *testing.B) {
 		s.poll.setSnap(snap)
 	}
 }
+
+// A server that returned looks at nothing any more: its poller's last look
+// is over, so it reads no state that came after it.
+func TestServeReturnsAfterItsPollerStopped(t *testing.T) {
+	isolate(t)
+	s := New(manageKinds)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready, done := make(chan struct{}), make(chan error, 1)
+	go func() { done <- s.Serve(ctx, "127.0.0.1:0", func(string) { close(ready) }) }()
+	select {
+	case <-ready:
+	case err := <-done:
+		t.Fatalf("did not serve: %v", err)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("still serving after its context ended")
+	}
+	select {
+	case <-s.poll.stopped:
+	default:
+		t.Fatal("Serve returned while its poller still ran")
+	}
+}
