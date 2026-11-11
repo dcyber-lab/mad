@@ -187,7 +187,8 @@ public enum HomeMapping {
                            whereLine: whereLine, age: item.since.map { MadWords.age(now.timeIntervalSince($0)) } ?? "",
                            cost: (agent?.cost ?? 0) > 0 ? MadWords.money(agent?.cost ?? 0) : "",
                            detail: detail, mono: item.mono, acts: blind ? ActWords.acts(of: item).filter { $0.kind == .deny } : ActWords.acts(of: item), mustOpen: blind,
-                           openID: blind ? (item.from ?? "") : "", macLine: macLine)
+                           openID: blind ? (item.from ?? "") : "", macLine: macLine,
+                           removableAgentID: item.kind == "create" ? "" : agent?.id ?? "")
     }
 
     // MARK: Today

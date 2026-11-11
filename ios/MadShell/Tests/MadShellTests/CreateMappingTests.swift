@@ -76,6 +76,7 @@ final class CreateMappingTests: XCTestCase {
         XCTAssertEqual(team.macLine, "想创建一个团队 · fix-flaky · 3 个角色")
         XCTAssertFalse(agent.macLine.contains("mad"), "the project is in the Mac's line")
         XCTAssertTrue(agent.detail.contains("mad"), "the iPhone's row lost its project")
+        XCTAssertEqual(agent.removableAgentID, "", "a request to create offers no 删除 of the agent that asks")
     }
 
     func testACreatedTeamsLineHasItsTileSubAndTarget() throws {
