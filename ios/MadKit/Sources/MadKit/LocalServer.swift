@@ -134,18 +134,27 @@ public final class ServerLauncher: @unchecked Sendable {
 
         // The first line it prints is the URL. Read as it comes, with a timer beside it: a read that
         // waits for output cannot be cancelled, so a silent server would hold it until it exits.
-        let line: String? = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+        let first: FirstLine = await withCheckedContinuation { (continuation: CheckedContinuation<FirstLine, Never>) in
             let once = Once(continuation)
             let buffer = LineBuffer()
             out.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
-                if data.isEmpty { once.finish(nil); return } // it closed its output
-                if let line = buffer.add(data) { once.finish(line) }
+                if data.isEmpty { once.finish(.closed); return } // it closed its output
+                if let line = buffer.add(data) { once.finish(.line(line)) }
             }
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { once.finish(nil) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { once.finish(.timedOut) }
         }
         out.fileHandleForReading.readabilityHandler = nil
-        guard let line else {
+        let line: String
+        switch first {
+        case .line(let l):
+            line = l
+        case .closed:
+            // Its output ended without a line: it is gone. The closed output says so, not `isRunning`,
+            // which still says yes for a moment after the pipe closed.
+            stop()
+            throw LocalServer.LaunchError.failed("it exited at once")
+        case .timedOut:
             let running = p.isRunning
             stop()
             throw running ? LocalServer.LaunchError.timeout : LocalServer.LaunchError.failed("it exited at once")
@@ -157,17 +166,24 @@ public final class ServerLauncher: @unchecked Sendable {
         return endpoint
     }
 
+    /// What ended the wait for the server's first line.
+    private enum FirstLine: Sendable {
+        case line(String)
+        case closed
+        case timedOut
+    }
+
     /// Resumes a continuation once, whichever of the line, the end of output and the timer comes first.
     private final class Once: @unchecked Sendable {
         private let lock = NSLock()
-        private var continuation: CheckedContinuation<String?, Never>?
-        init(_ c: CheckedContinuation<String?, Never>) { continuation = c }
-        func finish(_ line: String?) {
+        private var continuation: CheckedContinuation<FirstLine, Never>?
+        init(_ c: CheckedContinuation<FirstLine, Never>) { continuation = c }
+        func finish(_ first: FirstLine) {
             lock.lock()
             let c = continuation
             continuation = nil
             lock.unlock()
-            c?.resume(returning: line)
+            c?.resume(returning: first)
         }
     }
 

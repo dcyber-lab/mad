@@ -6,10 +6,13 @@ import XCTest
 private final class WaitingMac: MadAPI {
     struct Ask: Equatable { var tag: String?; var wait: Int }
     var asks: [Ask] = []
+    /// When each look was asked.
+    var askedAt: [Date] = []
     private var held: [CheckedContinuation<DeckAnswer, Error>] = []
 
     func deck(holding tag: String?, wait: Int) async throws -> DeckAnswer {
         asks.append(Ask(tag: tag, wait: wait))
+        askedAt.append(Date())
         return try await withCheckedThrowingContinuation { held.append($0) }
     }
 
@@ -135,15 +138,17 @@ final class DeckWaitTests: XCTestCase {
     /// A failure is tried again after `interval`, and the link says the Mac is away meanwhile.
     func testAFailureIsTriedAgainAfterAnInterval() async throws {
         let mac = WaitingMac()
-        let s = DeckStore(api: mac, interval: .milliseconds(50))
+        let s = DeckStore(api: mac, interval: .milliseconds(100))
         let task = Task { await s.run() }
         defer { task.cancel() }
         try await eventually { mac.waiting == 1 }
+        let failed = Date()
         mac.fail()
         try await eventually { s.link == .offline }
-        try await Task.sleep(for: .milliseconds(20))
-        XCTAssertEqual(mac.asks.count, 1, "not tried again at once")
         try await eventually { mac.asks.count == 2 }
+        // Told by when the second look was asked, not by a pause of the test's own and a count after it: a busy
+        // machine stretches such a pause past the interval.
+        XCTAssertGreaterThanOrEqual(mac.askedAt[1].timeIntervalSince(failed), 0.09, "not tried again at once")
     }
 }
 
