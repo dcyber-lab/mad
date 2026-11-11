@@ -34,6 +34,8 @@ const (
 	// StaleRunning: a hook said running but the screen froze this long, so
 	// the turn was interrupted (claude fires no Stop hook on Esc).
 	StaleRunning = 10 * time.Second
+	// HostEvent is the hook event of mad host's reports (host.report).
+	HostEvent = "host"
 	// waitingTail is how many bottom screen lines are scanned for prompts.
 	waitingTail = 15
 	// answerSettle: a wait's prompt off a screen that moved since it
@@ -314,7 +316,9 @@ func (t *Tracker) compute(k agent.Kind, pane tmux.Pane, hasPane bool, hook *Hook
 		t.hash, t.lastChange = sum, now
 	}
 
-	if k.Hooks && hook != nil {
+	// mad host reports for any kind it runs (codex too, which has no hooks
+	// of its own): a window-mode agent quiet in a long tool call is running.
+	if hook != nil && (k.Hooks || hook.Event == HostEvent) {
 		switch hook.State {
 		case Waiting:
 			// Answered in its pane, or by keys from the window: claude says
