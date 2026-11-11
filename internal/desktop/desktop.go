@@ -55,6 +55,8 @@ type Server struct {
 	interrupts interrupts
 	// wins: the app windows open on this server (window_life.go).
 	wins windows
+	// winCodes: the codes a new window trades once for the token (winauth.go).
+	winCodes windowCodes
 	// revokeTick is how often a device's requests look for its revoking
 	// (revokeEvery); set before serving.
 	revokeTick time.Duration
@@ -124,12 +126,15 @@ func WithHeaders(h http.Handler) http.Handler { return headers(h) }
 func (s *Server) Handler() http.Handler {
 	web, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
-	// The page and its assets carry nothing secret; the token arrives in
-	// the URL's fragment, which the browser never sends.
+	// The page and its assets carry nothing secret; the token, or a code
+	// for it, arrives in the URL's fragment, which the browser never sends.
 	mux.Handle("GET /", PageHandler(web, s.Build))
+	mux.Handle("GET /api/hello", http.HandlerFunc(s.hello))
 	mux.Handle("GET /api/deck", s.auth(http.HandlerFunc(s.deck)))
 	mux.Handle("GET /api/window", s.auth(http.HandlerFunc(s.window)))
 	mux.Handle("GET /api/window/state", s.auth(http.HandlerFunc(s.windowState)))
+	mux.Handle("POST /api/window/code", s.auth(masterOnly(http.HandlerFunc(s.windowCode))))
+	mux.Handle("POST /api/window/token", http.HandlerFunc(s.windowToken))
 	mux.Handle("GET /api/chat", s.auth(http.HandlerFunc(s.chat)))
 	mux.Handle("GET /api/live", s.auth(http.HandlerFunc(s.live)))
 	mux.Handle("GET /api/commands", s.auth(http.HandlerFunc(s.commands)))

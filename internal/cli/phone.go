@@ -17,7 +17,7 @@ import (
 func phoneCmd(args []string, stdio IO) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	const usage = "usage: mad phone [on [--tailscale | --cloudflare [--tunnel name --hostname host]] | off | devices | revoke <id|name>]"
+	const usage = "usage: mad phone [on [--tailscale | --cloudflare [--tunnel name --hostname host]] | off | devices | revoke <id|name> | rotate]"
 	what := ""
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		what, args = args[0], args[1:]
@@ -42,6 +42,8 @@ func phoneCmd(args []string, stdio IO) error {
 	switch what {
 	case "devices":
 		return listDevices(stdio)
+	case "rotate":
+		return rotateToken(stdio)
 	case "revoke":
 		if fs.NArg() != 1 {
 			return fmt.Errorf("usage: mad phone revoke <id|name>")
@@ -97,6 +99,24 @@ func phoneCmd(args []string, stdio IO) error {
 		where = "through a Cloudflare Tunnel, from anywhere"
 	}
 	fmt.Fprintf(stdio.Out, "Scan it with the phone's camera, %s, or open (once, within %d minutes):\n%s\n", where, int(phone.PairTTL.Minutes()), s.URL)
+	return nil
+}
+
+// rotateToken replaces the master token and says what that cuts off.
+func rotateToken(stdio IO) error {
+	restarted, err := phone.Rotate()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(stdio.Out, "mad: the master token is a new one")
+	if restarted {
+		fmt.Fprintln(stdio.Out, "  The phone's server was restarted with it.")
+	} else {
+		fmt.Fprintln(stdio.Out, "  The phone's server was not restarted (not running): if it runs, mad phone off then mad phone on.")
+	}
+	fmt.Fprintln(stdio.Out, "  Stops working: a window open on the phone's server (run mad desktop again), the Mac app until it is reopened,")
+	fmt.Fprintln(stdio.Out, "  and phones paired before devices had tokens of their own, which hold the old master token (pair them again).")
+	fmt.Fprintln(stdio.Out, "  Keeps working: paired devices (mad phone devices), and windows on a server of their own.")
 	return nil
 }
 

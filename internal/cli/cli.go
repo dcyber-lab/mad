@@ -75,6 +75,8 @@ usage:
                       open the deck in a window of its own (preview)
   mad phone [on|off]  the window on your phone, over Tailscale: on
                       serves it and shows the QR code to scan
+  mad phone devices|revoke <id|name>|rotate
+                      the paired phones; rotate makes a new master token
   mad kill-server     stop the deck, every agent in it and what they
                       left running
   mad version         print the version

@@ -121,12 +121,16 @@ func WatchWindow(ctx context.Context, open func() bool) {
 }
 
 // OpenOnServer asks the server at base (which holds the window named id)
-// whether that window is open.
+// whether that window is open. The server proves it is mad each time
+// before the token goes to it: the port may have changed hands since (a
+// restart leaves it free for a moment).
 func OpenOnServer(ctx context.Context, c *http.Client, base, token, id string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	q := url.Values{"token": {token}, "id": {id}}
-	req, err := http.NewRequestWithContext(ctx, "GET", base+"/api/window/state?"+q.Encode(), nil)
+	if !proven(ctx, c, base, token) {
+		return false
+	}
+	req, err := bearer(ctx, "GET", base+"/api/window/state?"+url.Values{"id": {id}}.Encode(), token)
 	if err != nil {
 		return false
 	}
@@ -190,18 +194,24 @@ func CloseBrowser(profile string) {
 
 // Reusable says whether the server at base, started by something else
 // (the phone's), answers to token as a mad that knows windows: then a
-// window can open on it instead of on a server of its own.
+// window can open on it instead of on a server of its own. It first has
+// the server prove it holds the token (/api/hello), so whatever squats on
+// the port while the phone's server is down never gets the token; a mad
+// too old to prove it is not reusable.
 func Reusable(ctx context.Context, c *http.Client, base, token string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
+	if !proven(ctx, c, base, token) {
+		return false
+	}
 	get := func(path string) (*http.Response, error) {
-		req, err := http.NewRequestWithContext(ctx, "GET", base+path+"token="+url.QueryEscape(token), nil)
+		req, err := bearer(ctx, "GET", base+path, token)
 		if err != nil {
 			return nil, err
 		}
 		return c.Do(req)
 	}
-	resp, err := get("/api/deck?")
+	resp, err := get("/api/deck")
 	if err != nil {
 		return false
 	}
@@ -211,7 +221,7 @@ func Reusable(ctx context.Context, c *http.Client, base, token string) bool {
 		return false
 	}
 	// An older server answers the deck but not windows.
-	r2, err := get("/api/window/state?id=probe&")
+	r2, err := get("/api/window/state?id=probe")
 	if err != nil {
 		return false
 	}

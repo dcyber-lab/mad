@@ -120,6 +120,54 @@ func Token() (string, error) {
 	return t, os.WriteFile(paths.PhoneToken(), []byte(t+"\n"), 0o600)
 }
 
+// Rotate replaces the master token with a new one and says whether the
+// phone's server was restarted to take it: a running server holds the
+// token it started with. Paired devices keep working, as their tokens
+// are their own; whatever holds the old master token does not.
+func Rotate() (restarted bool, err error) {
+	t, err := randHex()
+	if err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(paths.StateDir(), 0o755); err != nil {
+		return false, err
+	}
+	// Written whole and renamed, so a server starting meanwhile reads the
+	// old token or the new one, never half of one.
+	tmp, err := os.CreateTemp(paths.StateDir(), ".phone-token-*")
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if _, err := tmp.WriteString(t + "\n"); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmp.Name(), paths.PhoneToken()); err != nil {
+		return false, err
+	}
+	return refreshRunning()
+}
+
+// refreshRunning restarts the phone's server if it runs; tests replace it.
+var refreshRunning = func() (bool, error) {
+	panes, err := tmux.ListPanes()
+	if err != nil {
+		return false, nil // no deck, so no server holding the old token
+	}
+	if p, ok := tmux.FindPane(panes, tmux.IDPhone); !ok || p.Dead {
+		return false, nil
+	}
+	return refresh()
+}
+
 // Get says how things stand.
 func Get(ctx context.Context) Status {
 	var s Status
@@ -181,13 +229,19 @@ var awake = func() string {
 // Refresh starts the phone's server again, if it runs: on the mad just
 // built, its page as that mad has it. The deck does it as it opens.
 func Refresh() error {
+	_, err := refresh()
+	return err
+}
+
+// refresh is Refresh, and says whether it started the server again.
+func refresh() (bool, error) {
 	panes, err := tmux.ListPanes()
 	if err != nil {
-		return err
+		return false, err
 	}
 	p, ok := tmux.FindPane(panes, tmux.IDPhone)
 	if !ok {
-		return nil
+		return false, nil
 	}
 	via := LoadChoice().Via
 	host := ""
@@ -206,13 +260,13 @@ func Refresh() error {
 		}
 	}
 	if host == "" {
-		return nil
+		return false, nil
 	}
 	origin := host
 	if via != ViaCloudflare {
 		origin = Origin(host)
 	}
-	return respawn(p.ID, serveCommand(origin), host)
+	return true, respawn(p.ID, serveCommand(origin), host)
 }
 
 var originRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`-origin '?([\w.-]+)(?::\d+)?`) })
