@@ -283,7 +283,8 @@ func (s *State) OpenSessions() map[string]bool {
 
 // Clone deep-copies the tree, so background work never races the UI.
 func (s *State) Clone() *State {
-	cp := &State{Ignored: append([]string(nil), s.Ignored...)}
+	cp := *s // its scalars; SaveMerged compares them with base's
+	cp.Projects, cp.Ignored = nil, append([]string(nil), s.Ignored...)
 	for _, p := range s.Projects {
 		pc := *p
 		pc.Runs = nil
@@ -299,7 +300,7 @@ func (s *State) Clone() *State {
 		}
 		cp.Projects = append(cp.Projects, &pc)
 	}
-	return cp
+	return &cp
 }
 
 // Dir is where a's process runs.
