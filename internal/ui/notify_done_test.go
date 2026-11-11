@@ -53,7 +53,7 @@ func TestDoneNotificationSaysWhatWasSaid(t *testing.T) {
 	}
 
 	// A turn mad started by itself pushes nothing; waiting still does.
-	m.madNext.mark("bg", t0.Add(70*time.Second))
+	m.rounds.Mad.Mark("bg", t0.Add(70*time.Second))
 	if as := turn("busy", 80, 90); len(as) != 0 {
 		t.Errorf("bus-started turn pushed: %+v", as)
 	}

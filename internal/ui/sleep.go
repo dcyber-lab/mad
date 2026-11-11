@@ -3,78 +3,25 @@ package ui
 import (
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dcyber-lab/mad/internal/agent"
 	"github.com/dcyber-lab/mad/internal/deck"
+	"github.com/dcyber-lab/mad/internal/rounds"
 	"github.com/dcyber-lab/mad/internal/state"
 	"github.com/dcyber-lab/mad/internal/status"
 )
 
-// sleepCheckEvery is how often agents are checked against sleep.after.
-const sleepCheckEvery = 30 * time.Second
+// Idle agents are put to sleep by the rounds (package rounds); here is z,
+// which puts the agent under the cursor to sleep now.
 
 // sleepAgent is replaceable in tests.
 var sleepAgent = deck.SleepAgent
 
-// sleptMsg ends a round of putting agents to sleep: the idle check's, or
-// z's on the agent named manual.
+// sleptMsg ends z's putting the agent named manual to sleep.
 type sleptMsg struct {
 	manual string
 	err    error
-}
-
-// canSleep: the kind can reopen the agent's session, so ending its process
-// loses nothing but what the process held. A kind that names its sessions
-// itself (no {id} in start) needs the agent's to be known: reopening "the
-// latest" could take another agent's.
-func (m *model) canSleep(a *state.Agent) bool {
-	k := agent.ByName(m.kinds, a.Kind)
-	return k.Resume != "" && (a.SessionID != "" || strings.Contains(k.Start, "{id}"))
-}
-
-// sleepers are the agents that have sat idle off stage for sleep.after.
-// One whose diff is on stage counts as on stage: closing the diff brings
-// it back.
-func (m *model) sleepers(now time.Time) []string {
-	var ids []string
-	for _, a := range m.st.OrderedAgents() {
-		tr := m.trackers[a.ID]
-		shown := m.seen(a.ID)
-		// A working run comes back to its agents; it would only wake them.
-		if tr == nil || tr.Status != status.Idle || shown || !m.canSleep(a) || a.Run != "" && m.runActive(a.Run) {
-			continue
-		}
-		if now.Sub(tr.QuietSince()) >= m.cfg.SleepAfter {
-			ids = append(ids, a.ID)
-		}
-	}
-	return ids
-}
-
-// sleepCmd puts the agents that have been idle long enough to sleep, one
-// at a time off the UI goroutine. One that is busy is left for the next
-// check.
-func (m *model) sleepCmd(now time.Time) tea.Cmd {
-	m.lastSleepCheck = now
-	ids := m.sleepers(now)
-	if len(ids) == 0 {
-		return nil
-	}
-	m.sleeping = true
-	m.epoch++
-	return func() tea.Msg {
-		for _, id := range ids {
-			var busy *deck.BusyError
-			if _, err := sleepAgent(id, true); err != nil && !errors.As(err, &busy) {
-				return sleptMsg{err: err}
-			}
-		}
-		return sleptMsg{}
-	}
 }
 
 // sleepNow is z: put the agent to sleep now, unless it is in the middle
@@ -86,7 +33,7 @@ func (m *model) sleepNow(p *state.Project, a *state.Agent) tea.Cmd {
 		st = tr.Status
 	}
 	switch {
-	case !m.canSleep(a):
+	case !rounds.CanSleep(m.kinds, a):
 		m.setFlash(a.Kind + " can't resume a session: not put to sleep")
 		return nil
 	case st == status.Running || st == status.Waiting:
@@ -104,9 +51,6 @@ func (m *model) sleepNow(p *state.Project, a *state.Agent) tea.Cmd {
 }
 
 func (m *model) applySlept(msg sleptMsg) tea.Cmd {
-	if msg.manual == "" {
-		m.sleeping = false
-	}
 	var busy *deck.BusyError
 	switch {
 	case errors.As(msg.err, &busy):

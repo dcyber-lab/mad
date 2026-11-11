@@ -1,4 +1,4 @@
-package ui
+package rounds
 
 import (
 	"os"
@@ -20,7 +20,7 @@ import (
 // queued messages go on. What it sends of mad's own is recorded to be
 // counted; the person's is not.
 func TestDispatchSpendGate(t *testing.T) {
-	m, st := setup(t, "/code/a")
+	r, st, set, facts := newDeck(t)
 	const to, from = "bbbb2222-0000-0000-0000-000000000002", "aaaa1111-0000-0000-0000-000000000001"
 	st.Projects[0].Agents = []*state.Agent{
 		{ID: from, Kind: "claude", Name: "architect"}, {ID: to, Kind: "claude", Name: "builder"},
@@ -28,9 +28,8 @@ func TestDispatchSpendGate(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
-	m.rebuildRows()
-	m.trackers[to] = &status.Tracker{Status: status.Idle}
-	m.trackers[from] = &status.Tracker{Status: status.Idle}
+	set(to, status.Idle)
+	set(from, status.Idle)
 	you := bus.From{ID: bus.You, Label: bus.You}
 	if _, err := bus.Create("api", "", []string{from, to}, you); err != nil {
 		t.Fatal(err)
@@ -70,20 +69,21 @@ func TestDispatchSpendGate(t *testing.T) {
 	}
 
 	var sent []string
-	old := sendQueued
-	t.Cleanup(func() { sendQueued = old })
-	sendQueued = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
+	old := Send
+	t.Cleanup(func() { Send = old })
+	Send = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
 		sent = append(sent, a.ID+": "+text)
 		return nil
 	}
-	run := func(at time.Time) dispatchedMsg {
+	held := false // the keeper was told that the budget held an item back
+	run := func(at time.Time) Dispatched {
 		t.Helper()
-		cmd := m.dispatchCmd(at)
-		if cmd == nil {
+		job := r.dispatch(at, facts)
+		if job == nil {
 			t.Fatal("nothing offered")
 		}
-		msg := cmd().(dispatchedMsg)
-		m.applyDispatched(msg)
+		msg := job.Run().(Dispatched)
+		held = r.Done(msg, time.Now()).Spent
 		return msg
 	}
 
@@ -94,29 +94,29 @@ func TestDispatchSpendGate(t *testing.T) {
 	if q, _ := queue.Load(to); len(q.Items) != 2 || !q.Items[0].Bus {
 		t.Fatalf("queue = %+v", q)
 	}
-	if msg := run(now); msg.err != nil || len(sent) != 1 || sent[0] != to+": look at the logs" {
+	if msg := run(now); msg.Err != nil || len(sent) != 1 || sent[0] != to+": look at the logs" {
 		t.Fatalf("the person's message did not go: %+v %q", msg, sent)
 	}
 	later := now.Add(queueSettle + time.Second)
 	msg := run(later)
-	if msg.wait != bus.SpendWait || !msg.spent || len(sent) != 1 {
+	if msg.Wait != bus.SpendWait || !msg.Spent || len(sent) != 1 {
 		t.Fatalf("the bus item was not held: %+v sent=%q", msg, sent)
 	}
 	if q, _ := queue.Load(to); len(q.Items) != 1 || !q.Items[0].Bus {
 		t.Fatalf("queue = %+v", q)
 	}
-	if !m.spend.Closed {
-		t.Error("the footer was not told")
+	if !held {
+		t.Error("the keeper was not told, for its footer")
 	}
 
 	// The person speaks in the channel: that digest is theirs, and goes.
 	if _, err := bus.Post("api", you, "@builder and the tests too", 0); err != nil {
 		t.Fatal(err)
 	}
-	if msg := run(later.Add(time.Minute)); msg.spent || len(sent) != 2 || !strings.Contains(sent[1], "and the tests too") {
+	if msg := run(later.Add(time.Minute)); msg.Spent || len(sent) != 2 || !strings.Contains(sent[1], "and the tests too") {
 		t.Fatalf("the person's digest was held: %+v sent=%q", msg, sent)
 	}
-	if m.madNext.take(to, time.Now()) {
+	if r.Mad.Take(to, time.Now()) {
 		t.Error("the person's digest marked the next turn as mad's")
 	}
 	// It was not counted: no turn is open for the builder.
@@ -134,7 +134,7 @@ func TestDispatchSpendGate(t *testing.T) {
 // An open gate counts the turn mad started by itself (a digest with no
 // person in it) and settles it with the agent's cost.
 func TestDispatchSpendCounted(t *testing.T) {
-	m, st := setup(t, "/code/a")
+	r, st, set, facts := newDeck(t)
 	const to, from = "bbbb2222-0000-0000-0000-000000000002", "aaaa1111-0000-0000-0000-000000000001"
 	st.Projects[0].Agents = []*state.Agent{
 		{ID: from, Kind: "claude", Name: "architect"}, {ID: to, Kind: "claude", Name: "builder"},
@@ -142,8 +142,7 @@ func TestDispatchSpendCounted(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
-	m.rebuildRows()
-	m.trackers[to] = &status.Tracker{Status: status.Idle}
+	set(to, status.Idle)
 	you := bus.From{ID: bus.You, Label: bus.You}
 	if _, err := bus.Create("api", "", []string{from, to}, you); err != nil {
 		t.Fatal(err)
@@ -151,26 +150,26 @@ func TestDispatchSpendCounted(t *testing.T) {
 	if _, err := bus.Post("api", bus.From{ID: from, Label: "architect"}, "@builder please start on the handler", 0); err != nil {
 		t.Fatal(err)
 	}
-	old := sendQueued
-	t.Cleanup(func() { sendQueued = old })
+	old := Send
+	t.Cleanup(func() { Send = old })
 	markedAtSend := false
-	sendQueued = func(_ *state.State, a *state.Agent, _ string, _ []agent.Kind) error {
-		m.madNext.mu.Lock()
-		_, markedAtSend = m.madNext.at[a.ID]
-		m.madNext.mu.Unlock()
+	Send = func(_ *state.State, a *state.Agent, _ string, _ []agent.Kind) error {
+		r.Mad.mu.Lock()
+		_, markedAtSend = r.Mad.at[a.ID]
+		r.Mad.mu.Unlock()
 		return nil
 	}
-	cmd := m.dispatchCmd(time.Now())
-	if cmd == nil {
+	job := r.dispatch(time.Now(), facts)
+	if job == nil {
 		t.Fatal("nothing offered")
 	}
-	if msg := cmd().(dispatchedMsg); msg.err != nil || msg.spent {
+	if msg := job.Run().(Dispatched); msg.Err != nil || msg.Spent {
 		t.Fatalf("dispatched: %+v", msg)
 	}
 	if !markedAtSend {
 		t.Error("the mark came after the send: a fast start would miss it")
 	}
-	if !m.madNext.take(to, time.Now()) {
+	if !r.Mad.Take(to, time.Now()) {
 		t.Error("a delivery mad started did not mark the agent's next turn as mad's")
 	}
 	// Its turn ends later: the settle adds it, with no cost for no cost data.

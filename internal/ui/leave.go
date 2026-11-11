@@ -9,6 +9,7 @@ import (
 
 	"github.com/dcyber-lab/mad/internal/deck"
 	"github.com/dcyber-lab/mad/internal/paths"
+	"github.com/dcyber-lab/mad/internal/rounds"
 	"github.com/dcyber-lab/mad/internal/status"
 	"github.com/dcyber-lab/mad/internal/textutil"
 	"github.com/dcyber-lab/mad/internal/tmux"
@@ -30,7 +31,7 @@ func (m *model) detach() tea.Cmd {
 	pids := map[int]int{} // pane pid → index in agents
 	for _, a := range m.st.OrderedAgents() {
 		p, _ := m.st.FindAgent(a.ID)
-		l := leaving{name: p.Name + "/" + textutil.Truncate(m.agentTitle(p, a), 30), sleeps: m.canSleep(a)}
+		l := leaving{name: p.Name + "/" + textutil.Truncate(m.agentTitle(p, a), 30), sleeps: rounds.CanSleep(m.kinds, a)}
 		if tr := m.trackers[a.ID]; tr != nil {
 			l.status = tr.Status
 		}

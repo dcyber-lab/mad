@@ -1,4 +1,4 @@
-package ui
+package rounds
 
 import (
 	"strings"
@@ -14,13 +14,11 @@ import (
 )
 
 func TestDispatchQueue(t *testing.T) {
-	m, st := setup(t, "/code/a")
+	r, st, set, facts := newDeck(t)
 	st.Projects[0].Agents = []*state.Agent{
 		{ID: "busy", Kind: "claude"}, {ID: "free", Kind: "claude"},
 		{ID: "role", Kind: "claude", Run: "r1"}, {ID: "asks", Kind: "claude"},
 	}
-	m.rebuildRows()
-	set := func(id, s string) { m.trackers[id] = &status.Tracker{Status: s} }
 	set("busy", status.Running)
 	set("free", status.Idle)
 	set("role", status.Idle)
@@ -35,9 +33,9 @@ func TestDispatchQueue(t *testing.T) {
 
 	var sent []string
 	refuse := false
-	old := sendQueued
-	t.Cleanup(func() { sendQueued = old })
-	sendQueued = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
+	old := Send
+	t.Cleanup(func() { Send = old })
+	Send = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
 		if refuse {
 			return drive.ErrBusy
 		}
@@ -45,11 +43,11 @@ func TestDispatchQueue(t *testing.T) {
 		return nil
 	}
 	run := func(at time.Time) bool {
-		cmd := m.dispatchCmd(at)
-		if cmd == nil {
+		job := r.dispatch(at, facts)
+		if job == nil {
 			return false
 		}
-		m.applyDispatched(cmd().(dispatchedMsg))
+		r.Done(job.Run(), time.Now())
 		return true
 	}
 
@@ -61,8 +59,8 @@ func TestDispatchQueue(t *testing.T) {
 	if run(now.Add(time.Second)) {
 		t.Errorf("sent again before the agent's status caught up: %q", sent)
 	}
-	if m.queued["free"] != 1 {
-		t.Errorf("queued = %v", m.queued)
+	if r.Queued("free") != 1 {
+		t.Errorf("queued = %v", r.queued)
 	}
 
 	// Refused: the message goes back to the front, with why, and is
@@ -101,7 +99,7 @@ func TestDispatchQueue(t *testing.T) {
 }
 
 func TestDispatchBusItem(t *testing.T) {
-	m, st := setup(t, "/code/a")
+	r, st, set, facts := newDeck(t)
 	const to, from = "bbbb2222-0000-0000-0000-000000000002", "aaaa1111-0000-0000-0000-000000000001"
 	st.Projects[0].Agents = []*state.Agent{
 		{ID: from, Kind: "claude", Name: "architect"}, {ID: to, Kind: "claude", Name: "builder"},
@@ -109,9 +107,8 @@ func TestDispatchBusItem(t *testing.T) {
 	if err := st.Save(); err != nil {
 		t.Fatal(err)
 	}
-	m.rebuildRows()
-	m.trackers[to] = &status.Tracker{Status: status.Idle}
-	m.trackers[from] = &status.Tracker{Status: status.Idle}
+	set(to, status.Idle)
+	set(from, status.Idle)
 
 	if _, err := bus.Create("api", "", []string{from, to}, bus.From{ID: bus.You, Label: bus.You}); err != nil {
 		t.Fatal(err)
@@ -126,9 +123,9 @@ func TestDispatchBusItem(t *testing.T) {
 
 	var sent []string
 	refuse := false
-	old := sendQueued
-	t.Cleanup(func() { sendQueued = old })
-	sendQueued = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
+	old := Send
+	t.Cleanup(func() { Send = old })
+	Send = func(_ *state.State, a *state.Agent, text string, _ []agent.Kind) error {
 		if refuse {
 			return drive.ErrBusy
 		}
@@ -136,11 +133,11 @@ func TestDispatchBusItem(t *testing.T) {
 		return nil
 	}
 	run := func(at time.Time) bool {
-		cmd := m.dispatchCmd(at)
-		if cmd == nil {
+		job := r.dispatch(at, facts)
+		if job == nil {
 			return false
 		}
-		m.applyDispatched(cmd().(dispatchedMsg))
+		r.Done(job.Run(), time.Now())
 		return true
 	}
 

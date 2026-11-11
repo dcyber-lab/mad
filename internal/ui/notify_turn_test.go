@@ -51,7 +51,7 @@ func bodies(as []alert) []string {
 func TestPersonTurnRightAfterBusWakePushes(t *testing.T) {
 	m, t0, poll, end := turnDeck(t)
 	poll(-5, status.Idle)
-	m.madNext.mark("bg", t0)
+	m.rounds.Mad.Mark("bg", t0)
 	poll(1, status.Running)
 	if as := end("digest handled", 8); len(as) != 0 {
 		t.Fatalf("mad's turn pushed: %v", bodies(as))
@@ -67,7 +67,7 @@ func TestPersonTurnRightAfterBusWakePushes(t *testing.T) {
 func TestMadTurnAfterPermissionPushesNoFinished(t *testing.T) {
 	m, t0, poll, end := turnDeck(t)
 	poll(-5, status.Idle)
-	m.madNext.mark("bg", t0)
+	m.rounds.Mad.Mark("bg", t0)
 	poll(1, status.Running)
 	if as := poll(5, status.Waiting); len(as) != 1 || as[0].Kind != notify.Waiting {
 		t.Fatalf("waiting: %v", bodies(as))
@@ -99,7 +99,7 @@ func TestPermissionAnsweredKeepsTheTurnStart(t *testing.T) {
 func TestMadTurnSlowStart(t *testing.T) {
 	m, t0, poll, end := turnDeck(t)
 	poll(-5, status.Idle)
-	m.madNext.mark("bg", t0)
+	m.rounds.Mad.Mark("bg", t0)
 	poll(35, status.Running)
 	if as := end("digest handled", 60); len(as) != 0 {
 		t.Errorf("mad's turn pushed: %v", bodies(as))
@@ -119,8 +119,8 @@ func TestDeckRestartedMidTurnPushesNothing(t *testing.T) {
 func TestPersonsDeliveryClearsTheMark(t *testing.T) {
 	m, t0, poll, end := turnDeck(t)
 	poll(-5, status.Idle)
-	m.madNext.mark("bg", t0)
-	m.madNext.clear("bg")
+	m.rounds.Mad.Mark("bg", t0)
+	m.rounds.Mad.Clear("bg")
 	poll(1, status.Running)
 	if as := end("answer", 20); len(as) != 1 {
 		t.Errorf("person's turn: %v", bodies(as))

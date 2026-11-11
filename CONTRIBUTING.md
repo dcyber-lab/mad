@@ -40,6 +40,7 @@ with dependencies pointing downwards in this list:
 | `internal/cli`       | Subcommands (`mad`, `add`, `switch`, `scan`, `hook`, …)          |
 | `internal/desktop`   | `mad desktop`: the deck in a window (web sidebar, conversations drawn from transcripts and hosts) |
 | `internal/ui`        | Bubble Tea sidebar, project picker, session picker               |
+| `internal/rounds`    | The deck's work by the clock, with nobody at the keys: queued messages and bus digests sent to agents whose turn is over, lapsed handoffs marked, work followed up, timers fired, idle agents put to sleep. No loop of its own: the sidebar has the rounds made on each tick |
 | `internal/team`      | Teams: agents in roles started together in a channel, from a template |
 | `internal/run`       | Runs: a task handed through agents in roles by a flow (steps, reviews, questions, gates, what a step must leave behind) |
 | `internal/queue`     | Messages waiting for an agent's turn to end (the sidebar sends them) |

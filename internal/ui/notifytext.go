@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 )
 
@@ -106,39 +105,4 @@ func cutRunes(s string, n int) string {
 func continues(r rune) bool {
 	return r == '‍' || (r >= 0xFE00 && r <= 0xFE0F) || (r >= 0x1F3FB && r <= 0x1F3FF) ||
 		(r >= 0xE0020 && r <= 0xE007F) || unicode.In(r, unicode.Mn, unicode.Me, unicode.Mc)
-}
-
-// madMarks says which agents' next turn is mad's own: set by the
-// dispatcher (another goroutine) as it delivers, taken by the poll that
-// sees the turn start.
-type madMarks struct {
-	mu sync.Mutex
-	at map[string]time.Time
-}
-
-// madMarkTTL: a mark whose turn never showed up is forgotten.
-const madMarkTTL = 10 * time.Minute
-
-func (k *madMarks) mark(id string, now time.Time) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.at == nil {
-		k.at = map[string]time.Time{}
-	}
-	k.at[id] = now
-}
-
-func (k *madMarks) clear(id string) {
-	k.mu.Lock()
-	delete(k.at, id)
-	k.mu.Unlock()
-}
-
-// take reports whether id's turn starting at now is mad's, and clears the mark.
-func (k *madMarks) take(id string, now time.Time) bool {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	at, ok := k.at[id]
-	delete(k.at, id)
-	return ok && now.Sub(at) < madMarkTTL
 }

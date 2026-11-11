@@ -23,6 +23,7 @@ import (
 	"github.com/dcyber-lab/mad/internal/git"
 	"github.com/dcyber-lab/mad/internal/paths"
 	"github.com/dcyber-lab/mad/internal/poke"
+	"github.com/dcyber-lab/mad/internal/rounds"
 	madrun "github.com/dcyber-lab/mad/internal/run"
 	"github.com/dcyber-lab/mad/internal/skill"
 	"github.com/dcyber-lab/mad/internal/state"
@@ -206,21 +207,12 @@ type model struct {
 	runSince map[string]time.Time // agent id → when its current run started
 	runSeen  map[string]bool      // agent id → its current turn was seen starting
 	runByMad map[string]bool      // agent id → its current turn is one mad started
-	madNext  madMarks             // delivered by mad, the agent's next turn not yet seen
 	notified map[string]time.Time // agent id + event kind → last notification
 
-	sleeping       bool      // idle agents are being put to sleep
-	lastSleepCheck time.Time // when they were last looked for
-
-	dispatching  bool                 // a queued message is being sent
-	lapsing      bool                 // handoffs are being checked for lapses
-	lastLapse    time.Time            // when they were last checked
-	following    bool                 // follow-ups are being raised
-	lastFollow   time.Time            // when they were last
-	spend        bus.SpendState       // the day's budget for mad's own work
-	lastDispatch time.Time            // when the queues were last looked at
-	queued       map[string]int       // agent id → messages waiting (not paused)
-	queueAt      map[string]time.Time // agent id → not offered a message before
+	// rounds is the deck's work by the clock: deliveries, lapses,
+	// follow-ups, sleep. The sidebar has it made on each tick (rounds.go).
+	rounds *rounds.Rounds
+	spend  bus.SpendState // the day's budget for mad's own work
 
 	runs          map[string]*madrun.File // run id → its run.json as last read
 	runnerStarted map[string]time.Time    // run id → when its runner was last started here
@@ -306,8 +298,7 @@ func newModel(st *state.State, kinds []agent.Kind) *model {
 		runSeen:       map[string]bool{},
 		runByMad:      map[string]bool{},
 		notified:      map[string]time.Time{},
-		queued:        map[string]int{},
-		queueAt:       map[string]time.Time{},
+		rounds:        rounds.New(),
 	}
 	m.rebuildRows()
 	return m
@@ -336,7 +327,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// a rebuilt mad: leave for it, between sends (one cut short would lose its message)
 		if now := time.Now(); now.Sub(m.lastBinCheck) >= binCheckEvery {
 			m.lastBinCheck = now
-			if !m.dispatching && m.bin.rebuilt(now) {
+			if !m.rounds.Dispatching() && m.bin.rebuilt(now) {
 				return m, tea.Quit
 			}
 		}
@@ -360,20 +351,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.dayReading && time.Since(m.lastDay) > transcriptScanEvery {
 			cmds = append(cmds, m.dayCmd())
 		}
-		if m.cfg.SleepAfter > 0 && !m.sleeping && time.Since(m.lastSleepCheck) >= sleepCheckEvery {
-			cmds = append(cmds, m.sleepCmd(time.Now()))
-		}
-		if !m.dispatching && time.Since(m.lastDispatch) >= dispatchEvery {
-			cmds = append(cmds, m.dispatchCmd(time.Now()))
-		}
-		if !m.lapsing && time.Since(m.lastLapse) >= lapseEvery {
-			cmds = append(cmds, m.lapseCmd(time.Now()))
-		}
+		cmds = append(cmds, m.roundCmds(time.Now())...)
 		if !m.busBusy && time.Since(m.lastBus) >= busEvery {
 			cmds = append(cmds, m.busCmd(time.Now()))
-		}
-		if !m.following && time.Since(m.lastFollow) >= followEvery {
-			cmds = append(cmds, m.followCmd(time.Now()))
 		}
 		return m, tea.Batch(cmds...)
 	case pollMsg:
@@ -387,15 +367,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyExternals(msg)
 	case sleptMsg:
 		return m, m.applySlept(msg)
-	case lapsedMsg:
-		m.lapsing = false
-	case followedMsg:
-		m.following, m.spend = false, msg.spend
-		m.look(time.Now())
+	case roundMsg:
+		return m, m.applyRound(msg.res)
 	case busMsg:
 		m.applyBus(msg)
-	case dispatchedMsg:
-		return m, m.applyDispatched(msg)
 	case dayMsg:
 		m.dayReading, m.dayCost = false, float64(msg)
 	case gitMsg:
