@@ -383,7 +383,7 @@ func (h *Host) report(s string) {
 	if hook == status.Idle {
 		h.writeTurn() // before the Idle report: the deck reads the reply when it sees the turn end
 	}
-	_ = status.WriteHook(h.agent, &status.Hook{State: hook, Event: "host"}, time.Now())
+	_ = status.WriteHook(h.agent, &status.Hook{State: hook, Event: status.HostEvent}, time.Now())
 }
 
 // writeTurn records what the agent said last, as its hook would at the

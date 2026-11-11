@@ -23,13 +23,14 @@ import (
 // when it has one), a turn per message, its items streamed as they come,
 // and approvals and questions asked as requests to the client.
 type codex struct {
-	h     *Host
-	agent string
-	dir   string
-	sid   string   // the thread to resume
-	model string   // from the agent's arguments, or picked since
-	mode  string   // the approval policy picked since, for its next turns
-	files []string // images written for the person's messages
+	h      *Host
+	agent  string
+	dir    string
+	sid    string   // the thread to resume
+	model  string   // from the agent's arguments, or picked since
+	config []string // the agent's -c overrides, passed to app-server as they are
+	mode   string   // the approval policy picked since, for its next turns
+	files  []string // images written for the person's messages
 
 	wmu     sync.Mutex // one write at a time; the reader never waits on it
 	started chan struct{}
@@ -63,12 +64,30 @@ func newCodex(h *Host, a *state.Agent, dir string) *codex {
 	c := &codex{h: h, agent: a.ID, dir: dir, sid: a.SessionID, started: make(chan struct{}), ready: make(chan struct{}),
 		waiting: map[string]chan codexReply{}, items: map[string]int{}, changes: map[string]string{},
 		asks: map[string]codexAsk{}, quest: map[string]codexQuest{}}
-	for i, arg := range a.Args {
-		if (arg == "-m" || arg == "--model") && i+1 < len(a.Args) {
-			c.model = a.Args[i+1]
+	c.model, c.config = codexArgs(a.Args)
+	return c
+}
+
+// codexArgs reads what app-server can take of the agent's own TUI flags:
+// its model, and its -c config overrides (an MCP server of its own, say),
+// which codex applies to any subcommand. The TUI's other flags are its own.
+func codexArgs(args []string) (model string, config []string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case (arg == "-m" || arg == "--model") && i+1 < len(args):
+			model = args[i+1]
+			i++
+		case (arg == "-c" || arg == "--config") && i+1 < len(args):
+			config = append(config, "-c", args[i+1])
+			i++
+		case strings.HasPrefix(arg, "--config="):
+			config = append(config, "-c", strings.TrimPrefix(arg, "--config="))
+		case strings.HasPrefix(arg, "-c") && len(arg) > 2 && !strings.HasPrefix(arg, "--"):
+			config = append(config, "-c", strings.TrimPrefix(strings.TrimPrefix(arg, "-c"), "="))
 		}
 	}
-	return c
+	return model, config
 }
 
 // codexPermissions are the approval policies it can run under.
@@ -84,7 +103,9 @@ var codexBin = "codex"
 func (c *codex) run(ctx context.Context) error {
 	defer c.forgetImages()
 	// With mad's MCP server, as its TUI starts with it (deck.MCPFlags).
-	cmd := agentCmd(ctx, c.dir, codexBin, append([]string{"app-server"}, deck.CodexMCPArgs(c.agent)...)...)
+	// The agent's own overrides first: mad's MCP server stays mad's.
+	args := append(append([]string{"app-server"}, c.config...), deck.CodexMCPArgs(c.agent)...)
+	cmd := agentCmd(ctx, c.dir, codexBin, args...)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err

@@ -303,3 +303,22 @@ func TestQuota(t *testing.T) {
 		t.Errorf("not yet expired: %+v", e)
 	}
 }
+
+// A window-mode codex (no hooks of its own) quiet in a long tool call: mad
+// host's fresh running report keeps it running, not the frozen screen; a
+// report of its own kind's (none for codex) would not count.
+func TestObserveHostReportsForAnyKind(t *testing.T) {
+	codex := agent.Kind{Name: "codex"}
+	var tr Tracker
+	tr.Observe(codex, alive, true, nil, "x", false, t0)
+	beat := &Hook{State: Running, Event: HostEvent, At: t0.Add(time.Minute)}
+	if s := tr.Observe(codex, alive, true, beat, "x", false, t0.Add(time.Minute+time.Second)); s != Running {
+		t.Errorf("host running, screen frozen = %s", s)
+	}
+	if s := tr.Observe(codex, alive, true, &Hook{State: Running, At: t0.Add(time.Minute)}, "x", false, t0.Add(time.Minute+time.Second)); s != Idle {
+		t.Errorf("a non-host hook on a kind without hooks = %s", s)
+	}
+	if s := tr.Observe(codex, alive, true, &Hook{State: Idle, Event: HostEvent, At: t0.Add(2 * time.Minute)}, "x", false, t0.Add(2*time.Minute)); s != Idle {
+		t.Errorf("host idle = %s", s)
+	}
+}
